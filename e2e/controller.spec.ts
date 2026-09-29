@@ -221,7 +221,7 @@ test.describe('Switch Pro Controller, legacy DirectInput-style mapping (no mappi
     await open(page, 'screen=title');
     await plug(page, PRO_LEGACY);
     await frames(page, 4);
-    await tap(page, 0, 1);
+    await tap(page, 0, 12); // Home: reveals the pad without navigating anywhere
     // title: VERSUS, VS AI, TRAINING, CONTROLLER CHECK, OPTIONS: three hat-downs land on CONTROLLER CHECK
     for (let i = 0; i < 3; i++) {
       await setAxis(page, 0, 9, HAT.d);
@@ -335,22 +335,26 @@ test.describe('remapping and persistence', () => {
 test.describe('hot-plug and multiple pads', () => {
   const xboxLike: PadSpec = { id: 'Xbox 360 Controller (STANDARD GAMEPAD Vendor: 045e Product: 028e)', mapping: 'standard', buttons: 17, axes: [0, 0, 0, 0], rumble: true };
 
-  test('two pads become P1 and P2 in the order they appeared (first press); unplugging one frees its slot', async ({ page }) => {
+  test('two pads become P1 and P2 in the order they appeared; unplugging one frees its slot without a stuck button', async ({ page }) => {
     await open(page, 'screen=title');
-    // Chrome only lists a pad after its first press, so "the order they appeared" is "the order they were pressed": the
-    // Xbox pad is pressed first (index 1 here to prove index order is not what decides), the Pro second
-    await plug(page, { ...xboxLike, index: 1 });
-    await frames(page, 4);
-    await tap(page, 1, CANON.SOUTH);
-    await plug(page, { ...PRO_STANDARD, index: 0 });
+    // Chrome lists a pad only after its first press and hands out the lowest free index, so index order IS appearance order
+    await plug(page, xboxLike);
     await frames(page, 4);
     await tap(page, 0, CANON.SOUTH);
-    const assign = await page.evaluate(() => window.__sandbox!.input.assignment());
-    expect(assign).toEqual(['pad:1', 'pad:0']);
-    await page.evaluate(() => (window as unknown as { __fp: { unplug(i: number): void } }).__fp.unplug(1));
+    await plug(page, PRO_STANDARD);
+    await frames(page, 4);
+    await tap(page, 1, CANON.SOUTH);
+    expect(await page.evaluate(() => window.__sandbox!.input.assignment())).toEqual(['pad:0', 'pad:1']);
+    expect(await page.evaluate(() => window.__sandbox!.input.devices().filter((d) => d.id.startsWith('pad')).map((d) => d.family))).toEqual(['xbox', 'nintendo']);
+
+    // hold Strike on P1's pad and yank it out: the game must see it released, never stuck
+    await setButton(page, 0, CANON.WEST, true);
+    await frames(page, 4);
+    expect((await page.evaluate(() => window.__sandbox!.game.held[0])) & BTN.STRIKE).toBe(BTN.STRIKE);
+    await page.evaluate(() => (window as unknown as { __fp: { unplug(i: number): void } }).__fp.unplug(0));
     await frames(page, 6);
-    const after = await page.evaluate(() => window.__sandbox!.input.assignment());
-    expect(after[0]).not.toBe('pad:1');
-    expect(await page.evaluate(() => window.__sandbox!.input.devices().some((d) => d.id === 'pad:1' && d.connected))).toBe(false);
+    expect((await page.evaluate(() => window.__sandbox!.game.held[0])) & BTN.STRIKE).toBe(0);
+    expect(await page.evaluate(() => window.__sandbox!.input.devices().some((d) => d.id === 'pad:0' && d.connected))).toBe(false);
+    expect(await page.evaluate(() => window.__sandbox!.input.assignment())).not.toContain('pad:0');
   });
 });
