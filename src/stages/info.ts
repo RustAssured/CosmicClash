@@ -170,11 +170,9 @@ const tussenRamps: readonly RampSpec[] = [
   ramp(0.98, 0.3, 3, 0.2, 0.58, 0.92, 1.04), // one warm rose accent
 ];
 
-const paletteOf = (specs: readonly RampSpec[]): string[] => buildPalette(specs);
-
 /**
- * Number of colours in each ramp of every palette, in palette order. The renderer uses it to dither ONLY between
- * neighbouring steps of one ramp (the way a pixel artist does) instead of guessing ramp boundaries.
+ * Number of colours in each ramp of every palette, in palette order (also published as `StageInfo.ramps`). The renderer uses
+ * it to dither ONLY between neighbouring steps of one ramp, the way a pixel artist does, instead of guessing boundaries.
  */
 export const STAGE_RAMPS: Readonly<Record<StageId, readonly number[]>> = {
   nursery: nurseryRamps.map((r) => r.n),
@@ -190,7 +188,7 @@ const mk = (
   nameKo: string,
   blurb: string,
   lighting: StageLighting,
-  palette: string[],
+  specs: readonly RampSpec[],
 ): StageInfo => ({
   id,
   index: STAGE_IDS.indexOf(id),
@@ -199,7 +197,8 @@ const mk = (
   blurb,
   arena: arena(),
   lighting,
-  palette,
+  palette: buildPalette(specs),
+  ramps: specs.map((r) => r.n),
 });
 
 /** All five stages, complete and final. Other modules read `lighting` and `arena` from here. */
@@ -210,7 +209,7 @@ export const STAGE_INFO: Readonly<Record<StageId, StageInfo>> = {
     '별의 요람',
     'Dust pillars rise into the glare of newborn suns.',
     nurseryLighting,
-    paletteOf(nurseryRamps),
+    nurseryRamps,
   ),
   rim: mk(
     'rim',
@@ -218,7 +217,7 @@ export const STAGE_INFO: Readonly<Record<StageId, StageInfo>> = {
     '은하의 끝',
     'At the edge of a turning galaxy, the light of a billion stars.',
     rimLighting,
-    paletteOf(rimRamps),
+    rimRamps,
   ),
   redgiant: mk(
     'redgiant',
@@ -226,7 +225,7 @@ export const STAGE_INFO: Readonly<Record<StageId, StageInfo>> = {
     '붉은 거성의 잔영',
     'A dying sun exhales its shells into the dark.',
     redgiantLighting,
-    paletteOf(redgiantRamps),
+    redgiantRamps,
   ),
   quasar: mk(
     'quasar',
@@ -234,7 +233,7 @@ export const STAGE_INFO: Readonly<Record<StageId, StageInfo>> = {
     '퀘이사 공허',
     'Relativistic jets scar the black.',
     quasarLighting,
-    paletteOf(quasarRamps),
+    quasarRamps,
   ),
   tussenruimte: mk(
     'tussenruimte',
@@ -242,6 +241,6 @@ export const STAGE_INFO: Readonly<Record<StageId, StageInfo>> = {
     '틈',
     'Between two galaxies there is only stillness.',
     tussenLighting,
-    paletteOf(tussenRamps),
+    tussenRamps,
   ),
 };

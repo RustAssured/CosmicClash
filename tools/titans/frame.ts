@@ -1,6 +1,6 @@
 /**
  * Render a moment of a scripted fight to PNG (real Fighters + Match; fake world unless the matter library is present).
- *   npx tsx tools/titans/frame.ts out.png [--a=lastone --b=asteroid] [--t=200] [--script0="20:strike"] [--script1=...] [--scale=3]
+ *   npx tsx tools/titans/frame.ts out.png [--a=lastone --b=asteroid] [--t=200] [--script0="20:strike"] [--script1=...] [--scale=3] [--meter=1] [--focus=0|1]
  * Uses dev/titans/blit.ts as the compositor, so it shows exactly what the layers contain.
  */
 import { mkdirSync } from 'node:fs';
@@ -15,8 +15,10 @@ const out = args.find((a) => !a.startsWith('--')) ?? '.scratch/titans/frame.png'
 const opt = (k: string, d: string): string => (args.find((a) => a.startsWith(`--${k}=`)) ?? `--${k}=${d}`).split('=').slice(1).join('=');
 const m = makeMatch({ a: opt('a', 'lastone') as TitanId, b: opt('b', 'asteroid') as TitanId, seed: +opt('seed', '7') });
 skipIntro(m);
+if (opt('meter', '') !== '')
+  for (const f of m.fighters) (f as unknown as { meter: number }).meter = +opt('meter', '0');
 const t0 = m.tick;
-m.setSources(createScriptSource(parseScript(opt('script0', '')), t0), createScriptSource(parseScript(opt('script1', '')), t0));
+m.setSources(createScriptSource(parseScript(opt('script0', '')), t0 + 1), createScriptSource(parseScript(opt('script1', '')), t0 + 1));
 run(m, +opt('t', '60'));
 const a = m.fighters[0].view;
 const b = m.fighters[1].view;

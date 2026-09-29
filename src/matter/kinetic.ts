@@ -23,7 +23,7 @@ const pt: WorldPoint = { x: 0, y: 0 };
 
 const opts: CraterOpts = {
   budget: 0,
-  lipFrac: 0.22,
+  lipFrac: 0.14,
   aspect: 0,
   chunkProb: 0.55,
   speedMul: 1,
@@ -45,14 +45,6 @@ const out: CraterOut = {
   thr: 0,
 };
 
-/** Weighted mean resistance of the covered cells to damage type `type`. */
-export function meanResist(ctx: DamageCtx, type: number): number {
-  const { core, body } = ctx;
-  let s = 0;
-  for (let k = 0; k < ctx.n; k++) s += resistOf(body, core.covIdx[k]!, type) * core.covW[k]!;
-  return s / ctx.sumW;
-}
-
 /**
  * KINETIC — a ballistic impact. Carves a bowl-shaped CRATER whose size comes from the energy, the local hardness and the
  * material (iron deep and clean, regolith wide and soft), throws directional EJECTA (rigid chunks + dust, faster near the
@@ -61,9 +53,9 @@ export function meanResist(ctx: DamageCtx, type: number): number {
  */
 export function applyKinetic(ctx: DamageCtx, res: DamageResult): void {
   const { body } = ctx;
-  const rEff = meanResist(ctx, T_KINETIC);
   const cov = coverageOf(ctx);
-  opts.budget = ctx.energy * rEff;
+  // Raw energy: every cell's own cost already divides by its resistance (counting it in the budget too would square the matchup).
+  opts.budget = ctx.energy;
   opts.craterR = ctx.params.crater ?? 0;
   opts.chunkProb = 0.72;
   if (opts.budget >= 0.5 && carveCrater(ctx, opts, out)) {

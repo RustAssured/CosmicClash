@@ -32,6 +32,22 @@ describe('stage info', () => {
     expect(Math.max(...ls)).toBeGreaterThan(0.85); // and stars must be able to be nearly white
   });
 
+  it.each(STAGE_IDS)('%s publishes ramps that partition its palette into dark → light runs', (id) => {
+    const info = STAGES[id];
+    expect(info.ramps).toBeDefined();
+    expect(info.ramps!.reduce((a, b) => a + b, 0)).toBe(info.palette.length);
+    expect(info.ramps!.length).toBeGreaterThanOrEqual(5);
+    let i = 0;
+    for (const n of info.ramps!) {
+      const lum = info.palette.slice(i, i + n).map((c) => {
+        const p = hex(c);
+        return (p & 255) * 0.2126 + ((p >>> 8) & 255) * 0.7152 + ((p >>> 16) & 255) * 0.0722;
+      });
+      for (let k = 1; k < lum.length; k++) expect(lum[k]!).toBeGreaterThan(lum[k - 1]!);
+      i += n;
+    }
+  });
+
   it('lighting vectors are unit length and colours are hex', () => {
     for (const id of STAGE_IDS) {
       const l = STAGES[id].lighting;

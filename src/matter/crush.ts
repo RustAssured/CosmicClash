@@ -8,16 +8,15 @@ import { edgeBond } from './cuts';
 import { PK } from './particles';
 import { RAMP_DUST, spawnMassParticle } from './debris';
 import { T_CRUSH, coverageOf, finishDamage, localToWorldF, recordBlow, type DamageCtx } from './dmg';
-import { meanResist } from './kinetic';
 import { stepBlast } from './blast';
 
 const opts: CraterOpts = {
   budget: 0,
-  lipFrac: 0.36,
+  lipFrac: 0.26,
   aspect: 0.42,
   chunkProb: 0.22,
   speedMul: 0.7,
-  compact: 0.35,
+  compact: 0.25,
   craterR: 0,
   type: T_CRUSH,
 };
@@ -44,9 +43,8 @@ const pt: WorldPoint = { x: 0, y: 0 };
  */
 export function applyCrush(ctx: DamageCtx, res: DamageResult): void {
   const { core, body } = ctx;
-  const rEff = meanResist(ctx, T_CRUSH);
   const cov = coverageOf(ctx);
-  const E = ctx.energy * rEff;
+  const E = ctx.energy;
   opts.budget = E;
   opts.craterR = ctx.params.crater ?? 0;
   if (ctx.params.compress !== undefined && ctx.params.compress > 0) {

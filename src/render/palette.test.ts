@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { STAGE_IDS } from '@/contracts';
 import { STAGES } from '@/stages';
-import { STAGE_RAMPS } from '@/stages/info';
 import { bayerRanks, bayerTexels, bayerThreshold, ditherQuantise } from './dither';
 import {
   CROSS_RAMP_MAX,
@@ -98,7 +97,7 @@ describe('bayer matrices', () => {
 });
 
 describe('palette + dither LUT', () => {
-  const pal = preparePalette(STAGES.nursery.palette, STAGE_RAMPS.nursery);
+  const pal = preparePalette(STAGES.nursery.palette, STAGES.nursery.ramps);
   const lut = buildDitherLut(pal);
   const bayer = bayerRanks(8);
 
@@ -196,7 +195,7 @@ describe('palette + dither LUT', () => {
   });
 
   it('only mixes neighbouring steps of one ramp (or near-identical colours): clean ramps, never confetti', () => {
-    const ramps = STAGE_RAMPS.nursery;
+    const ramps = STAGES.nursery.ramps!;
     expect(pal.rampOf[pal.count - 1]).toBe(ramps.length - 1);
     let mixed = 0;
     let cross = 0;

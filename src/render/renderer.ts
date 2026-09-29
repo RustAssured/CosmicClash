@@ -34,7 +34,6 @@ import {
   type StageId,
 } from '@/contracts';
 import { STAGES } from '@/stages';
-import { STAGE_RAMPS } from '@/stages/info';
 import { createScenery } from '@/stages/scenery';
 import {
   MAX_IMPULSES,
@@ -107,7 +106,7 @@ class PixelRenderer implements DebuggableRenderer {
   private three!: WebGLRenderer;
   private canvas!: HTMLCanvasElement;
   private opts: RendererOptions = {};
-  private tier: Tier = TIERS[2];
+  tier: Tier = TIERS[2]; // read by tools/render/perf.mjs
   private quality: 0 | 1 | 2 = 2;
   private ready = false;
   private lost = false;
@@ -145,6 +144,7 @@ class PixelRenderer implements DebuggableRenderer {
 
   // stage
   private stage: StageId = 'nursery';
+  private stageRequested = false;
   private scenery: StageScenery | null = null;
   private godColor = new Vector3(1, 0.7, 0.4);
 
@@ -236,7 +236,8 @@ class PixelRenderer implements DebuggableRenderer {
     this.buildPasses();
     this.ready = true;
     this.resize(this.cssW, this.cssH, this.dpr);
-    this.setStage(this.stage);
+    // Scenery (shader compile, palette LUT, pillar bakes ≈ seconds) is built by the first setStage()/draw(), never twice.
+    if (this.stageRequested) this.setStage(this.stage);
   }
 
   private buildTargets(): void {
@@ -311,6 +312,7 @@ class PixelRenderer implements DebuggableRenderer {
       uDecay: { value: 0.965 },
       uHaloR: { value: 90 },
       uGasK: { value: 0.6 },
+      uOcc: { value: 0.3 },
     });
     this.postPass = new FullscreenPass(POST_FRAG, {
       uRes: res,
@@ -343,6 +345,7 @@ class PixelRenderer implements DebuggableRenderer {
 
   setStage(id: StageId, disposePrevious = true): void {
     this.stage = id;
+    this.stageRequested = true;
     if (!this.ready) return;
     const info = STAGES[id];
     if (disposePrevious) this.scenery?.dispose();
@@ -355,7 +358,7 @@ class PixelRenderer implements DebuggableRenderer {
       height: this.sceneRT.height,
     });
     this.scenery = s;
-    this.buildPaletteTextures(info.palette, STAGE_RAMPS[id]);
+    this.buildPaletteTextures(info.palette, info.ramps);
     const c = hex(info.lighting.color);
     this.godColor.set(pr(c) / 255, pg(c) / 255, pb(c) / 255);
     this.lastTimeSec = -1;
@@ -363,7 +366,7 @@ class PixelRenderer implements DebuggableRenderer {
     this.drawnOnce = false;
   }
 
-  private buildPaletteTextures(palette: readonly string[], ramps: readonly number[]): void {
+  private buildPaletteTextures(palette: readonly string[], ramps: readonly number[] | undefined): void {
     const pal = preparePalette(palette, ramps);
     const lut = buildDitherLut(pal, { size: this.tier.lutSize });
     this.lutTex?.dispose();
@@ -412,7 +415,9 @@ class PixelRenderer implements DebuggableRenderer {
       const s = fx.shockwaves[i]!;
       const life = Math.max(0, 1 - s.age);
       if (life <= 0 || s.radius < 1) continue;
-      const disp = s.strength * 15 * life * life;
+      // `strength` is the CURRENT refraction strength (producers already decay it); the age term only rounds off the
+      // last part of the ring's life so it never pops out.
+      const disp = s.strength * 14 * (1 - s.age * s.age);
       f.shock[n * 4] = s.x - vx;
       f.shock[n * 4 + 1] = s.y - vy;
       f.shock[n * 4 + 2] = s.radius;
@@ -432,7 +437,8 @@ class PixelRenderer implements DebuggableRenderer {
       f.impulse[m * 4] = s.x - vx;
       f.impulse[m * 4 + 1] = s.y - vy;
       f.impulse[m * 4 + 2] = Math.max(8, s.radius);
-      f.impulse[m * 4 + 3] = s.strength * Math.pow(life, 1.5) * 0.6;
+      // `strength` is current (producers decay it); the age term only fades the tail. ≈ 0.5 rad of twist at the centre for 0.6.
+      f.impulse[m * 4 + 3] = s.strength * Math.sqrt(life) * 0.9;
       f.impulse2[m * 4] = s.age;
       f.impulse2[m * 4 + 1] = s.hue;
       m++;
@@ -494,7 +500,7 @@ class PixelRenderer implements DebuggableRenderer {
     du.uContrast!.value = look.contrast;
     du.uBloomThreshold!.value = look.bloomThreshold;
     du.uBloomGain!.value = look.bloomGain;
-    du.uFlash!.value = Math.min(1, fx.flash) * 0.6;
+    du.uFlash!.value = Math.min(1, fx.flash) * 0.45;
     r.setClearColor(0x000000, 1);
     this.ditherPass.render(r, this.frameRT);
 

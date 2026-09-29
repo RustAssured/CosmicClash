@@ -36,6 +36,11 @@ export interface MoveInfo {
   hitFrom: number;
   hitTo: number;
   hasHitboxes: boolean;
+  /**
+   * The axis of the move's principal straight hitbox (a fixed, non-sweeping line: beams) relative to the anchor, facing +1,
+   * nominal reach. A diagonal beam's bounding box is mostly empty corner, so hit probability is judged along this axis instead.
+   */
+  line: { x0: number; y0: number; x1: number; y1: number; width: number } | null;
 }
 
 const tmp = makeFatShape();
@@ -83,6 +88,8 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
       let hitFrom = 1e9;
       let hitTo = -1;
       let bestE = -1;
+      let line: MoveInfo['line'] = null;
+      let bestLineE = -1;
       for (const hb of v.hitboxes) {
         const s = Math.pow(reach, hb.reachScale ?? 1);
         templateExtent(hb.shape, s, ext);
@@ -96,6 +103,11 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
           type = hb.damage.type;
         }
         if (continuous && hb.shape.kind === 'line') beam = true;
+        if (hb.shape.kind === 'line' && !hb.sweepTo && hb.damage.energy > bestLineE) {
+          bestLineE = hb.damage.energy;
+          instantiateTemplate(hb.shape, { x: 0, y: 0, facing: 1, scale: s }, tmp);
+          line = { x0: tmp.x0, y0: tmp.y0, x1: tmp.x1, y1: tmp.y1, width: tmp.width };
+        }
         hitFrom = Math.min(hitFrom, hb.from);
         hitTo = Math.max(hitTo, hb.to);
       }
@@ -125,6 +137,7 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
         hitFrom: has ? hitFrom : 0,
         hitTo: has ? hitTo : 0,
         hasHitboxes: has,
+        line: has ? line : null,
       });
     }
   }

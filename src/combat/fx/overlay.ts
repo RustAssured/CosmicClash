@@ -26,6 +26,7 @@ export class Overlay {
   private pby0 = 0;
   private pbx1 = 0;
   private pby1 = 0;
+  private readonly dirtyRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
 
   constructor(
     id: string,
@@ -98,14 +99,26 @@ export class Overlay {
     L.version++;
     const had = this.pbx1 > this.pbx0;
     const has = this.bx1 > this.bx0;
-    if (!had && !has) L.dirty = null;
-    else {
-      const d = L.dirty ?? { x0: 0, y0: 0, x1: 0, y1: 0 };
-      d.x0 = Math.min(had ? this.pbx0 : this.w, has ? this.bx0 : this.w);
-      d.y0 = Math.min(had ? this.pby0 : this.h, has ? this.by0 : this.h);
-      d.x1 = Math.max(had ? this.pbx1 : 0, has ? this.bx1 : 0);
-      d.y1 = Math.max(had ? this.pby1 : 0, has ? this.by1 : 0);
-      L.dirty = d;
+    if (had || has) {
+      const x0 = Math.min(had ? this.pbx0 : this.w, has ? this.bx0 : this.w);
+      const y0 = Math.min(had ? this.pby0 : this.h, has ? this.by0 : this.h);
+      const x1 = Math.max(had ? this.pbx1 : 0, has ? this.bx1 : 0);
+      const y1 = Math.max(had ? this.pby1 : 0, has ? this.by1 : 0);
+      // the renderer nulls `dirty` once uploaded; until then keep accumulating so no changed pixel is ever dropped
+      const d = L.dirty;
+      if (d === null) {
+        const own = this.dirtyRect;
+        own.x0 = x0;
+        own.y0 = y0;
+        own.x1 = x1;
+        own.y1 = y1;
+        L.dirty = own;
+      } else {
+        if (x0 < d.x0) d.x0 = x0;
+        if (y0 < d.y0) d.y0 = y0;
+        if (x1 > d.x1) d.x1 = x1;
+        if (y1 > d.y1) d.y1 = y1;
+      }
     }
   }
 

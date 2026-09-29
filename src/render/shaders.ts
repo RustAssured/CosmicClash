@@ -220,6 +220,7 @@ uniform float uDensity;     // fraction of the pixel→light distance marched
 uniform float uDecay;
 uniform float uHaloR;       // px, analytic halo radius around the light
 uniform float uGasK;        // how much bright open gas contributes as a light source
+uniform float uOcc;         // opacity removed from the beam per fully occluded step (0..1)
 in vec2 vUv;
 out vec4 o;
 void main() {
@@ -227,6 +228,7 @@ void main() {
   vec2 delta = (uLight - p) * uDensity / float(uSamples);
   vec2 q = p;
   float w = 1.0;
+  float T = 1.0;             // transmittance of the beam between the light and the sample: occluders cast SHAFTS
   float acc = 0.0;
   vec3 tint = vec3(0.0);
   for (int i = 0; i < 64; i++) {
@@ -238,10 +240,10 @@ void main() {
     float open = 1.0 - s.a;
     float lightD = length(q - uLight);
     float halo = exp(-lightD / uHaloR);
-    float gas = smoothstep(0.32, 0.85, luma(s.rgb)) * uGasK;
-    float src = (halo * (inside ? open : 1.0) + gas * open);
-    acc += src * w;
-    tint += s.rgb * gas * open * w;
+    float gas = smoothstep(0.32, 0.85, luma(s.rgb)) * uGasK * open;
+    acc += (halo * open + gas) * T * w;
+    tint += s.rgb * gas * T * w;
+    T *= 1.0 - s.a * uOcc;
     w *= uDecay;
   }
   float n = float(uSamples);

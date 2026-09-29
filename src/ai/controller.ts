@@ -22,6 +22,8 @@ import { Plan, Steer } from './plan';
 const TYPES: DamageType[] = ['FRACTURE', 'ASSIMILATION', 'TIDAL', 'THERMAL', 'CRUSH', 'KINETIC'];
 const GLIDE_TAU = 0.35 / Math.LN2;
 const LOG_MAX = 80;
+/** A foe that has shown no threatening move or guard for this long (2.5 s) is treated as passive. */
+const PASSIVE_TICKS = 150;
 
 interface Cand {
   score: number;
@@ -123,6 +125,8 @@ export class UtilityAI implements AIController {
   private prevMoveId: string | null = null;
   private prevState = '';
   private prevProcessedTick = -1;
+  /** Tick (foe observation time) at which the foe last did something threatening; NaN until the first observation of a round. */
+  private foeActedTick = Number.NaN;
 
   /* own bookkeeping */
   private lastSurgeTick = -1e9;
@@ -160,6 +164,7 @@ export class UtilityAI implements AIController {
     this.prevMoveId = null;
     this.prevState = '';
     this.prevProcessedTick = -1;
+    this.foeActedTick = Number.NaN;
     this.lastSurgeTick = -1e9;
     this.stunAge = 0;
   }
@@ -226,6 +231,8 @@ export class UtilityAI implements AIController {
    * ---------------------------------------------------------------------------------------------- */
 
   private observeFoe(F: Snapshot): void {
+    if (Number.isNaN(this.foeActedTick) || F.moveId !== null || F.state === 'guard' || F.state === 'surge')
+      this.foeActedTick = F.tick;
     let tok: Token | null = null;
     if (F.moveId !== null && F.moveId !== this.prevMoveId) {
       tok = (F.moveSlot as Token | null) ?? 'idle';
@@ -267,6 +274,57 @@ export class UtilityAI implements AIController {
     return clamp((ox / Math.min(hw, fx1 - fx0)) * (oy / Math.min(hh, fy1 - fy0)), 0, 1);
   }
 
+  /**
+   * Hit probability of a straight beam: sample its axis and count how many samples land on live matter of the foe (its
+   * observed 8×8 region grid, shifted by where it is predicted to be). Three samples ≈ 24 px of overlap is a sure hit.
+   */
+  private lineCoverage(
+    ln: { x0: number; y0: number; x1: number; y1: number; width: number },
+    S: FighterView,
+    F: Snapshot,
+    f: 1 | -1,
+    rs: number,
+    disp: number,
+    shiftX: number,
+    shiftY: number,
+  ): number {
+    const ax = S.x + disp + f * ln.x0 * rs;
+    const ay = S.y + ln.y0 * rs;
+    const bx = S.x + disp + f * ln.x1 * rs;
+    const by = S.y + ln.y1 * rs;
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len < 1) return 0;
+    const nx = -(by - ay) / len;
+    const ny = (bx - ax) / len;
+    const off = Math.max(1, ln.width * 0.35);
+    const w = Math.max(1, F.bx1 - F.bx0);
+    const h = Math.max(1, F.by1 - F.by0);
+    const cx = (F.bx0 + F.bx1) * 0.5;
+    const cy = (F.by0 + F.by1) * 0.5;
+    const n = Math.ceil(len / 8);
+    let hits = 0;
+    for (let k = 0; k <= n; k++) {
+      const u = k / n;
+      const px = ax + (bx - ax) * u - shiftX;
+      const py = ay + (by - ay) * u - shiftY;
+      let inside = false;
+      for (let o = -1; o <= 1 && !inside; o++) {
+        const qx = px + nx * off * o;
+        const qy = py + ny * off * o;
+        if (qx < F.bx0 || qx >= F.bx1 || qy < F.by0 || qy >= F.by1) continue;
+        // bodies are blobs, not boxes: only the central ellipse of the bounds is reliably solid
+        const ex = (qx - cx) / (0.5 * w);
+        const ey = (qy - cy) / (0.5 * h);
+        if (ex * ex + ey * ey > 1) continue;
+        const gx = clamp(Math.floor(((qx - F.bx0) / w) * 8), 0, 7);
+        const gy = clamp(Math.floor(((qy - F.by0) / h) * 8), 0, 7);
+        if (F.region[gy * 8 + gx]! > 0.08) inside = true;
+      }
+      if (inside) hits++;
+    }
+    return clamp(hits / 3, 0, 1);
+  }
+
   /** Foe displacement (px) `ticks` after the delayed observation (glide model, same constants as the fighter). */
   private foeShift(F: Snapshot, ticks: number, axis: 'x' | 'y'): number {
     const v = axis === 'x' ? F.vx : F.vy;
@@ -303,7 +361,7 @@ export class UtilityAI implements AIController {
     const hi = Math.max(x0, x1);
     const y0 = S.y + mi.y0 * rs;
     const y1 = S.y + mi.y1 * rs;
-    let p = this.coverage(lo, y0, hi, y1, F, sx, sy);
+    let p = mi.line ? this.lineCoverage(mi.line, S, F, f, rs, disp, sx, sy) : this.coverage(lo, y0, hi, y1, F, sx, sy);
     if (p <= 0) return;
     // a foe that is already moving away / has a surge ready dodges some of it; a guarding foe blocks some
     p = Math.min(1, p * 1.25);
@@ -603,7 +661,9 @@ export class UtilityAI implements AIController {
         if (mi.chargeMax > 0 && p > 0) {
           const need = (dist + 24) / Math.max(20, mi.x1 * S.stats.reachMul);
           const frac = clamp((need - cr[0]) / Math.max(0.01, cr[1] - cr[0]), 0, 1);
-          chargeTicks = Math.round(frac * mi.chargeMax * (0.55 + 0.45 * this.rng.next()));
+          // holding the charge for the right length is a skill: novices cut it short (and fall short), the best add a margin
+          const hold = (1 - this.P.punishSkill) * (0.55 + 0.45 * this.rng.next()) + this.P.punishSkill * 1.08;
+          chargeTicks = Math.min(mi.chargeMax, Math.round(frac * mi.chargeMax * hold));
           dmg *= 1 + frac * 0.7;
         }
         if (p < 0.12) continue;
@@ -615,14 +675,17 @@ export class UtilityAI implements AIController {
           score = per * (0.35 + pers.punish * 0.5) * this.P.punishSkill;
           if (startupEff + 2 > vuln) score *= 0.1;
         } else {
+          // a foe that has done nothing for a while (idle dummy, AFK, stunned-out) cannot punish anything: simply maximise damage per second
+          const passive = F.tick - this.foeActedTick >= PASSIVE_TICKS;
           // neutral: a poke is cheap, a heavy is a commitment a reacting foe can punish — weigh by time and by whether it can react
           const react = clamp((startupEff - 16) / 34, 0, 1);
           let commit = react * (foeIdle ? 0.55 : 0.1);
           if (foeGuards && mi.slot === 'crush') commit -= 0.35; // crushes break guards
           const time = (mi.total / 60) * 0.32;
           score = per * (0.4 + pers.aggression * 0.55) * 0.85 - time - commit * (0.5 + pers.patience);
+          if (passive) score = (dmg / Math.max(24, startupEff + mi.active + mi.recovery)) * (60 / 350) * (0.5 + 0.5 * pers.aggression);
           const risk = ((mi.recovery + startupEff) / 100) * (1 - p) * (0.3 + 0.6 * pers.patience) * (1 - 0.5 * pers.retreat);
-          score -= risk;
+          if (!passive) score -= risk;
           if (F.phase === 'startup' || F.phase === 'charge') score -= 0.1; // do not walk into a windup
           if (mi.slot === 'signature') score += 0.3 * (pers.gaze + pers.zoning) * (mi.beam ? 1 : 0.55);
         }

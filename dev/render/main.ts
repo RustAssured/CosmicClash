@@ -179,7 +179,7 @@ function currentFx(): FrameFx {
   fx.shockwaves.length = 0;
   for (let i = shocks.length - 1; i >= 0; i--) {
     const s = shocks[i]!;
-    const age = (simTime - s.born) / 1.4;
+    const age = (simTime - s.born) / 0.9;
     if (age >= 1) {
       shocks.splice(i, 1);
       continue;
@@ -188,19 +188,27 @@ function currentFx(): FrameFx {
       x: s.x,
       y: s.y,
       age,
-      radius: 20 + s.radius * (1 - Math.pow(1 - age, 2)),
-      strength: s.strength,
+      // mirrors the app's FxState: eased radius, strength already decayed by the producer
+      radius: s.radius * (1 - Math.pow(1 - age, 2.2)),
+      strength: s.strength * Math.pow(1 - age, 1.6),
     });
   }
   fx.impulses.length = 0;
   for (let i = impulses.length - 1; i >= 0; i--) {
     const s = impulses[i]!;
-    const age = (simTime - s.born) / 2.6;
+    const age = (simTime - s.born) / 2.2;
     if (age >= 1) {
       impulses.splice(i, 1);
       continue;
     }
-    fx.impulses.push({ x: s.x, y: s.y, age, strength: s.strength, radius: s.radius, hue: s.hue });
+    fx.impulses.push({
+      x: s.x,
+      y: s.y,
+      age,
+      strength: s.strength * (1 - age * 0.7),
+      radius: s.radius * (0.3 + 0.7 * Math.sqrt(age)),
+      hue: s.hue,
+    });
   }
   fx.lenses.length = 0;
   if (lensOn) fx.lenses.push({ x: B.x, y: B.y - 10, horizonR: 26, strength: 1 });
@@ -340,6 +348,8 @@ const api = {
       intensity: number;
       lens: boolean;
       timeScale: number;
+      flash: number;
+      aberration: number;
     }>,
   ): void {
     if (s.stage && s.stage !== stage) {
@@ -356,8 +366,15 @@ const api = {
     if (s.intensity !== undefined) fx.intensity = s.intensity;
     if (s.lens !== undefined) lensOn = s.lens;
     if (s.timeScale !== undefined) fx.timeScale = s.timeScale;
+    if (s.flash !== undefined) fx.flash = s.flash;
+    if (s.aberration !== undefined) fx.aberration = s.aberration;
   },
   fire,
+  /** Run `n` sim ticks without advancing the scenery clock or drawing (lets the heavy camera arrive). */
+  settle(n = 300): void {
+    loop.pause();
+    for (let i = 0; i < n; i++) tick();
+  },
   point(x: number, y: number): void {
     pointerWorld = { x, y };
   },

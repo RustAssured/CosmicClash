@@ -224,10 +224,11 @@ export class FighterImpl implements Fighter {
   private readonly sparkRamp: number[];
   /** Reusable particle request (behaviours mutate it and hand it to `world.spawnParticles`). */
   readonly particleSpawn: ParticleSpawn;
-  private bbox = { x0: 0, y0: 0, x1: 0, y1: 0, stamp: -1e9 };
+  /** Cached live bounds: refreshed from the world when the matter changed / the body flipped / every few ticks, else shifted with the transform. */
+  private readonly bbCache = { tx: 0, ty: 0, lean: 0, facing: 1, version: -1, stamp: -1e9 };
+  private readonly bodyDirty = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private lastEventTick = -1e9;
   private readonly bnd: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
-  private bbDirty = true;
   private moveActiveNow = false;
 
   constructor(opts: FighterOptions) {
@@ -1228,64 +1229,38 @@ export class FighterImpl implements Fighter {
     t.y = Math.round(this.py + bob);
     t.facing = this.facing;
     t.lean = Math.round(this.leanF * this.facing);
-    this.bbDirty = this.bbDirty || this.tickNo - this.bbox.stamp > 10;
   }
 
-  /** World AABB of live matter (returns a reused object). The scan is cached in map-local terms and refreshed every ~10 ticks / after damage. */
+  /**
+   * World AABB of live matter (returns a reused object), from `world.liveBounds`. The world scans the whole cell map, so the result is
+   * cached: it is refreshed when the map changed, the body flipped, or every 8 ticks, and otherwise shifted by the transform delta.
+   */
   liveBounds(): Bounds {
-    if (this.bbDirty) this.recomputeBounds();
     const t = this.body.transform;
-    const b = this.bbox;
-    const wx0 = t.x + (b.x0 - t.anchorX) * t.facing;
-    const wx1 = t.x + (b.x1 - t.anchorX) * t.facing;
-    const pad = Math.abs(t.lean);
+    const c = this.bbCache;
     const o = this.bnd;
-    o.x0 = Math.min(wx0, wx1) - pad;
-    o.x1 = Math.max(wx0, wx1) + pad;
-    o.y0 = t.y + (b.y0 - t.anchorY);
-    o.y1 = t.y + (b.y1 - t.anchorY);
+    if (this.body.map.version !== c.version || t.facing !== c.facing || this.tickNo - c.stamp > 8) {
+      if (!this.world.liveBounds(this.body.id, o)) {
+        o.x0 = t.x;
+        o.x1 = t.x;
+        o.y0 = t.y;
+        o.y1 = t.y;
+      }
+      c.version = this.body.map.version;
+      c.facing = t.facing;
+      c.stamp = this.tickNo;
+    } else {
+      const dx = t.x - c.tx;
+      const dl = Math.abs(t.lean) - Math.abs(c.lean);
+      o.x0 += dx - dl;
+      o.x1 += dx + dl;
+      o.y0 += t.y - c.ty;
+      o.y1 += t.y - c.ty;
+    }
+    c.tx = t.x;
+    c.ty = t.y;
+    c.lean = t.lean;
     return o;
-  }
-
-  private recomputeBounds(): void {
-    const map = this.body.map;
-    let x0 = map.w;
-    let x1 = -1;
-    let y0 = map.h;
-    let y1 = -1;
-    for (let y = 0; y < map.h; y++) {
-      const row = y * map.w;
-      let first = -1;
-      for (let x = 0; x < map.w; x++)
-        if (map.material[row + x] !== 0) {
-          first = x;
-          break;
-        }
-      if (first < 0) continue;
-      let last = first;
-      for (let x = map.w - 1; x > first; x--)
-        if (map.material[row + x] !== 0) {
-          last = x;
-          break;
-        }
-      if (first < x0) x0 = first;
-      if (last > x1) x1 = last;
-      if (y < y0) y0 = y;
-      y1 = y;
-    }
-    if (x1 < 0) {
-      x0 = 0;
-      x1 = 0;
-      y0 = 0;
-      y1 = 0;
-    }
-    const b = this.bbox;
-    b.x0 = x0;
-    b.x1 = x1 + 1;
-    b.y0 = y0;
-    b.y1 = y1 + 1;
-    b.stamp = this.tickNo;
-    this.bbDirty = false;
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -1618,7 +1593,6 @@ export class FighterImpl implements Fighter {
     let dr = EMPTY_DAMAGE_RESULT as Readonly<typeof EMPTY_DAMAGE_RESULT>;
     if (e.energy >= 0.5) {
       dr = this.world.applyDamage(this.body.id, e);
-      this.bbDirty = true;
     }
     const cells = dr.cellsRemoved + ir.extraCells;
     res.cellsRemoved = cells;
@@ -1872,7 +1846,25 @@ export class FighterImpl implements Fighter {
     L.anchorX = t.anchorX;
     L.anchorY = t.anchorY;
     L.version = map.version;
-    L.dirty = map.dirty;
+    const md = map.dirty;
+    if (md !== null) {
+      // copy the matter world's changed rect into our own (the renderer nulls `L.dirty` after upload) and consume it
+      let d = L.dirty;
+      if (d === null) {
+        d = this.bodyDirty;
+        d.x0 = md.x0;
+        d.y0 = md.y0;
+        d.x1 = md.x1;
+        d.y1 = md.y1;
+        L.dirty = d;
+      } else {
+        if (md.x0 < d.x0) d.x0 = md.x0;
+        if (md.y0 < d.y0) d.y0 = md.y0;
+        if (md.x1 > d.x1) d.x1 = md.x1;
+        if (md.y1 > d.y1) d.y1 = md.y1;
+      }
+      map.dirty = null;
+    }
     L.pixels = map.pixels;
     L.emissive = map.emissive;
     out.push(L);
@@ -1946,7 +1938,7 @@ export class FighterImpl implements Fighter {
     t.lean = 0;
     this.prevTx = t.x;
     this.prevTy = t.y;
-    this.bbDirty = true;
+    this.bbCache.stamp = -1e9;
     this.behaviour.reset(healFraction);
     this.refreshStats();
     this.threatCount = 0;

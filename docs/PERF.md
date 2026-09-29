@@ -31,3 +31,22 @@ Allocation: **idle 1000 ticks (bodies, chunks, particles, burning and infection 
 Mass ledger after the 60 s fight: residual −2.5e-5 (exact conservation is asserted in 24 fuzz barrages and the unit tests).
 
 Not measured: real-GPU cost of the layers (matter only fills two pooled 640×360 logical-resolution RGBA layers; upload cost belongs to the renderer), and behaviour on other JS engines.
+
+## Render (B1)
+
+Measured with `node tools/render/perf.mjs [--layers]` (Playwright → headless Chromium, **SwiftShader software WebGL2**, 1280×720 viewport, the nursery with two test bodies, a UI layer and sparks; the dev server on :5201). **The rasteriser runs on the same 4 shared vCPUs as everything else** (load average 7–10 while these numbers were taken, three other builders running tests), so wall times are heavily pessimistic and ±30 % noisy; they show *relative* cost. The representative numbers are the **CPU-side ms per `draw()`** (all our JS + GL command submission, no rasterisation) and the **fill estimate** (fragments shaded per frame, machine independent).
+
+| tier | scenery target | CPU ms / `draw()` | software-GL wall ms / frame (no scenery layers → full) | scenery fragments / frame | + post & present |
+|---|---|---|---|---|---|
+| 0 | 640×360, ×0.4 particles, 3 bloom levels, 16 ray taps | 3.5 – 8 | 65 → 590 | 4.2 M | 1.6 M |
+| 1 | 640×360, ×0.7 particles, 4 levels, 28 taps | 1.2 – 7 | 65 → 875 | 5.7 M | 1.6 M |
+| 2 (showpiece) | 1280×720 supersample, ×1 particles, 5 levels, 44 taps | 3 – 4 | 85 → 2 700 | 28.3 M | 1.6 M |
+
+* **CPU per `draw()` is 3–8 ms** (the spread is scheduler noise on the loaded box; a quiet-box median is ≈ 3.5 ms at every tier): one `renderer.render` for ~26 scenery layers, one for the 2D layers, ~14 full-screen passes, uniform packing. It is independent of scenery complexity (a GPU-bound frame). No per-frame allocation in our code (compositor, layer cache, fx packing and the scenery frame are preallocated; verified by reading the hot path — not by a heap profile).
+* **The non-scenery part of the pipeline** (lens + palette dither + 2D layers + 5-level bloom + 44-tap god rays + post + integer upscale) costs 65–175 ms per frame *in software*, ≈ 1.6 M fragments; that is ≈ 0.6 ms on a 3 Gfrag/s integrated GPU.
+* **Scenery fill** dominates. Per-layer wall cost at tier 2 (software; `--layers`): particle nebula 1.2 s, the fbm layers (`glow`, `gas-mid`, `sky`, `dust-lanes`, `mist`) 0.25–0.4 s each, pillars 0.06–0.12 s each, stars/wisps/hero stars < 0.05 s. At 3 Gfrag/s (a conservative blended-fragment rate for an integrated GPU) the estimate is **≈ 1.9 ms (tier 0), 2.4 ms (tier 1), 10 ms (tier 2)** — inside the 16 ms budget, but tier 2 is ALU-heavy (five fbm layers at 4× the pixels) so on an old iGPU it may not hold 60 fps. **Recommendation:** default to tier 1 (still full-quality art at the logical resolution) and enable tier 2 on discrete GPUs / when `renderer.stats` + frame pacing show headroom. *This is an estimate, not a measurement on real hardware.*
+* **Load time:** `setStage('nursery')` ≈ 2.5 – 4 s in software (shader compilation ≈ 1 s, palette LUT 70–180 ms, two GPU pillar bakes ≈ 0.3 s on a real GPU); warm re-entry ≈ 0.3 s. The LUT build is CPU (`buildDitherLut`: 48³ nodes ≈ 180 ms in Node). Call `setStage` on the stage-select screen.
+* **Uploads:** the layer texture cache uploaded exactly the dirty rect in the GPU verification (64 texels for an 8×8 change on a 640×360 layer) and nothing for unchanged versions (`node tools/render/verify.mjs`).
+* Frame *interval* in the sandbox on this box is ~0.4–4 s (software), so real-time behaviour was judged from stills and from the deterministic checks, not from motion.
+
+Not measured: any real-GPU time; motion smoothness of the dithered scenery under camera pans (judged from stills only — see the Known issues in the final report).

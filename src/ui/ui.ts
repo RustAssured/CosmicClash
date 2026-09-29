@@ -115,7 +115,7 @@ class UIRuntime implements GameUI, UICtx {
     this.t += dtSec;
     this.screenTime += dtSec;
     if (this.fade < 1) this.fade = Math.min(1, this.fade + dtSec / FADE_SEC);
-    this.input.poll();
+    this.input.pollIfStale();
     this.navAny = this.input.nav('any');
     const n = this.navAny;
     const active = n.any || n.up || n.down || n.left || n.right || n.confirm || n.back || n.start;

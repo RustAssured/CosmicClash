@@ -89,17 +89,17 @@ vec2 warpByForces(vec2 c, float k) {
   return c;
 }
 
-// Warm/cool tint contributed by impulses near a point (fire = orange), for glowing dust.
+// Tint contributed by impulses that carry a hue (fire = orange), for glowing dust. Impulses with hue -1 add nothing.
 vec3 impulseGlow(vec2 c) {
   vec3 g = vec3(0.0);
   for (int i = 0; i < 6; i++) {
     if (i >= uNImp) break;
     vec4 m = uImp[i];
     float hue = uImp2[i].y;
+    if (hue < 0.0) continue;                      // contract: hue -1 = no tint (the impulse still swirls)
     vec2 d = c - m.xy;
     float w = exp(-dot(d, d) / (m.z * m.z * 1.6)) * abs(m.w) * (1.0 - uImp2[i].x);
-    vec3 col = hue < 0.0 ? vec3(1.0, 0.7, 0.4)
-                         : clamp(abs(fract(hue + vec3(0.0, 0.6667, 0.3333)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+    vec3 col = clamp(abs(fract(hue + vec3(0.0, 0.6667, 0.3333)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
     g += col * w;
   }
   return g;

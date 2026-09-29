@@ -1,5 +1,4 @@
 import { hex, pb, pg, pr, type StageInfo } from '@/contracts';
-import { STAGE_RAMPS } from '../info';
 
 /** Linear-light RGB triple (HDR values allowed). */
 export type Rgb = readonly [number, number, number];
@@ -14,7 +13,7 @@ export function hexLinear(h: string): [number, number, number] {
 
 /** The stage palette split into its ramps, each entry as linear RGB, dark → light. */
 export function paletteRamps(info: StageInfo): Rgb[][] {
-  const lens = STAGE_RAMPS[info.id];
+  const lens = info.ramps ?? [info.palette.length];
   const out: Rgb[][] = [];
   let i = 0;
   for (const n of lens) {

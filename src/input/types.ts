@@ -297,6 +297,8 @@ export interface InputManager {
   detach(): void;
   /** Once per frame (idempotent within one timestamp). Rescans pads, updates nav and stickiness. */
   poll(nowMs?: number): void;
+  /** Poll unless something already did within `maxAgeMs` (wall clock): safe for the UI to call even when the app polls. */
+  pollIfStale(maxAgeMs?: number): void;
   /** The `InputSource` for a player slot. Samples devices *at tick time*; edges are per tick. */
   source(slot: 0 | 1): InputSource;
   /** Menu navigation frame, valid until the next poll. 'any' merges every device. */

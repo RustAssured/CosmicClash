@@ -564,6 +564,42 @@ async function main(): Promise<void> {
         lum += (f[i]! & 255) + ((f[i]! >>> 8) & 255) + ((f[i]! >>> 16) & 255);
       check(`stage ${st} draws a non-blank scenery`, lum > 2000, `sum ${lum}`);
     }
+    // God rays: an opaque body between the stage light and a probe region casts a shaft (the probe gets less ray light),
+    // while a control region beside it is unaffected. Scenery is identical in both frames; only the occluder differs.
+    r.setStage('nursery');
+    const bar = makeLayer('bar', 'world', 0, 10, 300);
+    bar.pixels.fill(rgba(4, 3, 5, 255));
+    Object.assign(bar, {
+      anchorX: 5,
+      anchorY: 0,
+      x: view.x0 + 158,
+      y: view.y0 + 0,
+      prevX: view.x0 + 158,
+      prevY: view.y0,
+      version: 1,
+    });
+    r.draw(frameOf([], { stage: 'nursery', tick: 3000 }));
+    const open = r.captureLogical();
+    r.draw(frameOf([bar], { stage: 'nursery', tick: 3000 }));
+    const blocked = r.captureLogical();
+    const lumAt = (f: Uint32Array, x0: number, y0: number, x1: number, y1: number): number => {
+      let s = 0;
+      let n = 0;
+      for (let y = y0; y < y1; y++)
+        for (let x = x0; x < x1; x++) {
+          const p = f[y * LOGICAL_W + x]!;
+          s += (p & 255) + ((p >>> 8) & 255) + ((p >>> 16) & 255);
+          n += 3;
+        }
+      return s / n;
+    };
+    const shadow = lumAt(open, 250, 60, 310, 110) - lumAt(blocked, 250, 60, 310, 110);
+    const control = Math.abs(lumAt(open, 400, 5, 460, 35) - lumAt(blocked, 400, 5, 460, 35));
+    check(
+      'god rays: an opaque body between the light and a region casts a shaft there (and only there)',
+      shadow > 1.5 && control < 0.5,
+      `shaft dims the probe by ${shadow.toFixed(2)} levels, control region moves ${control.toFixed(2)}`,
+    );
     r.setStage('tussenruimte');
     void bg;
   }

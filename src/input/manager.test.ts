@@ -418,6 +418,31 @@ describe('menu navigation', () => {
     r.frame();
     expect(r.m.nav('any').down).toBe(false);
   });
+  it('a second poll in the same frame with a DIFFERENT timestamp (rAF time vs performance.now) must not swallow the edge', () => {
+    const r = rig();
+    const p = r.pads.plug(proStandard());
+    r.frame();
+    p.set(Pad.DOWN, true);
+    r.clock.t += 16;
+    // the app polls with the rAF timestamp, which trails performance.now() by a few ms …
+    r.m.poll(r.clock.t - 9);
+    expect(r.m.nav('any').down).toBe(true);
+    // … then the UI polls "just in case": it must be a no-op, the edge must survive
+    r.clock.t += 1;
+    r.m.pollIfStale();
+    expect(r.m.nav('any').down).toBe(true);
+    // a genuinely new frame (clock moved on, nobody polled) does poll
+    r.clock.t += 16;
+    r.m.pollIfStale();
+    expect(r.m.nav('any').down).toBe(false); // held, not re-fired: the repeat delay has not elapsed
+    p.release(Pad.DOWN);
+    r.clock.t += 16;
+    r.m.pollIfStale();
+    p.set(Pad.DOWN, true);
+    r.clock.t += 16;
+    r.m.pollIfStale();
+    expect(r.m.nav('any').down).toBe(true); // a fresh press after a release fires again
+  });
   it('left stick navigates with hysteresis', () => {
     const r = rig();
     const p = r.pads.plug(proStandard());

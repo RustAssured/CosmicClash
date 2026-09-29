@@ -107,6 +107,8 @@ class Manager implements InputManager {
   private activityQueue: DeviceInfo[] = [];
 
   private lastPollNow = -Infinity;
+  /** `clock()` at the last real poll: what `pollIfStale` measures against, independent of the timestamp the caller passed. */
+  private lastPollWall = -Infinity;
   private lastTick = -1;
   /** Clock time of the last tick-time sample; a stale value means the sim is not running (menus). */
   private lastSampleAt = -Infinity;
@@ -463,6 +465,7 @@ class Manager implements InputManager {
     // Idempotent per frame: the app and the UI may both call poll() in one frame.
     if (Math.abs(now - this.lastPollNow) < 3) return;
     this.lastPollNow = now;
+    this.lastPollWall = this.clock();
     // Sub-tick taps are latched for the sim; with no sim running (menus) nothing will consume them, and a stale latch
     // would surface as a phantom button press on the first tick of the next match.
     if (now - this.lastSampleAt > STALE_LATCH_MS) for (const d of this.allDevices()) d.dropLatch();
@@ -495,6 +498,17 @@ class Manager implements InputManager {
     this.looseKeys.length = 0;
 
     this.buildNav(now, anyFresh, captured);
+  }
+
+  /**
+   * Poll only if nobody has this frame. The UI calls this from `update()` so it works standalone, and stays a no-op when the
+   * app already polled — WHATEVER timestamp the app passed. (`poll(now)` de-duplicates by the timestamp it is given, but a
+   * requestAnimationFrame timestamp and `performance.now()` differ by up to a frame, so a second, "different" poll in the
+   * same frame would rebuild the nav frame and swallow the edge the first one produced: measured in the browser sandbox as
+   * menus that ignored two presses in three.)
+   */
+  pollIfStale(maxAgeMs = 8): void {
+    if (this.clock() - this.lastPollWall > maxAgeMs) this.poll();
   }
 
   private buildNav(now: number, anyFresh: Record<string, boolean>, suppress: boolean): void {

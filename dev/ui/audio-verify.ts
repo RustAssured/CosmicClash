@@ -1,6 +1,6 @@
 import type { AudioEvent, AudioScene, StageId, TitanId } from '@/contracts';
 import { createAudioEngine, type AudioEngineExt } from '@/audio/engine';
-import { bandShare, decayTime, firstAbove, peak, rms, spectralCentroid, toDb } from '@/audio/dsp/analysis';
+import { bandShare, decayTime, envelopeDb, firstAbove, peak, rms, spectralCentroid, toDb } from '@/audio/dsp/analysis';
 
 /**
  * Numeric verification of the REAL audio engine in a real browser: every scenario renders through an OfflineAudioContext
@@ -45,6 +45,12 @@ export interface VerifyReport {
   scoreCalmLowBandShare: number;
   /** RMS of (render A − render B) relative to the render, same seed: at most float noise (≤ −60 dB). */
   scoreRepeatDiffDb: number;
+  /** Peak level (raw, after 2 s) of the calm menu score vs the full-intensity fight score. */
+  scoreCalmPeakDb: number;
+  scoreHotPeakDb: number;
+  /** Spread of the 50 ms RMS envelope: rhythm layers make the hot score far more dynamic than the calm drone. */
+  scoreCalmDynDb: number;
+  scoreHotDynDb: number;
   /** Spectral centroid above 300 Hz (sub-bass thump excluded) of the Last One's glass being hit… */
   /** Spectral centroid above 300 Hz (the shared sub-bass thump excluded): the glassy Last One being hit. */
   glassCentroidHz: number;
@@ -54,6 +60,16 @@ export interface VerifyReport {
   gainHalfDb: number;
   uiPeakDb: number;
   uiMaxTailSec: number;
+}
+
+/**
+ * The score smooths intensity (rises with a 0.35 s time constant, as in play, where update() runs every frame). Offline there
+ * are no frames, so feed it two seconds of them first — WITHOUT scheduling — then pre-schedule `horizon` seconds at the settled
+ * intensity. One single call would plan the whole clip at ~5 % of the intensity asked for.
+ */
+function settle(eng: AudioEngineExt, s: AudioScene, horizon: number): void {
+  for (let i = 0; i < 120; i++) eng.updateAt(s, 1 / 60, 0);
+  eng.updateAt(s, 1 / 60, horizon);
 }
 
 const scene = (o: Partial<AudioScene> = {}, a: TitanId = 'lastone', b: TitanId = 'asteroid'): AudioScene => ({
@@ -267,6 +283,10 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
       scoreHotLowBandShare: nan,
       scoreCalmLowBandShare: nan,
       scoreRepeatDiffDb: nan,
+      scoreCalmPeakDb: nan,
+      scoreHotPeakDb: nan,
+      scoreCalmDynDb: nan,
+      scoreHotDynDb: nan,
       glassCentroidHz: spectralCentroid(lastHit, SR, Math.floor(SR * 0.05), 8192, 300),
       rockCentroidHz: spectralCentroid(rockHit, SR, Math.floor(SR * 0.05), 8192, 300),
       gainMasterZeroPeak: nan,
@@ -312,24 +332,27 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
   let stormEvents = 0;
   const stormScene = scene({ intensity: 1, lowestIntegrity: 0.1 });
   const stormBuf = await render(6, (eng) => {
-    eng.updateAt(stormScene, 1 / 60, 6);
+    settle(eng, stormScene, 6);
     stormEvents = storm(6, eng);
   });
   const rawBuf = await render(
     6,
     (eng) => {
-      eng.updateAt(stormScene, 1 / 60, 6);
+      settle(eng, stormScene, 6);
       storm(6, eng);
     },
     { unsafeBypassLimiter: true },
   );
 
-  // --- reverb tail of the heaviest blow
-  const heavy = await render(9, (eng) => {
-    eng.setVolumes({ music: 0 });
-    eng.updateAt(scene(), 1 / 60, 0);
-    eng.handleAt([hit({ type: 'CRUSH', energy: 9000, heavy: true }), { t: 'shockwave', x: 800, y: 300, strength: 1, radius: 300, hue: 0 }], 0.05);
-  });
+  // --- reverb tail of the heaviest blow (event alone: the fighters' idle bed would otherwise never let the envelope decay)
+  const heavyBed = await bedFor(9, scene());
+  const heavyWith = await render(
+    9,
+    setupFor([hit({ type: 'CRUSH', energy: 9000, heavy: true }), { t: 'shockwave', x: 800, y: 300, strength: 1, radius: 300, hue: 0 }], scene()),
+    { unsafeBypassLimiter: true },
+  );
+  const heavyDiff = new Float32Array(heavyWith.mono.length);
+  for (let i = 0; i < heavyDiff.length; i++) heavyDiff[i] = heavyWith.mono[i]! - heavyBed.mono[i]!;
 
   // --- latency: first audible sample after an event scheduled at t = 0.006 (the engine's own look-ahead)
   const lat = await render(0.5, (eng) => {
@@ -342,9 +365,7 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
   const scoreAt = async (i: number, seed = 1): Promise<Rendered> =>
     render(
       10,
-      (eng) => {
-        eng.updateAt(scene({ intensity: i, fighters: null, phase: i > 0 ? 'fight' : 'menu' }), 1 / 60, 10);
-      },
+      (eng) => settle(eng, scene({ intensity: i, fighters: null, phase: i > 0 ? 'fight' : 'menu' }), 10),
       { seed },
     );
   const calm = await scoreAt(0);
@@ -358,6 +379,11 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
   // the pulse and taiko layers live below 200 Hz: they must carry a real share of the hot score's power
   const hotLowShare = bandShare(hotA.mono, SR, 20, 200, SR * 4, 32768);
   const calmLowShare = bandShare(calm.mono, SR, 20, 200, SR * 4, 32768);
+  // rhythm layers show up as dynamics: the spread of the 50 ms RMS envelope (loudest − quietest window) and the peak level
+  const dyn = (x: Float32Array): number => {
+    const env = envelopeDb(x.subarray(SR * 2), Math.round(SR * 0.05)).filter((v) => v > -90);
+    return Math.max(...env) - Math.min(...env);
+  };
 
   // --- volume control (a fixed, unclipped test tone-like event; master scales linearly AFTER the dynamics)
   const gainProbe = (master: number) =>
@@ -387,16 +413,20 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
     stormPeakNoLimiter: rawBuf.peak,
     stormRmsDb: toDb(rms(stormBuf.mono)),
     stormEvents,
-    heavyHitTailSec: decayTime(heavy.mono.subarray(Math.floor(SR * 0.05)), SR, 40, 20),
+    heavyHitTailSec: decayTime(heavyDiff.subarray(Math.floor(SR * 0.05)), SR, 40, 20),
     latencyMs: first < 0 ? Infinity : (first / SR) * 1000,
     scoreCalmRmsDb: toDb(rms(calm.mono, SR * 2, SR * 10)),
     scoreHotRmsDb: toDb(rms(hotA.mono, SR * 2, SR * 10)),
     scoreHotLowBandShare: hotLowShare,
     scoreCalmLowBandShare: calmLowShare,
     scoreRepeatDiffDb,
+    scoreCalmPeakDb: toDb(peak(calm.mono, SR * 2)),
+    scoreHotPeakDb: toDb(peak(hotA.mono, SR * 2)),
+    scoreCalmDynDb: dyn(calm.mono),
+    scoreHotDynDb: dyn(hotA.mono),
     glassCentroidHz: spectralCentroid(lastHit, SR, Math.floor(SR * 0.05), 8192, 300),
     rockCentroidHz: spectralCentroid(rockHit, SR, Math.floor(SR * 0.05), 8192, 300),
-    gainMasterZeroPeak: zero.peak,
+    gainMasterZeroPeak: peak(zero.mono, Math.floor(SR * 0.4)),
     gainHalfDb: toDb(half.peak) - toDb(full.peak),
     uiPeakDb: Math.max(...ui.map((e) => e.peakDb)),
     uiMaxTailSec: Math.max(...ui.map((e) => e.tailSec)),

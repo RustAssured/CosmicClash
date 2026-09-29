@@ -622,18 +622,27 @@ export class AsteroidBehaviour extends Behaviour {
     const t = f.body.transform;
     const dir = f.facing;
     const at = m.phase === 'active' ? m.phaseTick - 1 : -1;
-    for (let i = 0; i < cfg.count; i++) {
-      const launch = cfg.sweepFrom + ((i * 1.37) % (cfg.sweepTo - cfg.sweepFrom - 20));
+    // a hot haze along the whole sweep so the storm reads as one attack, then the individual rocks on top of it
+    if (at >= cfg.sweepFrom - 4 && at <= cfg.sweepTo + 10) {
+      const k = clamp01(1 - Math.abs(at - (cfg.sweepFrom + cfg.sweepTo) * 0.5) / (cfg.sweepTo - cfg.sweepFrom));
+      for (let g = 0; g < 6; g++) this.fx.glow(t.x + dir * (40 + g * 46), t.y + Math.sin(tick * 0.2 + g) * 10, 34, 230, 130, 60, 0.12 * k);
+    }
+    // twice as many rocks as the damage model has hits: the storm should look like a wall, the hitboxes are what count
+    for (let i = 0; i < cfg.count * 2; i++) {
+      const launch = cfg.sweepFrom + ((i * 0.69) % (cfg.sweepTo - cfg.sweepFrom - 20));
       const age = at - launch;
-      if (age < 0 || age > 30) continue;
+      if (age < 0 || age > 34) continue;
       const spread = ((i * 37) % 100) / 100 - 0.5;
       const x = t.x + dir * (26 + age * 10.5);
       const y = t.y + spread * 120 * (0.25 + age / 30) + Math.sin(age * 0.5 + i) * 6;
-      const size = 2 + (i % 3);
+      const size = 3 + (i % 4);
+      for (let s = 1; s <= 8; s++) {
+        const q = 1 - s / 9;
+        this.fx.add(Math.round(x - dir * s * 3), Math.round(y), 255 * q, 170 * q, 80 * q);
+        if (size >= 5) this.fx.add(Math.round(x - dir * s * 3), Math.round(y + 1), 200 * q, 120 * q, 50 * q);
+      }
       this.pebble(this.front, x, y, size, i, 1);
-      for (let s = 1; s <= 5; s++)
-        this.fx.add(Math.round(x - dir * s * 3), Math.round(y), 150 - s * 26, 110 - s * 19, 60 - s * 10);
-      if (age < 3) this.fx.glow(x, y, 7, 255, 210, 130, 0.6);
+      this.fx.glow(x, y, age < 4 ? 10 : 6, 255, 210, 130, age < 4 ? 0.7 : 0.3);
     }
     void tick;
   }

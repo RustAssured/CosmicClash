@@ -656,7 +656,10 @@ export class LastOneBehaviour extends Behaviour {
     fx.end();
   }
 
-  /** A beam: a hot white-gold core, a gold body and a soft additive halo, with slow shimmer along its length. */
+  /**
+   * A beam, evaluated per pixel from its distance to the axis (so a diagonal beam has no holes or dotting): a hot white core,
+   * an amber body that reddens toward its edge, and a soft additive halo, with a slow shimmer travelling along its length.
+   */
   private drawBeam(
     fx: Overlay,
     x0: number,
@@ -672,40 +675,53 @@ export class LastOneBehaviour extends Behaviour {
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx / len;
     const uy = dy / len;
-    const nx = -uy;
-    const ny = ux;
-    const steps = Math.ceil(len / 1.5);
-    const halfW = Math.max(2, width * 0.5);
-    for (let s = 0; s < steps; s++) {
-      const d = (s / steps) * len;
-      const px = x0 + ux * d;
-      const py = y0 + uy * d;
-      const fall = 1 - (d / len) * 0.45;
-      const shimmer = 0.75 + 0.25 * Math.sin(d * 0.35 - tick * 0.9);
-      const wcore = halfW * 0.28 * fall * shimmer;
-      const wbody = halfW * 0.62 * fall;
-      const wglow = halfW * (big ? 1.9 : 1.5) * fall;
-      // sample across the beam width
-      for (let o = -Math.ceil(wglow); o <= Math.ceil(wglow); o++) {
-        const qx = px + nx * o;
-        const qy = py + ny * o;
-        const ao = Math.abs(o);
-        const rx = Math.round(qx);
-        const ry = Math.round(qy);
-        if (ao <= wcore) fx.add(rx, ry, 255, 250, 225);
-        else if (ao <= wbody) fx.add(rx, ry, 255, 205, 110);
-        else
-          fx.add(
-            rx,
-            ry,
-            70 * (1 - (ao - wbody) / Math.max(1, wglow - wbody)),
-            46 * (1 - (ao - wbody) / Math.max(1, wglow - wbody)),
-            16,
-          );
+    const halfW = Math.max(3, width * 0.5);
+    const reach = halfW * (big ? 2.1 : 1.6);
+    const bx0 = Math.max(fx.ox, Math.floor(Math.min(x0, x1) - reach));
+    const bx1 = Math.min(fx.ox + fx.w - 1, Math.ceil(Math.max(x0, x1) + reach));
+    const by0 = Math.max(fx.oy, Math.floor(Math.min(y0, y1) - reach));
+    const by1 = Math.min(fx.oy + fx.h - 1, Math.ceil(Math.max(y0, y1) + reach));
+    const phase = tick * 0.9;
+    for (let y = by0; y <= by1; y++) {
+      const py = y + 0.5 - y0;
+      for (let x = bx0; x <= bx1; x++) {
+        const px = x + 0.5 - x0;
+        const along = px * ux + py * uy;
+        if (along < -halfW || along > len) continue;
+        const perp = Math.abs(py * ux - px * uy);
+        if (perp > reach) continue;
+        const s = along > 0 ? along / len : 0;
+        const w = halfW * (1 - s * 0.4);
+        const u = perp / w;
+        const shimmer = 0.5 + 0.5 * Math.sin(along * 0.28 - phase);
+        // brightness along the beam: full at the eye, a little dimmer at the far end, a soft round cap behind the source
+        const cap = (along < 0 ? 1 + along / halfW : 1) * (s > 0.84 ? (1 - s) / 0.16 : 1);
+        if (cap <= 0) continue;
+        let r: number;
+        let g: number;
+        let b: number;
+        const core = 0.26 + 0.08 * shimmer;
+        if (u < core) {
+          r = 255;
+          g = 250;
+          b = 232;
+        } else if (u < 1) {
+          const q = (u - core) / (1 - core);
+          r = 255;
+          g = 226 - 96 * q;
+          b = 165 - 118 * q;
+        } else {
+          const q = Math.max(0, 1 - (u - 1) / (reach / w - 1));
+          const k = q * q;
+          r = 150 * k;
+          g = 84 * k;
+          b = 34 * k;
+        }
+        fx.add(x, y, r * cap, g * cap, b * cap);
       }
     }
     // source flare
-    fx.glow(x0, y0, halfW * 1.6, 255, 230, 160, 0.8);
+    fx.glow(x0, y0, halfW * 1.8, 255, 236, 170, 0.8);
   }
 
   private drawHalo(fx: Overlay, tick: number): void {

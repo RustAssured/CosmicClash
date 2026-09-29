@@ -17,7 +17,7 @@ import {
 } from '@/contracts';
 import { createFighter } from '@/combat';
 import { createMatterWorld } from '@/matter';
-import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
+import { createAiSource, createMatch, createNullSource, createScriptSource, type Match } from '@/sim';
 import { createAI } from '@/ai';
 import { getTitanDef, IMPLEMENTED_TITANS } from '@/titans';
 import { blitLayers, makeFrame, paintBackdrop } from './blit';
@@ -26,7 +26,7 @@ import { blitLayers, makeFrame, paintBackdrop } from './blit';
  * Titans sandbox: a sprite viewer (lighting presets, intact/50%/10%, animated tendrils) and a keyboard-playable fight against
  * an AI / dummy / second human on the REAL matter world, composited by dev/titans/blit.ts. This is where the weight is felt.
  * URL harness: ?a=lastone&b=asteroid&mode=fight|viewer&ai=3&ctl=ai|dummy|human&light=nursery|cold|noon&state=intact|50|10
- *              &seed=7&t=120 (advance N ticks then freeze)&script0=…&script1=… (see contracts/harness.ts)&hitboxes=1
+ *              &seed=7&t=120 (skip the intro, advance N fight ticks, then freeze with freeze=1)&script0=…&script1=… (tick 0 = fight goes live; see contracts/harness.ts)&hitboxes=1
  */
 
 const LIGHTS: Record<string, StageLighting> = {
@@ -67,7 +67,7 @@ pick(sel.ai, 'ai');
 pick(sel.light, 'light');
 pick(sel.state, 'state');
 let debug = q.get('hitboxes') === '1';
-let paused = q.get('freeze') === '1';
+let paused = q.get('freeze') === '1' || q.has('t');
 let stepOnce = false;
 const seed = parseInt(q.get('seed') ?? '7', 10) || 7;
 
@@ -146,17 +146,22 @@ function start(): void {
     lighting,
   });
   const ctl = viewer ? 'dummy' : sel.ctl.value;
+  // harness semantics (contracts/harness.ts): the intro is fast-forwarded silently, script tick 0 is the tick the fight goes live
+  match.setSources(createNullSource(), createNullSource());
+  for (let guard = 0; match.phase !== 'fight' && guard < 900; guard++) match.step();
+  // the first live step polls tick t0 + 1, so measure scripts from there (script tick 0 = the first live tick)
+  const t0 = match.tick;
   const s0 = q.get('script0');
   const s1 = q.get('script1');
   const second: InputSource | null =
     s1 !== null
-      ? createScriptSource(parseScript(s1), match.tick)
+      ? createScriptSource(parseScript(s1), t0 + 1)
       : ctl === 'ai'
         ? createAiSource(match, 1, createAI(level, getTitanDef(b), seed + 3))
         : ctl === 'human'
           ? P2
           : null;
-  match.setSources(s0 !== null ? createScriptSource(parseScript(s0), match.tick) : P1, second);
+  match.setSources(s0 !== null ? createScriptSource(parseScript(s0), t0 + 1) : P1, second);
   const a0 = match.fighters[0].view;
   const b0 = match.fighters[1].view;
   camX = (a0.x + b0.x) / 2;

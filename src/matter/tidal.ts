@@ -15,6 +15,8 @@ const order = new Int32Array(MAX_CAND);
 const BUCKETS = 96;
 const bucketCount = new Int32Array(BUCKETS + 1);
 const MAX_PER_SLICE = 260;
+/** Minimum energy to tear one cell off, whatever it is made of. */
+const TEAR_COST_FLOOR = 0.4;
 
 /**
  * TIDAL — a field pulling matter toward the attacker's focal point (originX, originY). Cells are torn off in order of how
@@ -72,7 +74,11 @@ export function applyTidal(ctx: DamageCtx, res: DamageResult): void {
       const nl = Math.sqrt(nx * nx + ny * ny);
       expose = nl > 0 ? 0.25 + 0.75 * Math.max(0, (nx * sdx + ny * sdy) / nl) : 0.5;
     }
-    const cost = (1.5 * hardness(body, i) * (0.25 + 0.75 * holdFrac) * (map.integrity[i]! / 255) * coh) / r;
+    // Floor: even the airiest gas costs something to strip (a Strike must not vaporise a whole star's corona).
+    const cost = Math.max(
+      TEAR_COST_FLOOR,
+      (1.5 * hardness(body, i) * (0.25 + 0.75 * holdFrac) * (map.integrity[i]! / 255) * coh) / r,
+    );
     cand[nc] = i;
     candCost[nc] = cost;
     candScore[nc] = (wgt[k]! * expose * pull) / Math.max(0.02, cost);

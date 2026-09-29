@@ -33,10 +33,10 @@ const LOOK: SceneryLook = {
   contrast: 1.08,
   bloomThreshold: 1.15,
   bloomGain: 0.42,
-  godRayGain: 0.9,
-  godRayGas: 0.25,
-  godRayHalo: 140,
-  godRayDecay: 0.972,
+  godRayGain: 2.0,
+  godRayGas: 0.2,
+  godRayHalo: 230,
+  godRayDecay: 0.978,
   vignette: 0.55,
 };
 

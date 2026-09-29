@@ -30,50 +30,89 @@ mkdirSync(outDir, { recursive: true });
 
 /** Scenarios drive the sandbox through window.__RENDER__ (see dev/render/main.ts). Times are scenery seconds. */
 const SCENARIOS = [
-  { name: 'calm', run: (R) => R.set({ time: 3, fa: 640, fb: 980, intensity: 0.2 }) },
+  {
+    name: 'calm',
+    run: (R) => {
+      R.set({
+        time: 3,
+        fa: 640,
+        fb: 980,
+        intensity: 0.2,
+        flash: 0,
+        aberration: 0,
+        timeScale: 1,
+        lens: false,
+      });
+      R.settle();
+    },
+  },
   {
     name: 'pan-left',
     run: (R) => {
-      R.set({ time: 9, fa: 260, fb: 600, intensity: 0.2 });
-      R.advance(200, 0); // let the heavy camera glide there
+      R.set({ time: 9, fa: 260, fb: 600, intensity: 0.2, flash: 0, aberration: 0 });
+      R.settle(); // let the heavy camera glide there
     },
   },
   {
     name: 'pan-right',
     run: (R) => {
-      R.set({ time: 14, fa: 1000, fb: 1340, intensity: 0.2 });
-      R.advance(200, 0);
+      R.set({ time: 14, fa: 1000, fb: 1340, intensity: 0.2, flash: 0, aberration: 0 });
+      R.settle();
     },
   },
   {
     name: 'shock',
     run: (R) => {
-      R.set({ time: 20, fa: 640, fb: 980, intensity: 0.7 });
+      R.set({ time: 20, fa: 640, fb: 980, intensity: 0.7, flash: 0, aberration: 0 });
+      R.settle();
       R.point(820, 250);
       R.fire('shock');
-      R.advance(14);
+      R.advance(10, 0.2);
     },
   },
   {
     name: 'impulse',
     run: (R) => {
-      R.set({ time: 25, fa: 640, fb: 980, intensity: 0.85 });
+      R.set({ time: 25, fa: 640, fb: 980, intensity: 0.85, flash: 0, aberration: 0 });
+      R.settle();
       R.point(700, 230);
       R.fire('impulse');
-      R.advance(50);
+      R.advance(30, 0.5);
     },
   },
-  { name: 'lens', run: (R) => R.set({ time: 30, fa: 600, fb: 960, intensity: 0.4, lens: true }) },
+  {
+    name: 'lens',
+    run: (R) => {
+      R.set({ time: 30, fa: 600, fb: 960, intensity: 0.4, lens: true });
+      R.settle();
+    },
+  },
   {
     name: 'ko',
     run: (R) => {
       R.set({ time: 36, fa: 640, fb: 980, intensity: 1 });
+      R.settle();
       R.point(900, 260);
       R.fire('ko');
       R.advance(10);
     },
   },
-  { name: 'later', run: (R) => R.set({ time: 61, fa: 700, fb: 1020, intensity: 0.3, lens: false }) },
+  {
+    name: 'later',
+    run: (R) => {
+      R.set({
+        time: 61,
+        fa: 700,
+        fb: 1020,
+        intensity: 0.3,
+        lens: false,
+        flash: 0,
+        aberration: 0,
+        timeScale: 1,
+      });
+      R.settle();
+    },
+  },
 ];
 
 const browser = await chromium.launch({
@@ -100,8 +139,12 @@ for (const stage of stages) {
     bad++;
   });
   const t0 = Date.now();
+  // 'commit', not 'load': on a busy machine Vite transforms modules on demand and 'load' can exceed the default timeout.
   await page.goto(
     `${base}?stage=${stage}&quality=${quality}&freeze=1&t=0&text=0&sparks=1&ui=1&intensity=0.2`,
+    {
+      waitUntil: 'commit',
+    },
   );
   await page.waitForFunction("document.body.dataset.ready==='1'", null, { timeout: 180000 });
   console.log(`${stage}: ready in ${((Date.now() - t0) / 1000).toFixed(1)} s (quality ${quality})`);

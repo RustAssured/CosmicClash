@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>UI sandbox</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #05060a;
+        color: #9fb0d0;
+        font:
+          12px ui-monospace,
+          monospace;
+        overflow: hidden;
+      }
+      body {
+        display: grid;
+        place-items: center;
+      }
+      canvas {
+        image-rendering: pixelated;
+        width: min(100vw, 177.7778vh);
+        height: min(56.25vw, 100vh);
+        display: block;
+      }
+      #hint {
+        position: fixed;
+        left: 8px;
+        bottom: 6px;
+        opacity: 0.55;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c" width="640" height="360"></canvas>
+    <div id="hint">?screen=title|mode|assign|select|stage|controller|options|pause|results|attract|hud &amp;hud=1</div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -109,7 +109,10 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   const budget = o.budget;
   const craterBudget = budget * (1 - o.lipFrac);
   // Half-disc-ish bowl of area ~ budget cells: pi/2 * Rl * (aspect Rl) = budget  =>  Rl.
-  let Rl = o.craterR > 0 ? o.craterR : Math.sqrt((2 * craterBudget) / (Math.PI * aspect));
+  // `crater` is a lower bound on the bowl: the energy is always spent, so a small hint on a big blow still yields the crater
+  // the energy pays for (a Strike that leaves a 6-cell pit and wastes 90% of its energy would not read as a hit).
+  const derived = Math.sqrt((2 * craterBudget) / (Math.PI * aspect));
+  let Rl = o.craterR > 0 ? Math.max(o.craterR, derived * 0.8) : derived;
   Rl = Math.max(2.2, Math.min(50, Rl * 1.35)); // search extent (the threshold picks the true radius)
   const Rd = Rl * aspect;
 
@@ -135,6 +138,11 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     const lat = rx * tx + ry * ty;
     const dd = depth >= 0 ? depth : -depth * 1.3;
     const d = Math.sqrt((lat / Rl) * (lat / Rl) + (dd / Rd) * (dd / Rd));
+    if (resistOf(body, i, o.type) <= 0.001) {
+      // Immune matter (the Black Hole's horizon) is never cratered, loosened or compacted.
+      dEff[k] = Infinity;
+      continue;
+    }
     dEff[k] = d;
     if (d <= 1) {
       const cost =

@@ -23,6 +23,17 @@ const F_GLOW = CellFlag.GLOWING;
 
 const pt: WorldPoint = { x: 0, y: 0 };
 const trans = new Float32Array(MAX_BODY_DIM + 2);
+/** Share of a blow's energy concentrated on the cells nearest its centre so it always melts a pit (the rest heats the whole shape). */
+const CORE_SHARE = 0.75;
+/** A concentrated blow melts at most this many cells per unit of energy (a baseline cell costs ~1; ice and other easy matter more). */
+const CORE_CELLS_PER_ENERGY = 1.6;
+/** No matter is harder than this many energy per cell to melt away: a sustained blow always gets through (the damage floor). */
+const CORE_COST_CAP = 2.4;
+const CORE_BINS = 32;
+const binNeed = new Float64Array(CORE_BINS);
+const binCnt = new Int32Array(CORE_BINS);
+const binDose = new Float32Array(CORE_BINS);
+const dTneed = new Float32Array(MAX_BODY_DIM * MAX_BODY_DIM);
 let flameBudget = 0;
 
 /** Live heat tolerance multiplier: HEAT TOLERANCE attribute x fighter-owned heatScale. 5 => 1.0. */
@@ -45,8 +56,54 @@ export function applyThermal(ctx: DamageCtx, res: DamageResult): void {
   const tol = heatTol(body);
   const pierce = ctx.has(DF.PIERCE);
   const heatParam = ctx.params.heat;
-  const perW = heatParam !== undefined ? heatParam : (ctx.energy / ctx.sumW) * HEAT_PER_ENERGY;
   const w = body.w;
+  // Concentrated core (energy-derived heat only): the cells nearest the centre get exactly the dose that vaporises them, in
+  // descending order of shape weight, until CORE_SHARE of the energy (or the cell cap) is used. The remainder heats the whole
+  // shape (ignition, glow, ablation) as before.
+  let coreUsed = 0;
+  binDose.fill(0);
+  if (heatParam === undefined) {
+    binNeed.fill(0);
+    binCnt.fill(0);
+    for (let k = 0; k < n; k++) {
+      const i = idx[k]!;
+      const md = mats[map.material[i]!]!;
+      dTneed[k] = 0;
+      if (md.vaporize <= 0) continue;
+      const infected = map.infection[i]! > 60;
+      const dTn = md.vaporize * tol * (infected ? 0.85 : 1) - map.temperature[i]!;
+      if (dTn <= 0) continue;
+      const r = Math.max(0.05, resistOf(body, i, T_THERMAL));
+      const e = Math.min(
+        CORE_COST_CAP,
+        (dTn * md.heatCapacity * tol) / (HEAT_PER_ENERGY * (1 - md.heatAbsorb) * r * (infected ? 1.5 : 1)),
+      );
+      dTneed[k] = dTn;
+      const b = Math.min(CORE_BINS - 1, Math.floor(wgt[k]! * CORE_BINS));
+      binNeed[b] = binNeed[b]! + e;
+      binCnt[b] = binCnt[b]! + 1;
+    }
+    let cum = 0;
+    let cnt = 0;
+    const eBudget = ctx.energy * CORE_SHARE;
+    const cellCap = ctx.energy * CORE_CELLS_PER_ENERGY;
+    for (let b = CORE_BINS - 1; b >= 0; b--) {
+      const need = binNeed[b]!;
+      if (need <= 0) continue;
+      if (cum + need <= eBudget && cnt + binCnt[b]! <= cellCap) {
+        binDose[b] = 1;
+        cum += need;
+        cnt += binCnt[b]!;
+        continue;
+      }
+      const f = Math.max(0, Math.min((eBudget - cum) / need, (cellCap - cnt) / binCnt[b]!));
+      binDose[b] = f;
+      cum += f * need;
+      break;
+    }
+    coreUsed = cum;
+  }
+  const perW = heatParam !== undefined ? heatParam : ((ctx.energy - coreUsed) / ctx.sumW) * HEAT_PER_ENERGY;
   const xDom = Math.abs(ctx.ldx) >= Math.abs(ctx.ldy);
   const asc = xDom ? ctx.ldx >= 0 : ctx.ldy >= 0;
   trans.fill(1);
@@ -68,7 +125,11 @@ export function applyThermal(ctx: DamageCtx, res: DamageResult): void {
     const absorb = md.heatAbsorb;
     let dT = (perW * wgt[k]! * tr * (1 - absorb) * resistOf(body, i, T_THERMAL)) / (md.heatCapacity * tol);
     if (map.infection[i]! > 60) dT *= 1.5;
-    if (!pierce) trans[lane] = tr * (1 - absorb * 0.5);
+    if (coreUsed > 0) {
+      const dose = binDose[Math.min(CORE_BINS - 1, Math.floor(wgt[k]! * CORE_BINS))]!;
+      if (dose > 0) dT += dose * dTneed[k]! * tr;
+    }
+    if (!pierce) trans[lane] = tr * (1 - absorb * 0.25);
     if (dT <= 0) continue;
     ctx.note(i, wgt[k]!);
     let T = map.temperature[i]! + dT;

@@ -30,6 +30,7 @@ import {
 import { PK } from './particles';
 import { findImpact, type Impact } from './impact';
 import { K_LINE } from './shape';
+import { carveCrater, type CraterOpts, type CraterOut } from './crater';
 
 /** Energy (baseline units) to sever one full-strength (255) bond. Seam bonds are cheaper: they are the weak paths. */
 const K_E = 3.6;
@@ -47,6 +48,35 @@ interface CutStats {
   tipCorner: number;
 }
 const cutStats: CutStats = { broken: 0, spent: 0, complete: true, tipCorner: -1 };
+/** Energy this event spent severing bonds (summed over its cuts): what is left of the cut budget is gouged instead. */
+let cutTotal = 0;
+
+/** The chisel: energy that shearing could not use (tough matter, short cuts) still chips a pit out of the contact. */
+const gougeOpts: CraterOpts = {
+  budget: 0,
+  lipFrac: 0.1,
+  aspect: 0.55,
+  chunkProb: 0.6,
+  speedMul: 0.8,
+  compact: 0,
+  craterR: 0,
+  type: T_FRACTURE,
+};
+const gougeOut: CraterOut = {
+  ok: false,
+  fx: 0,
+  fy: 0,
+  nx: 0,
+  ny: -1,
+  rl: 0,
+  rd: 0,
+  removed: 0,
+  chunks: 0,
+  removedMass: 0,
+  thr: 0,
+};
+/** Share of a blow's raw energy that always goes to the chisel (on top of unspent shear energy). */
+const GOUGE_BASE = 0.32;
 /** Corners along this event's cuts, remembered as places where SEED_CRACK fronts can start (on the surviving side). */
 const seedCorners: number[] = [];
 
@@ -81,35 +111,46 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
   }
   const rEff = rs / ctx.sumW;
   const brit = bs / ctx.sumW;
-  const E = ctx.energy * rEff;
+  // Raw energy pays for work (every cost below already divides by the cell's own resistance); the resistance-scaled energy
+  // only SIZES the slab a blow tries to free (brittle matter shears off bigger pieces per energy than tough matter).
+  const Eraw = ctx.energy;
+  const E = Eraw * rEff;
   const pierce = ctx.has(DF.PIERCE);
   const isLine = q.kind === K_LINE;
   const continuous = ctx.has(DF.CONTINUOUS);
 
   seedCorners.length = 0;
+  cutTotal = 0;
   if (E >= 0.4) {
     let cutB: number;
     let chanB: number;
     let grindB: number;
     let seamB: number;
     if (isLine) {
-      cutB = E * (pierce ? 0.3 : 0.55);
-      chanB = E * (pierce ? 0.5 : 0.12);
-      grindB = E * (pierce ? 0.2 : 0.33);
+      cutB = Eraw * (pierce ? 0.3 : 0.45);
+      chanB = Eraw * (pierce ? 0.5 : 0.1);
+      grindB = Eraw * (pierce ? 0.2 : 0.25);
       seamB = 0;
     } else {
-      cutB = E * 0.55;
+      cutB = Eraw * 0.5;
       chanB = 0;
-      grindB = E * 0.25;
-      seamB = E * 0.2;
+      grindB = Eraw * 0.2;
+      seamB = Eraw * 0.15;
     }
     let tipCorner = -1;
+    // A short stab (limited penetration, no PIERCE) shears a slab off the surface like a blow; a beam or a piercing line cuts along its axis.
+    const stab = isLine && !pierce && (ctx.params.penetration ?? 60) < 24;
     if (!continuous || (core.tick & 1) === 0) {
-      if (isLine) tipCorner = lineCut(ctx, E, cutB, grindB, pierce);
+      if (isLine && !stab) tipCorner = lineCut(ctx, E, cutB, grindB, pierce);
       else tipCorner = blowCuts(ctx, E, cutB, grindB);
     }
     if (chanB > 0) carveChannel(ctx, chanB, pierce);
     if (seamB > 0) seamPop(ctx, seamB, brit);
+    if (!continuous) {
+      const g = Eraw * GOUGE_BASE + Math.max(0, cutB - cutTotal);
+      gougeOpts.budget = g;
+      if (g >= 4) carveCrater(ctx, gougeOpts, gougeOut);
+    }
     if (ctx.has(DF.SEED_CRACK)) plantSeeds(ctx, E, brit);
     else if (tipCorner >= 0 && !cutStats.complete && E > 20) {
       // A cut that ran out of energy leaves a live crack tip.
@@ -136,7 +177,7 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
  * --------------------------------------------------------------------------------------------- */
 
 /** Slab area (cells) a blow of effective energy `E` tries to free with `cuts` cuts. */
-const slabArea = (E: number, cuts: number): number => Math.max(50, Math.min(2200, (E * 1.5) / cuts));
+const slabArea = (E: number, cuts: number): number => Math.max(50, Math.min(2200, (E * 1.25) / cuts));
 
 /** Cut along a line shape's axis. Returns the tip corner of the (possibly partial) cut, or -1. */
 function lineCut(ctx: DamageCtx, E: number, cutB: number, grindB: number, pierce: boolean): number {
@@ -472,6 +513,7 @@ function runCut(ctx: DamageCtx, finder: CutFinder, budget: number, grindBudget: 
     seedCorners.push(path[L >> 1]!);
     seedCorners.push(path[Math.max(0, (L >> 1) - (L >> 2))]!);
   }
+  cutTotal += spent;
   cutStats.broken = broken;
   cutStats.spent = spent;
   cutStats.complete = complete;

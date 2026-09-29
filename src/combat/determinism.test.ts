@@ -20,7 +20,6 @@ function fight(
   skipIntro(m);
   const t0 = m.tick;
   m.setSources(createScriptSource(parseScript(SCRIPT_A), t0), createScriptSource(parseScript(SCRIPT_B), t0));
-  m.fighters[0].view.meter; // touch
   (m.fighters[0] as unknown as { meter: number }).meter = 1;
   (m.fighters[1] as unknown as { meter: number }).meter = 1;
   let events = 0;

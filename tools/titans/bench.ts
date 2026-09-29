@@ -15,7 +15,7 @@ function run(a: TitanId, b: TitanId): void {
   const m = makeMatch({ a, b, seed: 3, createWorld: (s) => createMatterWorld(s) });
   skipIntro(m);
   const t0 = m.tick;
-  m.setSources(createScriptSource(parseScript(A), t0), createScriptSource(parseScript(B), t0));
+  m.setSources(createScriptSource(parseScript(A), t0 + 1), createScriptSource(parseScript(B), t0 + 1));
   (m.fighters[0] as unknown as { meter: number }).meter = 1;
   (m.fighters[1] as unknown as { meter: number }).meter = 1;
   let fighterMs = 0;

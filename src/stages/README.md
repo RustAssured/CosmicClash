@@ -9,8 +9,8 @@ isStageImplemented('nursery');        // true only for stages with bespoke scene
 createScenery('rim');                 // GenericScenery stand-in until Phase 2 (still reactive, palette-dithered, parallax)
 ```
 
-* `info.ts` (pure, no three): `STAGE_INFO`/`STAGES` (`StageInfo` ×5, validated by `validateStageInfo` in `info.test.ts`) and `STAGE_RAMPS` (ramp lengths of each palette, used by the dither).
-  Palettes are built from `hueShiftRamp`s. **Palette rules:** (a) write ramps dark → light and list each ramp's length in `STAGE_RAMPS`; (b) hue-adjacent ramps must be **bridged** (nursery: magenta → *coral* → amber),
+* `info.ts` (pure, no three): `STAGE_INFO`/`STAGES` (`StageInfo` ×5, validated by `validateStageInfo` in `info.test.ts`) and `STAGE_RAMPS` (= `StageInfo.ramps`: the length of each palette ramp, used by the dither).
+  Palettes are built from `hueShiftRamp`s. **Palette rules:** (a) write ramps dark → light and the ramp lengths become `StageInfo.ramps` automatically; (b) hue-adjacent ramps must be **bridged** (nursery: magenta → *coral* → amber),
   otherwise gradients between them jump; (c) keep 40–64 colours; (d) one near-black "void" ramp for the sky, dust ramp(s) for occluders, a hot ramp for stars; (e) when a ramp drifts across the red seam write
   `−0.01`/`1.03`, not `0.99`/`0.03` (hue interpolation is numeric). `npx tsx tools/render/palette-sheet.ts` writes swatches; `tools/render/dither-preview.ts` shows the dither on synthetic images.
 * `types.ts`: `StageScenery { look, init(ctx), update(frame), render(hdrTarget), lightScreenPos(out), dispose() }`. A scenery draws **linear HDR** into the target the renderer hands it (rgb = radiance, alpha = occluder opacity that cuts
@@ -48,7 +48,7 @@ Fight reactions: shock rings ripple every layer, impulses swirl and warm them (`
 
 ## Adding a stage (Phase 2 recipe)
 
-1. Palette + lighting already exist in `info.ts` (adjust ramps, keep `STAGE_RAMPS` in sync).
+1. Palette + lighting already exist in `info.ts` (adjust the ramp specs; `ramps` follows).
 2. `class XScenery implements StageScenery`, `init`: `const kit = new SceneryKit(ctx, seed)`; add layers back-to-front with `addNebula` / `addSprites` / `addFullscreen` / `addQuad`; author colours with `paletteRamps(info)`.
 3. `update(frame)` → `kit.update(frame)` (+ your own per-frame state), `render(target)` → `kit.render(renderer, target)`, `lightScreenPos` → where the stage light currently is (follow its parallax), `dispose`.
 4. Register it in `scenery.ts` (`IMPLEMENTED` + `createScenery`). Use `tools/render/layers.mjs --only=…` to look at layers alone and `capture.mjs` for the eight fight states.

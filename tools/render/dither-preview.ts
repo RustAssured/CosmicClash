@@ -4,7 +4,7 @@
  *   npx tsx tools/render/dither-preview.ts [stage] [bayerSize=4] [levels=4]  →  .scratch/render/dither-<stage>.png
  */
 import { STAGE_IDS, hex, linearToRgbaBytes, type StageId } from './helpers';
-import { STAGE_INFO as STAGES, STAGE_RAMPS } from '../../src/stages/info';
+import { STAGE_INFO as STAGES } from '../../src/stages/info';
 import { Noise2 } from '../../src/stages/toolkit/noise';
 import { bayerRanks, bayerThreshold } from '../../src/render/dither';
 import { buildDitherLut, ditherToIndex, preparePalette, srgbToLinear } from '../../src/render/palette';
@@ -12,7 +12,7 @@ import { writePng } from '../lead/png';
 
 const stage = (process.argv[2] ?? 'nursery') as StageId;
 if (!STAGE_IDS.includes(stage)) throw new Error('unknown stage');
-const pal = preparePalette(STAGES[stage].palette, STAGE_RAMPS[stage]);
+const pal = preparePalette(STAGES[stage].palette, STAGES[stage].ramps);
 const lut = buildDitherLut(pal, { size: 32 });
 const bn = Number(process.argv[3] ?? 4);
 const levels = Number(process.argv[4] ?? 4);

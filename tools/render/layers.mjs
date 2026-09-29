@@ -42,7 +42,7 @@ page.on(
     console.log(`[console.${m.type()}]`, m.text()),
 );
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
-await page.goto(`${base}?${query}`);
+await page.goto(`${base}?${query}`, { waitUntil: 'commit' });
 await page.waitForFunction("document.body.dataset.ready==='1'", null, { timeout: 120000 });
 const only = opt.only ? String(opt.only).split(',') : null;
 const hide = opt.hide ? String(opt.hide).split(',') : [];

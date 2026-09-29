@@ -30,7 +30,7 @@ final @ canvas: nearest integer upscale + micro-zoom + roll (camera) ─► UI l
 ```
 
 * **Scenery is dithered, layers are not.** Titans/debris/particles keep their own colours; only the 3D backdrop is quantised into the stage palette.
-* **Palette dither** (`palette.ts`, `dither.ts`): the palette is split into *ramps* (`STAGE_RAMPS`, or inferred from lightness drops). A 3D LUT (32³/40³/48³ by tier, built once per stage,
+* **Palette dither** (`palette.ts`, `dither.ts`): the palette is split into *ramps* (`StageInfo.ramps`, or inferred from lightness drops). A 3D LUT (32³/40³/48³ by tier, built once per stage,
   ~70–180 ms) stores, per sRGB node, the best pair (A, B): a single colour, or two **neighbours of one ramp** (or near-identical colours across ramps, OKLab distance ≤ `CROSS_RAMP_MAX` 0.11),
   chosen by OKLab error of the linear-light mix. The shader re-derives the exact ratio per pixel by projecting the true colour on A→B, quantises it to **4 levels** (25 % dots / 50 % checker / 75 %)
   and thresholds against a **4×4 Bayer** matrix locked to the logical pixel grid. Result: deliberate, hand-drawn-looking patterns; no confetti between unrelated hues; no banding.
@@ -90,7 +90,7 @@ Per stage (`SceneryLook`, in the scenery): `exposure`, `contrast`, `bloomThresho
 
 * `npx vitest run src/render` — palette maths (OKLab, ramp inference, LUT pairs only between ramp neighbours, exact-colour reproduction, dithered tile ≈ target), Bayer matrices, viewport/letterbox maths, layer mapping vs
   the contract over ~100 k pixels, upload planning (dirty rect / full / none / recreate), stale registry.
-* `node tools/render/verify.mjs` (needs `npx vite --port 5201 --strictPort`) — **28 GPU checks in a real WebGL2 context**: mirror/lean/anchor exact vs `space.ts`, integer placement, normal/additive blending, dirty-rect
-  upload counts, no re-upload of unchanged layers, stale free, bloom locality, UI exactness, determinism, shockwave / flash / aberration / lens, zoom+roll leave UI alone, exact integer upscale + letterbox, context loss + restore, stage switching.
+* `node tools/render/verify.mjs` (needs `npx vite --port 5201 --strictPort`) — **29 GPU checks in a real WebGL2 context**: mirror/lean/anchor exact vs `space.ts`, integer placement, normal/additive blending, dirty-rect
+  upload counts, no re-upload of unchanged layers, stale free, bloom locality, UI exactness, determinism, shockwave / flash / aberration / lens, zoom+roll leave UI alone, exact integer upscale + letterbox, context loss + restore, god-ray shafts cast by occluders, stage switching.
 * `node tools/render/capture.mjs` — screenshots per stage in eight fight states → `.scratch/render/`; `node tools/render/perf.mjs [--layers]` — perf report; `npx tsx tools/render/dither-preview.ts` and `palette-sheet.ts` — palette / dither
   on synthetic images without a GPU; `tools/render/layers.mjs` (isolate scenery layers) and `bakes.mjs` (dump baked textures) for art iteration. Sandbox: `dev/render/index.html`.

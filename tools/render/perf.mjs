@@ -76,6 +76,34 @@ for (const q of tiers) {
         }
         layers.forEach((l) => (l.mesh.visible = true));
       }
+      // Fill-rate estimate (machine independent): fragments shaded per frame in the scenery pass at the reference camera.
+      const ss = rend.tier.supersample;
+      let sceneryFrags = 0;
+      for (const l of layers) {
+        const u = l.uniforms;
+        const geo = l.mesh.geometry;
+        const pos = geo.getAttribute('aPos');
+        if (pos && geo.getAttribute('aShape')) {
+          const shape = geo.getAttribute('aShape');
+          const par = u.uParallax.value;
+          let frags = 0;
+          for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i) - 480 * par;
+            const y = pos.getY(i) - 110 * par;
+            const hw = shape.getX(i);
+            const hh = shape.getY(i);
+            if (x < -hw || y < -hh || x > 640 + hw || y > 360 + hh) continue;
+            frags += 4 * hw * hh * ss * ss;
+          }
+          sceneryFrags += frags;
+        } else {
+          sceneryFrags += 640 * 360 * ss * ss;
+        }
+      }
+      const post =
+        640 * 360 * (1 /*dither*/ + 1 /*post*/ + 0.25 /*god*/ + 0.6) /*bloom chain*/ +
+        1280 * 720; /*present at 2x*/
+      out.fill = { sceneryMFrags: +(sceneryFrags / 1e6).toFixed(1), postMFrags: +(post / 1e6).toFixed(1) };
       const drawn = { calls: rend.stats.drawCalls, layers: layers.length };
       out.drawn = drawn;
       return out;
@@ -84,6 +112,9 @@ for (const q of tiers) {
   );
   console.log(
     `\nquality ${q}: setStage ${r.setStageMs} ms (incl. shader compile + bakes), ${r.drawn.layers} scenery layers, ${r.drawn.calls} draw calls`,
+  );
+  console.log(
+    `  fill estimate: scenery ${r.fill.sceneryMFrags} Mfrag + post/present ${r.fill.postMFrags} Mfrag per frame (at 3 Gfrag/s blended ≈ ${((r.fill.sceneryMFrags + r.fill.postMFrags) / 3).toFixed(1)} ms on an integrated GPU)`,
   );
   for (const run of r.runs)
     console.log(

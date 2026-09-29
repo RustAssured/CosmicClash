@@ -17,6 +17,8 @@ import {
   type OverlapResult,
   type ParticleSpawn,
   type ChunkSpawn,
+  type ArenaInfo,
+  type MatterLedger,
   type RenderLayer,
   type SimEvent,
   type StageLighting,
@@ -341,6 +343,50 @@ export function createFakeWorld(seed = 1): FakeWorld {
       if (!b) throw new Error(`fakeWorld: no body ${bodyId}`);
       return getStats(b);
     },
+    liveBounds(bodyId: number, out: { x0: number; y0: number; x1: number; y1: number }): boolean {
+      const b = bodies[bodyId];
+      if (!b) return false;
+      const map = b.map;
+      let x0 = map.w;
+      let x1 = -1;
+      let y0 = map.h;
+      let y1 = -1;
+      for (let y = 0; y < map.h; y++) {
+        const row = y * map.w;
+        for (let x = 0; x < map.w; x++) {
+          if (map.material[row + x] === 0) continue;
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+      if (x1 < 0) return false;
+      const t = b.transform;
+      const wa = t.x + (x0 - t.anchorX) * t.facing;
+      const wb = t.x + (x1 + 1 - t.anchorX) * t.facing;
+      out.x0 = Math.min(wa, wb) - Math.abs(t.lean);
+      out.x1 = Math.max(wa, wb) + Math.abs(t.lean);
+      out.y0 = t.y + (y0 - t.anchorY);
+      out.y1 = t.y + (y1 + 1 - t.anchorY);
+      return true;
+    },
+    ledger(): MatterLedger {
+      let cells = 0;
+      for (const b of bodies) if (b) cells += b.map.mass;
+      return {
+        created: cells,
+        injected: 0,
+        deleted: 0,
+        dissipated: 0,
+        credited: 0,
+        cellMass: cells,
+        poolMass: 0,
+        chunkMass: 0,
+        particleMass: 0,
+        error: 0,
+      };
+    },
 
     grow(_bodyId: number, _spec: GrowSpec): number {
       return 0;
@@ -422,6 +468,9 @@ export function createFakeWorld(seed = 1): FakeWorld {
 
     setLighting(_l: StageLighting): void {
       /* no-op */
+    },
+    setArena(_a: ArenaInfo): void {
+      /* no-op: the double has no debris to keep in bounds */
     },
     renderLayers(_view: ViewRect, _alpha: number): RenderLayer[] {
       return [];
