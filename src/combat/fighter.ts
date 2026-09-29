@@ -1460,7 +1460,8 @@ export class FighterImpl implements Fighter {
     e.dirY = dy / dl;
     e.duration = dmg.duration;
     e.sourceMass = this.stats.mass;
-    e.sourceBodyId = this.body.id;
+    // a move with extra.noCredit feeds nobody (the Black Hole's streams must not inflate its own mass without bound)
+    e.sourceBodyId = this.mv.def?.extra?.['noCredit'] ? -1 : this.body.id;
     e.originX = t.x;
     e.originY = t.y;
     const fv = foe.view;

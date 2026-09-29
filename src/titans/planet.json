@@ -38,6 +38,14 @@
         "char": "#1a2a4a",
         "crack": "#0a1a3a",
         "debris": "#69b0e0"
+      },
+      "physics": {
+        "resist": {
+          "CRUSH": 2.8,
+          "KINETIC": 2.8,
+          "FRACTURE": 2.8,
+          "THERMAL": 2.2
+        }
       }
     },
     {
@@ -49,6 +57,14 @@
         "char": "#3a4560",
         "crack": "#2b3c66",
         "debris": "#e6eef6"
+      },
+      "physics": {
+        "resist": {
+          "CRUSH": 2.8,
+          "KINETIC": 2.8,
+          "FRACTURE": 2.8,
+          "THERMAL": 2.2
+        }
       }
     },
     {
@@ -60,6 +76,14 @@
         "char": "#0a1a38",
         "crack": "#04102a",
         "debris": "#2e86d8"
+      },
+      "physics": {
+        "resist": {
+          "CRUSH": 2.8,
+          "KINETIC": 2.8,
+          "FRACTURE": 2.8,
+          "THERMAL": 2.2
+        }
       }
     },
     {
@@ -71,6 +95,14 @@
         "char": "#1a1a10",
         "crack": "#0c160e",
         "debris": "#5d7e34"
+      },
+      "physics": {
+        "resist": {
+          "CRUSH": 2.8,
+          "KINETIC": 2.8,
+          "FRACTURE": 2.8,
+          "THERMAL": 2.2
+        }
       }
     },
     {
@@ -82,6 +114,14 @@
         "char": "#2a1a14",
         "crack": "#1a0e0c",
         "debris": "#cf9a52"
+      },
+      "physics": {
+        "resist": {
+          "CRUSH": 2.8,
+          "KINETIC": 2.8,
+          "FRACTURE": 2.8,
+          "THERMAL": 2.2
+        }
       }
     },
     {
@@ -93,6 +133,14 @@
         "char": "#1a1414",
         "crack": "#120c10",
         "debris": "#8a7466"
+      },
+      "physics": {
+        "resist": {
+          "CRUSH": 2.8,
+          "KINETIC": 2.8,
+          "FRACTURE": 2.8,
+          "THERMAL": 2.2
+        }
       }
     },
     {
@@ -104,6 +152,14 @@
         "char": "#284a72",
         "crack": "#183050",
         "debris": "#bfe4f4"
+      },
+      "physics": {
+        "resist": {
+          "CRUSH": 2.8,
+          "KINETIC": 2.8,
+          "FRACTURE": 2.8,
+          "THERMAL": 2.2
+        }
       }
     },
     {
@@ -115,6 +171,14 @@
         "char": "#1a1214",
         "crack": "#0a0608",
         "debris": "#725248"
+      },
+      "physics": {
+        "resist": {
+          "CRUSH": 2.8,
+          "KINETIC": 2.8,
+          "FRACTURE": 2.8,
+          "THERMAL": 2.2
+        }
       }
     },
     {
@@ -127,6 +191,14 @@
         "crack": "#ffb040",
         "debris": "#c0481c",
         "glowRamp": ["#c0481c", "#ff9a30", "#ffe080", "#ffffff"]
+      },
+      "physics": {
+        "resist": {
+          "CRUSH": 2.8,
+          "KINETIC": 2.8,
+          "FRACTURE": 2.8,
+          "THERMAL": 2.2
+        }
       }
     },
     {
@@ -161,7 +233,7 @@
     "coreY": 104,
     "coreRadius": 13,
     "params": {
-      "radius": 70,
+      "radius": 60,
       "atmo": 8,
       "surface": 5.5,
       "crust": 11,
@@ -434,9 +506,9 @@
       "name": "Impact",
       "nameKo": "충격",
       "frame": {
-        "startup": 40,
+        "startup": 44,
         "active": 8,
-        "recovery": 54,
+        "recovery": 74,
         "cancelWindow": 0.4,
         "chargeMax": 0,
         "hitstop": 14
@@ -456,7 +528,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1400,
+                "energy": 1150,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -502,7 +574,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1400,
+                "energy": 1150,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -548,7 +620,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1400,
+                "energy": 1150,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -785,7 +857,7 @@
         "chargeReach": [0.8, 1.35],
         "slam": {
           "speed": 9,
-          "energy": 700,
+          "energy": 620,
           "crater": 16,
           "compress": 8,
           "shock": 1.2,
@@ -865,7 +937,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2100,
+                "energy": 1950,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -933,7 +1005,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2100,
+                "energy": 1950,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1001,7 +1073,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2100,
+                "energy": 1950,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1036,7 +1108,7 @@
           "from": 66,
           "gap": 10,
           "speed": 11,
-          "energy": 600,
+          "energy": 520,
           "crater": 14,
           "compress": 7,
           "shock": 1

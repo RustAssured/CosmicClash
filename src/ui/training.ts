@@ -30,7 +30,7 @@ export function drawTraining(ctx: UICtx, hud: HudState): void {
     const view = f.view;
     const right = slot === 1;
     const x = right ? LOGICAL_W - 8 - PW : 8;
-    const y = 66;
+    const y = LOGICAL_H - 30 - 64 - 2; // low on the screen, over the ground: the titans fight above it
     const ramp = accentRamp(f.def.ui.accent);
     panel(cv, x, y, PW, 64, { accent: ramp.dim, fill: alpha(C.ink0, 0.88), shade: false });
     const move = view.moveId ? f.moveById(view.moveId) : undefined;

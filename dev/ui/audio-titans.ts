@@ -271,11 +271,12 @@ export async function runTitanVerification(): Promise<TitanReport> {
     supernova: { type: 'THERMAL' },
     planet: { type: 'CRUSH', heavy: true, energy: 6000 },
   };
+  // the exact ids the titans emit (plus older keyword shapes, which must keep working)
   const cues: Record<(typeof NEW_TITANS)[number], string[]> = {
-    nexus: ['chain-sever', 'node-dark', 'graph-harvest', 'node-merge'],
-    blackhole: ['disk-shed', 'mass-lost', 'disk-break', 'horizon-collapse'],
-    supernova: ['layer-shed', 'core-collapse', 'fuel-lost'],
-    planet: ['moon-lost', 'atmosphere-strip', 'ocean-boil', 'crust-break'],
+    nexus: ['node-dark', 'harvest', 'chain-latch', 'chain-sever', 'graph-harvest', 'node-merge'],
+    blackhole: ['disk-shed', 'consume', 'hawking', 'mass-lost', 'disk-break', 'horizon-collapse'],
+    supernova: ['layer-blow', 'fuel-burn', 'collapse', 'layer-shed', 'core-collapse', 'fuel-lost'],
+    planet: ['crust-crack', 'moon-lost', 'atmo-strip', 'ocean-boil', 'atmosphere-strip', 'crust-break'],
   };
   const matters: Record<
     (typeof NEW_TITANS)[number],

@@ -60,7 +60,8 @@ score ─► music bus ─► (+ send) ────────────┘
 
 Cue ids (`SimEvent { t: 'cue' }`) are free-form strings owned by each titan. Voices react to the KIND of cue by keyword, so an id
 this engine has never seen still lands on something sensible: `sever`, `dark`, `lost`, `shed`, `break`, `boil`, `strip`,
-`collapse`, `harvest`, `swarm`, `merge` (`voices/cues.ts`, first keyword found in the id wins; anything else is a generic blip).
+`collapse`, `harvest`, `swarm`, `merge`, and the ones the newer titans' own ids need: `blow` (layer-blow), `crack` (crust-crack), `burn` (fuel-burn),
+`latch` (chain-latch), `consume`, `hawking` (`voices/cues.ts`, first keyword found in the id wins; anything else is a generic blip).
 `CUE_TRIM` is per titan (Last One and Asteroid 3, the others 1).
 
 A `TitanVoice` implements any subset of `onMove / onCharge / onRelease / onSurge / onHitDealt / onHitTaken / onGuard / onKo /
@@ -88,6 +89,10 @@ to root / drone fifth / octave (`fifthOf`: the mode's degree nearest a perfect f
 adds layers (sub, taiko, percussion, heartbeat, motes) rather than only gain: at full intensity the Nursery plays 14 hits a bar
 where the calm menu plays none, while the RMS level rises by about 2 dB. A KO is a hush; a round end blooms into an open chord. Intensity
 rises with a 0.35 s time constant and falls with 2.2 s, so it needs a steady per-frame `update`.
+
+The exact ids the shell emits (`layer-blow`, `crust-crack`, `fuel-burn`, `collapse`, `moon-lost`, `atmo-strip`, `ocean-boil`, `node-dark`,
+`harvest`, `chain-latch`, `disk-shed`, `consume`, `hawking`) each have their own sound, asserted to differ from the generic blip
+(`engine.test.ts`), and each has a button on the audition page.
 
 ## Chromium behaviours that bit, and the rules they produced
 

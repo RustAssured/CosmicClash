@@ -35,6 +35,10 @@ const CANON = {
 const problems = new WeakMap<Page, string[]>();
 async function open(page: Page, query = ''): Promise<void> {
   await installFakePads(page);
+  // a first launch opens the HOW TO PLAY pages over the title; these specs are about the menus behind them
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('adeuk.ui.v1')) localStorage.setItem('adeuk.ui.v1', '{"seenHowTo":true}');
+  });
   const errs: string[] = [];
   problems.set(page, errs);
   page.on('pageerror', (e) => errs.push(`pageerror: ${e.message}`));
@@ -136,8 +140,8 @@ test.describe('menus with a Switch Pro Controller', () => {
     await plug(page, PRO_STANDARD);
     await frames(page, 4);
     await tap(page, 0, CANON.HOME);
-    // VERSUS, VS AI, TRAINING, CONTROLLER CHECK, OPTIONS
-    for (let i = 0; i < 4; i++) await tap(page, 0, CANON.DOWN);
+    // VERSUS, VS AI, TRAINING, HOW TO PLAY, CONTROLLER CHECK, OPTIONS
+    for (let i = 0; i < 5; i++) await tap(page, 0, CANON.DOWN);
     await tap(page, 0, CANON.EAST);
     await waitScreen(page, 'options');
     await frames(page, 40);

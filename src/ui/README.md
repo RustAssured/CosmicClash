@@ -36,6 +36,12 @@ frame advantage in Training, announcements (ROUND 2, FIGHT, KO).
 
 ## Screens
 
+**Onboarding.** The title screen owns a three-page **HOW TO PLAY** (설명, `screens/howto.ts`): your body is your health, the moves with
+the REAL button of the controller last touched (`input.actionLabel`), then charge / aim / ultimate meter. It opens by itself on a
+first launch (`seenHowTo` in the stored settings), is skippable at any moment (Back or Start), and is item four of the title menu.
+During round one of the very first match on a device (`matches` counts starts) `hint.ts` draws a compact strip with each human
+player's buttons that fades out after about 16 seconds (`hintVisibility` is pure and tested).
+
 `boot` → `title` → `mode` (difficulty, VS AI only) → `assign` (join P1/P2) → `select` (titans, both players at once) → `stage` →
 `startMatch`. Also `controller` (Controller Check, reachable from title, options and pause), `options`, `pause`, `results`,
 `attract`, `hud`. Pad, keyboard and mixed play all work; prompts follow the last-used device (Nintendo, Xbox, PlayStation glyphs
@@ -64,13 +70,15 @@ decoded hat, the actions currently held), **Remap** (press the input you want fo
 - Static backdrops and greyed sprites are cached (`backdrop(cv, key, build)`), so a menu frame is a blit plus text.
 - The UI never reaches into the simulation: the HUD is drawn from `HudState` (public fighter views), and frame advantage is derived
   from those views (`advantage.ts`).
-- Persistence (`settings.ts`) is guarded and sanitised: volumes, quality, last picks and the AI level survive a reload; corrupt
+- Persistence (`settings.ts`) is guarded and sanitised: volumes, quality, last picks, the AI level, `seenHowTo` and the match count survive a reload; corrupt
   storage is ignored.
 - `ui.update()` calls `input.pollIfStale()`: safe whether or not the app polled this frame.
-- **Robust to slow frames** (software GL runs the game at 1-2 fps): `update(dt)` caps a hitch at 1 s (a hidden tab must not skip the
-  idle timer or every fade) but passes honest 0.5 s frames through; input guards ("do not let a mashed button skip the result") use
-  `settled(ctx, seconds)`, which is true after that time OR after 3 frames, so they never swallow input for more than a few frames.
-- The results screen shows rounds, damage dealt (the share of the foe's starting mass that is gone, `damageDealt`) and mass left,
+- **Robust to slow frames** (software GL runs the game at 1-2 fps, and the shell's loop hands the UI a clamped ~0.1 s frame time, which
+  made every fade, delay and the attract timer ten times slower than the wall clock): `update(dt)` uses the larger of the given
+  time and the wall-clock time since its last update, capped at 1 s a frame (a hidden tab must not skip every fade), and the title's
+  idle timer counts up to 30 s a frame. Input guards ("do not let a mashed button skip the result") use `settled(ctx, seconds)`,
+  true after that time OR after 3 frames, so they never swallow input for more than a few frames.
+- The results screen shows rounds won, damage dealt (the share of the foe's starting mass that is gone, `damageDealt`) and mass left,
   from `HudState`. The stage picker is driven by `implementedStages`: all five cards start their stage when they are listed.
 
 ## Performance
@@ -99,3 +107,10 @@ npx playwright test e2e/ui.spec.ts           # real browser: flows with fake pad
 - Korean text covers the precomposed syllables; standalone jamo (ㄱ, ㅏ…) and Hanja are not drawn.
 - The HUD is verified on fixture data (all six phases: intro, fight, ko, timeover, roundend, matchend) and in the sandbox, not yet against a live match (the app owns that wiring). Damage dealt is net mass removed: an accretor that regrew is under-counted.
 - No touch or mouse control: the game is for a pad or a keyboard.
+
+## Data strings must fit
+
+`text-fit.test.ts` measures every string that comes from titan and stage DEFINITIONS (names, epithets, resources, taglines,
+failure modes, blurbs) against the box the screens draw it in, for all six titans and five stages. It found one real overflow (Red
+Giant's Wake at double size beside the palette; the stage screen now falls back to single size) and drove the select panel's
+failure text to the micro face (the Supernova's is 221 characters: five lines, none cut). Add a titan or stage and it is checked.

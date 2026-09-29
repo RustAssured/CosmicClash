@@ -11,6 +11,10 @@ export interface UISettings {
   lastP2: TitanId;
   lastStage: StageId;
   aiLevel: Difficulty;
+  /** The HOW TO PLAY pages have been shown once (they open by themselves on the very first launch). */
+  seenHowTo: boolean;
+  /** Matches started on this device: the in-match hint strip shows during the very first one. */
+  matches: number;
 }
 
 export const UI_STORAGE_KEY = 'adeuk.ui.v1';
@@ -24,6 +28,8 @@ export const defaultUISettings = (): UISettings => ({
   lastP2: 'asteroid',
   lastStage: 'nursery',
   aiLevel: 3,
+  seenHowTo: false,
+  matches: 0,
 });
 
 const int = (v: unknown, lo: number, hi: number, d: number): number =>
@@ -51,6 +57,8 @@ export function parseUISettings(raw: string | null): UISettings {
       ? (o.lastStage as StageId)
       : d.lastStage,
     aiLevel: int(o.aiLevel, 1, 6, d.aiLevel) as Difficulty,
+    seenHowTo: o.seenHowTo === true,
+    matches: int(o.matches, 0, 100000, d.matches),
   };
 }
 

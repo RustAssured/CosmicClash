@@ -36,8 +36,8 @@ const SHED_LUMP = 0.012;
 const COOL_AFTER = 100;
 const COOL_PER_TICK = 1.6 / 60;
 /** Fuel regained per unit of THERMAL/KINETIC energy the star absorbs, and the most one blow can give. */
-const ABSORB_GAIN = 0.012;
-const ABSORB_MAX = 8;
+const ABSORB_GAIN = 0.006;
+const ABSORB_MAX = 4;
 
 /* ---- passives / failure mode ------------------------------------------------------------------------------------------------ */
 /** Radiance: the aura is applied every few ticks; its heat (temperature units per cell at full weight) grows with fuel. */

@@ -38,22 +38,31 @@ Node 20 or newer. Click the page or press any key or button once: browsers only 
 
 ## How to play
 
+The game explains itself: the **first time you launch it** the title screen opens a three-page **HOW TO PLAY** (설명), skippable with
+the back button, and it is always in the title menu. The moves page prints the buttons of the controller you last touched
+(Nintendo, Xbox, PlayStation or keyboard). During the first round of your very first match a slim strip repeats those buttons and
+fades out by itself.
+
 Two titans, one arena, best of three rounds. Each round is a two-second intro, up to 90 seconds of fighting, and a KO. If time
 runs out the titan with more of itself left wins.
 
-**Destruction is health.** The titan's HUD portrait is a live thumbnail of what remains of it, with a ghost of the silhouette it
+**Destruction is health.** There is no health bar: your body is the bar. The titan's HUD portrait is a live thumbnail of what remains of it, with a ghost of the silhouette it
 started with. Losing matter also changes how a titan fights: lighter and faster, but weaker. Damaged regions hit less hard, so
 carve toward the core.
 
 | Move | What it is |
 |---|---|
-| **Strike** | Light, fast, safe-ish. Aim it with the left stick. |
+| **Aim** | Tilt the stick up, forward or down before a blow to choose where it lands. |
+| **Strike** | Light, fast, safe-ish. Hold to charge. |
 | **Crush** | Heavy and slow to land; sustained Crush breaks a Guard. Vast, and it commits you. |
 | **Surge** | Drift or dash with a brief moment of intangibility. |
 | **Signature** | The titan's own trick, often hold-to-charge (the Last One's Gaze, the Asteroid's Swarm). |
-| **Ultimate** | Spends the meter, which fills from dealing and from receiving damage. |
+| **Ultimate** | Spends the meter, which fills from dealing AND from receiving damage. |
 | **Guard** | A shell whose strength depends on the damage type against its material. |
 | **Feint** | Cancel a windup into Guard or Surge in its first 40 %. |
+
+When the last blow lands, the winner is called out over the fight before the results screen (rounds, damage dealt as the share of
+the rival's matter removed, matter left) offers **Rematch** or **Title**.
 
 Modes: **Versus** (two players, one screen), **VS AI** (six difficulty levels, "Titan" being the top), **Training** (frame data,
 hitboxes and matter overlays, no clock, no KO) and, after a minute idle on the title screen, an AI-versus-AI attract mode.
@@ -245,9 +254,14 @@ Read this before you rely on the controller layer.
   Controller Check screen exists so the difference between the tables and reality is visible and fixable by any player.
 - **WebHID** report parsing and the HD-rumble encoder are written from the community's reverse-engineered protocol notes and have
   never talked to a real controller. They are off unless you turn them on.
+- **The live game has been driven through a real browser, but slowly.** The keyboard path from the title to a running match, the
+  pause menu, the announcer, the training overlay and the results screen were checked with screenshots of the built game in headless
+  Chromium with software WebGL, which runs at about one frame a second here. Nothing was played by hand at 60 fps on a GPU: feel,
+  timing and legibility at speed are unjudged.
 - **Audio has been measured, not heard.** The engine is rendered offline in headless Chromium and checked for clipping, NaN,
   audibility, latency, adaptive-score response, volume law and tail lengths (`e2e/ui-audio.spec.ts`), and that pass found and fixed
-  real bugs. It cannot tell you a chord is beautiful. Whether a gamepad press unlocks audio differs by browser.
+  real bugs. It cannot tell you a chord is beautiful, that the six titans' voices are pleasant, or that the five stage scores suit their stages;
+  those are numbers about pitch, level and brightness. Whether a gamepad press unlocks audio differs by browser.
 
 ## Credits
 

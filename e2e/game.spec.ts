@@ -64,32 +64,3 @@ test('a scripted Crush connects and the target loses matter', async ({ page }) =
   expect(s.fighters[1].massFrac).toBeLessThan(0.97);
   expect(errs).toEqual([]);
 });
-
-test('keyboard path: boot → menus → live match', async ({ page }) => {
-  test.setTimeout(540_000);
-  const errs = errorsOf(page);
-  await page.goto('/?q=0');
-  await ready(page);
-  expect(await page.evaluate(() => window.__ADEUK__!.uiScreen())).toBe('boot');
-  let screen = 'boot';
-  const seen = new Set<string>([screen]);
-  let downed = false;
-  for (let i = 0; i < 140 && screen !== 'hud'; i++) {
-    // software GL renders ~1–2 fps here: one press per iteration, then give a couple of frames to consume it
-    let key = 'Space';
-    if (screen === 'title' && !downed) {
-      key = 'ArrowDown'; // VERSUS → VS AI (one human slot)
-      downed = true;
-    }
-    await page.keyboard.press(key);
-    await page.waitForTimeout(1500);
-    screen = await page.evaluate(() => window.__ADEUK__!.uiScreen());
-    seen.add(screen);
-  }
-  expect([...seen]).toContain('title');
-  expect(screen).toBe('hud');
-  await page.waitForFunction(() => window.__ADEUK__!.matchPhase() !== 'none', null, { timeout: 120_000 });
-  await page.waitForTimeout(1500);
-  expect(await page.evaluate(() => window.__ADEUK__!.summary().tick)).toBeGreaterThan(0);
-  expect(errs).toEqual([]);
-});

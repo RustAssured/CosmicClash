@@ -58,7 +58,9 @@ class UIRuntime implements GameUI, UICtx {
   dt = 0;
   screenTime = 0;
   screenFrames = 0;
+  firstMatch = false;
   private pendingResults: 0 | 1 | -1 | null = null;
+  private lastWallMs: number | null = null;
   private stack: UIScreenId[] = ['boot'];
   private readonly screens: Partial<Record<UIScreenId, Screen>> = {};
   private readonly actions: UIAction[] = [];
@@ -115,9 +117,15 @@ class UIRuntime implements GameUI, UICtx {
   }
 
   update(rawDtSec: number): void {
-    // a hitch (a hidden tab, a stalled software renderer) must not fast-forward fades, idle timers and toasts in one step;
-    // but a slow machine's honest 0.5 s frames must pass unchanged, so the cap is generous
-    const dtSec = Number.isFinite(rawDtSec) ? Math.min(1, Math.max(0, rawDtSec)) : 0;
+    // The shell's loop clamps the frame time it hands over (about 0.1 s) so a slow machine does not lurch; on software GL, at a
+    // frame every second or two, that makes every fade, delay and idle timer ten times slower than the clock on the wall. The UI
+    // therefore takes the larger of that and the wall-clock time since its last update, capped at 1 s a frame: a hidden tab or a
+    // stalled renderer must not fast-forward every fade in one step, but honest slow frames pass in full.
+    const nowMs = (this.deps.now ?? (() => performance.now()))();
+    const wallSec = this.lastWallMs === null ? 0 : Math.max(0, (nowMs - this.lastWallMs) / 1000);
+    this.lastWallMs = nowMs;
+    const given = Number.isFinite(rawDtSec) ? Math.max(0, rawDtSec) : 0;
+    const dtSec = Math.min(1, Math.max(given, wallSec));
     this.dt = dtSec;
     this.t += dtSec;
     this.screenTime += dtSec;
@@ -134,7 +142,8 @@ class UIRuntime implements GameUI, UICtx {
     const active = n.any || n.up || n.down || n.left || n.right || n.confirm || n.back || n.start;
     if (this.screen === 'title') {
       if (active) this.idle = 0;
-      else this.idle += dtSec;
+      else
+        this.idle += Math.min(30, Math.max(wallSec, Number.isFinite(rawDtSec) ? Math.max(0, rawDtSec) : 0));
       if (this.idle >= this.attractAfter) {
         this.idle = 0;
         this.emit({ type: 'attractStart' });
@@ -275,6 +284,8 @@ class UIRuntime implements GameUI, UICtx {
     this.settings.lastP2 = s.p2;
     this.settings.lastStage = s.stage;
     this.settings.aiLevel = s.aiLevel;
+    this.firstMatch = this.settings.matches === 0;
+    this.settings.matches++;
     this.saveSettings();
     const seed = this.deps.newSeed?.() ?? ((this.deps.now?.() ?? Date.now()) * 1000) & 0x7fffffff;
     const config: MatchConfig = {

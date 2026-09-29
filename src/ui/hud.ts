@@ -14,6 +14,7 @@ import { alphaBounds, samplePortrait, silhouette, type Bounds } from './portrait
 import { drawIcon, meterBar, panel, pips } from './pixel/shapes';
 import { drawText, measureText } from './pixel/text';
 import { band, type UICtx } from './screens/kit';
+import { drawHint } from './hint';
 import { drawTraining } from './training';
 
 /**
@@ -88,6 +89,7 @@ export function drawHud(ctx: UICtx, hud: HudState, opts: HudOptions = {}): void 
   drawClock(ctx, hud);
   if (!opts.compact) {
     drawAnnouncer(ctx, hud);
+    drawHint(ctx, hud);
     if (hud.training) drawTraining(ctx, hud);
   }
 }

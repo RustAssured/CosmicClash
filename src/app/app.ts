@@ -228,6 +228,12 @@ export class App {
       aiLevel: 3,
     };
     this.session = session;
+    // a human slot with no device (harness boot skips the Assign screen) falls back to the keyboard layouts
+    const assigned = this.input.assignment();
+    for (const slot of [0, 1] as const) {
+      if (config.slots[slot].controller === 'human' && assigned[slot] === null)
+        this.input.assign(slot, slot === 0 ? 'kb:kb1' : 'kb:kb2');
+    }
     this.bindSources(session, defs, opts.scripts);
     this.fx.reset();
     const v0 = match.fighters[0].view;

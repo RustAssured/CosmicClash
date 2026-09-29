@@ -202,17 +202,21 @@ export function createStageScreen(): Screen {
       const ramp = accentRamp(stageAccent(st));
       const dy = CARD_Y + CARD_H + 16;
       panel(cv, X0, dy, 5 * CARD_W + 4 * GAP, 96, { accent: ramp.dim });
-      drawText(cv, st.name.toUpperCase(), X0 + 16, dy + 12, {
+      // the long names (Red Giant's Wake) do not fit at double size beside the palette: fall back to single size
+      const big =
+        measureText(st.name.toUpperCase(), { scale: 2, tracking: 2 }) + 14 + measureText(st.nameKo) <= 360;
+      const nameScale = big ? 2 : 1;
+      drawText(cv, st.name.toUpperCase(), X0 + 16, dy + (big ? 12 : 16), {
         color: C.white,
         tracking: 2,
-        scale: 2,
+        scale: nameScale,
         shadow: alpha(C.void, 0.85),
       });
       drawText(
         cv,
         st.nameKo,
-        X0 + 16 + measureText(st.name.toUpperCase(), { scale: 2, tracking: 2 }) + 14,
-        dy + 15,
+        X0 + 16 + measureText(st.name.toUpperCase(), { scale: nameScale, tracking: 2 }) + 14,
+        dy + (big ? 15 : 16),
         { color: ramp.light },
       );
       let ty = dy + 38;

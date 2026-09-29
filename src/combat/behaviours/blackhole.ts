@@ -41,9 +41,9 @@ export class BlackHoleBehaviour extends Behaviour {
   private well: WellCfg | null = null;
   private ult: WellCfg | null = null;
   private wellOn = false;
-  private grownMass = 0;
+  private eatenAcc = 0;
+  private lastFoeMass = 0;
   private lastGrow = -1000;
-  private lastGain = 0;
   private lean = 0;
   private readonly xy = { x: 0, y: 0 };
   private readonly shape = makeFatShape();
@@ -82,7 +82,8 @@ export class BlackHoleBehaviour extends Behaviour {
   override reset(_heal: number): void {
     this.f.world.setGravitySource(this.f.slot, null);
     this.wellOn = false;
-    this.lastGain = this.f.view.bodyStats.massGained;
+    this.lastFoeMass = (this.f.foe.view.bodyStats as { mass: number }).mass;
+    this.eatenAcc = 0;
   }
 
   override adjustStats(s: EffectiveStats, massFrac: number): void {
@@ -154,7 +155,7 @@ export class BlackHoleBehaviour extends Behaviour {
         strength,
         radius,
         consumeRadius: cfg.consume,
-        creditBodyId: f.body.id,
+        creditBodyId: -1,
       });
       this.wellOn = true;
       // the foe is drawn in too, in proportion to how deep in the well it is
@@ -171,38 +172,39 @@ export class BlackHoleBehaviour extends Behaviour {
       f.world.setGravitySource(f.slot, null);
       this.wellOn = false;
     }
-    // accretion: build credited mass into new disk
-    const gained = st.massGained;
-    if (gained > this.lastGain + 4) {
-      f.events.push({
-        t: 'cue',
-        slot: f.slot,
-        titan: f.def.id,
-        id: 'consume',
-        x: t.x,
-        y: t.y,
-        amount: gained - this.lastGain,
-      });
-      this.lastGain = gained;
-    }
-    if (tick - this.lastGrow >= 45 && !f.ko) {
-      const idx = f.body.materials.findIndex((mm) => mm.key === this.matGrow);
-      const per = idx >= 0 ? f.body.materials[idx]!.density : 1;
-      const pool = gained - this.grownMass;
-      const cells = Math.min(60, Math.floor((pool * 0.9) / Math.max(0.03, per)));
-      if (idx >= 0 && cells >= 12) {
-        const a = hash01(tick, 7, 3) * 6.2832;
-        const added = f.world.grow(f.body.id, {
-          cells,
-          materialKey: this.matGrow,
-          nearX: t.x + Math.cos(a) * 70,
-          nearY: t.y + Math.sin(a) * 20,
+    // accretion: what the foe loses while the hole feeds fills the Accreted bar; the bar rebuilds the disk
+    const foeMass = (f.foe.view.bodyStats as { mass: number }).mass;
+    const eaten = this.lastFoeMass - foeMass;
+    this.lastFoeMass = foeMass;
+    if (eaten > 0 && !f.ko) {
+      f.resource = Math.min(f.resourceMax, f.resource + eaten * 0.02);
+      this.eatenAcc += eaten;
+      if (this.eatenAcc > 600) {
+        f.events.push({
+          t: 'cue',
+          slot: f.slot,
+          titan: f.def.id,
+          id: 'consume',
+          x: t.x,
+          y: t.y,
+          amount: this.eatenAcc,
         });
-        this.lastGrow = tick;
-        this.grownMass += added * per;
+        this.eatenAcc = 0;
       }
     }
-    f.resource = clamp((100 * (gained * 0.9)) / Math.max(1, st.initialMass * 0.25), 0, 100);
+    const missing = st.initialCells * 0.97 - st.cells;
+    if (tick - this.lastGrow >= 20 && !f.ko && missing > 40 && f.resource > 6) {
+      const cells = Math.min(70, Math.floor(missing));
+      const a = hash01(tick, 7, 3) * 6.2832;
+      const added = f.world.grow(f.body.id, {
+        cells,
+        materialKey: this.matGrow,
+        nearX: t.x + Math.cos(a) * 70,
+        nearY: t.y + Math.sin(a) * 20,
+      });
+      this.lastGrow = tick;
+      f.resource = Math.max(0, f.resource - added * 0.05);
+    }
     f.view.parts = Math.floor(f.resource / 10);
     // lensing follows the horizon and the accreted mass; a dying hole lets the light back
     const low = clamp01((st.massFrac - 0.22) / 0.5);

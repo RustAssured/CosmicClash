@@ -46,6 +46,8 @@ export interface UICtx {
   readonly screenTime: number;
   /** Updates since the current screen was entered (a slow machine may show only a few frames per second). */
   readonly screenFrames: number;
+  /** True while the very first match ever started on this device is running (the in-match hint strip uses it). */
+  readonly firstMatch: boolean;
   /** Merged nav frame from every device, and per-slot frames. */
   readonly nav: Readonly<NavFrame>;
   navFor(slot: 0 | 1): Readonly<NavFrame>;

@@ -31,7 +31,7 @@ const MATERIALS: TitanDef['materials'] = [
   {
     key: 'core',
     base: 'core',
-    physics: { density: 1.5 },
+    physics: { density: 1.5, resist: { CRUSH: 0.8, KINETIC: 0.8, FRACTURE: 4, ASSIMILATION: 4 } },
     visual: {
       ramp: slice(6, 11),
       emissive: 165,
@@ -44,7 +44,7 @@ const MATERIALS: TitanDef['materials'] = [
   {
     key: 'inner',
     base: 'plasma',
-    physics: { density: 0.5 },
+    physics: { density: 0.5, resist: { CRUSH: 0.8, KINETIC: 0.8, FRACTURE: 4, ASSIMILATION: 4 } },
     visual: {
       ramp: slice(4, 10),
       emissive: 105,
@@ -57,7 +57,7 @@ const MATERIALS: TitanDef['materials'] = [
   {
     key: 'photosphere',
     base: 'plasma',
-    physics: { density: 0.34 },
+    physics: { density: 0.34, resist: { CRUSH: 0.8, KINETIC: 0.8, FRACTURE: 4, ASSIMILATION: 4 } },
     visual: {
       ramp: slice(2, 10),
       emissive: 85,
@@ -115,7 +115,7 @@ const flare: MoveDef = {
   slot: 'strike',
   name: 'Flare',
   nameKo: '플레어',
-  frame: frame(10, 6, 18, { hitstop: 5 }),
+  frame: frame(11, 6, 28, { hitstop: 5 }),
   variants: aims((aim) => {
     const s = AIM_SIGN[aim];
     return {
@@ -140,7 +140,7 @@ const flare: MoveDef = {
   resourceCost: 0,
   meterCost: 0,
   tags: ['burst'],
-  extra: { fuel: 3, pose: { startup: { lean: -3 }, active: { lean: 5 } } },
+  extra: { fuel: 7, pose: { startup: { lean: -3 }, active: { lean: 5 } } },
 };
 
 /** Crush — Coronal Ejection: a vast slow fireball that travels out from the star, then blasts what it meets. */
@@ -149,7 +149,7 @@ const ejection: MoveDef = {
   slot: 'crush',
   name: 'Coronal Ejection',
   nameKo: '코로나 질량 방출',
-  frame: frame(32, 26, 50, { hitstop: 12 }),
+  frame: frame(32, 26, 64, { hitstop: 12 }),
   variants: aims((aim) => {
     const s = AIM_SIGN[aim];
     return {
@@ -160,7 +160,7 @@ const ejection: MoveDef = {
           26,
           { kind: 'point', ox: 56, oy: s * 26, r: 30 },
           T,
-          1500,
+          1350,
           { shock: 1.8, scatter: 1.2 },
           0,
           { x: 520, y: -60 + s * 110 },
@@ -174,7 +174,7 @@ const ejection: MoveDef = {
   resourceCost: 0,
   meterCost: 0,
   tags: ['projectile', 'heavy', 'blast'],
-  extra: { fuel: 14, pose: { startup: { lean: -8 }, active: { lean: 6 }, recovery: { lean: 2 } } },
+  extra: { fuel: 22, pose: { startup: { lean: -8 }, active: { lean: 6 }, recovery: { lean: 2 } } },
 };
 
 /** Surge — Solar Wind: the star sheds itself into a jet of plasma and rides it. */
@@ -224,7 +224,7 @@ const prominence: MoveDef = {
   meterCost: 0,
   tags: ['charge', 'projectile', 'zone'],
   extra: {
-    fuel: 12,
+    fuel: 18,
     chargePower: 0.8,
     chargeReach: [0.72, 1.45],
     /** The fire wall the arc leaves: a world-fixed vertical line of half-height `half`, hit every `every` ticks for `life` ticks. */
@@ -394,7 +394,7 @@ export const supernova: TitanDef = {
       trap: 0.1,
       punish: 0.6,
       gaze: 0.3,
-      fuelCare: 0.8,
+      fuelCare: 0,
     },
   },
   ui: { accent: '#ff9a3c', accent2: '#fff0b0', tagline: 'Burn bright. Burn out.' },

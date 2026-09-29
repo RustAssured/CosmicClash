@@ -33,7 +33,13 @@
       "key": "core",
       "base": "core",
       "physics": {
-        "density": 1.5
+        "density": 1.5,
+        "resist": {
+          "CRUSH": 0.8,
+          "KINETIC": 0.8,
+          "FRACTURE": 4,
+          "ASSIMILATION": 4
+        }
       },
       "visual": {
         "ramp": ["#ff8a2e", "#ffae38", "#ffd050", "#ffe98a", "#fff8d6", "#ffffff"],
@@ -48,7 +54,13 @@
       "key": "inner",
       "base": "plasma",
       "physics": {
-        "density": 0.5
+        "density": 0.5,
+        "resist": {
+          "CRUSH": 0.8,
+          "KINETIC": 0.8,
+          "FRACTURE": 4,
+          "ASSIMILATION": 4
+        }
       },
       "visual": {
         "ramp": ["#d23c2a", "#f0621f", "#ff8a2e", "#ffae38", "#ffd050", "#ffe98a", "#fff8d6"],
@@ -63,7 +75,13 @@
       "key": "photosphere",
       "base": "plasma",
       "physics": {
-        "density": 0.34
+        "density": 0.34,
+        "resist": {
+          "CRUSH": 0.8,
+          "KINETIC": 0.8,
+          "FRACTURE": 4,
+          "ASSIMILATION": 4
+        }
       },
       "visual": {
         "ramp": [
@@ -206,9 +224,9 @@
       "name": "Flare",
       "nameKo": "플레어",
       "frame": {
-        "startup": 10,
+        "startup": 11,
         "active": 6,
-        "recovery": 18,
+        "recovery": 28,
         "cancelWindow": 0.4,
         "chargeMax": 0,
         "hitstop": 5
@@ -357,7 +375,7 @@
       "meterCost": 0,
       "tags": ["burst"],
       "extra": {
-        "fuel": 3,
+        "fuel": 7,
         "pose": {
           "startup": {
             "lean": -3
@@ -376,7 +394,7 @@
       "frame": {
         "startup": 32,
         "active": 26,
-        "recovery": 50,
+        "recovery": 64,
         "cancelWindow": 0.4,
         "chargeMax": 0,
         "hitstop": 12
@@ -396,7 +414,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 1500,
+                "energy": 1350,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -446,7 +464,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 1500,
+                "energy": 1350,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -496,7 +514,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 1500,
+                "energy": 1350,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -537,7 +555,7 @@
       "meterCost": 0,
       "tags": ["projectile", "heavy", "blast"],
       "extra": {
-        "fuel": 14,
+        "fuel": 22,
         "pose": {
           "startup": {
             "lean": -8
@@ -758,7 +776,7 @@
       "meterCost": 0,
       "tags": ["charge", "projectile", "zone"],
       "extra": {
-        "fuel": 12,
+        "fuel": 18,
         "chargePower": 0.8,
         "chargeReach": [0.72, 1.45],
         "wall": {
@@ -1290,7 +1308,7 @@
       "trap": 0.1,
       "punish": 0.6,
       "gaze": 0.3,
-      "fuelCare": 0.8
+      "fuelCare": 0
     }
   },
   "ui": {

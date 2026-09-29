@@ -36,6 +36,10 @@ const SHOTS = '.scratch/e2e';
 
 async function open(page: Page, query = 'screen=controller'): Promise<void> {
   await installFakePads(page);
+  // a first launch opens the HOW TO PLAY pages over the title; these specs are about the menus behind them
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('adeuk.ui.v1')) localStorage.setItem('adeuk.ui.v1', '{"seenHowTo":true}');
+  });
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
@@ -287,8 +291,8 @@ test.describe('Switch Pro Controller, legacy DirectInput-style mapping (no mappi
     await plug(page, PRO_LEGACY);
     await frames(page, 4);
     await tap(page, 0, 12); // Home: reveals the pad without navigating anywhere
-    // title: VERSUS, VS AI, TRAINING, CONTROLLER CHECK, OPTIONS: three hat-downs land on CONTROLLER CHECK
-    for (let i = 0; i < 3; i++) {
+    // title: VERSUS, VS AI, TRAINING, HOW TO PLAY, CONTROLLER CHECK, OPTIONS: four hat-downs land on CONTROLLER CHECK
+    for (let i = 0; i < 4; i++) {
       await setAxis(page, 0, 9, HAT.d);
       await frames(page, 4);
       await setAxis(page, 0, 9, HAT.neutral);

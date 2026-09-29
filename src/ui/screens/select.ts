@@ -292,20 +292,22 @@ export function createSelectScreen(): Screen {
     // signature + failure
     cv.hline(x + 12, PANEL_Y + 190, PANEL_W - 24, C.line0);
     drawText(cv, 'DESTRUCTION', x + 12, PANEL_Y + 197, { color: ramp.light, font: 'micro', tracking: 1 });
-    let ty = PANEL_Y + 207;
-    for (const line of wrapClamp(dmg.text, PANEL_W - 24, 2)) {
-      drawText(cv, line, x + 12, ty, { color: C.soft });
-      ty += 12;
+    // Both texts come from the titan definitions and run long (the Supernova's failure mode is 221 characters): the micro face
+    // keeps every one of them whole (at most five lines) instead of cutting the sentence off.
+    let ty = PANEL_Y + 206;
+    for (const line of wrapClamp(dmg.text, PANEL_W - 24, 2, { font: 'micro' })) {
+      drawText(cv, line, x + 12, ty, { color: C.soft, font: 'micro' });
+      ty += 7;
     }
-    drawText(cv, `FAILURE  ${t.failureMode.name.toUpperCase()}`, x + 12, PANEL_Y + 236, {
+    drawText(cv, `FAILURE  ${t.failureMode.name.toUpperCase()}`, x + 12, PANEL_Y + 224, {
       color: C.danger,
       font: 'micro',
       tracking: 1,
     });
-    ty = PANEL_Y + 246;
-    for (const line of wrapClamp(t.failureMode.text, PANEL_W - 24, 2)) {
-      drawText(cv, line, x + 12, ty, { color: C.mid });
-      ty += 12;
+    ty = PANEL_Y + 234;
+    for (const line of wrapClamp(t.failureMode.text, PANEL_W - 24, 5, { font: 'micro' })) {
+      drawText(cv, line, x + 12, ty, { color: C.mid, font: 'micro' });
+      ty += 7;
     }
     void chip;
     void greyed;

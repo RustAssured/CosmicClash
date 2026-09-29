@@ -128,7 +128,20 @@ const CUE_WORDS = [
   'harvest',
   'swarm',
   'merge',
+  'blow',
+  'crack',
+  'burn',
+  'latch',
+  'consume',
+  'hawking',
 ] as const;
+/** The exact ids the four newer titans emit, on their own buttons. */
+const EMITTED_CUES: Partial<Record<TitanId, string[]>> = {
+  nexus: ['node-dark', 'harvest', 'chain-latch'],
+  blackhole: ['disk-shed', 'consume', 'hawking'],
+  supernova: ['layer-blow', 'fuel-burn', 'collapse'],
+  planet: ['crust-crack', 'moon-lost', 'atmo-strip', 'ocean-boil'],
+};
 const TYPES: DamageType[] = ['FRACTURE', 'ASSIMILATION', 'TIDAL', 'THERMAL', 'CRUSH', 'KINETIC'];
 const MOVES: Record<string, string[]> = {
   lastone: ['lastone.lash', 'lastone.lunge', 'lastone.shatter', 'lastone.gaze'],
@@ -268,6 +281,14 @@ const groups: { name: string; entries: (a: TitanId, b: TitanId) => Entry[] }[] =
         events: () => [
           { t: 'cue', slot: 1, titan: b, id: `${b}-${w}`, x: 900, y: 300, amount: 1 } as AudioEvent,
         ],
+      })),
+      ...(EMITTED_CUES[a] ?? []).map((id) => ({
+        label: `A emits ${id}`,
+        events: () => [{ t: 'cue', slot: 0, titan: a, id, x: 700, y: 300, amount: 1 } as AudioEvent],
+      })),
+      ...(EMITTED_CUES[b] ?? []).map((id) => ({
+        label: `B emits ${id}`,
+        events: () => [{ t: 'cue', slot: 1, titan: b, id, x: 900, y: 300, amount: 1 } as AudioEvent],
       })),
       {
         label: 'unknown id (generic)',

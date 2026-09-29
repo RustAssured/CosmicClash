@@ -16,7 +16,7 @@
     "name": "Accreted mass",
     "nameKo": "\uac15\ucc29 \uc9c8\ub7c9",
     "max": 100,
-    "start": 0,
+    "start": 30,
     "display": "bar"
   },
   "destruction": "TIDAL",
@@ -54,7 +54,8 @@
           "CRUSH": 1.6,
           "THERMAL": 1.6,
           "TIDAL": 0.6
-        }
+        },
+        "density": 0.45
       },
       "visual": {
         "ramp": ["#7a3a10", "#ffb050", "#ffe6b0", "#ffffff"],
@@ -81,7 +82,8 @@
           "CRUSH": 1.6,
           "THERMAL": 1.6,
           "TIDAL": 0.6
-        }
+        },
+        "density": 0.45
       }
     },
     {
@@ -101,7 +103,8 @@
           "CRUSH": 1.6,
           "THERMAL": 1.6,
           "TIDAL": 0.6
-        }
+        },
+        "density": 0.45
       }
     },
     {
@@ -121,7 +124,8 @@
           "CRUSH": 1.6,
           "THERMAL": 1.6,
           "TIDAL": 0.6
-        }
+        },
+        "density": 0.45
       }
     },
     {
@@ -212,7 +216,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 160,
+                "energy": 110,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -275,7 +279,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 160,
+                "energy": 110,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -338,7 +342,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 160,
+                "energy": 110,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -372,7 +376,8 @@
           "active": {
             "lean": 3
           }
-        }
+        },
+        "noCredit": true
       }
     },
     {
@@ -381,9 +386,9 @@
       "name": "Maw",
       "nameKo": "\uc544\uac00\ub9ac",
       "frame": {
-        "startup": 34,
+        "startup": 48,
         "active": 16,
-        "recovery": 40,
+        "recovery": 70,
         "cancelWindow": 0.4,
         "chargeMax": 0,
         "hitstop": 10
@@ -397,9 +402,9 @@
               "to": 16,
               "shape": {
                 "kind": "field",
-                "ox": 110,
+                "ox": 88,
                 "oy": -40,
-                "r": 92,
+                "r": 72,
                 "falloff": 0.5
               },
               "damage": {
@@ -424,13 +429,13 @@
               "to": 14,
               "shape": {
                 "kind": "point",
-                "ox": 80,
+                "ox": 62,
                 "oy": -40,
                 "r": 64
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 650,
+                "energy": 420,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -460,9 +465,9 @@
               "to": 16,
               "shape": {
                 "kind": "field",
-                "ox": 110,
+                "ox": 88,
                 "oy": 0,
-                "r": 92,
+                "r": 72,
                 "falloff": 0.5
               },
               "damage": {
@@ -487,13 +492,13 @@
               "to": 14,
               "shape": {
                 "kind": "point",
-                "ox": 80,
+                "ox": 62,
                 "oy": 0,
                 "r": 64
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 650,
+                "energy": 420,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -523,9 +528,9 @@
               "to": 16,
               "shape": {
                 "kind": "field",
-                "ox": 110,
+                "ox": 88,
                 "oy": 40,
-                "r": 92,
+                "r": 72,
                 "falloff": 0.5
               },
               "damage": {
@@ -550,13 +555,13 @@
               "to": 14,
               "shape": {
                 "kind": "point",
-                "ox": 80,
+                "ox": 62,
                 "oy": 40,
                 "r": 64
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 650,
+                "energy": 420,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -590,7 +595,8 @@
           "active": {
             "lean": 4
           }
-        }
+        },
+        "noCredit": true
       }
     },
     {
@@ -655,7 +661,7 @@
       "frame": {
         "startup": 14,
         "active": 50,
-        "recovery": 30,
+        "recovery": 44,
         "cancelWindow": 0.4,
         "chargeMax": 40,
         "hitstop": 0
@@ -676,7 +682,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 22,
+                "energy": 14,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -709,7 +715,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 22,
+                "energy": 14,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -742,7 +748,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 22,
+                "energy": 14,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -761,7 +767,7 @@
           "movement": []
         }
       },
-      "resourceCost": 0,
+      "resourceCost": 30,
       "meterCost": 0,
       "tags": ["charge", "field", "gravity"],
       "extra": {
@@ -771,11 +777,12 @@
           "radius": [140, 260],
           "strength": [900, 2200],
           "consume": 26,
-          "pullFoe": 420
+          "pullFoe": 260
         },
         "ctl": {
           "active": 0.5
-        }
+        },
+        "noCredit": true
       }
     },
     {
@@ -807,7 +814,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 50,
+                "energy": 34,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -840,7 +847,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 50,
+                "energy": 34,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -873,7 +880,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 50,
+                "energy": 34,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -900,13 +907,14 @@
           "radius": [200, 340],
           "strength": [1600, 3200],
           "consume": 30,
-          "pullFoe": 700
+          "pullFoe": 450
         },
         "ctl": {
           "startup": 0.1,
           "active": 0.1,
           "recovery": 0.3
-        }
+        },
+        "noCredit": true
       }
     },
     {

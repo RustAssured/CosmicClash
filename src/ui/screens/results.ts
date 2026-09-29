@@ -129,7 +129,7 @@ export function createResultsScreen(): Screen {
       });
       if (hud) {
         const rows: [string, string, string][] = [
-          ['ROUNDS', String(hud.round), String(hud.round)],
+          ['ROUNDS WON', String(hud.wins[0]), String(hud.wins[1])],
           [
             'DAMAGE',
             `${Math.round(damageDealt(hud, 0) * 100)}%`,

@@ -15,6 +15,9 @@ import { createFakeGamepads, proStandard, xboxStandard, type FakePad } from '@/i
 import { STAGE_INFO } from '@/stages/info';
 import { FIXTURE_TITANS, fakeHud, fixturePortraitProvider } from './fixtures';
 import { announcement } from './hud';
+import { hintVisibility } from './hint';
+import { moveLabel } from './screens/howto';
+import type { UICtx } from './screens/kit';
 import { damageDealt } from './screens/results';
 import { showScreen } from './ui';
 import { createUI } from './index';
@@ -30,7 +33,7 @@ interface Rig {
   history: UIAction[];
   store: ReturnType<typeof createMemoryStore>;
   win: EventTarget;
-  step: (frames?: number, dt?: number) => void;
+  step: (frames?: number, dt?: number, wallMs?: number) => void;
   /** Press a pad button for a few frames, then release. */
   tap: (pad: FakePad, b: number) => void;
   key: (code: string) => void;
@@ -44,6 +47,8 @@ function rig(
     attractAfterSec?: number;
     implementedTitans?: string[];
     implementedStages?: StageId[];
+    /** Leave the HOW TO PLAY pages unseen, so they open on the title (a first launch). */
+    firstLaunch?: boolean;
     store?: ReturnType<typeof createMemoryStore>;
   } = {},
 ): Rig {
@@ -63,6 +68,7 @@ function rig(
   const sounds: UiSoundId[] = [];
   const history: UIAction[] = [];
   const store = o.store ?? createMemoryStore();
+  if (!o.firstLaunch && !o.store) store.setItem(UI_STORAGE_KEY, JSON.stringify({ seenHowTo: true }));
   const ui = createUI({
     input,
     titans: FIXTURE_TITANS,
@@ -76,9 +82,9 @@ function rig(
     now: () => now,
     attractAfterSec: o.attractAfterSec ?? 1e9,
   });
-  const step = (frames = 1, dt = 1 / 60): void => {
+  const step = (frames = 1, dt = 1 / 60, wallMs = Math.round(dt * 1000)): void => {
     for (let i = 0; i < frames; i++) {
-      now += Math.round(dt * 1000);
+      now += wallMs;
       input.poll(now);
       ui.update(dt);
       const before = actions.length;
@@ -160,6 +166,113 @@ describe('boot → title', () => {
     r.step(3);
     r.key('Space');
     expect(r.ui.screen).toBe('title');
+  });
+});
+
+describe('onboarding', () => {
+  it('first launch opens HOW TO PLAY over the title once; it pages, skips and never reopens by itself', () => {
+    const store = createMemoryStore();
+    const r = rig({ firstLaunch: true, store });
+    const pad = r.pads.plug(proStandard());
+    r.step(3);
+    r.tap(pad, Pad.EAST); // boot → title (the pages open on arrival)
+    r.step(20);
+    expect(r.ui.screen).toBe('title');
+    r.draw();
+    const ink = inkCount(r.ui, 0, 0, LOGICAL_W, LOGICAL_H);
+    expect(ink).toBeGreaterThan(2000);
+    expect(JSON.parse(store.data.get(UI_STORAGE_KEY)!).seenHowTo).toBe(true);
+    // the title menu is not reachable while the pages are up: DOWN pages forward instead of moving the cursor
+    r.tap(pad, Pad.DOWN);
+    r.tap(pad, Pad.DOWN);
+    r.tap(pad, Pad.EAST); // last page: DONE
+    r.step(10);
+    r.drain();
+    // now the title menu is live: confirm on VERSUS goes to assign
+    r.tap(pad, Pad.EAST);
+    expect(r.ui.screen).toBe('assign');
+    // a second launch with the same storage goes straight to the menu
+    const again = rig({ firstLaunch: true, store });
+    const pad2 = again.pads.plug(proStandard());
+    again.step(3);
+    again.tap(pad2, Pad.EAST);
+    again.step(20);
+    again.tap(pad2, Pad.EAST);
+    expect(again.ui.screen).toBe('assign');
+  });
+
+  it('Back skips the pages at any moment; HOW TO PLAY is in the title menu', () => {
+    const r = rig({ firstLaunch: true });
+    const pad = r.pads.plug(proStandard());
+    r.step(3);
+    r.tap(pad, Pad.EAST);
+    r.step(20);
+    r.tap(pad, Pad.SOUTH); // Nintendo B = back: skip
+    r.step(5);
+    r.tap(pad, Pad.EAST);
+    expect(r.ui.screen).toBe('assign'); // the menu answered, so the pages are gone
+    r.tap(pad, Pad.SOUTH);
+    r.step(10);
+    r.tap(pad, Pad.DOWN);
+    r.tap(pad, Pad.DOWN);
+    r.tap(pad, Pad.DOWN); // → HOW TO PLAY
+    r.tap(pad, Pad.EAST);
+    r.draw();
+    expect(inkCount(r.ui, 0, 0, LOGICAL_W, LOGICAL_H)).toBeGreaterThan(2000);
+    r.tap(pad, Pad.SOUTH);
+    r.step(5);
+    expect(r.ui.screen).toBe('title');
+  });
+
+  it('the moves page shows the REAL buttons of the controller in hand: Nintendo, Xbox and keyboard differ', () => {
+    const labels = (setup: (r: Rig) => void): string[] => {
+      const r = rig();
+      setup(r);
+      r.step(3);
+      const ctx = r.ui as unknown as UICtx;
+      return (['strike', 'crush', 'surge', 'signature', 'guard'] as const).map((a) => moveLabel(ctx, a));
+    };
+    const nin = labels((r) => {
+      const p = r.pads.plug(proStandard());
+      p.set(Pad.EAST, true);
+      r.step(2);
+    });
+    const xbox = labels((r) => {
+      const p = r.pads.plug(xboxStandard());
+      p.set(Pad.EAST, true);
+      r.step(2);
+    });
+    const kb = labels((r) => r.key('KeyJ'));
+    expect(nin.join()).not.toBe(xbox.join());
+    expect(kb).toEqual(['J', 'I', 'K', 'L', expect.stringMatching(/SHIFT|SPACE|SHFT/)]);
+  });
+
+  it('the first-match hint: only in round one of the very first match, with a human, and it fades out', () => {
+    const hud = (o: Parameters<typeof fakeHud>[0], tick: number, mode = 'vsai'): HudState => {
+      const h = fakeHud(o);
+      (h.match as { tick: number }).tick = tick;
+      (h.match.config as { mode: string }).mode = mode;
+      (h.match.config.slots[0] as { controller: string }).controller = 'human';
+      return h;
+    };
+    expect(hintVisibility(false, hud({ phase: 'fight', round: 1 }, 400))).toBe(0);
+    expect(hintVisibility(true, hud({ phase: 'fight', round: 2 }, 400))).toBe(0);
+    expect(hintVisibility(true, hud({ phase: 'fight', round: 1 }, 400, 'attract'))).toBe(0);
+    expect(hintVisibility(true, hud({ phase: 'fight', round: 1 }, 400))).toBe(1);
+    expect(hintVisibility(true, hud({ phase: 'fight', round: 1 }, 60 * 15))).toBeGreaterThan(0);
+    expect(hintVisibility(true, hud({ phase: 'fight', round: 1 }, 60 * 15))).toBeLessThan(1);
+    expect(hintVisibility(true, hud({ phase: 'fight', round: 1 }, 60 * 30))).toBe(0);
+  });
+
+  it('startMatch counts matches on the device; only the first is a first match', () => {
+    const r = rig();
+    const ctx = r.ui as unknown as UICtx & { firstMatch: boolean };
+    expect(ctx.firstMatch).toBe(false);
+    ctx.startMatch();
+    expect(ctx.firstMatch).toBe(true);
+    ctx.startMatch();
+    expect(ctx.firstMatch).toBe(false);
+    expect(JSON.parse(r.store.data.get(UI_STORAGE_KEY)!).matches).toBe(2);
   });
 });
 
@@ -479,11 +592,31 @@ describe('pause, results and attract', () => {
     pad.releaseAll();
     r.step(1, 0.5);
     expect(r.drain()).toContainEqual({ type: 'rematch' });
-    // and one huge hitch (a hidden tab) is capped: it must not fast-forward the idle timer past the attract threshold at once
-    const r2 = rig({ attractAfterSec: 5 });
+    // and a huge hitch (a hidden tab) counts for at most 30 s of idle time: it cannot start the attract mode by itself
+    const r2 = rig({ attractAfterSec: 60 });
+    const pad2 = r2.pads.plug(proStandard());
     r2.step(3);
+    r2.tap(pad2, Pad.EAST); // boot → title
+    r2.step(20);
+    expect(r2.ui.screen).toBe('title');
     r2.ui.update(600);
-    expect(r2.ui.screen).not.toBe('attract');
+    expect(r2.ui.screen).toBe('title');
+    r2.ui.update(600); // two such hitches do add up to a minute
+    expect(r2.ui.screen).toBe('attract');
+  });
+
+  it('idle time follows the wall clock when the shell hands over clamped frame times (software GL: 0.1 s frames, 3 s apart)', () => {
+    const r = rig({ attractAfterSec: 60 });
+    const pad = r.pads.plug(proStandard());
+    r.step(3);
+    r.tap(pad, Pad.EAST);
+    r.step(20);
+    r.drain();
+    expect(r.ui.screen).toBe('title');
+    r.step(15, 0.1, 3000); // 45 s of wall time
+    expect(r.ui.screen).toBe('title');
+    r.step(8, 0.1, 3000); // 69 s in all
+    expect(r.ui.screen).toBe('attract');
   });
 
   it('attract: idle on the title for N seconds emits attractStart; any input emits attractStop and returns', () => {
@@ -679,7 +812,7 @@ describe('HUD', () => {
   it('training overlay adds frame data for both fighters', () => {
     const r = hudRig();
     r.ui.draw(fakeHud({ mode: 'training', training: false }));
-    const off = inkCount(r.ui, 0, 64, 220, 140);
+    const off = inkCount(r.ui, 0, 260, 220, 332);
     r.ui.draw(
       fakeHud({
         mode: 'training',
@@ -695,7 +828,7 @@ describe('HUD', () => {
         },
       }),
     );
-    expect(inkCount(r.ui, 0, 64, 220, 140)).toBeGreaterThan(off + 200);
+    expect(inkCount(r.ui, 0, 260, 220, 332)).toBeGreaterThan(off + 200);
   });
 
   it('draws in well under a millisecond-scale budget per frame', () => {
