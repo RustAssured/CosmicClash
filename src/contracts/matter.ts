@@ -1,5 +1,5 @@
 import type { DamageEvent, DamageResult, DamageShape, DamageType, OverlapResult } from './damage';
-import type { RenderLayer, ViewRect } from './render';
+import type { RenderLayer, StageLighting, ViewRect } from './render';
 import type { SimEvent } from './sim';
 import type { TitanAttributes } from './titan';
 
@@ -249,6 +249,13 @@ export interface MatterBody {
   readonly materials: readonly MaterialDef[];
   readonly transform: BodyTransform;
   readonly attributes: TitanAttributes;
+  /**
+   * LIVE tuning multipliers owned by the fighter (default 1), read by the matter world every tick. `cohesionScale`
+   * scales all bond strengths in every damage model (the Asteroid's "rubble pile held by weak gravity" drops it as
+   * mass falls); `heatScale` scales ignition/vaporise thresholds and thermal resistance.
+   */
+  cohesionScale: number;
+  heatScale: number;
 }
 
 /** Per-body report (cheap; computed incrementally by matter, safe to read every tick). */
@@ -403,6 +410,8 @@ export interface MatterWorld {
   spawnChunk(spec: ChunkSpawn): void;
 
   /* ---- rendering ---- */
+  /** Stage lighting used to re-light freshly exposed surfaces and debris (call at match start; safe to call again). */
+  setLighting(l: StageLighting): void;
   /** Debris + particle layers rasterised at logical resolution for this view (screen-space layers, z ordered back→front).
    *  `alpha` ∈ [0,1) extrapolates by velocity for smooth >60 Hz display. */
   renderLayers(view: ViewRect, alpha: number): RenderLayer[];

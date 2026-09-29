@@ -31,6 +31,23 @@ export interface StageLighting {
   screenPos: [number, number];
 }
 
+/** Default arena and lighting so modules can work before stages exist (tests, dev sandboxes). Stage 1 values. */
+export const DEFAULT_ARENA: ArenaInfo = {
+  minX: 0,
+  maxX: 1600,
+  minY: 0,
+  maxY: 560,
+  restY: 290,
+  softWall: 120,
+};
+export const DEFAULT_LIGHTING: StageLighting = {
+  dir: [-0.5145, -0.5145, 0.6861],
+  color: '#ffb36b',
+  ambient: '#3b1d4a',
+  rim: '#ff5fb0',
+  screenPos: [0.12, -0.08],
+};
+
 export interface StageInfo {
   id: StageId;
   index: number;
