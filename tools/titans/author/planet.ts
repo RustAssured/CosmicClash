@@ -145,7 +145,7 @@ const MATERIALS: MaterialSpec[] = [
 const SOFTEN = ['forest', 'desert', 'mountain', 'ice', 'crust', 'mantle', 'ocean', 'atmosphere', 'cloud'];
 for (const mat of MATERIALS)
   if (SOFTEN.includes(mat.key))
-    mat.physics = { ...mat.physics, resist: { CRUSH: 2.8, KINETIC: 2.8, FRACTURE: 2.8, THERMAL: 2.2 } };
+    mat.physics = { ...mat.physics, resist: { CRUSH: 2.8, KINETIC: 2.8, FRACTURE: 2.8, THERMAL: 1.2 } };
 
 const moonMats = (rock: string[], dust: string[], dark: string[]): MaterialSpec[] => [
   { key: 'moonrock', base: 'rock', visual: vis(rock, 0, '#0c0a0e', '#1a1616', rock[3]) },
@@ -300,7 +300,7 @@ const cataclysm: MoveDef = {
         62,
         { kind: 'point', ox: 140, oy: 0, r: 64 },
         C,
-        1950,
+        2200,
         { crater: 32, compress: 14, shock: 2.2, scatter: 1.6 },
         UNBLOCK,
         { x: 500, y: -160 },

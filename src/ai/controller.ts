@@ -44,6 +44,8 @@ interface Cand {
     | 'feint'
     | 'escape';
   info: MoveInfo | null;
+  /** The model's own damage estimate for the move, before any learned correction (for the after-the-fact comparison). */
+  rawDmg: number;
   charge: number;
   dirX: number;
   dirY: number;
@@ -58,6 +60,7 @@ const newCand = (): Cand => ({
   kind: 'wait',
   what: 'wait',
   info: null,
+  rawDmg: 0,
   charge: 0,
   dirX: 0,
   dirY: 0,
@@ -150,6 +153,15 @@ export class UtilityAI implements AIController {
   /** "Is it landing?" memory: consecutive whiffs per move variant (decays), so an AI that keeps missing tries something else. */
   private readonly whiffs: Uint8Array;
   private readonly whiffTick: Int32Array;
+  /** Long-run record per move variant: times judged and times it landed (a skilled AI learns what really connects against THIS foe). */
+  private readonly useN: Float32Array;
+  private readonly landN: Float32Array;
+  /** Matter the foe really lost after each move (fraction of its mass) against the model's promise, per variant and overall. */
+  private readonly obsSum: Float32Array;
+  private readonly modelSum: Float32Array;
+  private obsAll = 0;
+  private modelAll = 0;
+  private pendModel = 0;
   private pendIdx = -1;
   private pendMass = 1;
   private pendUntil = 0;
@@ -165,6 +177,10 @@ export class UtilityAI implements AIController {
     this.infos = buildMoveInfos(def);
     this.whiffs = new Uint8Array(this.infos.length);
     this.whiffTick = new Int32Array(this.infos.length);
+    this.useN = new Float32Array(this.infos.length);
+    this.landN = new Float32Array(this.infos.length);
+    this.obsSum = new Float32Array(this.infos.length);
+    this.modelSum = new Float32Array(this.infos.length);
     for (const mi of this.infos) (this.bySlot[mi.slot] ??= []).push(mi);
     this.surgeDist = surgeDistance(def);
     const guard = def.moves.find((m) => m.slot === 'guard');
@@ -194,6 +210,12 @@ export class UtilityAI implements AIController {
     this.prevProcessedTick = -1;
     this.foeActedTick = Number.NaN;
     this.whiffs.fill(0);
+    this.useN.fill(0);
+    this.landN.fill(0);
+    this.obsSum.fill(0);
+    this.modelSum.fill(0);
+    this.obsAll = 0;
+    this.modelAll = 0;
     this.pendIdx = -1;
     this.lastSurgeTick = -1e9;
     this.stunAge = 0;
@@ -269,6 +291,15 @@ export class UtilityAI implements AIController {
     this.pendIdx = -1;
     if (F.guardUp || F.state === 'guard' || F.intangible) return; // blocked or dodged with a defence: not informative about aim
     const landed = this.pendSaw || this.pendMass - F.massFrac > 0.003;
+    this.useN[i]!++;
+    const obs = Math.max(0, this.pendMass - F.massFrac);
+    if (this.pendModel > 0) {
+      this.obsSum[i]! += obs;
+      this.modelSum[i]! += this.pendModel;
+      this.obsAll += obs;
+      this.modelAll += this.pendModel;
+    }
+    if (landed) this.landN[i]!++;
     if (landed) this.whiffs[i] = 0;
     else if (this.whiffs[i]! < 4) this.whiffs[i]!++;
     this.whiffTick[i] = tick;
@@ -283,6 +314,33 @@ export class UtilityAI implements AIController {
       return 1;
     }
     return Math.pow(0.4, n);
+  }
+
+  /**
+   * What this foe has actually let the move do, against what the model promised (levels that model the foe only): the observed
+   * landing rate shrunk toward the prediction by three pseudo-samples. Slow blows a mobile foe keeps sidestepping stop being chosen.
+   */
+  private calibration(mi: MoveInfo, predicted: number): number {
+    if (!this.P.predicts || predicted <= 0.01) return 1;
+    const n = this.useN[mi.idx]!;
+    if (n < 2) return 1;
+    const seen = (this.landN[mi.idx]! + 3 * predicted) / (n + 3);
+    return clamp(seen / predicted, 0.25, 1.25);
+  }
+
+  /**
+   * Relative worth of a move against THIS foe, learned from how much matter it really cost the foe compared with how much the
+   * model expected of it (against the same ratio over everything tried so far), shrunk toward 1 by two pseudo-uses.
+   * Damage the model cannot see (delayed cracks, orbiting swarms) shows up here.
+   */
+  private damageLearned(mi: MoveInfo): number {
+    if (!this.P.predicts || this.modelAll < 1) return 1;
+    const n = this.useN[mi.idx]!;
+    if (n < 1) return 1;
+    const k = this.obsAll / this.modelAll;
+    if (k <= 1e-9) return 1;
+    const mean = this.modelSum[mi.idx]! / n;
+    return clamp((this.obsSum[mi.idx]! / k + 2 * mean) / (this.modelSum[mi.idx]! + 2 * mean), 0.35, 3);
   }
 
   private observeFoe(F: Snapshot): void {
@@ -555,6 +613,7 @@ export class UtilityAI implements AIController {
     c.what = what;
     c.score = score;
     c.info = null;
+    c.rawDmg = 0;
     c.charge = 0;
     c.dirX = 0;
     c.dirY = 0;
@@ -840,10 +899,17 @@ export class UtilityAI implements AIController {
         const cr = (mi.def.extra?.['chargeReach'] as [number, number] | undefined) ?? [1, 1];
         // charged beams: judge them at full-charge reach, then hold only as long as the distance requires
         this.evalMove(mi, S, F, age, this.ev, mi.chargeMax > 0 ? cr[1] : 1);
-        const wf = this.whiffFactor(mi);
+        const wf = this.whiffFactor(mi) * this.calibration(mi, this.ev.p);
         const p = this.ev.p * wf;
         // rams hurt the ram too: value the blow net of what comes back
-        let dmg = this.ev.dmg * wf * (1 - 0.75 * mi.recoil);
+        const rawDmg = this.ev.dmg;
+        let dmg = this.ev.dmg * wf * this.damageLearned(mi) * (1 - 0.75 * mi.recoil);
+        if (mi.latch || mi.harvest) {
+          // an infection is a setup and a harvest its payoff: the tearing is worth what is already infected, the latch what is not
+          const f = clamp(F.infectFrac / 0.1, 0, 1);
+          if (mi.harvest) dmg *= 0.15 + 1.7 * f;
+          else dmg += 420 * (1 - f) * this.persona.punish;
+        }
         let chargeTicks = 0;
         if (mi.chargeMax > 0 && p > 0) {
           const need = (dist + 24) / Math.max(20, mi.x1 * S.stats.reachMul);
@@ -907,6 +973,7 @@ export class UtilityAI implements AIController {
           `hitP ${p.toFixed(2)} dmg ${dmg.toFixed(0)}${punish ? ` vuln ${vuln.toFixed(0)}` : ''}`,
         );
         c.info = mi;
+        c.rawDmg = rawDmg;
         c.charge = chargeTicks;
         c.delay = this.jitter();
       }
@@ -993,6 +1060,7 @@ export class UtilityAI implements AIController {
         const mi = c.info!;
         this.pendIdx = mi.idx;
         this.pendMass = F.massFrac;
+        this.pendModel = c.rawDmg;
         this.pendSaw = false;
         this.pendUntil =
           ctx.tick + c.delay + Math.round(mi.startup) + c.charge + mi.active + this.P.reactionTicks + 6;

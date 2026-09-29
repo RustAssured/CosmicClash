@@ -33,7 +33,7 @@
       "key": "horizon",
       "base": "horizon",
       "physics": {
-        "density": 0.4
+        "density": 0.15
       },
       "visual": {
         "ramp": ["#000000", "#010103", "#02020a"],
@@ -190,7 +190,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 1200,
+                "energy": 1380.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -216,7 +216,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 110,
+                "energy": 126.5,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -253,7 +253,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 1200,
+                "energy": 1380.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -279,7 +279,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 110,
+                "energy": 126.5,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -316,7 +316,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 1200,
+                "energy": 1380.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -342,7 +342,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 110,
+                "energy": 126.5,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -386,9 +386,9 @@
       "name": "Maw",
       "nameKo": "\uc544\uac00\ub9ac",
       "frame": {
-        "startup": 48,
+        "startup": 40,
         "active": 16,
-        "recovery": 70,
+        "recovery": 60,
         "cancelWindow": 0.4,
         "chargeMax": 0,
         "hitstop": 10
@@ -409,7 +409,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 9000,
+                "energy": 10350.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -435,7 +435,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 420,
+                "energy": 483.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -472,7 +472,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 9000,
+                "energy": 10350.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -498,7 +498,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 420,
+                "energy": 483.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -535,7 +535,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 9000,
+                "energy": 10350.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -561,7 +561,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 420,
+                "energy": 483.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -682,7 +682,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 14,
+                "energy": 16.1,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -715,7 +715,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 14,
+                "energy": 16.1,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -748,7 +748,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 14,
+                "energy": 16.1,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -814,7 +814,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 34,
+                "energy": 39.1,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -847,7 +847,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 34,
+                "energy": 39.1,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -880,7 +880,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 34,
+                "energy": 39.1,
                 "duration": 1,
                 "flags": 16,
                 "params": {

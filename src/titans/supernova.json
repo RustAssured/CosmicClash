@@ -653,7 +653,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 200,
+                "energy": 130,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -697,7 +697,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 200,
+                "energy": 130,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -741,7 +741,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 200,
+                "energy": 130,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -782,9 +782,9 @@
         "wall": {
           "half": 52,
           "width": 26,
-          "life": 54,
-          "every": 4,
-          "energy": 30
+          "life": 40,
+          "every": 5,
+          "energy": 16
         },
         "pose": {
           "startup": {
@@ -1106,7 +1106,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 3300,
+                "energy": 2000,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1152,7 +1152,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 3300,
+                "energy": 2000,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1198,7 +1198,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 3300,
+                "energy": 2000,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1308,7 +1308,7 @@
       "trap": 0.1,
       "punish": 0.6,
       "gaze": 0.3,
-      "fuelCare": 0
+      "fuelCare": 0.35
     }
   },
   "ui": {

@@ -76,7 +76,7 @@ export class BlackHoleBehaviour extends Behaviour {
     this.well = (f.slotMoves.signature?.extra?.['well'] as WellCfg | undefined) ?? null;
     this.ult = (f.slotMoves.ultimate?.extra?.['well'] as WellCfg | undefined) ?? null;
     f.resourceMax = f.def.resource.max;
-    f.resource = 0;
+    f.resource = f.def.resource.start;
   }
 
   override reset(_heal: number): void {
@@ -194,7 +194,7 @@ export class BlackHoleBehaviour extends Behaviour {
     }
     const missing = st.initialCells * 0.97 - st.cells;
     if (tick - this.lastGrow >= 20 && !f.ko && missing > 40 && f.resource > 6) {
-      const cells = Math.min(70, Math.floor(missing));
+      const cells = Math.min(40, Math.floor(missing));
       const a = hash01(tick, 7, 3) * 6.2832;
       const added = f.world.grow(f.body.id, {
         cells,
@@ -203,7 +203,7 @@ export class BlackHoleBehaviour extends Behaviour {
         nearY: t.y + Math.sin(a) * 20,
       });
       this.lastGrow = tick;
-      f.resource = Math.max(0, f.resource - added * 0.05);
+      f.resource = Math.max(0, f.resource - added * 0.15);
     }
     f.view.parts = Math.floor(f.resource / 10);
     // lensing follows the horizon and the accreted mass; a dying hole lets the light back
@@ -269,6 +269,17 @@ export class BlackHoleBehaviour extends Behaviour {
     }
     if (massFrac < 0.5) {
       const n = Math.round((0.5 - massFrac) * 30);
+      if (tick % 45 === 0 && !f.ko) {
+        f.events.push({
+          t: 'cue',
+          slot: f.slot,
+          titan: f.def.id,
+          id: 'hawking',
+          x: t.x,
+          y: t.y,
+          amount: 0.5 - massFrac,
+        });
+      }
       for (let k = 0; k < n; k++) {
         const a = hash01(tick, k, 5) * 6.2832;
         const r = hz * (0.9 + 0.5 * hash01(tick, k, 6));

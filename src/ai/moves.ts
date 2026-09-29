@@ -43,6 +43,9 @@ export interface MoveInfo {
   lungeDuring: number;
   /** Fraction of the damage dealt that comes back on the attacker (rams: `extra.recoil` in the move JSON). */
   recoil: number;
+  /** Plants an infection (a setup for a harvest) / tears infected matter out (pays off only on an infected foe). */
+  latch: boolean;
+  harvest: boolean;
   meterCost: number;
   resourceCost: number;
   /** Tick range (relative to the first active tick) in which any hitbox is live. */
@@ -111,6 +114,8 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
       let bestE = -1;
       let line: MoveInfo['line'] = null;
       let bestLineE = -1;
+      let latch = false;
+      let harvest = false;
       for (const hb of v.hitboxes) {
         const s = Math.pow(reach, hb.reachScale ?? 1);
         templateExtent(hb.shape, s, ext);
@@ -119,6 +124,10 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
         // a foe rarely stays inside a beam for its whole window: count a realistic dwell
         const dwell = continuous ? Math.min(hb.to - hb.from, 14) / Math.max(1, hb.rehit ?? 1) : 1;
         energy += hb.damage.energy * dwell;
+        if (hb.damage.type === 'ASSIMILATION') {
+          if ((hb.damage.params.harvest ?? 0) > 0) harvest = true;
+          else if ((hb.damage.params.latch ?? 0) > 0) latch = true;
+        }
         if (hb.damage.energy > bestE) {
           bestE = hb.damage.energy;
           type = hb.damage.type;
@@ -155,6 +164,8 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
         lungeBefore: travel(v.movement, fr.startup),
         lungeDuring: travel(v.movement, fr.startup + fr.active, fr.startup),
         recoil: (m.extra?.['recoil'] as number | undefined) ?? 0,
+        latch,
+        harvest,
         meterCost: m.meterCost,
         resourceCost: m.resourceCost,
         hitFrom: has ? hitFrom : 0,

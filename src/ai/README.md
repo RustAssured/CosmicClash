@@ -31,3 +31,10 @@ match.setSources(humanOrScript, createAiSource(match, 1, ai));
 
 Level feel lives in `levels.ts`; titan style in the JSON `ai.weights`; the scoring formulas are commented in
 `controller.ts` (`attackCandidates`, `think`). Use `tools/ai/duel.ts` to look at fights and `ai.log` to see why it chose what it chose.
+
+## Resource-aware personality weights (optional, in a titan's `ai.weights`)
+
+- `fuelCare` (0..1): for titans whose resource is a burning stock (Supernova's fuel). Pokes lose value as the stock falls, a "cool off" retreat appears below 40 % (it scores higher the emptier the stock), and the ultimate gains value as the finisher once the stock runs low.
+- `reserve` (resource units): for titans whose resource counts guardians (Planet's moons). A resource-costing move that would leave fewer than `reserve` units is scored down unless it is a punish; deliberate, high-odds uses get a bonus.
+
+Both default to 0, so other titans are unchanged.

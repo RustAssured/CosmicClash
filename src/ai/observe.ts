@@ -48,6 +48,8 @@ export class Snapshot {
   by1 = 0;
   integrityPct = 100;
   massFrac = 1;
+  /** Share of the fighter's live cells that carry an assimilation infection (public body statistics). */
+  infectFrac = 0;
   meter = 0;
   parts = 0;
   ko = false;
@@ -94,6 +96,7 @@ export class Snapshot {
     this.by1 = v.boundsY1;
     this.integrityPct = v.integrityPct;
     this.massFrac = v.bodyStats.massFrac;
+    this.infectFrac = v.bodyStats.infectedCells / Math.max(1, v.bodyStats.cells);
     this.meter = v.meter;
     this.parts = v.parts;
     this.ko = v.ko;

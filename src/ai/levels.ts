@@ -31,9 +31,9 @@ export interface LevelParams {
 const TABLE: Record<Difficulty, Omit<LevelParams, 'level' | 'reactionTicks'>> = {
   1: {
     blunder: 0.32,
-    jitter: 6,
-    noisePx: 24,
-    thinkEvery: 16,
+    jitter: 9,
+    noisePx: 60,
+    thinkEvery: 22,
     temperature: 0.9,
     predicts: false,
     feints: false,
@@ -42,9 +42,9 @@ const TABLE: Record<Difficulty, Omit<LevelParams, 'level' | 'reactionTicks'>> = 
   },
   2: {
     blunder: 0.2,
-    jitter: 5,
-    noisePx: 18,
-    thinkEvery: 13,
+    jitter: 7,
+    noisePx: 44,
+    thinkEvery: 17,
     temperature: 0.7,
     predicts: false,
     feints: false,
@@ -54,7 +54,7 @@ const TABLE: Record<Difficulty, Omit<LevelParams, 'level' | 'reactionTicks'>> = 
   3: {
     blunder: 0.12,
     jitter: 4,
-    noisePx: 13,
+    noisePx: 28,
     thinkEvery: 10,
     temperature: 0.5,
     predicts: true,
@@ -65,7 +65,7 @@ const TABLE: Record<Difficulty, Omit<LevelParams, 'level' | 'reactionTicks'>> = 
   4: {
     blunder: 0.07,
     jitter: 3,
-    noisePx: 9,
+    noisePx: 16,
     thinkEvery: 8,
     temperature: 0.38,
     predicts: true,

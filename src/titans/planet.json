@@ -44,7 +44,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 2.2
+          "THERMAL": 1.2
         }
       }
     },
@@ -63,7 +63,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 2.2
+          "THERMAL": 1.2
         }
       }
     },
@@ -82,7 +82,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 2.2
+          "THERMAL": 1.2
         }
       }
     },
@@ -101,7 +101,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 2.2
+          "THERMAL": 1.2
         }
       }
     },
@@ -120,7 +120,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 2.2
+          "THERMAL": 1.2
         }
       }
     },
@@ -139,7 +139,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 2.2
+          "THERMAL": 1.2
         }
       }
     },
@@ -158,7 +158,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 2.2
+          "THERMAL": 1.2
         }
       }
     },
@@ -177,7 +177,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 2.2
+          "THERMAL": 1.2
         }
       }
     },
@@ -197,7 +197,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 2.2
+          "THERMAL": 1.2
         }
       }
     },
@@ -937,7 +937,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1950,
+                "energy": 2200,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1005,7 +1005,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1950,
+                "energy": 2200,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1073,7 +1073,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1950,
+                "energy": 2200,
                 "duration": 1,
                 "flags": 32,
                 "params": {

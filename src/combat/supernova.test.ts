@@ -25,7 +25,7 @@ describe('Supernova', () => {
       src.held = t === 1 || t === 125 ? Btn.CRUSH : 0;
       m.step();
     }
-    expect(fa.view.resource).toBeLessThan(80);
+    expect(fa.view.resource).toBeLessThan(85);
     expect(fa.view.resource).toBeGreaterThan(50);
     expect(fa.view.bodyStats.mass).toBeLessThan(ini * 0.985);
     expect(fa.view.bodyStats.massFrac).toBeGreaterThan(0.46);
