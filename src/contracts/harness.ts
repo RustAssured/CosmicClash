@@ -7,7 +7,7 @@ import { Btn, type ScriptEvent } from './input';
  *   ?stage=nursery|rim|redgiant|quasar|tussenruimte
  *   &a=lastone&b=asteroid            (titan ids for slot 0 / slot 1)
  *   &seed=1234
- *   &t=180                           (advance N ticks, then freeze)
+ *   &t=180                           (skip the intro, then advance N fight ticks, then freeze)
  *   &state=intact|50|10              (start both bodies pre-damaged)
  *   &mode=fight|aivai|title|controller|select|training
  *   &ai=3                            (difficulty for AI-controlled slots; 1..6)
@@ -15,7 +15,9 @@ import { Btn, type ScriptEvent } from './input';
  *   &script0=20:crush,80:sig*30      (scripted input for slot 0; see parseScript)
  *   &script1=...
  *   &hud=0|1  &debug=0|1  &freeze=1  &scale=2
- * Also exposed at runtime as window.__ADEUK__ (see src/app/harness).
+
+ * Script tick 0 = the tick the fight goes live (intro is fast-forwarded silently in harness mode).
+ * Also exposed at runtime as window.__ADEUK__ (`AdeukHarnessApi` below).
  */
 export interface HarnessParams {
   stage: StageId;
@@ -137,4 +139,70 @@ export function parseHarnessParams(search: string): HarnessParams {
     freeze: q.get('freeze') === '1' || (has('t') && q.get('freeze') !== '0'),
     active: keys.some(has),
   };
+}
+
+/** Snapshot of one fighter for logs and evidence tables. */
+export interface HarnessFighterSummary {
+  titan: TitanId;
+  state: string;
+  moveId: string | null;
+  x: number;
+  y: number;
+  integrityPct: number;
+  massFrac: number;
+  resource: number;
+  meter: number;
+  ko: boolean;
+  cells: number;
+}
+
+export interface HarnessSummary {
+  tick: number;
+  phase: string;
+  round: number;
+  wins: [number, number];
+  fighters: [HarnessFighterSummary, HarnessFighterSummary];
+  hash: number;
+}
+
+export interface HarnessPerf {
+  /** Mean / p95 / max ms spent in Match.step() since the last reset. */
+  simMsMean: number;
+  simMsP95: number;
+  simMsMax: number;
+  /** Mean CPU ms of one full frame (camera + layers + renderer.draw + ui) and of renderer.draw alone. */
+  frameMsMean: number;
+  drawMsMean: number;
+  /** Wall-clock frames per second over the sample window (software GL in CI is pessimistic). */
+  fps: number;
+  ticks: number;
+  frames: number;
+}
+
+/** Exposed as `window.__ADEUK__` whenever the app runs (always safe; used by Playwright evidence/perf tools). */
+export interface AdeukHarnessApi {
+  readonly ready: boolean;
+  readonly params: HarnessParams;
+  /** Advance exactly `n` sim ticks (deterministic, no wall clock), then render one frame. */
+  step(n: number): void;
+  /** Render a frame at the current state (no ticks). */
+  renderNow(): void;
+  summary(): HarnessSummary;
+  hash(): number;
+  /** Replace the scripted input of a slot (see parseScript grammar); tick 0 = now. */
+  setScript(slot: 0 | 1, script: string): void;
+  /** Run the sim for `ticks` ticks measuring cost per tick, with rendering off. */
+  benchSim(ticks: number): HarnessPerf;
+  /** Run `frames` full frames (1 tick + render each) and report timings. */
+  benchFrames(frames: number): HarnessPerf;
+  /** Latest final 640×360 frame, packed RGBA, top row first. */
+  captureLogical(): Uint32Array;
+  /** Ordered list of sim events seen since the last call (for evidence/logging). */
+  drainEventLog(): unknown[];
+}
+
+declare global {
+  interface Window {
+    __ADEUK__?: AdeukHarnessApi;
+  }
 }
