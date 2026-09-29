@@ -303,8 +303,10 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
     const right = Math.max(a.x + a.hw, b.x + b.hw, ax2 + a.hw, bx2 + b.hw);
     const top = Math.min(a.y - a.hh, b.y - b.hh, ay2 - a.hh, by2 - b.hh);
     const bottom = Math.max(a.y + a.hh, b.y + b.hh, ay2 + a.hh, by2 + b.hh);
-    pull(sx, left, right, W, T.safeMarginX, T.hardMarginX);
-    pull(sy, top, bottom, H, T.safeMarginY, T.hardMarginY);
+    // the renderer's micro-zoom crops the view: keep the fighters inside what is actually visible
+    const zf = 1 + zoomBias + zoomPulse * 0.6;
+    pull(sx, left, right, W / zf, T.safeMarginX, T.hardMarginX);
+    pull(sy, top, bottom, H / zf, T.safeMarginY, T.hardMarginY);
   }
 
   function pull(sp: Spring, lo: number, hi: number, size: number, soft: number, hard: number): void {
@@ -427,7 +429,7 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
         const w = 0.55 * ramp;
         tx = lerp(tx, dirX, w);
         ty = lerp(ty, dirY, w * 0.6);
-        zoomTarget = Math.max(zoomTarget, (0.028 + 0.022 * push) * ramp);
+        zoomTarget = Math.max(zoomTarget, (0.02 + 0.015 * push) * ramp);
       }
       if (koHold > 0) {
         koHold--;

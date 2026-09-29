@@ -40,11 +40,12 @@
         "debris": "#69b0e0"
       },
       "physics": {
+        "heatAbsorb": 0.08,
         "resist": {
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 1.2
+          "THERMAL": 3.2
         }
       }
     },
@@ -59,11 +60,12 @@
         "debris": "#e6eef6"
       },
       "physics": {
+        "heatAbsorb": 0.08,
         "resist": {
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 1.2
+          "THERMAL": 3.2
         }
       }
     },
@@ -78,11 +80,12 @@
         "debris": "#2e86d8"
       },
       "physics": {
+        "heatAbsorb": 0.08,
         "resist": {
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 1.2
+          "THERMAL": 3.2
         }
       }
     },
@@ -101,7 +104,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 1.2
+          "THERMAL": 3.2
         }
       }
     },
@@ -120,7 +123,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 1.2
+          "THERMAL": 3.2
         }
       }
     },
@@ -139,7 +142,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 1.2
+          "THERMAL": 3.2
         }
       }
     },
@@ -158,7 +161,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 1.2
+          "THERMAL": 3.2
         }
       }
     },
@@ -177,7 +180,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 1.2
+          "THERMAL": 3.2
         }
       }
     },
@@ -197,7 +200,7 @@
           "CRUSH": 2.8,
           "KINETIC": 2.8,
           "FRACTURE": 2.8,
-          "THERMAL": 1.2
+          "THERMAL": 3.2
         }
       }
     },

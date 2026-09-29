@@ -381,7 +381,7 @@ describe('camera ultimate and KO choreography', () => {
     const mid = cam.sample(1);
     expect(minX).toBeLessThan(baseX - 8);
     expect(mid.state.zoom).toBeGreaterThan(1); // leaned toward the caster on the left
-    expect(z0).toBeGreaterThan(1.02);
+    expect(z0).toBeGreaterThan(1.012);
     expect(maxZ).toBeLessThanOrEqual(1.06 + 1e-9);
     expect(maxZ).toBeGreaterThan(z0); // the push keeps growing
     expect(worst).toBeGreaterThanOrEqual(0);

@@ -145,7 +145,11 @@ const MATERIALS: MaterialSpec[] = [
 const SOFTEN = ['forest', 'desert', 'mountain', 'ice', 'crust', 'mantle', 'ocean', 'atmosphere', 'cloud'];
 for (const mat of MATERIALS)
   if (SOFTEN.includes(mat.key))
-    mat.physics = { ...mat.physics, resist: { CRUSH: 2.8, KINETIC: 2.8, FRACTURE: 2.8, THERMAL: 1.2 } };
+    mat.physics = {
+      ...mat.physics,
+      ...(['ocean', 'atmosphere', 'cloud'].includes(mat.key) ? { heatAbsorb: 0.08 } : {}),
+      resist: { CRUSH: 2.8, KINETIC: 2.8, FRACTURE: 2.8, THERMAL: 3.2 },
+    };
 
 const moonMats = (rock: string[], dust: string[], dark: string[]): MaterialSpec[] => [
   { key: 'moonrock', base: 'rock', visual: vis(rock, 0, '#0c0a0e', '#1a1616', rock[3]) },

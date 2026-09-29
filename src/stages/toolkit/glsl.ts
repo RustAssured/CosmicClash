@@ -98,6 +98,7 @@ vec3 impulseGlow(vec2 c) {
     vec3 col = clamp(abs(fract(hue + vec3(0.0, 0.6667, 0.3333)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
     g += col * w;
   }
-  return g;
+  // soft-compress: a huge blast (supernova, black-hole ultimate) adds many overlapping impulses; without this the whole sky washes to one flat colour
+  return g / (1.0 + 0.7 * dot(g, vec3(0.3333)));
 }
 `;
