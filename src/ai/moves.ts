@@ -125,8 +125,11 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
         const dwell = continuous ? Math.min(hb.to - hb.from, 14) / Math.max(1, hb.rehit ?? 1) : 1;
         energy += hb.damage.energy * dwell;
         if (hb.damage.type === 'ASSIMILATION') {
-          if ((hb.damage.params.harvest ?? 0) > 0) harvest = true;
-          else if ((hb.damage.params.latch ?? 0) > 0) latch = true;
+          if ((hb.damage.params.harvest ?? 0) > 0) {
+            harvest = true;
+            // tearing out converted matter costs the target far more than the raw energy says (measured 6x on the Nexus)
+            energy += hb.damage.energy * dwell * 6 * hb.damage.params.harvest!;
+          } else if ((hb.damage.params.latch ?? 0) > 0) latch = true;
         }
         if (hb.damage.energy > bestE) {
           bestE = hb.damage.energy;

@@ -27,9 +27,9 @@ import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
 
 /* ---- fuel economy -------------------------------------------------------------------------------------------------------- */
 /** Fraction of the star's initial mass that burns away per fuel point spent: spending all 100 fuel shrinks it by over a third. */
-const SHED_PER_FUEL = 0.0048;
+const SHED_PER_FUEL = 0.0022;
 /** Burning never takes the star below this mass fraction (the remnant), so spending fuel cannot kill it. */
-const SHED_FLOOR = 0.38;
+const SHED_FLOOR = 0.6;
 /** The debt of burnt mass is paid to the matter world in lumps: `world.shed` scans the whole map. */
 const SHED_LUMP = 0.012;
 /** Quiet ticks (no move started, nothing landed, nothing taken) before the star cools and regains fuel, and the rate. */

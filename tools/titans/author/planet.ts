@@ -148,7 +148,7 @@ for (const mat of MATERIALS)
     mat.physics = {
       ...mat.physics,
       ...(['ocean', 'atmosphere', 'cloud'].includes(mat.key) ? { heatAbsorb: 0.08 } : {}),
-      resist: { CRUSH: 2.8, KINETIC: 2.8, FRACTURE: 2.8, THERMAL: 3.2 },
+      resist: { CRUSH: 3.4, KINETIC: 3.4, FRACTURE: 3.4, THERMAL: 3.2 },
     };
 
 const moonMats = (rock: string[], dust: string[], dark: string[]): MaterialSpec[] => [
@@ -201,7 +201,7 @@ const impact: MoveDef = {
   slot: 'crush',
   name: 'Impact',
   nameKo: '충격',
-  frame: frame(44, 8, 74, { hitstop: 14 }),
+  frame: frame(40, 8, 64, { hitstop: 14 }),
   variants: aims((aim) => {
     const s = AIM_SIGN[aim];
     return {
@@ -212,14 +212,14 @@ const impact: MoveDef = {
           8,
           { kind: 'point', ox: 96, oy: s * 34, r: 44 },
           C,
-          1150,
+          1000,
           { crater: 22, compress: 10, shock: 1.4, scatter: 1.2 },
           0,
           { x: 760, y: s * 120 - 60 },
           1,
         ),
       ],
-      movement: [key(0, -90, 0, 0.3), key(34, 300, s * 60, 0.05)],
+      movement: [key(0, -90, 0, 0.3), key(34, 150, s * 40, 0.05)],
     };
   }),
   resourceCost: 0,
@@ -271,7 +271,7 @@ const slam: MoveDef = {
     chargePower: 0.9,
     chargeReach: [0.8, 1.35],
     /** The moon is flung at speed px/tick and hits for `energy` (× charge power) as CRUSH with a crater; recoil is the share of the energy the moon itself takes. */
-    slam: { speed: 9, energy: 620, crater: 16, compress: 8, shock: 1.2, recoil: 0.14, life: 46 },
+    slam: { speed: 9, energy: 430, crater: 14, compress: 8, shock: 1.2, recoil: 0.14, life: 46 },
     ctl: { charge: 0.2, active: 0.25 },
     pose: { startup: { lean: -5 }, charge: { lean: -7 }, active: { lean: 5 } },
   },
@@ -304,7 +304,7 @@ const cataclysm: MoveDef = {
         62,
         { kind: 'point', ox: 140, oy: 0, r: 64 },
         C,
-        2200,
+        2000,
         { crater: 32, compress: 14, shock: 2.2, scatter: 1.6 },
         UNBLOCK,
         { x: 500, y: -160 },

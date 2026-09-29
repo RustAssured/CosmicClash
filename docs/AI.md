@@ -38,7 +38,7 @@ Every `thinkEvery` ticks while no plan is running (5 at level 6, 16 at level 1),
 4. **Execute** as a short script (`Plan`): steering modes (toward / away / fixed / neutral) with button presses, each press delayed
    by up to `jitter` ticks, never early. Charged beams hold the button only as long as the distance needs.
 
-While a move runs the AI may **feint out of it** (levels 4+) if a stronger telegraph will land first.
+Feinting out of a move (`considerFeint`) exists but is switched off at every level: measured after B2's heal-stability fix, it made levels 4 to 6 lose to level 3 in the Asteroid and Nexus mirrors (6 v 3: 34 % and 14 % with feints, 52 % and 50 % without).
 
 ### Lookahead without cloning the sim
 
@@ -78,9 +78,9 @@ walking in. It only ever sees actions after the reaction delay.
 | 1 | 350 ms | 45% | 6 | 24 | 16 | 0.90 | no | no | 0.35 | 0.25 |
 | 2 | 310 ms | 28% | 5 | 18 | 13 | 0.70 | no | no | 0.55 | 0.50 |
 | 3 | 270 ms | 12% | 4 | 13 | 10 | 0.50 | yes | no | 0.72 | 0.70 |
-| 4 | 230 ms | 7% | 3 | 9 | 8 | 0.38 | yes | yes | 0.85 | 0.85 |
-| 5 | 200 ms | 3.5% | 2 | 5 | 6 | 0.26 | yes | yes | 0.94 | 0.94 |
-| 6 ("Titan") | 180 ms | 0% | 1 | 2 | 5 | 0.18 | yes | yes | 1.00 | 1.00 |
+| 4 | 230 ms | 7% | 3 | 9 | 8 | 0.38 | yes | no | 0.85 | 0.85 |
+| 5 | 200 ms | 3.5% | 2 | 5 | 6 | 0.26 | yes | no | 0.94 | 0.94 |
+| 6 ("Titan") | 180 ms | 0% | 1 | 2 | 5 | 0.18 | yes | no | 1.00 | 1.00 |
 
 (`levels.ts` is the single source of truth; the reaction times come from `REACTION_MS` in the contract: 350/310/270/230/200/180 ms. "Defends" is the chance
 a telegraph is noticed and answered; "punish skill" the chance an opening is taken.) Level 6 is not omniscient: it is

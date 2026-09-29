@@ -907,7 +907,7 @@ export class UtilityAI implements AIController {
         if (mi.latch || mi.harvest) {
           // an infection is a setup and a harvest its payoff: the tearing is worth what is already infected, the latch what is not
           const f = clamp(F.infectFrac / 0.1, 0, 1);
-          if (mi.harvest) dmg *= 0.15 + 1.7 * f;
+          if (mi.harvest) dmg *= 0.7 + 0.9 * f;
           else dmg += 420 * (1 - f) * this.persona.punish;
         }
         let chargeTicks = 0;

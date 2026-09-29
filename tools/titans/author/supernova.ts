@@ -149,7 +149,7 @@ const ejection: MoveDef = {
   slot: 'crush',
   name: 'Coronal Ejection',
   nameKo: '코로나 질량 방출',
-  frame: frame(32, 26, 64, { hitstop: 12 }),
+  frame: frame(32, 26, 60, { hitstop: 12 }),
   variants: aims((aim) => {
     const s = AIM_SIGN[aim];
     return {
@@ -394,7 +394,7 @@ export const supernova: TitanDef = {
       trap: 0.1,
       punish: 0.6,
       gaze: 0.3,
-      fuelCare: 0.35,
+      fuelCare: 0.3,
     },
   },
   ui: { accent: '#ff9a3c', accent2: '#fff0b0', tagline: 'Burn bright. Burn out.' },
