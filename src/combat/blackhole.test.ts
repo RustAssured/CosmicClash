@@ -34,7 +34,7 @@ describe('the Black Hole', () => {
     const hz = a.body.materials.findIndex((mm) => mm.key === 'horizon');
     const count = (): number => {
       let n = 0;
-      for (let i = 0; i < a.body.n; i++) if (a.body.map.material[i] === hz) n++;
+      for (let i = 0; i < a.body.map.material.length; i++) if (a.body.map.material[i] === hz) n++;
       return n;
     };
     const before = count();
@@ -81,7 +81,7 @@ describe('the Black Hole', () => {
     const { m, a } = duel('4:ult', 150);
     for (let i = 0; i < 300; i++) m.step();
     expect(a.view.bodyStats.massFrac).toBeGreaterThan(0.6);
-    expect(a.view.resource?.id ?? 'accreted').toBe('accreted');
+    expect(a.view.resource).toBeGreaterThan(0);
   });
 
   it('Maw takes a real bite out of a foe', () => {

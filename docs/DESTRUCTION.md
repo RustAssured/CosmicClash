@@ -297,3 +297,12 @@ Every path that removes matter routes it: to a **chunk** (`chunkMass`), to **par
 - Fissure rendering: darker/bolder far wall, warm hue-shifted lip glint with a little emissive.
 - Chunks: stronger key-light edge (0.5), cool-violet dark rim on the unlit side, underside shading top 1.11 -> bottom 0.86; kinetic ejecta blocks are 6x6 with >= 9 cells to be a chunk (fewer confetti).
 - Tail spike: the 54-100 ms ticks seen in the page benchSim are NOT the matter world. Headless per-tick timing of the same aivai match (seed 11, 3800 ticks) shows the worst world.tick is 3.9 ms; the >20 ms steps are the first 2 ticks of the match (JIT) and the rest are outside matter (page GC / fighters / software-GL host load).
+
+## Round 5: thermal, crush and slab visuals in the integrated app
+
+- Slow-cut window capped: `stepSlowCuts` severs max(2, pending/36) edges per tick (~0.6 s for a long seam). Crack FRONTS planted by SEED_CRACK still finish their cuts later (measured Lastone Crush: 14 chunks by tick 60), so the last small slabs can shear ~1 s after the blow.
+- Fissures: on bodies >= 90 cells wide both walls of a broken bond are dark (2-px fissures); the lip glint is kept on small bodies.
+- Magma: `Body.magma` is set by any CRUSH blow; from then on strong fissure cells show molten rock (orange, emissive 110, 2-px on big bodies) except in gas materials. Planet crush strips show the glowing tectonic network.
+- Atmosphere: gas-debris materials heated above the glow threshold glow warm orange-white themselves (the rim glows, not the surface ramp).
+- Vapour: MODE_VAPOR gas particles use a shared warm ramp (white-orange, ember red, soot grey) instead of the material's pale gas colour.
+- Crater dust plume (`crater.ts`): 5-14 big soft dust puffs (3-4 px) lift along the surface normal, drift up and fade over 0.6-1 s.

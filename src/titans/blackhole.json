@@ -49,10 +49,10 @@
       "physics": {
         "toughness": 0.3,
         "resist": {
-          "FRACTURE": 2.4,
-          "KINETIC": 2.4,
-          "CRUSH": 2.4,
-          "THERMAL": 2.4,
+          "FRACTURE": 1.6,
+          "KINETIC": 1.6,
+          "CRUSH": 1.6,
+          "THERMAL": 1.6,
           "TIDAL": 0.6
         }
       },
@@ -76,10 +76,10 @@
       },
       "physics": {
         "resist": {
-          "FRACTURE": 2.4,
-          "KINETIC": 2.4,
-          "CRUSH": 2.4,
-          "THERMAL": 2.4,
+          "FRACTURE": 1.6,
+          "KINETIC": 1.6,
+          "CRUSH": 1.6,
+          "THERMAL": 1.6,
           "TIDAL": 0.6
         }
       }
@@ -96,10 +96,10 @@
       },
       "physics": {
         "resist": {
-          "FRACTURE": 2.4,
-          "KINETIC": 2.4,
-          "CRUSH": 2.4,
-          "THERMAL": 2.4,
+          "FRACTURE": 1.6,
+          "KINETIC": 1.6,
+          "CRUSH": 1.6,
+          "THERMAL": 1.6,
           "TIDAL": 0.6
         }
       }
@@ -116,10 +116,10 @@
       },
       "physics": {
         "resist": {
-          "FRACTURE": 2.4,
-          "KINETIC": 2.4,
-          "CRUSH": 2.4,
-          "THERMAL": 2.4,
+          "FRACTURE": 1.6,
+          "KINETIC": 1.6,
+          "CRUSH": 1.6,
+          "THERMAL": 1.6,
           "TIDAL": 0.6
         }
       }
@@ -212,7 +212,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 230,
+                "energy": 160,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -275,7 +275,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 230,
+                "energy": 160,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -338,7 +338,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 230,
+                "energy": 160,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -430,7 +430,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1000,
+                "energy": 650,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -493,7 +493,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1000,
+                "energy": 650,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -556,7 +556,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1000,
+                "energy": 650,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -676,7 +676,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 30,
+                "energy": 22,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -709,7 +709,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 30,
+                "energy": 22,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -742,7 +742,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 30,
+                "energy": 22,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -807,7 +807,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 70,
+                "energy": 50,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -840,7 +840,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 70,
+                "energy": 50,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -873,7 +873,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 70,
+                "energy": 50,
                 "duration": 1,
                 "flags": 16,
                 "params": {

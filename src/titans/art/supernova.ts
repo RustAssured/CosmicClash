@@ -340,7 +340,7 @@ export function paintSupernova(
 
       if (m === ids.photosphere || m === ids.inner || m === ids.core) {
         // depth profile: hottest (whitest) at the centre, limb-darkened toward the edge
-        let v = 0.86 - 0.52 * Math.pow(clamp01(u), 1.4);
+        let v = 0.72 - 0.4 * Math.pow(clamp01(u), 1.4);
         // granulation: Voronoi polygons — dark lanes where two cells meet, per-cell brightness, a soft gradient inside each
         worley(fx / p.grain, fy / p.grain, sA + 40, w1, 0.94);
         worley(fx / p.innerGrain, fy / p.innerGrain, sA + 90, w2, 0.9);

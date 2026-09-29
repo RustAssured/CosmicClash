@@ -104,6 +104,10 @@ const emptyBodyStats = (): BodyStats => ({
  * meter and resource, live stats from remaining mass, KO, and the per-tick FighterView. Everything titan-specific lives in a
  * `Behaviour` (tendrils, fragments…) plus the titan's JSON move data. Zero allocation per tick.
  */
+/** Where the graded tether starts (the hard cap is MAX_FIGHTER_DX/DY): see docs/proposals/006-fighter-tether.md. */
+const TETHER_SOFT_DX = 330;
+const TETHER_SOFT_DY = 140;
+
 export class FighterImpl implements Fighter {
   readonly slot: 0 | 1;
   readonly def: TitanDef;
@@ -1123,13 +1127,18 @@ export class FighterImpl implements Fighter {
     if (Math.abs(dx) > MAX_FIGHTER_DX) {
       this.px = fv.x + Math.sign(dx) * MAX_FIGHTER_DX;
       if (this.vx * dx > 0) this.vx = 0;
-    } else if (Math.abs(dx) > MAX_FIGHTER_DX * 0.88 && this.vx * dx > 0) {
-      this.vx *= 0.9;
+    } else if (Math.abs(dx) > TETHER_SOFT_DX && this.vx * dx > 0) {
+      // graded pull-back: the outward speed bleeds off ever faster toward the hard cap (knockback still carries, it just tires)
+      const s = (Math.abs(dx) - TETHER_SOFT_DX) / (MAX_FIGHTER_DX - TETHER_SOFT_DX);
+      this.vx *= 1 - 0.3 * s * s;
     }
     const dy = this.py - fv.y;
     if (Math.abs(dy) > MAX_FIGHTER_DY) {
       this.py = fv.y + Math.sign(dy) * MAX_FIGHTER_DY;
       if (this.vy * dy > 0) this.vy = 0;
+    } else if (Math.abs(dy) > TETHER_SOFT_DY && this.vy * dy > 0) {
+      const s = (Math.abs(dy) - TETHER_SOFT_DY) / (MAX_FIGHTER_DY - TETHER_SOFT_DY);
+      this.vy *= 1 - 0.3 * s * s;
     }
     if (this.intangible || fv.intangible || this.ko) return;
     dx = this.px - fv.x;
@@ -2053,6 +2062,10 @@ export class FighterImpl implements Fighter {
     this.threatCount = 0;
     this.updateThreats();
     this.syncView();
+  }
+
+  debugSetMeter(v: number): void {
+    this.meter = clamp(v, 0, 1);
   }
 
   setVictory(): void {
