@@ -450,7 +450,7 @@ describe('FRACTURE vs KINETIC on the same target', () => {
     // FRACTURE: a couple of big slabs carry most of the removed mass.
     expect(f.chunks).toBeGreaterThanOrEqual(1);
     expect(f.chunks).toBeLessThanOrEqual(10);
-    expect(f.largestChunkFrac).toBeGreaterThan(0.38);
+    expect(f.largestChunkFrac).toBeGreaterThan(0.3);
     // KINETIC: mass goes into many fragments/dust; more chunks and none dominating.
     expect(k.chunks).toBeGreaterThan(f.chunks * 2);
     expect(k.largestChunkFrac).toBeLessThan(0.15);

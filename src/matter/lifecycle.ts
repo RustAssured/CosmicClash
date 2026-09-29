@@ -2,6 +2,7 @@ import { CellFlag, Rng, type DamageEvent, type DamageType, type GrowSpec } from 
 import { CONN_NOW } from './body';
 import type { Body, WorldPoint } from './body';
 import { refreshSurfaceRect } from './cells';
+import { flushSlowCuts } from './cracks';
 import type { WorldCore } from './core';
 import { MODE_BURN, MODE_MECH, MODE_VAPOR, endSpray, sprayCell } from './debris';
 import { killCell } from './cells';
@@ -153,8 +154,7 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
     }
     keys.sort();
     const count = Math.min(target, qt);
-    for (let k = 0; k < count; k++) {
-      const c = keys[k]! % 65536;
+    const healCell = (c: number, order: number): void => {
       const x = c % w;
       const y = (c - x) / w;
       mat[c] = s.material[c]!;
@@ -164,7 +164,7 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
       map.temperature[c] = 0;
       map.infection[c] = 0;
       // Scar: weaker, sometimes cracked/charred; the ragged front (early ones = older scar) is weaker still.
-      const edgeness = 1 - k / Math.max(1, count);
+      const edgeness = 1 - order / Math.max(1, count);
       map.integrity[c] = Math.max(40, Math.round(105 + rng.next() * 65 - edgeness * 20));
       let fl = 0;
       if (rng.next() < 0.28) fl |= F_CRACK;
@@ -180,6 +180,41 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
         map.bondD[c] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondD[c]! * scar));
       if (y > 0 && mat[c - w] !== 0)
         map.bondD[c - w] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondD[c - w]! * scar));
+      if (
+        !(x < w - 1 && mat[c + 1] !== 0 && map.bondR[c] !== 0) &&
+        !(x > 0 && mat[c - 1] !== 0 && map.bondR[c - 1] !== 0) &&
+        !(y < h - 1 && mat[c + w] !== 0 && map.bondD[c] !== 0) &&
+        !(y > 0 && mat[c - w] !== 0 && map.bondD[c - w] !== 0)
+      ) {
+        // Never leave a regrown cell with every bond severed (it would drop off as dust): keep its first live edge.
+        if (x < w - 1 && mat[c + 1] !== 0) map.bondR[c] = Math.max(1, Math.round(s.bondR[c]! * scar));
+        else if (x > 0 && mat[c - 1] !== 0)
+          map.bondR[c - 1] = Math.max(1, Math.round(s.bondR[c - 1]! * scar));
+        else if (y < h - 1 && mat[c + w] !== 0) map.bondD[c] = Math.max(1, Math.round(s.bondD[c]! * scar));
+        else if (y > 0 && mat[c - w] !== 0)
+          map.bondD[c - w] = Math.max(1, Math.round(s.bondD[c - w]! * scar));
+      }
+    };
+    // A regrown cell must touch a live cell by an EDGE (bonds are 4-connected): a diagonal-only cell would be an island that
+    // the connectivity pass turns into dust when the round starts. Several passes so cells whose neighbour regrows later join.
+    const done = new Uint8Array(qt);
+    let grown = 0;
+    for (let pass = 0; pass < 6 && grown < count; pass++) {
+      for (let k = 0; k < qt && grown < count; k++) {
+        if (done[k] === 1) continue;
+        const c = keys[k]! % 65536;
+        const x = c % w;
+        const y = (c - x) / w;
+        const edge =
+          (x < w - 1 && mat[c + 1] !== 0) ||
+          (x > 0 && mat[c - 1] !== 0) ||
+          (y < h - 1 && mat[c + w] !== 0) ||
+          (y > 0 && mat[c - w] !== 0);
+        if (!edge) continue;
+        done[k] = 1;
+        healCell(c, grown);
+        grown++;
+      }
     }
   }
   // 3. Existing damage recovers partially; transient processes end.
@@ -206,6 +241,7 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
   if (after > before) core.ledger.injected += after - before;
   else core.ledger.deleted += before - after;
   clearTransients(body);
+  body.debrisImmuneUntil = core.tick + 360;
   finishRebuild(body);
 }
 
@@ -327,7 +363,9 @@ const clampB = (v: number): number => Math.max(1, Math.min(255, Math.round(v)));
 
 /**
  * Debit `mass` from the body without producing matter: surface cells (core last) are burnt, blown or evaporated away as
- * pure VFX (the mass leaves the ledger as dissipated). Returns the number of cells removed.
+ * pure VFX (the mass leaves the ledger as dissipated). The accretion POOL is drained first (an accretor such as the Black Hole or
+ * Nexus holds mass there before `grow` turns it into cells), so disk/lattice damage bleeds them even when their cells are
+ * untouched; only what the pool cannot cover is taken from cells. Returns the number of cells removed.
  */
 export function shed(
   core: WorldCore,
@@ -339,6 +377,14 @@ export function shed(
   const { w } = body;
   const mat = map.material;
   const rng = body.rng;
+  const fromPool = Math.min(body.pool, Math.max(0, mass));
+  if (fromPool > 0) {
+    body.pool -= fromPool;
+    body.statsDirty = true;
+    core.ledger.dissipated += fromPool;
+    mass -= fromPool;
+    if (mass <= 1e-9) return 0;
+  }
   let removedMass = 0;
   let cells = 0;
   const coreR2 = (map.coreRadius + 1) * (map.coreRadius + 1);
@@ -466,6 +512,7 @@ export function carve(world: MatterWorldEx, body: Body, massFrac: number, seed: 
         params: type === 'THERMAL' ? { shock: 0 } : {},
       };
       world.applyDamage(body.id, ev);
+      flushSlowCuts(core, body);
       world.settleBody(body.id);
       const m = cellMassOf(body);
       stall = m >= lastMass - 1e-6 ? stall + 1 : 0;

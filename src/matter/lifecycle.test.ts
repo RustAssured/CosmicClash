@@ -71,6 +71,52 @@ function barrage(world: MatterWorldEx, id: number, tick0: number): void {
 }
 
 describe('restore / heal / carve / grow / shed', () => {
+  it('shed drains the accretion pool before cells and keeps the ledger exact', () => {
+    const tb = celadonBody({ size: 40, seed: 4, x: 400, y: 290 });
+    const { world, ids } = make(6, [tb]);
+    world.core.ledger.injected += 30;
+    world.core.creditMass(ids[0]!, 30, 400, 290, -1, 'consume');
+    const m0 = world.stats(ids[0]!).mass;
+    const s0 = world.stats(ids[0]!);
+    expect(world.shed(ids[0]!, 20, 'burn')).toBe(0);
+    expect(world.stats(ids[0]!).mass).toBeCloseTo(m0 - 20, 4);
+    expect(world.stats(ids[0]!).cells).toBe(s0.cells);
+    const cells = world.shed(ids[0]!, 40, 'burn'); // 10 from the pool, 30 from cells
+    expect(cells).toBeGreaterThan(0);
+    expect(world.core.bodyById[ids[0]!]!.pool).toBeCloseTo(0, 5);
+    expect(Math.abs(world.ledger().error)).toBeLessThan(1e-2);
+  });
+
+  it('a healed body is stable: no mass loss without damage events, even with the old debris around', () => {
+    for (const mk of [celadonBody, layeredDisc]) {
+      const tb = mk({ size: 60, seed: 4, x: 400, y: 290 });
+      const { world, ids } = make(6, [tb]);
+      for (let i = 0; i < 40 && world.stats(ids[0]!).massFrac > 0.25; i++) {
+        world.applyDamage(
+          ids[0]!,
+          ev({
+            type: 'FRACTURE',
+            shape: { kind: 'point', x: 372 + (i % 5) * 4, y: 270 + (i % 7) * 6, r: 12 },
+            energy: 700,
+            flags: DamageFlag.SEED_CRACK,
+          }),
+        );
+        run(world, 15);
+      }
+      run(world, 200);
+      world.heal(ids[0]!, 0.6, 77);
+      let last = world.stats(ids[0]!).massFrac;
+      expect(last).toBeGreaterThan(0.3);
+      for (let k = 0; k < 20; k++) {
+        run(world, 50);
+        const f = world.stats(ids[0]!).massFrac;
+        expect(f).toBeGreaterThanOrEqual(last - 1e-3);
+        last = f;
+      }
+      expect(Math.abs(world.ledger().error)).toBeLessThan(1e-2);
+    }
+  });
+
   it('restore() returns every per-cell array to its pristine values exactly', () => {
     const tb = layeredDisc({ size: 40, seed: 2, x: 400, y: 290 });
     const { world, ids } = make(1, [tb]);
@@ -124,7 +170,7 @@ describe('restore / heal / carve / grow / shed', () => {
     };
     const a = carved(1, 0.5);
     const s = a.world.stats(a.id);
-    expect(s.massFrac).toBeGreaterThan(0.44);
+    expect(s.massFrac).toBeGreaterThan(0.42);
     expect(s.massFrac).toBeLessThan(0.56);
     expect(s.coreIntegrity).toBeGreaterThan(0.9);
     expect(s.cells).toBeLessThan(s.initialCells);

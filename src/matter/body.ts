@@ -210,6 +210,8 @@ export class Body implements MatterBody {
   slowPos = 0;
   /** A CRUSH has cracked this body: fissures glow with magma from then on (visual only). */
   magma = false;
+  /** After a heal (round reset) the body is not pelted by the previous round's debris until this world tick. */
+  debrisImmuneUntil = 0;
 
   /* ---- shrapnel fuses (KINETIC EMBED) ---- */
   readonly fuseCell = new Int32Array(MAX_FUSES);

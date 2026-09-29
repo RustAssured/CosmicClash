@@ -282,3 +282,8 @@ export function stepSlowCuts(core: WorldCore, body: Body): void {
     body.connDirty = CONN_NOW;
   }
 }
+
+/** Sever every queued slow-cut edge at once (harness carving and tests that need the final state immediately). */
+export function flushSlowCuts(core: WorldCore, body: Body): void {
+  for (let guard = 0; guard < 5000 && body.slowPos < body.slowN; guard++) stepSlowCuts(core, body);
+}

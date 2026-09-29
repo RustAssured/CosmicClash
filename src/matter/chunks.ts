@@ -535,7 +535,7 @@ function collideBodies(core: WorldCore, c: Chunk): void {
     nx /= nl;
     ny /= nl;
     const vn = rvx * nx + rvy * ny;
-    if (speed > 55 && c.mass > 1.2 && vn < 0) {
+    if (speed > 120 && c.mass > 1.2 && vn < 0 && core.tick >= b.debrisImmuneUntil) {
       core.chunkImpact(b, c, hx, hy, rvx / speed, rvy / speed, speed);
       // Bounce with heavy loss, shed some spin.
       const e = 0.35;

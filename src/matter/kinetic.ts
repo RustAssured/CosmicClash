@@ -203,7 +203,7 @@ function burst(core: WorldCore, body: Body, c: number, energy: number, dirX: num
         continue;
       }
       // Bruise and break bonds with probability falling off from the centre.
-      const loss = (energy * t * t * 255) / (R * R * 0.35 * H * Math.max(0.3, resistOf(body, i, T_KINETIC)));
+      const loss = (energy * t * t * 255 * Math.max(0.3, resistOf(body, i, T_KINETIC))) / (R * R * 0.35 * H);
       const it = map.integrity[i]! - loss;
       if (it <= 0) {
         const m = mat[i]!;

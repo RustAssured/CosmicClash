@@ -181,7 +181,8 @@ class MatterWorldImpl implements MatterWorldEx {
     for (let i = 0; i < MAX_JOBS; i++) this.jobs.push(new Job());
     this.core.chunkImpact = (body, chunk, x, y, dx, dy, speed) => {
       // Debris impact: a capped KINETIC point blow. Modest by design; heavy fast chunks still hurt.
-      const energy = Math.min(90, 0.5 * chunk.mass * (speed / 60) * (speed / 60) * 2.2);
+      const ex = Math.max(0, speed - 100) / 60;
+      const energy = Math.min(60, 0.5 * chunk.mass * ex * ex * 2.2);
       if (energy < 2) return;
       const ev: DamageEvent = {
         type: 'KINETIC',

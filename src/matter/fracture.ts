@@ -538,7 +538,7 @@ function grindCell(ctx: DamageCtx, i: number, energy: number): void {
   const map = body.map;
   if (map.material[i] === 0 || isImmune(body, i, T_FRACTURE)) return;
   const h = hardness(body, i);
-  const loss = Math.min(150, (energy * 255) / (2 * h * Math.max(0.2, resistOf(body, i, T_FRACTURE))));
+  const loss = Math.min(150, (energy * 255 * Math.max(0.2, resistOf(body, i, T_FRACTURE))) / (2 * h));
   const it = map.integrity[i]! - loss;
   ctx.note(i, 1);
   if (it <= 0) {

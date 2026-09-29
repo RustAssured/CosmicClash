@@ -213,7 +213,7 @@ describe('FRACTURE', () => {
         dirY: 0.1,
       }),
     );
-    run(world, 12); // seams are severed progressively: measure while the fissure is still growing
+    run(world, 8); // seams are severed progressively: measure while the fissure is still growing
     let broken = 0;
     let wsum = 0;
     for (let i = 0; i < map.material.length; i++) {
