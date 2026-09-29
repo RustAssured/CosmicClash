@@ -13,7 +13,8 @@ import { makeMatch, skipIntro, ManualSource } from '@/combat/testing/harness';
 import { getTitanDef } from '@/titans';
 
 const args = process.argv.slice(2);
-const opt = (k: string, d: string): string => (args.find((a) => a.startsWith(`--${k}=`)) ?? `--${k}=${d}`).split('=').slice(1).join('=');
+const opt = (k: string, d: string): string =>
+  (args.find((a) => a.startsWith(`--${k}=`)) ?? `--${k}=${d}`).split('=').slice(1).join('=');
 const A = opt('a', 'lastone') as TitanId;
 const B = opt('b', 'asteroid') as TitanId;
 const [g0, g1, gs] = opt('gaps', '70:295:25').split(':').map(Number) as [number, number, number];
@@ -70,7 +71,9 @@ function press(slot: MoveSlot, gap: number, guard: boolean): Trial {
 const def = getTitanDef(A);
 const gaps: number[] = [];
 for (let g = g0; g <= g1; g += gs) gaps.push(g);
-console.log(`${A} → ${B}   (mass removed, % of the defender's initial mass, ${SETTLE} ticks after the press; gaps ${gaps.join(',')})`);
+console.log(
+  `${A} → ${B}   (mass removed, % of the defender's initial mass, ${SETTLE} ticks after the press; gaps ${gaps.join(',')})`,
+);
 for (const slot of SLOTS) {
   const mv = def.moves.find((x) => x.slot === slot);
   if (!mv) continue;

@@ -424,6 +424,11 @@ export function rasterParticles(
           if (sx < 0 || sx >= W) continue;
           // Round the corners of bigger blobs so they read as soft puffs rather than squares.
           if (sz >= 3 && (xx === 0 || xx === w2 - 1) && (yy === 0 || yy === w2 - 1)) continue;
+          if (sz >= 6) {
+            const cx = xx - (w2 - 1) / 2;
+            const cy = yy - (w2 - 1) / 2;
+            if (cx * cx + cy * cy > (w2 * w2) / 4) continue;
+          }
           if (thr < 16 && BAYER4[((sy & 3) << 2) | (sx & 3)]! >= thr) continue;
           const o = sy * W + sx;
           pix[o] = col;

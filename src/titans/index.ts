@@ -19,6 +19,8 @@ export {
 } from './art/nexus';
 export { LINK, linkIndex, rasterLink, RIVET_OFFSET, type LinkSink } from './art/chainLink';
 export type { SupernovaRig } from './art/supernova';
+export type { PlanetRig, MoonSpec } from './art/planet';
+export { generateMoonBody } from './art/planet';
 export { renderPortrait, type Portrait } from './portrait';
 export { blend } from './art/color';
 export { hash01 } from './art/noise';

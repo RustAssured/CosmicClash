@@ -10,6 +10,7 @@ import {
   footer,
   header,
   promptLabels,
+  settled,
   scrim,
   vignette,
   type Screen,
@@ -59,7 +60,7 @@ export function createAssignScreen(): Screen {
       if (n.back) {
         // back releases the last seat first, then leaves the screen
         const last = claimed[1] ? 1 : claimed[0] ? 0 : -1;
-        if (last >= 0 && humans(ctx) > 1 && ctx.screenTime > 0.4 && last === 1) {
+        if (last >= 0 && humans(ctx) > 1 && settled(ctx, 0.4) && last === 1) {
           claimed[1] = null;
           ctx.sound('back');
         } else {

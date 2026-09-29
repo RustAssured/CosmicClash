@@ -44,6 +44,8 @@ export interface UICtx {
   readonly dt: number;
   /** Seconds since the current screen was entered. */
   readonly screenTime: number;
+  /** Updates since the current screen was entered (a slow machine may show only a few frames per second). */
+  readonly screenFrames: number;
   /** Merged nav frame from every device, and per-slot frames. */
   readonly nav: Readonly<NavFrame>;
   navFor(slot: 0 | 1): Readonly<NavFrame>;
@@ -415,3 +417,11 @@ export function drawTitanPortrait(
     }
   }
 }
+
+/**
+ * True once a screen has been up for `sec` seconds OR a few frames, whichever comes first. Input guards ("don't let a mashed
+ * button skip this") use it so that on a machine running one or two frames a second they last a couple of frames, never
+ * long enough to swallow a deliberate press.
+ */
+export const settled = (ctx: Pick<UICtx, 'screenTime' | 'screenFrames'>, sec: number): boolean =>
+  ctx.screenTime >= sec || ctx.screenFrames >= 3;

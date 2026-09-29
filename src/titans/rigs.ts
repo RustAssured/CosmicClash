@@ -2,6 +2,7 @@ import type { TitanDef } from '@/contracts';
 import { buildAsteroidRig } from './art/asteroid';
 import { buildLastOneRig } from './art/lastone';
 import { buildNexusRig } from './art/nexus';
+import { buildPlanetRig } from './art/planet';
 import { buildSupernovaRig } from './art/supernova';
 import type { TitanRig } from './generate';
 
@@ -16,6 +17,8 @@ export function buildRigFor(def: TitanDef, seed: number): TitanRig {
       return buildNexusRig(def, seed);
     case 'supernova':
       return buildSupernovaRig(def, seed);
+    case 'planet':
+      return buildPlanetRig(def, seed);
     default:
       throw new Error(`no rig for titan '${def.id}'`);
   }

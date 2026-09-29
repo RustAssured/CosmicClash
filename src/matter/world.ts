@@ -43,6 +43,7 @@ import { applyThermal, stepThermal } from './thermal';
 import { applyTidal } from './tidal';
 import { applyAssimilation, stepInfection } from './assimilation';
 import { debugOverlay } from './debug';
+import { impactBurst } from './blowfx';
 
 /** A multi-tick damage application waiting to deliver its remaining slices. */
 class Job {
@@ -281,6 +282,7 @@ class MatterWorldImpl implements MatterWorldEx {
       if (ev.type === 'ASSIMILATION' || ev.type === 'TIDAL') this.applyEmpty(ev.type);
       return;
     }
+    if (first && (ev.type === 'FRACTURE' || ev.type === 'KINETIC' || ev.type === 'CRUSH')) impactBurst(ctx);
     switch (ev.type) {
       case 'FRACTURE':
         applyFracture(ctx, res);

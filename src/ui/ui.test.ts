@@ -13,6 +13,7 @@ import { Pad, createInputManager, createMemoryStore, type InputManager } from '@
 import { createFakeGamepads, proStandard, xboxStandard, type FakePad } from '@/input/testing';
 import { STAGE_INFO } from '@/stages/info';
 import { FIXTURE_TITANS, fakeHud, fixturePortraitProvider } from './fixtures';
+import { damageDealt } from './screens/results';
 import { showScreen } from './ui';
 import { createUI } from './index';
 import { UI_STORAGE_KEY } from './settings';
@@ -27,7 +28,7 @@ interface Rig {
   history: UIAction[];
   store: ReturnType<typeof createMemoryStore>;
   win: EventTarget;
-  step: (frames?: number) => void;
+  step: (frames?: number, dt?: number) => void;
   /** Press a pad button for a few frames, then release. */
   tap: (pad: FakePad, b: number) => void;
   key: (code: string) => void;
@@ -72,11 +73,11 @@ function rig(
     now: () => now,
     attractAfterSec: o.attractAfterSec ?? 1e9,
   });
-  const step = (frames = 1): void => {
+  const step = (frames = 1, dt = 1 / 60): void => {
     for (let i = 0; i < frames; i++) {
-      now += 16;
+      now += Math.round(dt * 1000);
       input.poll(now);
-      ui.update(1 / 60);
+      ui.update(dt);
       const before = actions.length;
       ui.drainActions(actions);
       for (let k = before; k < actions.length; k++) history.push(actions[k]!);
@@ -381,8 +382,7 @@ describe('pause, results and attract', () => {
     r.ui.showResults(0);
     r.ui.draw(fakeHud({ phase: 'matchend', wins: [2, 0] }));
     expect(r.ui.screen).toBe('results');
-    r.step(2);
-    r.tap(pad, Pad.EAST); // too early (< 0.8 s): ignored
+    r.tap(pad, Pad.EAST); // too early (< 0.8 s and only a couple of frames): ignored
     expect(r.drain().find((a) => a.type === 'rematch')).toBeUndefined();
     r.step(60);
     r.tap(pad, Pad.EAST);
@@ -393,6 +393,44 @@ describe('pause, results and attract', () => {
     r.tap(pad, Pad.EAST);
     expect(r.drain()).toContainEqual({ type: 'quitToTitle' });
     expect(r.ui.screen).toBe('title');
+  });
+
+  it('results stats: damage dealt is the mass removed from the foe, clamped to 0..1; the screen draws with them', () => {
+    const hud = fakeHud({ phase: 'matchend', wins: [2, 1], round: 3 });
+    const [a, b] = hud.match.fighters.map((f) => f.view.bodyStats) as unknown as {
+      mass: number;
+      initialMass: number;
+    }[];
+    a!.initialMass = 1000;
+    a!.mass = 250; // slot 0's body lost 75 %: slot 1 dealt 75 %
+    b!.initialMass = 1000;
+    b!.mass = 1400; // an accretor that grew: nothing was removed, clamped at 0
+    expect(damageDealt(hud, 1)).toBeCloseTo(0.75);
+    expect(damageDealt(hud, 0)).toBe(0);
+    const r = rig();
+    r.ui.showResults(1);
+    r.step(40);
+    r.ui.draw(hud);
+    expect(r.ui.screen).toBe('results');
+    expect(inkCount(r.ui, 270, 144, 370, 210)).toBeGreaterThan(80);
+  });
+
+  it('input guards are robust to slow frames: at 2 fps the results screen accepts input after a few frames, not many seconds', () => {
+    const r = rig();
+    const pad = r.pads.plug(proStandard());
+    r.ui.showResults(0);
+    r.ui.draw(fakeHud({ phase: 'matchend', wins: [2, 0] }));
+    r.step(4, 0.5);
+    pad.set(Pad.EAST, true);
+    r.step(1, 0.5);
+    pad.releaseAll();
+    r.step(1, 0.5);
+    expect(r.drain()).toContainEqual({ type: 'rematch' });
+    // and one huge hitch (a hidden tab) is capped: it must not fast-forward the idle timer past the attract threshold at once
+    const r2 = rig({ attractAfterSec: 5 });
+    r2.step(3);
+    r2.ui.update(600);
+    expect(r2.ui.screen).not.toBe('attract');
   });
 
   it('attract: idle on the title for N seconds emits attractStart; any input emits attractStop and returns', () => {

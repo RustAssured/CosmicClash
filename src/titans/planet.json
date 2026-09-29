@@ -1,0 +1,1120 @@
+{
+  "id": "planet",
+  "name": "Planet",
+  "nameKo": "행성",
+  "epithet": "De Wereld",
+  "attributes": {
+    "mass": 8,
+    "cohesion": 7,
+    "heat": 6,
+    "gravity": 7,
+    "reach": 6,
+    "tempo": 3
+  },
+  "resource": {
+    "id": "moons",
+    "name": "Moons",
+    "nameKo": "달",
+    "max": 2,
+    "start": 2,
+    "display": "pips"
+  },
+  "destruction": "CRUSH",
+  "passive": {
+    "name": "Gravity Well",
+    "text": "A small gravity well gathers debris into slow orbit around the planet: a ring of remains that drifts and now and then strikes the enemy."
+  },
+  "failureMode": {
+    "name": "Broken World",
+    "text": "Crust cracks reveal glowing magma, the atmosphere is stripped away (and with it the shield against heat), and moons can be knocked out of orbit and lost."
+  },
+  "materials": [
+    {
+      "key": "atmosphere",
+      "base": "gas",
+      "visual": {
+        "ramp": ["#16305a", "#24508c", "#3a7bc0", "#69b0e0", "#a8dcf2", "#e4f8ff"],
+        "emissive": 40,
+        "char": "#1a2a4a",
+        "crack": "#0a1a3a",
+        "debris": "#69b0e0"
+      }
+    },
+    {
+      "key": "cloud",
+      "base": "cloud",
+      "visual": {
+        "ramp": ["#2b3c66", "#4f6494", "#8497be", "#bccbe0", "#e6eef6", "#ffffff"],
+        "emissive": 20,
+        "char": "#3a4560",
+        "crack": "#2b3c66",
+        "debris": "#e6eef6"
+      }
+    },
+    {
+      "key": "ocean",
+      "base": "ocean",
+      "visual": {
+        "ramp": ["#08183c", "#0d2a64", "#123f8f", "#1a5cb8", "#2e86d8", "#62b8ec", "#b6e8fa"],
+        "emissive": 0,
+        "char": "#0a1a38",
+        "crack": "#04102a",
+        "debris": "#2e86d8"
+      }
+    },
+    {
+      "key": "forest",
+      "base": "regolith",
+      "visual": {
+        "ramp": ["#14241a", "#243c22", "#3b5c2a", "#5d7e34", "#88a044", "#b4be5c", "#dcdc8a"],
+        "emissive": 0,
+        "char": "#1a1a10",
+        "crack": "#0c160e",
+        "debris": "#5d7e34"
+      }
+    },
+    {
+      "key": "desert",
+      "base": "regolith",
+      "visual": {
+        "ramp": ["#2a1a18", "#4c3024", "#7a4c30", "#a8703c", "#cf9a52", "#e8c27a", "#f8e4b0"],
+        "emissive": 0,
+        "char": "#2a1a14",
+        "crack": "#1a0e0c",
+        "debris": "#cf9a52"
+      }
+    },
+    {
+      "key": "mountain",
+      "base": "rock",
+      "visual": {
+        "ramp": ["#241c22", "#3d3038", "#5f4d4c", "#8a7466", "#b39c88", "#dccbb8", "#f4eee8"],
+        "emissive": 0,
+        "char": "#1a1414",
+        "crack": "#120c10",
+        "debris": "#8a7466"
+      }
+    },
+    {
+      "key": "ice",
+      "base": "ice",
+      "visual": {
+        "ramp": ["#284a72", "#4a7fb0", "#86bde0", "#bfe4f4", "#e8f8ff", "#ffffff"],
+        "emissive": 30,
+        "char": "#284a72",
+        "crack": "#183050",
+        "debris": "#bfe4f4"
+      }
+    },
+    {
+      "key": "crust",
+      "base": "rock",
+      "visual": {
+        "ramp": ["#1a1216", "#33242a", "#4f3a38", "#725248", "#97705a", "#bc9070"],
+        "emissive": 0,
+        "char": "#1a1214",
+        "crack": "#0a0608",
+        "debris": "#725248"
+      }
+    },
+    {
+      "key": "mantle",
+      "base": "mantle",
+      "visual": {
+        "ramp": ["#2a0a10", "#5a1418", "#8c2a1a", "#c0481c", "#e8741e", "#ff9a30"],
+        "emissive": 40,
+        "char": "#3a0c10",
+        "crack": "#ffb040",
+        "debris": "#c0481c",
+        "glowRamp": ["#c0481c", "#ff9a30", "#ffe080", "#ffffff"]
+      }
+    },
+    {
+      "key": "magma",
+      "base": "magma",
+      "visual": {
+        "ramp": ["#7a1608", "#c03a10", "#f0701c", "#ffa838", "#ffd870", "#fff2b0"],
+        "emissive": 170,
+        "char": "#5a1006",
+        "crack": "#ffe080",
+        "debris": "#f0701c",
+        "glowRamp": ["#f0701c", "#ffd870", "#fff2b0", "#ffffff"]
+      }
+    },
+    {
+      "key": "core",
+      "base": "core",
+      "visual": {
+        "ramp": ["#ffb84a", "#ffdc78", "#fff2b0", "#ffffff"],
+        "emissive": 235,
+        "char": "#7a3a10",
+        "crack": "#ffffff",
+        "debris": "#ffdc78",
+        "glowRamp": ["#ffdc78", "#fff2b0", "#ffffff", "#ffffff"]
+      }
+    }
+  ],
+  "art": {
+    "w": 208,
+    "h": 208,
+    "coreX": 104,
+    "coreY": 104,
+    "coreRadius": 13,
+    "params": {
+      "radius": 74,
+      "atmo": 8,
+      "surface": 5.5,
+      "crust": 11,
+      "magmaR": 27,
+      "coreR": 13,
+      "tilt": -0.4,
+      "sea": 0.06,
+      "moons": [
+        {
+          "r": 15,
+          "a": 120,
+          "b": 32,
+          "tilt": -0.12,
+          "period": 430,
+          "phase": 0.6,
+          "crater": 8,
+          "lumpy": 0.2,
+          "materials": [
+            {
+              "key": "moonrock",
+              "base": "rock",
+              "visual": {
+                "ramp": ["#1c1a24", "#38343f", "#5a5560", "#84808a", "#b0aab0", "#dcd6d4", "#f4f0ec"],
+                "emissive": 0,
+                "char": "#1a1616",
+                "crack": "#0c0a0e",
+                "debris": "#84808a"
+              }
+            },
+            {
+              "key": "moondust",
+              "base": "regolith",
+              "visual": {
+                "ramp": ["#2a2428", "#4a4046", "#74666a", "#a08e8c", "#c8b8ae", "#e6d8cc"],
+                "emissive": 0,
+                "char": "#1a1616",
+                "crack": "#0c0a0e",
+                "debris": "#a08e8c"
+              }
+            },
+            {
+              "key": "moondark",
+              "base": "mantle",
+              "visual": {
+                "ramp": ["#0e0c14", "#1c1a26", "#2c2a38", "#403e50", "#5c5a6c"],
+                "emissive": 0,
+                "char": "#141012",
+                "crack": "#08060a",
+                "debris": "#403e50"
+              }
+            }
+          ]
+        },
+        {
+          "r": 11,
+          "a": 100,
+          "b": 26,
+          "tilt": 0.22,
+          "period": 300,
+          "phase": 3.7,
+          "crater": 5,
+          "lumpy": 0.7,
+          "materials": [
+            {
+              "key": "moonrock",
+              "base": "rock",
+              "visual": {
+                "ramp": ["#2a1410", "#54281c", "#84402a", "#b0603a", "#d4844c", "#eeac72", "#fbd6a4"],
+                "emissive": 0,
+                "char": "#1a1616",
+                "crack": "#0c0a0e",
+                "debris": "#b0603a"
+              }
+            },
+            {
+              "key": "moondust",
+              "base": "regolith",
+              "visual": {
+                "ramp": ["#3a1c14", "#683424", "#9a5636", "#c47a4c", "#e2a06c", "#f6c894"],
+                "emissive": 0,
+                "char": "#1a1616",
+                "crack": "#0c0a0e",
+                "debris": "#c47a4c"
+              }
+            },
+            {
+              "key": "moondark",
+              "base": "mantle",
+              "visual": {
+                "ramp": ["#1c0c0a", "#341812", "#4c261c", "#683828", "#8a4c34"],
+                "emissive": 0,
+                "char": "#141012",
+                "crack": "#08060a",
+                "debris": "#683828"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "moves": [
+    {
+      "id": "planet.nudge",
+      "slot": "strike",
+      "name": "Tidal Nudge",
+      "nameKo": "조석 밀기",
+      "frame": {
+        "startup": 12,
+        "active": 8,
+        "recovery": 18,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 6
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "nudge",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "point",
+                "ox": 82,
+                "oy": -30,
+                "r": 30
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 320,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "compress": 5,
+                  "crater": 8,
+                  "shock": 0.6
+                }
+              },
+              "knockback": {
+                "x": 560,
+                "y": -120
+              },
+              "guardPressure": 0.4,
+              "sweepTo": {
+                "kind": "point",
+                "ox": 118,
+                "oy": -34,
+                "r": 34
+              }
+            }
+          ],
+          "movement": [
+            {
+              "at": 8,
+              "ix": 120,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "nudge",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "point",
+                "ox": 82,
+                "oy": 0,
+                "r": 30
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 320,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "compress": 5,
+                  "crater": 8,
+                  "shock": 0.6
+                }
+              },
+              "knockback": {
+                "x": 560,
+                "y": -30
+              },
+              "guardPressure": 0.4,
+              "sweepTo": {
+                "kind": "point",
+                "ox": 118,
+                "oy": 0,
+                "r": 34
+              }
+            }
+          ],
+          "movement": [
+            {
+              "at": 8,
+              "ix": 120,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "nudge",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "point",
+                "ox": 82,
+                "oy": 30,
+                "r": 30
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 320,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "compress": 5,
+                  "crater": 8,
+                  "shock": 0.6
+                }
+              },
+              "knockback": {
+                "x": 560,
+                "y": 60
+              },
+              "guardPressure": 0.4,
+              "sweepTo": {
+                "kind": "point",
+                "ox": 118,
+                "oy": 34,
+                "r": 34
+              }
+            }
+          ],
+          "movement": [
+            {
+              "at": 8,
+              "ix": 120,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["shove"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -4
+          },
+          "active": {
+            "lean": 6
+          }
+        }
+      }
+    },
+    {
+      "id": "planet.impact",
+      "slot": "crush",
+      "name": "Impact",
+      "nameKo": "충격",
+      "frame": {
+        "startup": 34,
+        "active": 8,
+        "recovery": 46,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 14
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "slam",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "point",
+                "ox": 96,
+                "oy": -34,
+                "r": 44
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 1500,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 22,
+                  "compress": 10,
+                  "shock": 1.4,
+                  "scatter": 1.2
+                }
+              },
+              "knockback": {
+                "x": 760,
+                "y": -180
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -90,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 34,
+              "ix": 300,
+              "iy": -60,
+              "damp": 0.05
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "slam",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "point",
+                "ox": 96,
+                "oy": 0,
+                "r": 44
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 1500,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 22,
+                  "compress": 10,
+                  "shock": 1.4,
+                  "scatter": 1.2
+                }
+              },
+              "knockback": {
+                "x": 760,
+                "y": -60
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -90,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 34,
+              "ix": 300,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "slam",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "point",
+                "ox": 96,
+                "oy": 34,
+                "r": 44
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 1500,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 22,
+                  "compress": 10,
+                  "shock": 1.4,
+                  "scatter": 1.2
+                }
+              },
+              "knockback": {
+                "x": 760,
+                "y": 60
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -90,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 34,
+              "ix": 300,
+              "iy": 60,
+              "damp": 0.05
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["heavy", "ram", "quake"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -9
+          },
+          "active": {
+            "lean": 8
+          },
+          "recovery": {
+            "lean": 2
+          }
+        }
+      }
+    },
+    {
+      "id": "planet.shift",
+      "slot": "surge",
+      "name": "Orbital Shift",
+      "nameKo": "궤도 이동",
+      "frame": {
+        "startup": 3,
+        "active": 16,
+        "recovery": 9,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 430,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 430,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 430,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "intangible": [2, 16],
+      "tags": ["dash", "orbit"]
+    },
+    {
+      "id": "planet.moonslam",
+      "slot": "signature",
+      "name": "Moon Slam",
+      "nameKo": "달 충돌",
+      "frame": {
+        "startup": 14,
+        "active": 44,
+        "recovery": 24,
+        "cancelWindow": 0.4,
+        "chargeMax": 45,
+        "hitstop": 8
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "launch",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "point",
+                "ox": 76,
+                "oy": 0,
+                "r": 20
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 120,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 5
+                }
+              },
+              "knockback": {
+                "x": 200,
+                "y": 0
+              },
+              "guardPressure": 0.3
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -40,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "launch",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "point",
+                "ox": 76,
+                "oy": 0,
+                "r": 20
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 120,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 5
+                }
+              },
+              "knockback": {
+                "x": 200,
+                "y": 0
+              },
+              "guardPressure": 0.3
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -40,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "launch",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "point",
+                "ox": 76,
+                "oy": 0,
+                "r": 20
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 120,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 5
+                }
+              },
+              "knockback": {
+                "x": 200,
+                "y": 0
+              },
+              "guardPressure": 0.3
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -40,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        }
+      },
+      "resourceCost": 1,
+      "meterCost": 0,
+      "tags": ["charge", "projectile", "moon"],
+      "extra": {
+        "chargePower": 0.9,
+        "chargeReach": [0.8, 1.35],
+        "slam": {
+          "speed": 9,
+          "energy": 1100,
+          "crater": 16,
+          "compress": 8,
+          "shock": 1.2,
+          "recoil": 0.14,
+          "life": 46
+        },
+        "ctl": {
+          "charge": 0.2,
+          "active": 0.25
+        },
+        "pose": {
+          "startup": {
+            "lean": -5
+          },
+          "charge": {
+            "lean": -7
+          },
+          "active": {
+            "lean": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "planet.cataclysm",
+      "slot": "ultimate",
+      "name": "Cataclysm",
+      "nameKo": "대격변",
+      "frame": {
+        "startup": 90,
+        "active": 100,
+        "recovery": 50,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "gravity",
+              "from": 0,
+              "to": 50,
+              "shape": {
+                "kind": "field",
+                "ox": 150,
+                "oy": 0,
+                "r": 100,
+                "falloff": 1.5
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 20,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "compress": 4,
+                  "crater": 6
+                }
+              },
+              "knockback": {
+                "x": -70,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "rehit": 2
+            },
+            {
+              "id": "quake",
+              "from": 52,
+              "to": 62,
+              "shape": {
+                "kind": "point",
+                "ox": 140,
+                "oy": 0,
+                "r": 64
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 2400,
+                "duration": 1,
+                "flags": 32,
+                "params": {
+                  "crater": 32,
+                  "compress": 14,
+                  "shock": 2.2,
+                  "scatter": 1.6
+                }
+              },
+              "knockback": {
+                "x": 500,
+                "y": -160
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "gravity",
+              "from": 0,
+              "to": 50,
+              "shape": {
+                "kind": "field",
+                "ox": 150,
+                "oy": 0,
+                "r": 100,
+                "falloff": 1.5
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 20,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "compress": 4,
+                  "crater": 6
+                }
+              },
+              "knockback": {
+                "x": -70,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "rehit": 2
+            },
+            {
+              "id": "quake",
+              "from": 52,
+              "to": 62,
+              "shape": {
+                "kind": "point",
+                "ox": 140,
+                "oy": 0,
+                "r": 64
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 2400,
+                "duration": 1,
+                "flags": 32,
+                "params": {
+                  "crater": 32,
+                  "compress": 14,
+                  "shock": 2.2,
+                  "scatter": 1.6
+                }
+              },
+              "knockback": {
+                "x": 500,
+                "y": -160
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "gravity",
+              "from": 0,
+              "to": 50,
+              "shape": {
+                "kind": "field",
+                "ox": 150,
+                "oy": 0,
+                "r": 100,
+                "falloff": 1.5
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 20,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "compress": 4,
+                  "crater": 6
+                }
+              },
+              "knockback": {
+                "x": -70,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "rehit": 2
+            },
+            {
+              "id": "quake",
+              "from": 52,
+              "to": 62,
+              "shape": {
+                "kind": "point",
+                "ox": 140,
+                "oy": 0,
+                "r": 64
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 2400,
+                "duration": 1,
+                "flags": 32,
+                "params": {
+                  "crater": 32,
+                  "compress": 14,
+                  "shock": 2.2,
+                  "scatter": 1.6
+                }
+              },
+              "knockback": {
+                "x": 500,
+                "y": -160
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 1,
+      "tags": ["ultimate", "armor", "quake", "moon"],
+      "extra": {
+        "barrage": {
+          "from": 66,
+          "gap": 10,
+          "speed": 11,
+          "energy": 900,
+          "crater": 14,
+          "compress": 7,
+          "shock": 1
+        },
+        "ctl": {
+          "startup": 0.1,
+          "active": 0.05,
+          "recovery": 0.3
+        },
+        "pose": {
+          "startup": {
+            "lean": -5
+          },
+          "active": {
+            "lean": 3
+          }
+        }
+      }
+    },
+    {
+      "id": "planet.guard",
+      "slot": "guard",
+      "name": "Atmosphere Shield",
+      "nameKo": "대기 방패",
+      "frame": {
+        "startup": 3,
+        "active": 0,
+        "recovery": 5,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": []
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["guard"],
+      "extra": {
+        "shell": {
+          "absorb": {
+            "THERMAL": 0.8,
+            "KINETIC": 0.55,
+            "CRUSH": 0.35,
+            "FRACTURE": 0.5,
+            "TIDAL": 0.15,
+            "ASSIMILATION": 0.4
+          }
+        }
+      }
+    }
+  ],
+  "ai": {
+    "style": "Fortress: sits back behind its moons, punishes with Impact and Moon Slam, and uses its weight to hold the space.",
+    "weights": {
+      "aggression": 0.3,
+      "patience": 0.8,
+      "zoning": 0.75,
+      "retreat": 0.35,
+      "trap": 0.3,
+      "punish": 0.85,
+      "gaze": 0.6
+    }
+  },
+  "ui": {
+    "accent": "#58a6d8",
+    "accent2": "#e0b06a",
+    "tagline": "All things fall toward me."
+  }
+}

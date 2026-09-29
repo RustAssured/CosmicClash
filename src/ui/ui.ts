@@ -55,6 +55,7 @@ class UIRuntime implements GameUI, UICtx {
   t = 0;
   dt = 0;
   screenTime = 0;
+  screenFrames = 0;
   private stack: UIScreenId[] = ['boot'];
   private readonly screens: Partial<Record<UIScreenId, Screen>> = {};
   private readonly actions: UIAction[] = [];
@@ -110,10 +111,14 @@ class UIRuntime implements GameUI, UICtx {
     return this.input.nav(slot);
   }
 
-  update(dtSec: number): void {
+  update(rawDtSec: number): void {
+    // a hitch (a hidden tab, a stalled software renderer) must not fast-forward fades, idle timers and toasts in one step;
+    // but a slow machine's honest 0.5 s frames must pass unchanged, so the cap is generous
+    const dtSec = Number.isFinite(rawDtSec) ? Math.min(1, Math.max(0, rawDtSec)) : 0;
     this.dt = dtSec;
     this.t += dtSec;
     this.screenTime += dtSec;
+    this.screenFrames++;
     if (this.fade < 1) this.fade = Math.min(1, this.fade + dtSec / FADE_SEC);
     this.input.pollIfStale();
     this.navAny = this.input.nav('any');
@@ -172,6 +177,7 @@ class UIRuntime implements GameUI, UICtx {
       if (this.stack.length === 0) this.stack.push('hud');
       this.fade = 1;
       this.screenTime = 0;
+      this.screenFrames = 0;
       this.resetScreen();
     }
   }
@@ -315,6 +321,7 @@ class UIRuntime implements GameUI, UICtx {
 
   private enterTop(params: unknown, returning = false): void {
     this.screenTime = 0;
+    this.screenFrames = 0;
     this.fade = returning ? 0.4 : 0;
     this.resetScreen(params);
   }

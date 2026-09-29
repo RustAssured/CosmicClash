@@ -1,9 +1,28 @@
-import { LOGICAL_W, ROUNDS_TO_WIN } from '@/contracts';
+import { LOGICAL_W, ROUNDS_TO_WIN, type HudState } from '@/contracts';
 import { bodySprites } from '../hud';
 import { C, accentRamp, alpha } from '../pixel/palette';
 import { drawIcon, panel, pips } from '../pixel/shapes';
 import { drawText, measureText } from '../pixel/text';
-import { Menu, confirmBack, drawCentreMenu, footer, scrim, vignette, type Screen, backdrop } from './kit';
+import {
+  Menu,
+  confirmBack,
+  drawCentreMenu,
+  footer,
+  scrim,
+  settled,
+  vignette,
+  type Screen,
+  backdrop,
+} from './kit';
+
+/**
+ * Damage dealt BY `slot`, as the share (0..1) of the foe's starting mass that is gone from its body: the mass removed. Bodies
+ * persist across the rounds of a match, so it is the whole match's damage. An accretor that has regrown counts net.
+ */
+export function damageDealt(hud: HudState, slot: 0 | 1): number {
+  const foe = hud.match.fighters[slot === 0 ? 1 : 0].view.bodyStats;
+  return foe.initialMass > 0 ? Math.max(0, Math.min(1, (foe.initialMass - foe.mass) / foe.initialMass)) : 0;
+}
 
 /** Match results: who won, what remained of each body, the round tally, and REMATCH / TITLE. */
 export function createResultsScreen(): Screen {
@@ -20,7 +39,7 @@ export function createResultsScreen(): Screen {
     },
     update(ctx) {
       const n = ctx.nav;
-      if (ctx.screenTime < 0.8) return; // don't let a mashed button skip the result
+      if (!settled(ctx, 0.8)) return; // don't let a mashed button skip the result
       if (menu.step(n)) ctx.sound('move');
       if (!n.confirm) return;
       ctx.sound('confirm');
@@ -108,6 +127,27 @@ export function createResultsScreen(): Screen {
         align: 'center',
         tracking: 2,
       });
+      if (hud) {
+        const rows: [string, string, string][] = [
+          ['ROUNDS', String(hud.round), String(hud.round)],
+          [
+            'DAMAGE',
+            `${Math.round(damageDealt(hud, 0) * 100)}%`,
+            `${Math.round(damageDealt(hud, 1) * 100)}%`,
+          ],
+          [
+            'MASS LEFT',
+            `${Math.round(hud.match.fighters[0].view.bodyStats.massFrac * 100)}%`,
+            `${Math.round(hud.match.fighters[1].view.bodyStats.massFrac * 100)}%`,
+          ],
+        ];
+        rows.forEach(([label, a, b], i) => {
+          const y = 146 + i * 22;
+          drawText(cv, label, cx, y, { color: C.dim, font: 'micro', align: 'center', tracking: 1 });
+          drawText(cv, a, cx - 20, y + 9, { color: C.p1, align: 'center' });
+          drawText(cv, b, cx + 20, y + 9, { color: C.p2, align: 'center' });
+        });
+      }
       drawCentreMenu(ctx, menu, cx, 232, 24, accentRamp('#a8bdb2'));
       footer(ctx, confirmBack(ctx, 'SELECT', 'BACK').slice(0, 1));
     },

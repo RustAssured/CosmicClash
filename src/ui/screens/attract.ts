@@ -3,14 +3,14 @@ import { drawHud } from '../hud';
 import { drawLogo } from '../pixel/logo';
 import { C, alpha } from '../pixel/palette';
 import { drawText } from '../pixel/text';
-import type { Screen } from './kit';
+import { settled, type Screen } from './kit';
 
 /** Attract overlay: the HUD of an AI-vs-AI match plus a watermark; any input ends it. */
 export function createAttractScreen(): Screen {
   return {
     update(ctx) {
       const n = ctx.nav;
-      if (ctx.screenTime > 0.4 && (n.any || n.confirm || n.start || n.back)) {
+      if (settled(ctx, 0.4) && (n.any || n.confirm || n.start || n.back)) {
         ctx.emit({ type: 'attractStop' });
         ctx.sound('confirm');
         ctx.go('title');

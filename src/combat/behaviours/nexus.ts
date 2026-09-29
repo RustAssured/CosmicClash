@@ -399,8 +399,10 @@ export class NexusBehaviour extends Behaviour {
     const f = this.f;
     const grown = Math.min(4, Math.floor(this.grownCells / 60));
     const next = this.litCount + grown;
-    if (next < f.resource) f.events.push({ t: 'resource', slot: f.slot, kind: 'spend', amount: f.resource - next });
-    else if (next > f.resource) f.events.push({ t: 'resource', slot: f.slot, kind: 'gain', amount: next - f.resource });
+    if (next < f.resource)
+      f.events.push({ t: 'resource', slot: f.slot, kind: 'spend', amount: f.resource - next });
+    else if (next > f.resource)
+      f.events.push({ t: 'resource', slot: f.slot, kind: 'gain', amount: next - f.resource });
     f.resource = next;
     f.view.parts = Math.floor(next);
   }
@@ -466,7 +468,15 @@ export class NexusBehaviour extends Behaviour {
     }
     if (maxX >= 0) this.markDirty(minX - 1, minY - 1, maxX + 2, maxY + 2);
     localToWorld(t, N.x, N.y, this.xy);
-    f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'node-dark', x: this.xy.x, y: this.xy.y, amount: 1 });
+    f.events.push({
+      t: 'cue',
+      slot: f.slot,
+      titan: f.def.id,
+      id: 'node-dark',
+      x: this.xy.x,
+      y: this.xy.y,
+      amount: 1,
+    });
     // a puff of grey ash where the light went out
     const sp = f.particleSpawn;
     sp.kind = 'ash';
@@ -568,12 +578,25 @@ export class NexusBehaviour extends Behaviour {
     if (cells < 12 || this.rig.buds.length === 0) return;
     const bud = this.rig.buds[this.budIdx++ % this.rig.buds.length]!;
     localToWorld(f.body.transform, bud.x, bud.y, this.xy);
-    const added = f.world.grow(f.body.id, { cells, materialKey: 'lattice', nearX: this.xy.x, nearY: this.xy.y });
+    const added = f.world.grow(f.body.id, {
+      cells,
+      materialKey: 'lattice',
+      nearX: this.xy.x,
+      nearY: this.xy.y,
+    });
     this.lastGrow = tick;
     if (added <= 0) return;
     this.grownMass += added * per;
     this.grownCells += added;
-    f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'harvest', x: this.xy.x, y: this.xy.y, amount: added });
+    f.events.push({
+      t: 'cue',
+      slot: f.slot,
+      titan: f.def.id,
+      id: 'harvest',
+      x: this.xy.x,
+      y: this.xy.y,
+      amount: added,
+    });
     this.syncResource();
   }
 
@@ -607,7 +630,15 @@ export class NexusBehaviour extends Behaviour {
       this.latchNode = this.frontNode(0);
       this.latchOffX = (this.tip.x - fv.x) * 0.9;
       this.latchOffY = this.tip.y - fv.y;
-      f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'chain-latch', x: this.tip.x, y: this.tip.y, amount: 1 });
+      f.events.push({
+        t: 'cue',
+        slot: f.slot,
+        titan: f.def.id,
+        id: 'chain-latch',
+        x: this.tip.x,
+        y: this.tip.y,
+        amount: 1,
+      });
     } else if (id === 'nexus.constrict' && !this.rootedThisMove && this.rootCfg) {
       this.rootedThisMove = true;
       this.attachChains(this.rootCfg);
@@ -639,7 +670,10 @@ export class NexusBehaviour extends Behaviour {
       bestScore = -1e9;
       for (let n = 1; n < this.nN; n++) {
         if (!this.lit[n] || taken[n]) continue;
-        const s = (this.rig.nodes[n]!.x - this.rig.hub.x) * f.facing * (f.body.transform.facing === f.facing ? 1 : -1);
+        const s =
+          (this.rig.nodes[n]!.x - this.rig.hub.x) *
+          f.facing *
+          (f.body.transform.facing === f.facing ? 1 : -1);
         if (s > bestScore) {
           bestScore = s;
           best = n;
@@ -670,7 +704,15 @@ export class NexusBehaviour extends Behaviour {
     this.snapAcc = 0;
     const foe = f.foe as unknown as { applyStatus?: (mul: number, ticks: number) => void };
     foe.applyStatus?.(cfg.mul, cfg.ticks);
-    f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'chain-latch', x: fv.x, y: fv.y, amount: n });
+    f.events.push({
+      t: 'cue',
+      slot: f.slot,
+      titan: f.def.id,
+      id: 'chain-latch',
+      x: fv.x,
+      y: fv.y,
+      amount: n,
+    });
   }
 
   private clearChains(): void {
@@ -720,7 +762,15 @@ export class NexusBehaviour extends Behaviour {
     c.fade = 0;
     this.segHp.fill(cfg.hp);
     this.segOn.fill(1);
-    this.f.events.push({ t: 'cue', slot: this.f.slot, titan: this.f.def.id, id: 'chain-latch', x: c.cx, y: c.cy, amount: SEGS });
+    this.f.events.push({
+      t: 'cue',
+      slot: this.f.slot,
+      titan: this.f.def.id,
+      id: 'chain-latch',
+      x: c.cx,
+      y: c.cy,
+      amount: SEGS,
+    });
   }
 
   /** The cage is over: `crushed` = it closed on the foe, otherwise it was broken or the move ended. */
@@ -749,7 +799,14 @@ export class NexusBehaviour extends Behaviour {
     const m = f.mv;
     const cfg = this.cageCfg;
     if (f.ko) return;
-    if (m.def?.id === 'nexus.oog' && !m.feint && m.phase === 'active' && !this.cage.on && this.cage.fade === 0 && !this.cage.crushed) {
+    if (
+      m.def?.id === 'nexus.oog' &&
+      !m.feint &&
+      m.phase === 'active' &&
+      !this.cage.on &&
+      this.cage.fade === 0 &&
+      !this.cage.crushed
+    ) {
       this.startCage();
     }
     if (!this.cage.on || !cfg) return;
@@ -774,7 +831,15 @@ export class NexusBehaviour extends Behaviour {
     for (let k = 0; k < SEGS; k++) alive += this.segOn[k]!;
     if (SEGS - alive >= cfg.breakAt) {
       this.endCage(false);
-      f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'chain-snap', x: c.cx, y: c.cy, amount: 1 });
+      f.events.push({
+        t: 'cue',
+        slot: f.slot,
+        titan: f.def.id,
+        id: 'chain-snap',
+        x: c.cx,
+        y: c.cy,
+        amount: 1,
+      });
       return;
     }
     // the crush
@@ -805,7 +870,14 @@ export class NexusBehaviour extends Behaviour {
     sh.x = c.cx;
     sh.y = c.cy;
     sh.r = cfg.radius[1] + 22;
-    f.addThreat(asShape(sh) as DamageShape, 'CRUSH', cfg.crush.energy, Math.max(0, cfg.closeTo - c.t), 6, true);
+    f.addThreat(
+      asShape(sh) as DamageShape,
+      'CRUSH',
+      cfg.crush.energy,
+      Math.max(0, cfg.closeTo - c.t),
+      6,
+      true,
+    );
   }
 
   /** Sample discs along the live cage segments (parts the foe's blows can hit). */
@@ -1024,7 +1096,15 @@ export class NexusBehaviour extends Behaviour {
     }
     // the hub: a breathing heart and a slow diagonal shimmer through the crystal
     const H = rig.hub;
-    fx.glow(this.nodeWX[0]!, this.nodeWY[0]!, 14 + 2 * Math.sin(tick * 0.05), 255, 110, 170, 0.28 + (harvesting ? 0.2 : 0));
+    fx.glow(
+      this.nodeWX[0]!,
+      this.nodeWY[0]!,
+      14 + 2 * Math.sin(tick * 0.05),
+      255,
+      110,
+      170,
+      0.28 + (harvesting ? 0.2 : 0),
+    );
     const map = this.f.body.map;
     const W = map.w;
     const crystal = rig.ids.crystal;
@@ -1038,7 +1118,13 @@ export class NexusBehaviour extends Behaviour {
         const band = (((lx + ly * 0.7 - phase) % 13) + 13) % 13;
         if (band < 1.6) {
           localToWorld(t, lx + 0.5, ly + 0.5, this.xy);
-          fx.add(Math.floor(this.xy.x), Math.floor(this.xy.y), 70 * (1 - band / 1.6), 95 * (1 - band / 1.6), 130 * (1 - band / 1.6));
+          fx.add(
+            Math.floor(this.xy.x),
+            Math.floor(this.xy.y),
+            70 * (1 - band / 1.6),
+            95 * (1 - band / 1.6),
+            130 * (1 - band / 1.6),
+          );
         }
       }
     }
@@ -1117,7 +1203,17 @@ export class NexusBehaviour extends Behaviour {
       const ex = fv.x + this.chOffX[i]!;
       const ey = fv.y + this.chOffY[i]!;
       const sag = 1.5 + (1 - tense) * 7 + (left < 24 ? (24 - left) * 0.3 : 0);
-      this.pen.span(this.front, this.xy.x, this.xy.y, ex, ey, sag, 1.4 * (1 - tense) + 0.5, tick * 0.3 + i, 1);
+      this.pen.span(
+        this.front,
+        this.xy.x,
+        this.xy.y,
+        ex,
+        ey,
+        sag,
+        1.4 * (1 - tense) + 0.5,
+        tick * 0.3 + i,
+        1,
+      );
       this.front.disc(ex, ey, 2.2, this.chainRamp[5]!);
       this.fx.glow(ex, ey, 6, 255, 70, 100, 0.4 * tense + 0.15);
     }
@@ -1146,7 +1242,11 @@ export class NexusBehaviour extends Behaviour {
     const build = cfg.build;
     const reveal = c.on ? clamp01(c.t / build) : 1;
     // as the cage closes it tightens toward the crush; when it fades after the crush it flashes
-    const closing = c.on ? clamp01((c.t - cfg.closeFrom) / Math.max(1, cfg.closeTo - cfg.closeFrom)) : c.crushed ? 1 : 0;
+    const closing = c.on
+      ? clamp01((c.t - cfg.closeFrom) / Math.max(1, cfg.closeTo - cfg.closeFrom))
+      : c.crushed
+        ? 1
+        : 0;
     const R = c.on ? c.r : c.crushed ? cfg.radius[1] : c.r;
     let drawn = 0;
     for (let k = 0; k < SEGS; k++) {
@@ -1162,7 +1262,7 @@ export class NexusBehaviour extends Behaviour {
         const px = c.cx + Math.cos(a) * R;
         const py = c.cy + Math.sin(a) * R;
         // tangent of the circle
-        this.pen.link(ov, px, py, -Math.sin(a), Math.cos(a), i + k, this.segHp[k]! < (cfg.hp * 0.4) ? -0.5 : 0);
+        this.pen.link(ov, px, py, -Math.sin(a), Math.cos(a), i + k, this.segHp[k]! < cfg.hp * 0.4 ? -0.5 : 0);
         drawn++;
       }
       // joint beads between segments, glowing as the crush nears
@@ -1175,7 +1275,8 @@ export class NexusBehaviour extends Behaviour {
         this.fx.glow(jx, jy, 8 + closing * 6, 255, 60, 100, 0.3 + closing * 0.4);
       }
     }
-    if (c.on && closing > 0.8 && tick % 2 === 0) this.fx.glow(c.cx, c.cy, R + 10, 255, 60, 90, 0.16 * closing);
+    if (c.on && closing > 0.8 && tick % 2 === 0)
+      this.fx.glow(c.cx, c.cy, R + 10, 255, 60, 90, 0.16 * closing);
     if (!c.on && c.crushed) this.fx.glow(c.cx, c.cy, R + 24, 255, 120, 140, 0.55 * (c.fade / 14));
     void drawn;
     void m;
@@ -1210,7 +1311,7 @@ export class NexusBehaviour extends Behaviour {
       sh.x1 = fv.x + this.chOffX[i]!;
       sh.y1 = fv.y + this.chOffY[i]!;
       sh.width = 3;
-      out.push({ shape: asShape(sh), color: 0xff5a3affs, label: 'chain' });
+      out.push({ shape: asShape(sh), color: 0xff5a3aff, label: 'chain' });
     }
   }
 

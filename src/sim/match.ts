@@ -44,7 +44,7 @@ const TIMEOVER_PHASE_TICKS = 48;
 const DEFAULT_START_GAP = 380;
 const INFINITE_RESET_DELAY = 90;
 /** Fraction of missing matter that regrows (as scars) between rounds. */
-const ROUND_HEAL_FRACTION = 0.3;
+const ROUND_HEAL_FRACTION = 0.6;
 
 const q = (v: number, s: number): number => Math.round(v * s) | 0;
 
