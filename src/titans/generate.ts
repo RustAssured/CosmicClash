@@ -8,13 +8,14 @@ import {
 } from '@/contracts';
 import { paintAsteroid, type AsteroidRig } from './art/asteroid';
 import { paintLastOne, type LastOneRig } from './art/lastone';
+import { paintBlackHole, type BlackHoleRig } from './art/blackhole';
 import { paintNexus, type NexusRig } from './art/nexus';
 import { paintPlanet, type PlanetRig } from './art/planet';
 import { paintSupernova, type SupernovaRig } from './art/supernova';
 import { resolveMaterials } from './materialTable';
 
 /** Per-titan geometric rig produced alongside the pixels (anchor points the fighter needs: tendril roots, eye, core…). */
-export type TitanRig = LastOneRig | AsteroidRig | NexusRig | SupernovaRig | PlanetRig;
+export type TitanRig = LastOneRig | AsteroidRig | NexusRig | BlackHoleRig | SupernovaRig | PlanetRig;
 
 export interface PaintedTitan {
   map: MatterMap;
@@ -27,6 +28,7 @@ const PAINTERS: Partial<Record<TitanId, Painter>> = {
   lastone: paintLastOne as Painter,
   asteroid: paintAsteroid as Painter,
   nexus: paintNexus as Painter,
+  blackhole: paintBlackHole as Painter,
   supernova: paintSupernova as Painter,
   planet: paintPlanet as Painter,
 };

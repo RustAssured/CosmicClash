@@ -261,7 +261,7 @@ const slam: MoveDef = {
     chargePower: 0.9,
     chargeReach: [0.8, 1.35],
     /** The moon is flung at speed px/tick and hits for `energy` (× charge power) as CRUSH with a crater; recoil is the share of the energy the moon itself takes. */
-    slam: { speed: 9, energy: 1100, crater: 16, compress: 8, shock: 1.2, recoil: 0.14, life: 46 },
+    slam: { speed: 9, energy: 800, crater: 16, compress: 8, shock: 1.2, recoil: 0.14, life: 46 },
     ctl: { charge: 0.2, active: 0.25 },
     pose: { startup: { lean: -5 }, charge: { lean: -7 }, active: { lean: 5 } },
   },
@@ -308,7 +308,7 @@ const cataclysm: MoveDef = {
   tags: ['ultimate', 'armor', 'quake', 'moon'],
   extra: {
     /** After the quake each surviving moon is flung at the foe in turn: ticks after the quake between launches. */
-    barrage: { from: 66, gap: 10, speed: 11, energy: 900, crater: 14, compress: 7, shock: 1 },
+    barrage: { from: 66, gap: 10, speed: 11, energy: 700, crater: 14, compress: 7, shock: 1 },
     ctl: { startup: 0.1, active: 0.05, recovery: 0.3 },
     pose: { startup: { lean: -5 }, active: { lean: 3 } },
   },

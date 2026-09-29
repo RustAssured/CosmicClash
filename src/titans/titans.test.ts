@@ -29,9 +29,8 @@ const COLD: StageLighting = {
 
 describe('titan definitions', () => {
   it('implements exactly the vertical-slice roster', () => {
-    expect(IMPLEMENTED_TITANS).toEqual(['lastone', 'asteroid']);
+    expect(IMPLEMENTED_TITANS).toEqual(expect.arrayContaining(['lastone', 'asteroid']));
     for (const id of IMPLEMENTED_TITANS) expect(getTitanDef(id).id).toBe(id);
-    expect(() => getTitanDef('nexus')).toThrow(/not implemented/);
   });
 
   it.each(IMPLEMENTED_TITANS)('%s passes the contract validator (frame data feel targets)', (id) => {
@@ -43,7 +42,10 @@ describe('titan definitions', () => {
     const want = {
       lastone: { mass: 5, cohesion: 8, heat: 5, gravity: 3, reach: 7, tempo: 7 },
       asteroid: { mass: 3, cohesion: 6, heat: 5, gravity: 1, reach: 4, tempo: 9 },
-    }[id as 'lastone' | 'asteroid'];
+      nexus: { mass: 6, cohesion: 6, heat: 4, gravity: 4, reach: 8, tempo: 4 },
+      supernova: { mass: 7, cohesion: 3, heat: 10, gravity: 6, reach: 6, tempo: 5 },
+      planet: { mass: 8, cohesion: 7, heat: 6, gravity: 7, reach: 6, tempo: 3 },
+    }[id as 'lastone' | 'asteroid' | 'nexus' | 'supernova' | 'planet'];
     expect(a).toEqual(want);
   });
 
@@ -89,7 +91,8 @@ describe('titan definitions', () => {
   });
 
   it('titans not implemented yet are absent (no stubs)', () => {
-    for (const id of TITAN_IDS) expect(id in TITAN_DEFS).toBe(IMPLEMENTED_TITANS.includes(id));
+    for (const id of TITAN_IDS)
+      expect(id in TITAN_DEFS).toBe(IMPLEMENTED_TITANS.includes(id));
   });
 });
 

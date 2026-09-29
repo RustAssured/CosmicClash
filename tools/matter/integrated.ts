@@ -53,7 +53,15 @@ const match = createMatch(
             `   -> touched ${r.cellsTouched} removed ${r.cellsRemoved} mass ${r.massRemoved.toFixed(1)} | ` +
             `stats d(cells) ${after.cells - c0} d(mass) ${(after.mass - m0).toFixed(1)} | ledger err ${(w.ledger().error - L0.error).toExponential(1)}`,
         );
-        pending.push({ tick: match.tick, bodyId, m0, type: ev.type, energy: ev.energy });
+        lastHitTick = match.tick;
+        pending.push({
+          tick: match.tick,
+          bodyId,
+          m0,
+          type: ev.type,
+          energy: ev.energy,
+          imm: m0 - after.mass,
+        });
         return r;
       };
       return w;
@@ -70,19 +78,40 @@ interface Pend {
   m0: number;
   type: string;
   energy: number;
+  imm: number;
 }
 const pending: Pend[] = [];
+let lastMass = match.world.stats(1).mass;
+let lastHitTick = -9999;
+const lossBy = [0, 0, 0];
+const CHECKS = [20, 40, 90, 300, 900];
 match.setSources(createScriptSource(parseScript(arg('script0', '4:crush')), ROUND_INTRO_TICKS), null);
 for (let t = 0; t < ROUND_INTRO_TICKS + ticks; t++) {
   match.step();
-  for (let i = pending.length - 1; i >= 0; i--) {
-    const p = pending[i]!;
-    if (match.tick - p.tick >= 120) {
-      const s = match.world.stats(p.bodyId);
-      console.log(
-        `   .. ${p.type} E=${p.energy.toFixed(0)} @${p.tick}: after 120 ticks the body lost ${(((p.m0 - s.mass) / s.initialMass) * 100).toFixed(2)}% of its initial mass (massFrac ${s.massFrac.toFixed(3)})`,
-      );
-      pending.splice(i, 1);
+  {
+    const st = match.world.stats(1);
+    const d = lastMass - st.mass;
+    lastMass = st.mass;
+    if (d > 0) {
+      const since = match.tick - lastHitTick;
+      lossBy[since <= 30 ? 0 : since <= 300 ? 1 : 2]! += d;
     }
   }
+  for (const p of pending) {
+    for (const c of CHECKS) {
+      if (match.tick - p.tick !== c) continue;
+      const s = match.world.stats(p.bodyId);
+      const lost = p.m0 - s.mass;
+      console.log(
+        `   .. ${p.type} E=${p.energy.toFixed(0)} @${p.tick} +${c} ticks: lost ${((lost / s.initialMass) * 100).toFixed(2)}% of initial mass, of which immediate ${((p.imm / s.initialMass) * 100).toFixed(2)}% (delayed share ${lost > 0 ? (((lost - p.imm) / lost) * 100).toFixed(0) : 0}%)`,
+      );
+    }
+  }
+}
+{
+  const tot = lossBy[0]! + lossBy[1]! + lossBy[2]!;
+  if (tot > 0)
+    console.log(
+      `mass lost on body 1 by time since the latest blow: <=30 ticks ${((lossBy[0]! / tot) * 100).toFixed(0)}%, 31-300 ${((lossBy[1]! / tot) * 100).toFixed(0)}%, >300 ${((lossBy[2]! / tot) * 100).toFixed(0)}%`,
+    );
 }

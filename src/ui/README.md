@@ -24,10 +24,9 @@ showScreen(ui, 'controller', params?);          // jump to a screen (sandboxes, 
 | `implementedTitans`, `implementedStages` | what can be played now; the rest is shown greyed out |
 | `storage?`, `now?`, `newSeed?`, `version?`, `attractAfterSec?` | persistence, clocks and seeds (defaults: `localStorage`, `performance.now`, time-derived, 60 s) |
 | `sound?(id: UiSoundId)` | menu sounds: wire to `audio.handle([{ t: 'ui', id }])` |
-| `onQuality?(q)`, `onExtra?(a)` | **local adapters** for what `UIAction` cannot carry yet (render quality; training dummy / reset / heal). See `docs/proposals/400-b4-ui-input-audio-wiring.md` |
 
 Actions the UI emits: `startMatch`, `quitToTitle`, `resume`, `rematch`, `restartRound`, `unlockAudio` and `setVolume` (both on the
-first press on the boot screen, which is a real user gesture), `toggleTraining`, `setTrainingView`, `attractStart` / `attractStop`
+first press on the boot screen, which is a real user gesture), `toggleTraining`, `setTrainingView`, `setQuality` (options), `setDummy`, `resetPositions`, `healBoth` (pause menu, training), `attractStart` / `attractStop`
 (after `attractAfterSec` idle on the title). What the app must do with each is in the proposal doc and demonstrated by
 `dev/ui/main.ts`.
 
@@ -68,6 +67,11 @@ decoded hat, the actions currently held), **Remap** (press the input you want fo
 - Persistence (`settings.ts`) is guarded and sanitised: volumes, quality, last picks and the AI level survive a reload; corrupt
   storage is ignored.
 - `ui.update()` calls `input.pollIfStale()`: safe whether or not the app polled this frame.
+- **Robust to slow frames** (software GL runs the game at 1-2 fps): `update(dt)` caps a hitch at 1 s (a hidden tab must not skip the
+  idle timer or every fade) but passes honest 0.5 s frames through; input guards ("do not let a mashed button skip the result") use
+  `settled(ctx, seconds)`, which is true after that time OR after 3 frames, so they never swallow input for more than a few frames.
+- The results screen shows rounds, damage dealt (the share of the foe's starting mass that is gone, `damageDealt`) and mass left,
+  from `HudState`. The stage picker is driven by `implementedStages`: all five cards start their stage when they are listed.
 
 ## Performance
 
@@ -93,5 +97,5 @@ npx playwright test e2e/ui.spec.ts           # real browser: flows with fake pad
 ## Known limits
 
 - Korean text covers the precomposed syllables; standalone jamo (ㄱ, ㅏ…) and Hanja are not drawn.
-- The HUD is verified on fixture data and in the sandbox, not yet against a live match (the app owns that wiring).
+- The HUD is verified on fixture data (all six phases: intro, fight, ko, timeover, roundend, matchend) and in the sandbox, not yet against a live match (the app owns that wiring). Damage dealt is net mass removed: an accretor that regrew is under-counted.
 - No touch or mouse control: the game is for a pad or a keyboard.

@@ -85,6 +85,86 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
   expect(r.scoreCalmRmsDb).toBeGreaterThan(-45);
   expect(r.scoreHotRmsDb).toBeLessThan(-12);
 
+  // --- the four newer titans: every event audible and not hot, and each voice does what its design says
+  const t = r.titans!;
+  expect(t, 'the report carries the titan section').not.toBeNull();
+  expect(t.events.length).toBeGreaterThan(60);
+  for (const e of t.events) {
+    expect(e.peakDb, `${e.name} is inaudible`).toBeGreaterThan(-26);
+    expect(e.peakDb, `${e.name} is hot before the limiter`).toBeLessThan(-3);
+    expect(e.tailSec, `${e.name} never decays`).toBeLessThan(6);
+  }
+  const by = Object.fromEntries(t.character.map((c) => [c.titan, c]));
+  // materials, by the brightness of the body voice: glass > chain > plasma > rock > planet rumble
+  const order = ['lastone', 'nexus', 'supernova', 'asteroid', 'planet'] as const;
+  for (let i = 1; i < order.length; i++)
+    expect(
+      by[order[i - 1]!]!.bodyCentroidHz,
+      `${order[i - 1]} should be brighter than ${order[i]}`,
+    ).toBeGreaterThan(by[order[i]!]!.bodyCentroidHz);
+  expect(by.blackhole!.bedSubShare, 'the black hole lives in the sub-bass').toBeGreaterThan(
+    Math.max(...t.character.filter((c) => c.titan !== 'blackhole').map((c) => c.bedSubShare)),
+  );
+  expect(t.blackHole.heavyHz, 'more mass, lower drone').toBeLessThan(t.blackHole.lightHz * 0.8);
+  expect(t.blackHole.sparkleDb, 'Hawking glitter as it runs out of mass').toBeGreaterThan(8);
+  expect(t.nexus.beatsPerSecHigh, 'the graph pulses faster when more of it is lit').toBeGreaterThan(
+    t.nexus.beatsPerSecLow * 1.8,
+  );
+  expect(t.supernova.bedFullDb, 'the roar fades with the fuel').toBeGreaterThan(t.supernova.bedStarvedDb + 2);
+  expect(t.planet.windBeforeDb - t.planet.windAfterDb, 'the wind dies with the atmosphere').toBeGreaterThan(
+    4,
+  );
+
+  // --- the five stage scores: five characters, in key, and intensity adds music rather than gain
+  const st = r.stages!;
+  const S = Object.fromEntries(st.stages.map((m) => [m.stage, m]));
+  const fighting = [S.nursery!, S.rim!, S.redgiant!, S.quasar!];
+  expect(st.stages).toHaveLength(5);
+  expect(st.minPairDistance, 'two stages sound alike').toBeGreaterThan(0.8);
+  for (const m of st.stages) {
+    expect(m.calmBassFitCents, `${m.stage} drone is out of key`).toBeLessThan(35);
+    expect(m.padFitCents, `${m.stage} pad is out of key`).toBeLessThan(35);
+    expect(m.hotFitCents, `${m.stage} fight is out of key`).toBeLessThan(35);
+    expect(m.hotPeakDb, `${m.stage} score peak`).toBeLessThan(-8);
+    expect(m.hotPeakDb, `${m.stage} score is louder at full intensity`).toBeGreaterThan(m.calmPeakDb);
+  }
+  // Tussenruimte: near-silent stillness with glass motes
+  for (const m of fighting) {
+    expect(S.tussenruimte!.calmRmsDb, `stiller than ${m.stage} (calm)`).toBeLessThan(m.calmRmsDb - 7);
+    expect(S.tussenruimte!.hotRmsDb, `stiller than ${m.stage} (fight)`).toBeLessThan(m.hotRmsDb - 7);
+    expect(S.tussenruimte!.hotMotesPerMin, `more motes than ${m.stage}`).toBeGreaterThan(
+      m.hotMotesPerMin * 2,
+    );
+    expect(S.tussenruimte!.calmCentroidHz, 'its energy is glass, high above the others').toBeGreaterThan(
+      m.calmCentroidHz * 3,
+    );
+  }
+  expect(S.tussenruimte!.hotHitsPerBar, 'no rhythm at all').toBe(0);
+  // Quasar: tense and sparse. Rim: vast and slow. Red Giant: mournful, heavy, dark. Nursery: warm and open.
+  for (const m of [S.nursery!, S.rim!, S.redgiant!])
+    expect(S.quasar!.hotHitsPerBar, `quasar is sparser than ${m.stage}`).toBeLessThan(m.hotHitsPerBar * 0.6);
+  for (const m of [S.nursery!, S.redgiant!, S.quasar!])
+    expect(S.rim!.bpm, `rim is slower than ${m.stage}`).toBeLessThan(m.bpm);
+  expect(S.rim!.calmCentroidHz, 'rim is deeper than the nursery').toBeLessThan(S.nursery!.calmCentroidHz);
+  for (const m of [S.nursery!, S.rim!, S.quasar!]) {
+    expect(S.redgiant!.calmCentroidHz, `red giant is darker than ${m.stage}`).toBeLessThan(m.calmCentroidHz);
+    expect(S.redgiant!.hotLowShare, `red giant is heavier than ${m.stage}`).toBeGreaterThan(m.hotLowShare);
+  }
+  for (const m of [S.rim!, S.redgiant!, S.quasar!])
+    expect(S.nursery!.hotCentroidHz, `nursery is brighter than ${m.stage}`).toBeGreaterThan(m.hotCentroidHz);
+  // intensity is MUSIC: layers join one by one, hits multiply, while the level barely moves (RMS lift of a few dB at most)
+  expect(st.layersByIntensity[0]).toBeLessThanOrEqual(1);
+  expect(st.layersByIntensity.at(-1)!).toBeGreaterThanOrEqual(4);
+  for (let i = 1; i < 5; i++) {
+    expect(st.layersByIntensity[i]!).toBeGreaterThanOrEqual(st.layersByIntensity[i - 1]!);
+    expect(st.hitsPerBarByIntensity[i]!).toBeGreaterThanOrEqual(st.hitsPerBarByIntensity[i - 1]!);
+  }
+  for (const m of fighting) {
+    expect(m.hotHitsPerBar - m.calmHitsPerBar, `${m.stage}: the fight adds rhythm`).toBeGreaterThan(3);
+    expect(m.hotLayers, `${m.stage}: the fight adds layers`).toBeGreaterThan(m.calmLayers);
+    expect(m.hotRmsDb - m.calmRmsDb, `${m.stage}: intensity is not just louder`).toBeLessThan(4);
+  }
+
   // --- volume: master 0 is silent, master 0.5 is −12 dB (squared taper) because master sits AFTER the dynamics
   expect(r.gainMasterZeroPeak).toBeLessThan(1e-4);
   expect(r.gainHalfDb).toBeGreaterThan(-13.5);

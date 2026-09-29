@@ -48,9 +48,9 @@ export interface PlanetRig {
   coreR: number;
   tilt: number;
   moons: MoonSpec[];
-  /** Per map cell: sphere z (0..255), longitude and latitude indices (0..255), 255/0 outside the disc. Lighting-independent. */
+  /** Per map cell: sphere z (0..255), longitude (0..65535 around the sphere) and latitude (0..127) indices, 255/0 outside the disc. Lighting-independent. */
   nz: Uint8Array;
-  lon: Uint8Array;
+  lon: Uint16Array;
   lat: Uint8Array;
   /** Wrapping cloud density texture, 256 (lon) × 128 (lat), 0..255. */
   clouds: Uint8Array;
@@ -121,6 +121,7 @@ function buildClouds(seed: number): Uint8Array {
   const W = 256;
   const H = 128;
   const out = new Uint8Array(W * H);
+  const raw = new Float32Array(W * H);
   const s = (seed & 0xfff) + 77;
   const stormX = 0.42 * W;
   const stormY = 0.62 * H;
@@ -130,7 +131,7 @@ function buildClouds(seed: number): Uint8Array {
       const lat = (y / H - 0.5) * Math.PI;
       const band = 0.5 + 0.5 * Math.sin(lat * 7 + 1.2 * periodic(x * 0.03, y * 0.05, W * 0.03, s + 3, 2));
       const n = periodic(u * 9, y * 0.06, 9, s, 4) * 0.7 + periodic(u * 20, y * 0.13, 20, s + 9, 3) * 0.3;
-      let d = 0.42 * n + 0.32 * band - 0.08;
+      let d = 0.5 + 0.55 * n + 0.3 * band - 0.42;
       // cyclone: a spiral arm pattern around the storm eye
       let dx = x - stormX;
       if (dx > W / 2) dx -= W;
@@ -142,8 +143,14 @@ function buildClouds(seed: number): Uint8Array {
         const arm = 0.5 + 0.5 * Math.cos(th * 2);
         d = Math.max(d, 0.85 * arm * (1 - r / 34) + (r < 4 ? -1 : 0) * 0.5);
       }
-      out[y * W + x] = clamp(Math.round(smoothstep(0.32, 0.62, d) * 255), 0, 255);
+      raw[y * W + x] = d;
     }
+  // normalise: the densest ~38% of the sphere becomes cloud, with soft edges
+  const sorted = Float32Array.from(raw).sort();
+  const thr = sorted[Math.floor(sorted.length * 0.68)]!;
+  const top = sorted[Math.floor(sorted.length * 0.95)]!;
+  for (let i = 0; i < raw.length; i++)
+    out[i] = Math.round(smoothstep(thr - 0.03 * (top - thr), thr + 0.35 * (top - thr), raw[i]!) * 255);
   cloudCache.set(seed, out);
   return out;
 }
@@ -198,7 +205,7 @@ export function buildPlanetRig(def: TitanDef, seed: number): PlanetRig {
   const W = def.art.w;
   const H = def.art.h;
   const nz = new Uint8Array(W * H);
-  const lon = new Uint8Array(W * H);
+  const lon = new Uint16Array(W * H);
   const lat = new Uint8Array(W * H);
   const cx = CX(def) + 0.5;
   const cy = CY(def) + 0.5;
@@ -208,7 +215,7 @@ export function buildPlanetRig(def: TitanDef, seed: number): PlanetRig {
       if (!sphere((x + 0.5 - cx) / p.radius, (y + 0.5 - cy) / p.radius, p.tilt, q)) continue;
       const i = y * W + x;
       nz[i] = Math.round(q.nz * 255);
-      lon[i] = Math.round(((q.lon / Math.PI) * 0.5 + 0.5) * 255);
+      lon[i] = Math.round(((q.lon / Math.PI) * 0.5 + 0.5) * 65535);
       lat[i] = Math.round((q.lat / Math.PI + 0.5) * 127);
     }
   return {
@@ -303,8 +310,15 @@ export function paintPlanet(
         // the real materials, by depth
         const d = rd - r;
         let m: number;
-        if (d < p.surface + 0.6 * fbm(x * 0.2, y * 0.2, sA + 9, 2)) m = cls[i]!;
-        else if (d < p.crust) m = I.crust;
+        if (d < p.surface + 0.6 * fbm(x * 0.2, y * 0.2, sA + 9, 2)) {
+          m = cls[i]!;
+          // mountain ranges crossing the limb: land there is bare rock (the face colours already blend into it)
+          if (
+            (m === I.forest || m === I.desert) &&
+            fbm(Math.cos(th) * 2.6 + 3, Math.sin(th) * 2.6 - 1, sB + 44, 3) > 0.16
+          )
+            m = I.mountain;
+        } else if (d < p.crust) m = I.crust;
         else if (r > p.magmaR + 2 * fbm(x * 0.13, y * 0.13, sB + 4, 2)) m = I.mantle;
         else if (r > p.coreR + 1.2 * fbm(x * 0.2, y * 0.2, sA + 1, 2)) m = I.magma;
         else m = I.core;

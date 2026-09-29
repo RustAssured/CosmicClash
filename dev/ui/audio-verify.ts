@@ -73,15 +73,31 @@ export interface VerifyReport {
   uiMaxTailSec: number;
 }
 
-/** A worst-case event storm: everything at once, over `seconds`, from both titans. */
+/** A worst-case event storm: everything at once, over `seconds`, from all six titans (their releases, cues, surges, ultimates). */
 function storm(seconds: number, eng: AudioEngineExt): number {
   let n = 0;
   const types = ['FRACTURE', 'ASSIMILATION', 'TIDAL', 'THERMAL', 'CRUSH', 'KINETIC'] as const;
+  const roster: TitanId[] = ['lastone', 'nexus', 'blackhole', 'supernova', 'planet', 'asteroid'];
+  const cues = [
+    'sever',
+    'dark',
+    'lost',
+    'shed',
+    'break',
+    'boil',
+    'strip',
+    'collapse',
+    'harvest',
+    'swarm',
+    'merge',
+  ];
   for (let i = 0; i < 480; i++) {
     const t = 0.05 + (i / 480) * (seconds - 0.5);
+    const titan = roster[i % 6]!;
     const evs: AudioEvent[] = [
       hit({
         type: types[i % 6]!,
+        titan,
         energy: 6000 + (i % 5) * 700,
         heavy: i % 3 === 0,
         onDamaged: 0.8,
@@ -94,18 +110,28 @@ function storm(seconds: number, eng: AudioEngineExt): number {
       {
         t: 'release',
         slot: (i % 2) as 0 | 1,
-        titan: i % 2 ? 'asteroid' : 'lastone',
-        moveId: i % 2 ? 'asteroid.meteor' : 'lastone.shatter',
+        titan,
+        moveId: `${titan}.crush`,
         moveSlot: 'crush',
         x: 800,
         y: 300,
         power: 1,
       },
+      {
+        t: 'cue',
+        slot: (i % 2) as 0 | 1,
+        titan,
+        id: `${titan}-${cues[i % cues.length]}`,
+        x: 800,
+        y: 300,
+        amount: 1,
+      },
+      { t: 'surge', slot: (i % 2) as 0 | 1, titan, x: 800, y: 300, dirX: 1, dirY: 0 },
     ];
     if (i % 40 === 0)
       evs.push(
         { t: 'ko', slot: (i % 2) as 0 | 1, x: 800, y: 300 },
-        { t: 'ultimate', slot: 0, titan: 'lastone', phase: 'start', x: 800, y: 300 },
+        { t: 'ultimate', slot: 0, titan: roster[(i / 40) % 6]!, phase: 'start', x: 800, y: 300 },
       );
     eng.handleAt(evs, t);
     n += evs.length;

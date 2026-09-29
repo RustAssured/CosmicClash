@@ -10,6 +10,7 @@ export {
 } from './generate';
 export type { LastOneRig, TendrilRoot } from './art/lastone';
 export type { AsteroidRig } from './art/asteroid';
+export type { BlackHoleRig } from './art/blackhole';
 export {
   groupNexusCells,
   type NexusRig,

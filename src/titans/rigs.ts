@@ -1,6 +1,7 @@
 import type { TitanDef } from '@/contracts';
 import { buildAsteroidRig } from './art/asteroid';
 import { buildLastOneRig } from './art/lastone';
+import { buildBlackHoleRig } from './art/blackhole';
 import { buildNexusRig } from './art/nexus';
 import { buildPlanetRig } from './art/planet';
 import { buildSupernovaRig } from './art/supernova';
@@ -15,6 +16,8 @@ export function buildRigFor(def: TitanDef, seed: number): TitanRig {
       return buildAsteroidRig(def, seed);
     case 'nexus':
       return buildNexusRig(def, seed);
+    case 'blackhole':
+      return buildBlackHoleRig(def, seed);
     case 'supernova':
       return buildSupernovaRig(def, seed);
     case 'planet':

@@ -215,7 +215,7 @@ Each module has its own `README.md` (public API, invariants, tuning knobs, how t
 
 ```bash
 npx tsx tools/ui/sheet.ts            # render every UI screen to .scratch/ui/*.png (Node, no browser)
-npx tsx tools/ui/audio-verify.ts     # numeric audio verification in headless Chromium (--quick, --json)
+npx tsx tools/ui/audio-verify.ts     # numeric audio verification in headless Chromium (--quick, --titans, --stages, --body, --json)
 npx vitest run src/input src/ui src/audio
 npx playwright test e2e/controller.spec.ts e2e/ui.spec.ts e2e/ui-audio.spec.ts
 ```

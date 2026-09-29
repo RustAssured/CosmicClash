@@ -2,18 +2,20 @@ import { Rng, STAGE_IDS, type StageId } from '@/contracts';
 import { midiToHz } from '@/audio/dsp/math';
 import { MODES, STAGE_FEEL, STAGE_MUSIC, fifthOf } from '@/audio/dsp/scales';
 import { STEPS_PER_BAR, planStep, stepSeconds } from '@/audio/score/plan';
-import { bandShare, envelopeDb, peakFrequency, spectralCentroid } from '@/audio/dsp/analysis';
+import { bandShare, peakFrequency, spectralCentroid } from '@/audio/dsp/analysis';
 import { SR, peak, render, rms, scene, settle, toDb, type Rendered } from './audio-render';
 
 /**
  * Stage scores, in numbers. Each stage's score is rendered alone (no fighters, no effects, no limiter) in a calm menu and in a
- * full-intensity fight, and described by how loud, how bright and how low it sits, how much rhythm the planner gives it, whether
- * what it plays is IN KEY (the drone's dominant pitch against the stage's root and fifth, the pad's against its scale) and
- * whether the rhythm layers keep time with the bar. Rhythm is counted from the planner (the same `planStep` the engine runs,
- * seeded the same way) rather than guessed from the waveform: onset detection on a sustained pad is noise, the planner is exact.
+ * full-intensity fight, and described by how loud, how bright and how low it sits, how much rhythm the planner gives it, and
+ * whether what it plays is IN KEY (the drone's dominant pitch against the stage's root and fifth, the pad's and the fight's
+ * against its scale). Rhythm is counted from the planner (the same `planStep` the engine runs, seeded the same way) rather than
+ * guessed from the waveform: onset detection on a sustained pad is noise (a first attempt at measuring "on the grid" that way
+ * agreed with chance), the planner is exact. That the planned steps are then scheduled on the sixteenth-note grid is the
+ * engine's own arithmetic, covered by the score unit tests.
  *
- * It is the evidence that the five stages differ in character and that intensity adds MUSIC (layers, in key, on the beat) rather
- * than just gain. Whether they are beautiful is for ears.
+ * It is the evidence that the five stages differ in character and that intensity adds MUSIC (layers, in key) rather than just
+ * gain. Whether they are beautiful is for ears.
  */
 export interface StageMetrics {
   stage: StageId;
@@ -44,9 +46,6 @@ export interface StageMetrics {
   padFitCents: number;
   /** The same for the full fight's dominant pitch in 100-800 Hz (drone, pad, taiko bodies; below that the sub pulse sweeps). */
   hotFitCents: number;
-  /** Low-band attacks found in the fight (rises of 6 dB in 10 ms) and the share of them within 25 ms of a 16th-note line. */
-  gridOnsets: number;
-  onGridShare: number;
 }
 
 export interface StageReport {
@@ -61,18 +60,6 @@ export interface StageReport {
 const SECONDS = 14;
 const FROM = SR * 2;
 
-/** One-pole low-pass. */
-function lowpass(x: Float32Array, hz: number): Float32Array {
-  const a = 1 - Math.exp((-2 * Math.PI * hz) / SR);
-  const y = new Float32Array(x.length);
-  let s = 0;
-  for (let i = 0; i < x.length; i++) {
-    s += a * (x[i]! - s);
-    y[i] = s;
-  }
-  return y;
-}
-
 /** Distance in cents from `hz` to the nearest pitch class in `classes` (semitones above `rootHz`, mod 12). */
 function centsToClasses(hz: number, rootHz: number, classes: readonly number[]): number {
   if (hz <= 0) return Infinity;
@@ -83,28 +70,6 @@ function centsToClasses(hz: number, rootHz: number, classes: readonly number[]):
     best = Math.min(best, Math.abs(d - 6) * 100);
   }
   return best;
-}
-
-/**
- * Attacks in the low band of `x` (below 250 Hz: sub pulses and taiko), and how many fall on the sixteenth-note grid the score
- * plans on (steps `stepSec` apart, the first at 20 ms): the evidence that the rhythm layers keep time with the bar.
- */
-function gridAlignment(x: Float32Array, stepSec: number): { onsets: number; onGrid: number } {
-  const win = Math.round(SR * 0.01);
-  const env = envelopeDb(lowpass(x, 250), win);
-  const first = Math.ceil(FROM / win);
-  let onsets = 0;
-  let onGrid = 0;
-  let last = -1;
-  for (let i = first + 1; i < env.length; i++) {
-    if (env[i]! - env[i - 1]! < 6 || env[i]! < -70 || i - last < 6) continue;
-    last = i;
-    onsets++;
-    const t = ((i + 0.5) * win) / SR - 0.02;
-    const off = Math.abs(t / stepSec - Math.round(t / stepSec)) * stepSec;
-    if (off <= 0.025) onGrid++;
-  }
-  return { onsets, onGrid };
 }
 
 interface Rhythm {
@@ -158,10 +123,7 @@ async function measure(stage: StageId): Promise<StageMetrics> {
   const hot = await stageRender(stage, 'fight', 1);
   const rootHz = midiToHz(music.root);
   const scaleClasses = MODES[music.mode] as readonly number[];
-
-  const grid = gridAlignment(hot.mono, stepSeconds(music.bpm, 1));
   const droneClasses = [0, (fifthOf(music) - music.root) % 12];
-
   const padPeak = peakFrequency(calm.mono, SR, 150, 1500, FROM, 131072);
   const calmPlan = planned(stage, 'menu', 0);
   const hotPlan = planned(stage, 'fight', 1);
@@ -190,8 +152,6 @@ async function measure(stage: StageId): Promise<StageMetrics> {
     padPeakHz: padPeak,
     padFitCents: centsToClasses(padPeak, rootHz, scaleClasses),
     hotFitCents: centsToClasses(peakFrequency(hot.mono, SR, 100, 800, FROM, 131072), rootHz, scaleClasses),
-    gridOnsets: grid.onsets,
-    onGridShare: grid.onsets >= 3 ? grid.onGrid / grid.onsets : Number.NaN,
   };
 }
 

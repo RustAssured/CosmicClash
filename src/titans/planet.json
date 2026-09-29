@@ -785,7 +785,7 @@
         "chargeReach": [0.8, 1.35],
         "slam": {
           "speed": 9,
-          "energy": 1100,
+          "energy": 800,
           "crater": 16,
           "compress": 8,
           "shock": 1.2,
@@ -1036,7 +1036,7 @@
           "from": 66,
           "gap": 10,
           "speed": 11,
-          "energy": 900,
+          "energy": 700,
           "crater": 14,
           "compress": 7,
           "shock": 1

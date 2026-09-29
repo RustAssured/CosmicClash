@@ -53,6 +53,9 @@ phaseSel.value = 'fight';
 
 const intensity = $<HTMLInputElement>('intensity');
 const integrity = $<HTMLInputElement>('integrity');
+const massA = $<HTMLInputElement>('massA');
+const resourceA = $<HTMLInputElement>('resourceA');
+const speedA = $<HTMLInputElement>('speedA');
 const state = { scoreOn: false };
 
 const scene = (): AudioScene => {
@@ -69,8 +72,17 @@ const scene = (): AudioScene => {
     timeScale: 1,
     fighters: fight
       ? [
-          { titan: a, x: 700, speed: 60, massFrac: 1, charge: 0, resource: 10, meter: 0.3, state: 'idle' },
-          { titan: b, x: 900, speed: 40, massFrac: 1, charge: 0, resource: 10, meter: 0.3, state: 'idle' },
+          {
+            titan: a,
+            x: 700,
+            speed: Number(speedA.value),
+            massFrac: Number(massA.value), // may exceed 1 for the accreting titans
+            charge: 0,
+            resource: Number(resourceA.value), // 0..1 in the contract
+            meter: 0.3,
+            state: 'idle',
+          },
+          { titan: b, x: 900, speed: 40, massFrac: 1, charge: 0, resource: 0.6, meter: 0.3, state: 'idle' },
         ]
       : null,
   };
@@ -103,6 +115,20 @@ interface Entry {
   label: string;
   events: (a: TitanId, b: TitanId) => AudioEvent[];
 }
+/** Every keyword the engine understands in a `cue` id (a titan's own ids are matched on these; anything else is a generic blip). */
+const CUE_WORDS = [
+  'sever',
+  'dark',
+  'lost',
+  'shed',
+  'break',
+  'boil',
+  'strip',
+  'collapse',
+  'harvest',
+  'swarm',
+  'merge',
+] as const;
 const TYPES: DamageType[] = ['FRACTURE', 'ASSIMILATION', 'TIDAL', 'THERMAL', 'CRUSH', 'KINETIC'];
 const MOVES: Record<string, string[]> = {
   lastone: ['lastone.lash', 'lastone.lunge', 'lastone.shatter', 'lastone.gaze'],
@@ -229,15 +255,23 @@ const groups: { name: string; entries: (a: TitanId, b: TitanId) => Entry[] }[] =
     ],
   },
   {
-    name: 'Titan cues',
+    name: 'Titan cues (A, then B: every keyword the voices know)',
     entries: (a, b) => [
+      ...CUE_WORDS.map((w) => ({
+        label: `A ${a}-${w}`,
+        events: () => [
+          { t: 'cue', slot: 0, titan: a, id: `${a}-${w}`, x: 700, y: 300, amount: 1 } as AudioEvent,
+        ],
+      })),
+      ...CUE_WORDS.map((w) => ({
+        label: `B ${b}-${w}`,
+        events: () => [
+          { t: 'cue', slot: 1, titan: b, id: `${b}-${w}`, x: 900, y: 300, amount: 1 } as AudioEvent,
+        ],
+      })),
       {
-        label: 'tendril-sever',
-        events: () => [{ t: 'cue', slot: 0, titan: a, id: 'tendril-sever', x: 700, y: 300, amount: 1 }],
-      },
-      {
-        label: 'fragment-lost',
-        events: () => [{ t: 'cue', slot: 1, titan: b, id: 'fragment-lost', x: 900, y: 300, amount: 1 }],
+        label: 'unknown id (generic)',
+        events: () => [{ t: 'cue', slot: 0, titan: a, id: 'zzz', x: 700, y: 300, amount: 0.5 } as AudioEvent],
       },
     ],
   },
@@ -264,14 +298,14 @@ const groups: { name: string; entries: (a: TitanId, b: TitanId) => Entry[] }[] =
   },
   {
     name: 'Stress',
-    entries: (a, b) => [
+    entries: () => [
       {
         label: 'event storm (limiter test)',
         events: () => {
           const out: AudioEvent[] = [];
           for (let i = 0; i < 24; i++) {
             out.push(
-              hit(i % 2 ? b : a, TYPES[i % 6]!, {
+              hit(TITAN_IDS[i % 6]!, TYPES[i % 6]!, {
                 energy: 7000,
                 heavy: i % 3 === 0,
                 onDamaged: 0.8,
@@ -324,7 +358,7 @@ const bind = (id: string, key: 'master' | 'music' | 'sfx'): void => {
 bind('vMaster', 'master');
 bind('vMusic', 'music');
 bind('vSfx', 'sfx');
-for (const id of ['intensity', 'integrity']) {
+for (const id of ['intensity', 'integrity', 'massA', 'resourceA', 'speedA']) {
   const el = $<HTMLInputElement>(id);
   el.addEventListener('input', () => ($(`${id}V`).textContent = Number(el.value).toFixed(2)));
 }

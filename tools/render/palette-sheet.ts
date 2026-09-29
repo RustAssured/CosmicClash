@@ -18,7 +18,8 @@ for (const id of STAGE_IDS) {
   lens.forEach((n, row) => {
     for (let k = 0; k < n; k++) {
       const c = hex(info.palette[i++]!);
-      for (let y = 0; y < SW - 2; y++) for (let x = 0; x < SW - 2; x++) px[(row * SW + y) * w + k * SW + x] = c;
+      for (let y = 0; y < SW - 2; y++)
+        for (let x = 0; x < SW - 2; x++) px[(row * SW + y) * w + k * SW + x] = c;
     }
   });
   writePng(`.scratch/render/palette-${id}.png`, px, w, h, 2, 0xff000000);

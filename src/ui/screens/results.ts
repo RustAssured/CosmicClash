@@ -142,10 +142,10 @@ export function createResultsScreen(): Screen {
           ],
         ];
         rows.forEach(([label, a, b], i) => {
-          const y = 146 + i * 22;
-          drawText(cv, label, cx, y, { color: C.dim, font: 'micro', align: 'center', tracking: 1 });
-          drawText(cv, a, cx - 20, y + 9, { color: C.p1, align: 'center' });
-          drawText(cv, b, cx + 20, y + 9, { color: C.p2, align: 'center' });
+          const y = 143 + i * 26;
+          drawText(cv, label, cx, y, { color: C.soft, font: 'micro', align: 'center', tracking: 1 });
+          drawText(cv, a, cx - 28, y + 10, { color: C.p1, align: 'center' });
+          drawText(cv, b, cx + 28, y + 10, { color: C.p2, align: 'center' });
         });
       }
       drawCentreMenu(ctx, menu, cx, 232, 24, accentRamp('#a8bdb2'));

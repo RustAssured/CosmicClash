@@ -109,9 +109,9 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| gaze | 0–20 | line | FRACTURE | 40 /1t | PIERCE|CONTINUOUS | penetration=40, scatter=0.5 | 8,0 | 0.05 |
+| gaze | 0–20 | line | FRACTURE | 24 /1t | PIERCE|CONTINUOUS | penetration=40, scatter=0.5 | 8,0 | 0.05 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 800.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 480.
 
 Data-driven extras: `{"chargePower":1,"chargeReach":[0.8,1.2],"pose":{"startup":{"lean":-3},"charge":{"lean":-5},"active":{"lean":2}}}`
 
@@ -123,10 +123,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| sweep | 8–70 | line (sweeps) | FRACTURE | 80 /2t | PIERCE|CONTINUOUS | penetration=30, scatter=0.8 | 8,0 | 0.1 |
-| shear | 70–78 | cone | FRACTURE | 2200 | PIERCE|SEED_CRACK|UNBLOCKABLE | crackSeeds=12, crackStress=320, penetration=26, scatter=1.6 | 520,-80 | 1 |
+| sweep | 8–70 | line (sweeps) | FRACTURE | 92 /2t | PIERCE|CONTINUOUS | penetration=30, scatter=0.8 | 8,0 | 0.1 |
+| shear | 70–78 | cone | FRACTURE | 2530 | PIERCE|SEED_CRACK|UNBLOCKABLE | crackSeeds=12, crackStress=320, penetration=26, scatter=1.6 | 520,-80 | 1 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 7160.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 8234.
 
 Data-driven extras: `{"pose":{"startup":{"lean":-6},"active":{"lean":4},"recovery":{"lean":0}},"halo":true,"ctl":{"startup":0.1,"active":0.06,"recovery":0.3}}`
 
@@ -199,9 +199,9 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| ram | 0–10 | point | KINETIC | 1350 | EMBED | embed=6, embedDelay=40, crater=20, penetration=22, scatter=1.3 | 820,-120 | 1 |
+| ram | 0–10 | point | KINETIC | 1147.5 | EMBED | embed=6, embedDelay=40, crater=20, penetration=22, scatter=1.3 | 820,-120 | 1 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1350.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1148.
 
 Data-driven extras: `{"recoil":0.9,"pose":{"startup":{"lean":-9},"active":{"lean":13},"recovery":{"lean":4}}}`
 
@@ -233,10 +233,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| storm | 8–60 | line | KINETIC | 100 /6t | PIERCE | scatter=1.2, crater=5, penetration=8 | -35,-6 | 0.3 |
-| slam | 64–74 | point | KINETIC | 2200 | EMBED|UNBLOCKABLE | embed=10, embedDelay=36, crater=28, penetration=30, scatter=1.6 | 900,-160 | 1 |
+| storm | 8–60 | line | KINETIC | 70 /6t | PIERCE | scatter=1.2, crater=5, penetration=8 | -35,-6 | 0.3 |
+| slam | 64–74 | point | KINETIC | 1650 | EMBED|UNBLOCKABLE | embed=10, embedDelay=36, crater=28, penetration=30, scatter=1.6 | 900,-160 | 1 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 2300.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1720.
 
 Data-driven extras: `{"pose":{"startup":{"lean":-6},"active":{"lean":6}},"cascade":{"count":40,"energy":0,"life":84,"sweepFrom":8,"sweepTo":64},"ctl":{"startup":0.1,"active":0.1,"recovery":0.3}}`
 
@@ -245,5 +245,462 @@ Data-driven extras: `{"pose":{"startup":{"lean":-6},"active":{"lean":6}},"cascad
 Startup **3** · active **0** · recovery **5** = **8 ticks** (0.13 s); cancel window 0; hit-stop base 0. Tags: `guard`.
 
 Data-driven extras: `{"shell":{"absorb":{"KINETIC":0.75,"CRUSH":0.5,"FRACTURE":0.4,"THERMAL":0.1,"TIDAL":0.2,"ASSIMILATION":0.25}}}`
+
+Validation against the feel targets: all clear.
+
+## The Nexus · 넥서스 — *De Nexus*
+
+> Everything connects. Everything is mine.
+
+| MASS | COHESION | HEAT | GRAVITY | REACH | TEMPO |
+|---|---|---|---|---|---|
+| 6 | 6 | 4 | 4 | 8 | 4 |
+
+- **Destruction signature:** ASSIMILATION
+- **Resource:** Nodes (마디) — max 16, start 12, shown as pips
+- **Passive — Growth:** Matter harvested from the enemy is built into the graph: new nodes bud, the frame thickens and the Nexus slowly grows heavier.
+- **Failure mode — Dark Nodes:** Chains are the only links between nodes. Cut one and the far side of the graph goes dark and breaks away; a Nexus with few live nodes is short of reach, harvest and cage.
+- **AI personality:** Builds, traps and encloses: roots the foe with Constrict, keeps chains attached, harvests what it infected and retreats to regrow; goes for the Enclosed Eye when the foe is slowed or cornered.
+- **Accent colours:** `#d63a4e`, `#8fd4ff`
+- **Art recipe:** 224×208 map, core (112, 104) r=6
+
+### Materials
+
+| key | physics archetype | overrides | emissive | ramp (dark → light) |
+|---|---|---|---|---|
+| crystal | crystal | — | 46 | `#0f0a2a` `#241556` `#4a2792` `#8a39bd` `#c760d6` `#8fc4ff` `#d4ecff` `#ffffff` |
+| hubcore | core | — | 230 | `#8a1050` `#e0307a` `#ff7aa8` `#ffc4d8` `#fff2f6` |
+| chain | chain | — | 0 | `#140609` `#2a0d13` `#48141e` `#6a1c26` `#8f262f` `#b83a38` `#dc5f4a` `#ffb59a` |
+| node | node | — | 84 | `#1e0410` `#4a0818` `#7c0c28` `#b0143a` `#dc1e48` `#f8506a` `#ffb0b8` |
+| nodecore | node | — | 230 | `#7a0c30` `#d4204a` `#ff5a78` `#ffb0bc` `#fff0f2` |
+| lattice | lattice | — | 36 | `#2a0612` `#5c0e28` `#8e1a3c` `#c2304e` `#ee6078` `#ffb0bc` |
+| deadnode | node | — | 0 | `#141012` `#241e20` `#382f32` `#50464a` `#6c6266` `#8a8084` |
+
+### Moves
+
+| move | slot | startup | active | recovery | total | seconds |
+|---|---|---|---|---|---|---|
+| Latch | strike | 12 | 8 | 20 | 40 | 0.67 s |
+| Constrict | crush | 30 | 12 | 42 | 84 | 1.40 s |
+| Slither | surge | 3 | 22 | 26 | 51 | 0.85 s |
+| Harvest | signature | 14 | 30 | 26 | 70 | 1.17 s |
+| Ingesloten Oog | ultimate | 66 | 110 | 64 | 240 | 4.00 s |
+
+**Guard — Chain Mesh:** absorbs KINETIC 80% · FRACTURE 55% · CRUSH 50% · ASSIMILATION 40% · TIDAL 30% · THERMAL 12% of incoming energy while healthy.
+
+#### Latch · 고리 걸기  `nexus.latch`  — strike
+
+Startup **12** · active **8** · recovery **20** = **40 ticks** (0.67 s); cancel window 0.4; hit-stop base 6. Tags: `chain` `latch`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| latch | 0–8 | line (sweeps) | ASSIMILATION | 240 | LATCH | latch=210 | 40,0 | 0.15 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 240.
+
+Data-driven extras: `{"chain":{"kind":"latch","attach":110,"nodes":1},"pose":{"startup":{"lean":-4},"active":{"lean":5},"recovery":{"lean":1}}}`
+
+#### Constrict · 조이기  `nexus.constrict`  — crush
+
+Startup **30** · active **12** · recovery **42** = **84 ticks** (1.40 s); cancel window 0.4; hit-stop base 10. Tags: `chain` `grab` `root`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| grip | 0–10 | point | CRUSH | 700 | — | compress=7, crater=12 | -260,0 | 0.8 |
+| bind | 0–10 | point | ASSIMILATION | 220 | LATCH | latch=230 | -40,0 | 0.2 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 920.
+
+Data-driven extras: `{"root":{"mul":0.3,"ticks":150,"chains":3,"snap":700},"recoil":0.05,"pose":{"startup":{"lean":-7},"active":{"lean":8},"recovery":{"lean":2}}}`
+
+#### Slither · 미끄러짐  `nexus.slither`  — surge
+
+Startup **3** · active **22** · recovery **26** = **51 ticks** (0.85 s); cancel window 0; hit-stop base 0. Intangible ticks [4, 22). Tags: `glide` `chains-trail`.
+
+Data-driven extras: `{"trail":true}`
+
+#### Harvest · 수확  `nexus.harvest`  — signature
+
+Startup **14** · active **30** · recovery **26** = **70 ticks** (1.17 s); cancel window 0.4; hold up to 40 ticks to charge; hit-stop base 0. Tags: `charge` `harvest` `field`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| harvest | 0–30 | field | ASSIMILATION | 55 /4t | CONTINUOUS | latch=70, harvest=0.9 | -22,0 | 0.05 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1650.
+
+Data-driven extras: `{"chargePower":1,"chargeReach":[0.9,1.35],"pose":{"startup":{"lean":-3},"charge":{"lean":-5},"active":{"lean":3}}}`
+
+#### Ingesloten Oog · 갇힌 눈  `nexus.oog`  — ultimate
+
+Startup **66** · active **110** · recovery **64** = **240 ticks** (4.00 s); cancel window 0.4; hit-stop base 0. Cost: meter 1. Tags: `ultimate` `enclose` `armor` `chains`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| spiral | 0–40 | line (sweeps) | ASSIMILATION | 220 /8t | LATCH | latch=200 | 0,0 | 0.1 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 220.
+
+Data-driven extras: `{"cage":{"segments":8,"radius":[175,44],"build":56,"closeFrom":60,"closeTo":100,"hp":260,"breakAt":3,"crush":{"energy":2800,"latch":240,"compress":10,"crater":16}},"ctl":{"startup":0.1,"active":0.15,"recovery":0.3},"pose":{"startup":{"lean":-6},"active":{"lean":3},"recovery":{"lean":0}}}`
+
+#### Chain Mesh · 사슬 그물  `nexus.guard`  — guard
+
+Startup **3** · active **0** · recovery **5** = **8 ticks** (0.13 s); cancel window 0; hit-stop base 0. Tags: `guard`.
+
+Data-driven extras: `{"shell":{"absorb":{"KINETIC":0.8,"FRACTURE":0.55,"CRUSH":0.5,"ASSIMILATION":0.4,"TIDAL":0.3,"THERMAL":0.12}}}`
+
+Validation against the feel targets: all clear.
+
+## Black Hole · 블랙홀 — *De Leegte*
+
+> Nothing leaves.
+
+| MASS | COHESION | HEAT | GRAVITY | REACH | TEMPO |
+|---|---|---|---|---|---|
+| 8 | 9 | 10 | 10 | 5 | 2 |
+
+- **Destruction signature:** TIDAL
+- **Resource:** Accreted mass (강착 질량) — max 100, start 0, shown as bar
+- **Passive — Accretion:** Everything it consumes builds its disk: heavier and stronger, but slower.
+- **Failure mode — Hawking Evaporation:** The horizon cannot be hit, the disk can. A disrupted disk sheds mass; at low mass the hole shrinks and evaporates in sparkle.
+- **AI personality:** Zones and pulls: keeps its distance, sets wells, lets the foe come, punishes with Maw when the foe is pinned.
+- **Accent colours:** `#ff9a3a`, `#7ab8ff`
+- **Art recipe:** 224×208 map, core (112, 104) r=8
+
+### Materials
+
+| key | physics archetype | overrides | emissive | ramp (dark → light) |
+|---|---|---|---|---|
+| horizon | horizon | — | 0 | `#000000` `#010103` `#02020a` |
+| photon | diskGas | toughness=0.3 | 255 | `#7a3a10` `#ffb050` `#ffe6b0` `#ffffff` |
+| diskhot | diskGas | — | 150 | `#5a1a08` `#b8420f` `#ff8a2a` `#ffc46a` `#fff0c0` |
+| diskmid | diskGas | — | 90 | `#3a0f0a` `#7a2410` `#c4501a` `#f08838` `#ffc078` |
+| diskdim | diskGas | — | 40 | `#1a0608` `#3a0c10` `#6a1616` `#9a2a1e` `#c8482a` |
+| jet | jet | — | 170 | `#0e2a5a` `#2a68c8` `#7ab8ff` `#d8f0ff` `#ffffff` |
+
+### Moves
+
+| move | slot | startup | active | recovery | total | seconds |
+|---|---|---|---|---|---|---|
+| Shear | strike | 13 | 10 | 16 | 39 | 0.65 s |
+| Maw | crush | 34 | 16 | 40 | 90 | 1.50 s |
+| Slip | surge | 3 | 22 | 26 | 51 | 0.85 s |
+| Gravity Well | signature | 14 | 50 | 30 | 94 | 1.57 s |
+| Spaghettification | ultimate | 60 | 120 | 60 | 240 | 4.00 s |
+
+**Guard — Disk Shield:** absorbs KINETIC 65% · FRACTURE 60% · CRUSH 45% · TIDAL 30% · ASSIMILATION 30% · THERMAL 10% of incoming energy while healthy.
+
+#### Shear · 전단  `blackhole.shear`  — strike
+
+Startup **13** · active **10** · recovery **16** = **39 ticks** (0.65 s); cancel window 0.4; hit-stop base 6. Tags: `tidal` `field`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| shear | 0–10 | field | TIDAL | 240 | — | pull=1.2 | -60,0 | 0.15 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 240.
+
+Data-driven extras: `{"pose":{"startup":{"lean":-3},"active":{"lean":3}}}`
+
+#### Maw · 아가리  `blackhole.maw`  — crush
+
+Startup **34** · active **16** · recovery **40** = **90 ticks** (1.50 s); cancel window 0.4; hit-stop base 10. Tags: `tidal` `field` `pull`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| maw | 0–16 | field | TIDAL | 1300 | — | pull=1.6 | -140,0 | 0.7 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1300.
+
+Data-driven extras: `{"pose":{"startup":{"lean":-6},"active":{"lean":4}}}`
+
+#### Slip · 미끄러짐  `blackhole.slip`  — surge
+
+Startup **3** · active **22** · recovery **26** = **51 ticks** (0.85 s); cancel window 0; hit-stop base 0. Intangible ticks [3, 16). Tags: `glide`.
+
+Data-driven extras: `{}`
+
+#### Gravity Well · 중력 우물  `blackhole.well`  — signature
+
+Startup **14** · active **50** · recovery **30** = **94 ticks** (1.57 s); cancel window 0.4; hold up to 40 ticks to charge; hit-stop base 0. Tags: `charge` `field` `gravity`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| well | 0–50 | field | TIDAL | 30 /3t | CONTINUOUS | pull=1.1 | -25,0 | 0.05 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1500.
+
+Data-driven extras: `{"chargePower":1,"chargeReach":[0.9,1.35],"well":{"radius":[140,260],"strength":[900,2200],"consume":26,"pullFoe":420},"ctl":{"active":0.5}}`
+
+#### Spaghettification · 스파게티화  `blackhole.spaghetti`  — ultimate
+
+Startup **60** · active **120** · recovery **60** = **240 ticks** (4.00 s); cancel window 0.4; hit-stop base 0. Cost: meter 1. Tags: `ultimate` `field` `armor` `gravity`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| tide | 0–120 | field | TIDAL | 42 /3t | CONTINUOUS | pull=1.8 | -40,0 | 0.1 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 5040.
+
+Data-driven extras: `{"well":{"radius":[200,340],"strength":[1600,3200],"consume":30,"pullFoe":700},"ctl":{"startup":0.1,"active":0.1,"recovery":0.3}}`
+
+#### Disk Shield · 강착 방패  `blackhole.guard`  — guard
+
+Startup **3** · active **0** · recovery **5** = **8 ticks** (0.13 s); cancel window 0; hit-stop base 0. Tags: `guard`.
+
+Data-driven extras: `{"shell":{"absorb":{"KINETIC":0.65,"FRACTURE":0.6,"CRUSH":0.45,"TIDAL":0.3,"ASSIMILATION":0.3,"THERMAL":0.1}}}`
+
+Validation against the feel targets: all clear.
+
+## Supernova · 초신성 — *De Stervende Ster*
+
+> Burn bright. Burn out.
+
+| MASS | COHESION | HEAT | GRAVITY | REACH | TEMPO |
+|---|---|---|---|---|---|
+| 7 | 3 | 10 | 6 | 6 | 5 |
+
+- **Destruction signature:** THERMAL
+- **Resource:** Core Fuel (핵연료) — max 100, start 100, shown as bar
+- **Passive — Radiance:** The star heats whatever comes near: a faint thermal field, stronger with fuel, warms the enemy cells around it. Blows of heat and force it absorbs are turned back into fuel.
+- **Failure mode — Stripped Layers:** Heavy damage blows the outer plasma off in sheets and exposes the white-hot core, which then takes far more damage. Fuel burns the star smaller; at zero fuel it collapses into one last nova and fights on as a dim remnant.
+- **AI personality:** Bursts, then cools: spends fuel in a flurry of flares and ejections, backs off to recover, and detonates a Nova when the foe is stuck or cornered.
+- **Accent colours:** `#ff9a3c`, `#fff0b0`
+- **Art recipe:** 208×208 map, core (104, 104) r=13
+
+### Materials
+
+| key | physics archetype | overrides | emissive | ramp (dark → light) |
+|---|---|---|---|---|
+| core | core | density=1.5 | 235 | `#ffd050` `#ffe98a` `#fff8d6` `#ffffff` `#dcefff` `#a9d8ff` |
+| inner | plasma | density=0.5 | 150 | `#d23c2a` `#f0621f` `#ff8a2e` `#ffae38` `#ffd050` `#ffe98a` `#fff8d6` `#ffffff` |
+| photosphere | plasma | density=0.34 | 120 | `#7c1d33` `#a72832` `#d23c2a` `#f0621f` `#ff8a2e` `#ffae38` `#ffd050` `#ffe98a` `#fff8d6` |
+| corona | corona | density=0.45, resist={"FRACTURE":0.65,"KINETIC":0.75,"CRUSH":0.75,"THERMAL":0.4,"ASSIMILATION":1,"TIDAL":3.6} | 78 | `#1b0d3a` `#3b1a68` `#6d34a0` `#a45ccc` `#e39ae6` `#fff0fb` |
+| prominence | plasma | density=0.35, resist={"FRACTURE":0.65,"KINETIC":0.75,"CRUSH":0.75,"THERMAL":0.38,"ASSIMILATION":1.1,"TIDAL":3.8} | 175 | `#5a1030` `#a01e34` `#e23f2c` `#ff7a30` `#ffb040` `#ffe080` `#fff6c8` |
+
+### Moves
+
+| move | slot | startup | active | recovery | total | seconds |
+|---|---|---|---|---|---|---|
+| Flare | strike | 10 | 6 | 18 | 34 | 0.57 s |
+| Coronal Ejection | crush | 32 | 26 | 50 | 108 | 1.80 s |
+| Solar Wind | surge | 2 | 14 | 6 | 22 | 0.37 s |
+| Prominence | signature | 12 | 44 | 26 | 82 | 1.37 s |
+| Nova | ultimate | 110 | 70 | 60 | 240 | 4.00 s |
+| Final Collapse | signature | 96 | 70 | 100 | 266 | 4.43 s |
+
+**Guard — Plasma Shell:** absorbs FRACTURE 55% · KINETIC 50% · CRUSH 35% · THERMAL 70% · TIDAL 5% · ASSIMILATION 40% of incoming energy while healthy.
+
+#### Flare · 플레어  `supernova.flare`  — strike
+
+Startup **10** · active **6** · recovery **18** = **34 ticks** (0.57 s); cancel window 0.4; hit-stop base 5. Tags: `burst`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| flare | 0–6 | field (sweeps) | THERMAL | 380 | — | shock=0.6, scatter=1 | 210,-10 | 0.3 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 380.
+
+Data-driven extras: `{"fuel":3,"pose":{"startup":{"lean":-3},"active":{"lean":5}}}`
+
+#### Coronal Ejection · 코로나 질량 방출  `supernova.ejection`  — crush
+
+Startup **32** · active **26** · recovery **50** = **108 ticks** (1.80 s); cancel window 0.4; hit-stop base 12. Tags: `projectile` `heavy` `blast`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| ejecta | 0–26 | point (sweeps) | THERMAL | 1500 | — | shock=1.8, scatter=1.2 | 520,-60 | 1 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1500.
+
+Data-driven extras: `{"fuel":14,"pose":{"startup":{"lean":-8},"active":{"lean":6},"recovery":{"lean":2}}}`
+
+#### Solar Wind · 태양풍  `supernova.wind`  — surge
+
+Startup **2** · active **14** · recovery **6** = **22 ticks** (0.37 s); cancel window 0; hit-stop base 0. Intangible ticks [1, 11). Tags: `dash` `trail`.
+
+Data-driven extras: `{"fuel":2}`
+
+#### Prominence · 홍염  `supernova.prominence`  — signature
+
+Startup **12** · active **44** · recovery **26** = **82 ticks** (1.37 s); cancel window 0.4; hold up to 60 ticks to charge; hit-stop base 6. Tags: `charge` `projectile` `zone`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| arc | 0–12 | point (sweeps) | THERMAL | 200 | — | shock=0.5, scatter=1 | 130,0 | 0.4 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 200.
+
+Data-driven extras: `{"fuel":12,"chargePower":0.8,"chargeReach":[0.72,1.45],"wall":{"half":52,"width":26,"life":54,"every":4,"energy":30},"pose":{"startup":{"lean":-4},"charge":{"lean":-6},"active":{"lean":3}}}`
+
+#### Nova · 노바  `supernova.nova`  — ultimate
+
+Startup **110** · active **70** · recovery **60** = **240 ticks** (4.00 s); cancel window 0.4; hit-stop base 0. Cost: meter 1. Tags: `ultimate` `armor` `blast` `collapse`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| blast | 4–40 | ring (sweeps) | THERMAL | 3000 | UNBLOCKABLE | shock=2.4, scatter=1.6 | 300,-120 | 1 |
+| wave | 30–66 | ring (sweeps) | THERMAL | 2200 | UNBLOCKABLE | shock=1.8, scatter=1.4 | 520,-140 | 1 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 5200.
+
+Data-driven extras: `{"fuel":60,"ctl":{"startup":0.1,"active":0.05,"recovery":0.3},"pose":{"startup":{"lean":-2},"active":{"lean":0},"recovery":{"lean":0}}}`
+
+#### Final Collapse · 마지막 붕괴  `supernova.collapse`  — signature
+
+Startup **96** · active **70** · recovery **100** = **266 ticks** (4.43 s); cancel window 0.4; hit-stop base 0. Cost: meter 1. Tags: `ultimate` `armor` `blast` `collapse`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| final | 4–66 | ring (sweeps) | THERMAL | 3300 | UNBLOCKABLE | shock=3, scatter=2 | 700,-170 | 1 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 3300.
+
+Data-driven extras: `{"followUpOnly":true,"fuel":0,"ctl":{"startup":0.05,"active":0.02,"recovery":0.2},"pose":{"startup":{"lean":-2},"active":{"lean":0},"recovery":{"lean":0}}}`
+
+#### Plasma Shell · 플라스마 껍질  `supernova.guard`  — guard
+
+Startup **3** · active **0** · recovery **5** = **8 ticks** (0.13 s); cancel window 0; hit-stop base 0. Tags: `guard`.
+
+Data-driven extras: `{"shell":{"absorb":{"FRACTURE":0.55,"KINETIC":0.5,"CRUSH":0.35,"THERMAL":0.7,"TIDAL":0.05,"ASSIMILATION":0.4}}}`
+
+Validation against the feel targets: all clear.
+
+## Planet · 행성 — *De Wereld*
+
+> All things fall toward me.
+
+| MASS | COHESION | HEAT | GRAVITY | REACH | TEMPO |
+|---|---|---|---|---|---|
+| 8 | 7 | 6 | 7 | 6 | 3 |
+
+- **Destruction signature:** CRUSH
+- **Resource:** Moons (달) — max 2, start 2, shown as pips
+- **Passive — Gravity Well:** A small gravity well gathers debris into slow orbit around the planet: a ring of remains that drifts and now and then strikes the enemy.
+- **Failure mode — Broken World:** Crust cracks reveal glowing magma, the atmosphere is stripped away (and with it the shield against heat), and moons can be knocked out of orbit and lost.
+- **AI personality:** Fortress: sits back behind its moons, punishes with Impact and Moon Slam, and uses its weight to hold the space.
+- **Accent colours:** `#58a6d8`, `#e0b06a`
+- **Art recipe:** 208×208 map, core (104, 104) r=13
+
+### Materials
+
+| key | physics archetype | overrides | emissive | ramp (dark → light) |
+|---|---|---|---|---|
+| atmosphere | gas | — | 40 | `#16305a` `#24508c` `#3a7bc0` `#69b0e0` `#a8dcf2` `#e4f8ff` |
+| cloud | cloud | — | 20 | `#2b3c66` `#4f6494` `#8497be` `#bccbe0` `#e6eef6` `#ffffff` |
+| ocean | ocean | — | 0 | `#08183c` `#0d2a64` `#123f8f` `#1a5cb8` `#2e86d8` `#62b8ec` `#b6e8fa` |
+| forest | regolith | — | 0 | `#14241a` `#243c22` `#3b5c2a` `#5d7e34` `#88a044` `#b4be5c` `#dcdc8a` |
+| desert | regolith | — | 0 | `#2a1a18` `#4c3024` `#7a4c30` `#a8703c` `#cf9a52` `#e8c27a` `#f8e4b0` |
+| mountain | rock | — | 0 | `#241c22` `#3d3038` `#5f4d4c` `#8a7466` `#b39c88` `#dccbb8` `#f4eee8` |
+| ice | ice | — | 30 | `#284a72` `#4a7fb0` `#86bde0` `#bfe4f4` `#e8f8ff` `#ffffff` |
+| crust | rock | — | 0 | `#1a1216` `#33242a` `#4f3a38` `#725248` `#97705a` `#bc9070` |
+| mantle | mantle | — | 40 | `#2a0a10` `#5a1418` `#8c2a1a` `#c0481c` `#e8741e` `#ff9a30` |
+| magma | magma | — | 170 | `#7a1608` `#c03a10` `#f0701c` `#ffa838` `#ffd870` `#fff2b0` |
+| core | core | — | 235 | `#ffb84a` `#ffdc78` `#fff2b0` `#ffffff` |
+
+### Moves
+
+| move | slot | startup | active | recovery | total | seconds |
+|---|---|---|---|---|---|---|
+| Tidal Nudge | strike | 12 | 8 | 18 | 38 | 0.63 s |
+| Impact | crush | 34 | 8 | 46 | 88 | 1.47 s |
+| Orbital Shift | surge | 3 | 16 | 9 | 28 | 0.47 s |
+| Moon Slam | signature | 14 | 44 | 24 | 82 | 1.37 s |
+| Cataclysm | ultimate | 90 | 100 | 50 | 240 | 4.00 s |
+
+**Guard — Atmosphere Shield:** absorbs THERMAL 80% · KINETIC 55% · CRUSH 35% · FRACTURE 50% · TIDAL 15% · ASSIMILATION 40% of incoming energy while healthy.
+
+#### Tidal Nudge · 조석 밀기  `planet.nudge`  — strike
+
+Startup **12** · active **8** · recovery **18** = **38 ticks** (0.63 s); cancel window 0.4; hit-stop base 6. Tags: `shove`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| nudge | 0–8 | point (sweeps) | CRUSH | 320 | — | compress=5, crater=8, shock=0.6 | 560,-30 | 0.4 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 320.
+
+Data-driven extras: `{"pose":{"startup":{"lean":-4},"active":{"lean":6}}}`
+
+#### Impact · 충격  `planet.impact`  — crush
+
+Startup **34** · active **8** · recovery **46** = **88 ticks** (1.47 s); cancel window 0.4; hit-stop base 14. Tags: `heavy` `ram` `quake`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| slam | 0–8 | point | CRUSH | 1500 | — | crater=22, compress=10, shock=1.4, scatter=1.2 | 760,-60 | 1 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1500.
+
+Data-driven extras: `{"pose":{"startup":{"lean":-9},"active":{"lean":8},"recovery":{"lean":2}}}`
+
+#### Orbital Shift · 궤도 이동  `planet.shift`  — surge
+
+Startup **3** · active **16** · recovery **9** = **28 ticks** (0.47 s); cancel window 0; hit-stop base 0. Intangible ticks [2, 16). Tags: `dash` `orbit`.
+
+#### Moon Slam · 달 충돌  `planet.moonslam`  — signature
+
+Startup **14** · active **44** · recovery **24** = **82 ticks** (1.37 s); cancel window 0.4; hold up to 45 ticks to charge; hit-stop base 8. Cost: resource 1. Tags: `charge` `projectile` `moon`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| launch | 0–6 | point | CRUSH | 120 | — | crater=5 | 200,0 | 0.3 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 120.
+
+Data-driven extras: `{"chargePower":0.9,"chargeReach":[0.8,1.35],"slam":{"speed":9,"energy":800,"crater":16,"compress":8,"shock":1.2,"recoil":0.14,"life":46},"ctl":{"charge":0.2,"active":0.25},"pose":{"startup":{"lean":-5},"charge":{"lean":-7},"active":{"lean":5}}}`
+
+#### Cataclysm · 대격변  `planet.cataclysm`  — ultimate
+
+Startup **90** · active **100** · recovery **50** = **240 ticks** (4.00 s); cancel window 0.4; hit-stop base 0. Cost: meter 1. Tags: `ultimate` `armor` `quake` `moon`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| gravity | 0–50 | field | CRUSH | 20 /2t | CONTINUOUS | compress=4, crater=6 | -70,0 | 0.2 |
+| quake | 52–62 | point | CRUSH | 2400 | UNBLOCKABLE | crater=32, compress=14, shock=2.2, scatter=1.6 | 500,-160 | 1 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 3400.
+
+Data-driven extras: `{"barrage":{"from":66,"gap":10,"speed":11,"energy":700,"crater":14,"compress":7,"shock":1},"ctl":{"startup":0.1,"active":0.05,"recovery":0.3},"pose":{"startup":{"lean":-5},"active":{"lean":3}}}`
+
+#### Atmosphere Shield · 대기 방패  `planet.guard`  — guard
+
+Startup **3** · active **0** · recovery **5** = **8 ticks** (0.13 s); cancel window 0; hit-stop base 0. Tags: `guard`.
+
+Data-driven extras: `{"shell":{"absorb":{"THERMAL":0.8,"KINETIC":0.55,"CRUSH":0.35,"FRACTURE":0.5,"TIDAL":0.15,"ASSIMILATION":0.4}}}`
 
 Validation against the feel targets: all clear.

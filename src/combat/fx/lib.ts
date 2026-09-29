@@ -265,3 +265,6 @@ export function ribbon(
     if (r > 2.5) ov.disc(p.x, p.y, r * 0.5, rampAt(ramp, 0.8 + 0.2 * q), 255);
   }
 }
+
+/** 4×4 Bayer threshold in (0, 1) at pixel (x, y). */
+export const bayer = (x: number, y: number): number => (BAYER[((y & 3) << 2) | (x & 3)]! + 0.5) / 16;

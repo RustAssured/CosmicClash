@@ -1,0 +1,864 @@
+{
+  "id": "blackhole",
+  "name": "Black Hole",
+  "nameKo": "\ube14\ub799\ud640",
+  "epithet": "De Leegte",
+  "attributes": {
+    "mass": 8,
+    "cohesion": 9,
+    "heat": 10,
+    "gravity": 10,
+    "reach": 5,
+    "tempo": 2
+  },
+  "resource": {
+    "id": "accreted",
+    "name": "Accreted mass",
+    "nameKo": "\uac15\ucc29 \uc9c8\ub7c9",
+    "max": 100,
+    "start": 0,
+    "display": "bar"
+  },
+  "destruction": "TIDAL",
+  "passive": {
+    "name": "Accretion",
+    "text": "Everything it consumes builds its disk: heavier and stronger, but slower."
+  },
+  "failureMode": {
+    "name": "Hawking Evaporation",
+    "text": "The horizon cannot be hit, the disk can. A disrupted disk sheds mass; at low mass the hole shrinks and evaporates in sparkle."
+  },
+  "materials": [
+    {
+      "key": "horizon",
+      "base": "horizon",
+      "visual": {
+        "ramp": ["#000000", "#010103", "#02020a"],
+        "emissive": 0,
+        "char": "#150a08",
+        "crack": "#000000",
+        "debris": "#000000"
+      }
+    },
+    {
+      "key": "photon",
+      "base": "diskGas",
+      "physics": {
+        "toughness": 0.3
+      },
+      "visual": {
+        "ramp": ["#7a3a10", "#ffb050", "#ffe6b0", "#ffffff"],
+        "emissive": 255,
+        "char": "#150a08",
+        "crack": "#000000",
+        "debris": "#ffe6b0"
+      }
+    },
+    {
+      "key": "diskhot",
+      "base": "diskGas",
+      "visual": {
+        "ramp": ["#5a1a08", "#b8420f", "#ff8a2a", "#ffc46a", "#fff0c0"],
+        "emissive": 150,
+        "char": "#150a08",
+        "crack": "#000000",
+        "debris": "#ff8a2a"
+      }
+    },
+    {
+      "key": "diskmid",
+      "base": "diskGas",
+      "visual": {
+        "ramp": ["#3a0f0a", "#7a2410", "#c4501a", "#f08838", "#ffc078"],
+        "emissive": 90,
+        "char": "#150a08",
+        "crack": "#000000",
+        "debris": "#c4501a"
+      }
+    },
+    {
+      "key": "diskdim",
+      "base": "diskGas",
+      "visual": {
+        "ramp": ["#1a0608", "#3a0c10", "#6a1616", "#9a2a1e", "#c8482a"],
+        "emissive": 40,
+        "char": "#150a08",
+        "crack": "#000000",
+        "debris": "#6a1616"
+      }
+    },
+    {
+      "key": "jet",
+      "base": "jet",
+      "visual": {
+        "ramp": ["#0e2a5a", "#2a68c8", "#7ab8ff", "#d8f0ff", "#ffffff"],
+        "emissive": 170,
+        "char": "#150a08",
+        "crack": "#000000",
+        "debris": "#7ab8ff"
+      }
+    }
+  ],
+  "art": {
+    "w": 224,
+    "h": 208,
+    "coreX": 112,
+    "coreY": 104,
+    "coreRadius": 8,
+    "params": {
+      "centre": [112, 104],
+      "horizon": 30,
+      "ring": 3.2,
+      "diskIn": 36,
+      "diskOut": 88,
+      "squash": 0.3,
+      "tilt": -0.2,
+      "jet": {
+        "len": 60,
+        "w": 2.4
+      }
+    }
+  },
+  "moves": [
+    {
+      "id": "blackhole.shear",
+      "slot": "strike",
+      "name": "Shear",
+      "nameKo": "\uc804\ub2e8",
+      "frame": {
+        "startup": 13,
+        "active": 10,
+        "recovery": 16,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 6
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "shear",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "field",
+                "ox": 96,
+                "oy": -34,
+                "r": 42,
+                "falloff": 0.6
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 1200,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "pull": 1.2
+                }
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.15,
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 25,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "shear",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "field",
+                "ox": 96,
+                "oy": 0,
+                "r": 42,
+                "falloff": 0.6
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 1200,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "pull": 1.2
+                }
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.15,
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 25,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "shear",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "field",
+                "ox": 96,
+                "oy": 34,
+                "r": 42,
+                "falloff": 0.6
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 1200,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "pull": 1.2
+                }
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.15,
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 25,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["tidal", "field"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -3
+          },
+          "active": {
+            "lean": 3
+          }
+        }
+      }
+    },
+    {
+      "id": "blackhole.maw",
+      "slot": "crush",
+      "name": "Maw",
+      "nameKo": "\uc544\uac00\ub9ac",
+      "frame": {
+        "startup": 34,
+        "active": 16,
+        "recovery": 40,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 10
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "maw",
+              "from": 0,
+              "to": 16,
+              "shape": {
+                "kind": "field",
+                "ox": 110,
+                "oy": -40,
+                "r": 92,
+                "falloff": 0.5
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 9000,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "pull": 1.6
+                }
+              },
+              "knockback": {
+                "x": -140,
+                "y": 0
+              },
+              "guardPressure": 0.7,
+              "reachScale": 0.5
+            },
+            {
+              "id": "maw-crush",
+              "from": 6,
+              "to": 14,
+              "shape": {
+                "kind": "point",
+                "ox": 80,
+                "oy": -40,
+                "r": 64
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 2600,
+                "duration": 1,
+                "flags": 0,
+                "params": {}
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.7,
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -20,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "maw",
+              "from": 0,
+              "to": 16,
+              "shape": {
+                "kind": "field",
+                "ox": 110,
+                "oy": 0,
+                "r": 92,
+                "falloff": 0.5
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 9000,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "pull": 1.6
+                }
+              },
+              "knockback": {
+                "x": -140,
+                "y": 0
+              },
+              "guardPressure": 0.7,
+              "reachScale": 0.5
+            },
+            {
+              "id": "maw-crush",
+              "from": 6,
+              "to": 14,
+              "shape": {
+                "kind": "point",
+                "ox": 80,
+                "oy": 0,
+                "r": 64
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 2600,
+                "duration": 1,
+                "flags": 0,
+                "params": {}
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.7,
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -20,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "maw",
+              "from": 0,
+              "to": 16,
+              "shape": {
+                "kind": "field",
+                "ox": 110,
+                "oy": 40,
+                "r": 92,
+                "falloff": 0.5
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 9000,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "pull": 1.6
+                }
+              },
+              "knockback": {
+                "x": -140,
+                "y": 0
+              },
+              "guardPressure": 0.7,
+              "reachScale": 0.5
+            },
+            {
+              "id": "maw-crush",
+              "from": 6,
+              "to": 14,
+              "shape": {
+                "kind": "point",
+                "ox": 80,
+                "oy": 40,
+                "r": 64
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 2600,
+                "duration": 1,
+                "flags": 0,
+                "params": {}
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.7,
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -20,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["tidal", "field", "pull"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -6
+          },
+          "active": {
+            "lean": 4
+          }
+        }
+      }
+    },
+    {
+      "id": "blackhole.slip",
+      "slot": "surge",
+      "name": "Slip",
+      "nameKo": "\ubbf8\ub044\ub7ec\uc9d0",
+      "frame": {
+        "startup": 3,
+        "active": 22,
+        "recovery": 26,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 260,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 260,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 260,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "intangible": [3, 16],
+      "tags": ["glide"],
+      "extra": {}
+    },
+    {
+      "id": "blackhole.well",
+      "slot": "signature",
+      "name": "Gravity Well",
+      "nameKo": "\uc911\ub825 \uc6b0\ubb3c",
+      "frame": {
+        "startup": 14,
+        "active": 50,
+        "recovery": 30,
+        "cancelWindow": 0.4,
+        "chargeMax": 40,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "well",
+              "from": 0,
+              "to": 50,
+              "shape": {
+                "kind": "field",
+                "ox": 120,
+                "oy": -20,
+                "r": 120,
+                "falloff": 0.4
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 30,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 1.1
+                }
+              },
+              "knockback": {
+                "x": -25,
+                "y": 0
+              },
+              "guardPressure": 0.05,
+              "reachScale": 0.5,
+              "rehit": 3
+            }
+          ],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "well",
+              "from": 0,
+              "to": 50,
+              "shape": {
+                "kind": "field",
+                "ox": 120,
+                "oy": 0,
+                "r": 120,
+                "falloff": 0.4
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 30,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 1.1
+                }
+              },
+              "knockback": {
+                "x": -25,
+                "y": 0
+              },
+              "guardPressure": 0.05,
+              "reachScale": 0.5,
+              "rehit": 3
+            }
+          ],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "well",
+              "from": 0,
+              "to": 50,
+              "shape": {
+                "kind": "field",
+                "ox": 120,
+                "oy": 20,
+                "r": 120,
+                "falloff": 0.4
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 30,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 1.1
+                }
+              },
+              "knockback": {
+                "x": -25,
+                "y": 0
+              },
+              "guardPressure": 0.05,
+              "reachScale": 0.5,
+              "rehit": 3
+            }
+          ],
+          "movement": []
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["charge", "field", "gravity"],
+      "extra": {
+        "chargePower": 1,
+        "chargeReach": [0.9, 1.35],
+        "well": {
+          "radius": [140, 260],
+          "strength": [900, 2200],
+          "consume": 26,
+          "pullFoe": 420
+        },
+        "ctl": {
+          "active": 0.5
+        }
+      }
+    },
+    {
+      "id": "blackhole.spaghetti",
+      "slot": "ultimate",
+      "name": "Spaghettification",
+      "nameKo": "\uc2a4\ud30c\uac8c\ud2f0\ud654",
+      "frame": {
+        "startup": 60,
+        "active": 120,
+        "recovery": 60,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "tide",
+              "from": 0,
+              "to": 120,
+              "shape": {
+                "kind": "field",
+                "ox": 160,
+                "oy": 0,
+                "r": 240,
+                "falloff": 0.35
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 70,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 1.8
+                }
+              },
+              "knockback": {
+                "x": -40,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "reachScale": 0.5,
+              "rehit": 3
+            }
+          ],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "tide",
+              "from": 0,
+              "to": 120,
+              "shape": {
+                "kind": "field",
+                "ox": 160,
+                "oy": 0,
+                "r": 240,
+                "falloff": 0.35
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 70,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 1.8
+                }
+              },
+              "knockback": {
+                "x": -40,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "reachScale": 0.5,
+              "rehit": 3
+            }
+          ],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "tide",
+              "from": 0,
+              "to": 120,
+              "shape": {
+                "kind": "field",
+                "ox": 160,
+                "oy": 0,
+                "r": 240,
+                "falloff": 0.35
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 70,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 1.8
+                }
+              },
+              "knockback": {
+                "x": -40,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "reachScale": 0.5,
+              "rehit": 3
+            }
+          ],
+          "movement": []
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 1,
+      "tags": ["ultimate", "field", "armor", "gravity"],
+      "extra": {
+        "well": {
+          "radius": [200, 340],
+          "strength": [1600, 3200],
+          "consume": 30,
+          "pullFoe": 700
+        },
+        "ctl": {
+          "startup": 0.1,
+          "active": 0.1,
+          "recovery": 0.3
+        }
+      }
+    },
+    {
+      "id": "blackhole.guard",
+      "slot": "guard",
+      "name": "Disk Shield",
+      "nameKo": "\uac15\ucc29 \ubc29\ud328",
+      "frame": {
+        "startup": 3,
+        "active": 0,
+        "recovery": 5,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": []
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["guard"],
+      "extra": {
+        "shell": {
+          "absorb": {
+            "KINETIC": 0.65,
+            "FRACTURE": 0.6,
+            "CRUSH": 0.45,
+            "TIDAL": 0.3,
+            "ASSIMILATION": 0.3,
+            "THERMAL": 0.1
+          }
+        }
+      }
+    }
+  ],
+  "ai": {
+    "style": "Zones and pulls: keeps its distance, sets wells, lets the foe come, punishes with Maw when the foe is pinned.",
+    "weights": {
+      "aggression": 0.3,
+      "patience": 0.85,
+      "zoning": 0.9,
+      "retreat": 0.5,
+      "trap": 0.6,
+      "punish": 0.8,
+      "gaze": 0
+    }
+  },
+  "ui": {
+    "accent": "#ff9a3a",
+    "accent2": "#7ab8ff",
+    "tagline": "Nothing leaves."
+  }
+}
