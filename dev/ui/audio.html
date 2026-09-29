@@ -123,17 +123,39 @@
     <main>
       <h1>AUDIO AUDITION</h1>
       <p>
-        Everything here is synthesised live by the real engine (<code>src/audio</code>). Click anywhere first: browsers keep the
-        AudioContext suspended until a gesture. <span id="status">suspended</span>
+        Everything here is synthesised live by the real engine (<code>src/audio</code>). Click anywhere first:
+        browsers keep the AudioContext suspended until a gesture. <span id="status">suspended</span>
       </p>
       <h2>Scene</h2>
       <div class="row">
-        <label>Fighter A <select id="titanA"></select></label>
-        <label>Fighter B <select id="titanB"></select></label>
-        <label>Stage <select id="stage"></select></label>
-        <label>Phase <select id="phase"></select></label>
-        <label>Intensity <input id="intensity" type="range" min="0" max="1" step="0.01" value="0.4" /><span id="intensityV">0.40</span></label>
-        <label>Integrity <input id="integrity" type="range" min="0" max="1" step="0.01" value="0.9" /><span id="integrityV">0.90</span></label>
+        <label
+          >Fighter A
+          <select id="titanA"></select
+        ></label>
+        <label
+          >Fighter B
+          <select id="titanB"></select
+        ></label>
+        <label
+          >Stage
+          <select id="stage"></select
+        ></label>
+        <label
+          >Phase
+          <select id="phase"></select
+        ></label>
+        <label
+          >Intensity <input id="intensity" type="range" min="0" max="1" step="0.01" value="0.4" /><span
+            id="intensityV"
+            >0.40</span
+          ></label
+        >
+        <label
+          >Integrity <input id="integrity" type="range" min="0" max="1" step="0.01" value="0.9" /><span
+            id="integrityV"
+            >0.90</span
+          ></label
+        >
         <button id="score">Score: off</button>
       </div>
       <h2>Volume</h2>

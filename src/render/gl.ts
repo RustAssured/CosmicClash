@@ -92,6 +92,22 @@ export function resetSharedGeometry(): void {
 
 const passCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
+/**
+ * Compile a scene's shader programs ahead of use. With KHR_parallel_shader_compile the browser compiles in parallel and this
+ * resolves without blocking the frame; without it (software GL, some mobile) it compiles synchronously right here.
+ */
+export function compileScene(
+  renderer: WebGLRenderer,
+  scene: Scene,
+  camera: OrthographicCamera,
+): Promise<void> {
+  if (renderer.extensions.has('KHR_parallel_shader_compile')) {
+    return renderer.compileAsync(scene, camera).then(() => undefined);
+  }
+  renderer.compile(scene, camera);
+  return Promise.resolve();
+}
+
 export function makeMaterial(
   fragmentShader: string,
   uniforms: Record<string, IUniform>,
@@ -130,6 +146,11 @@ export class FullscreenPass {
   render(renderer: WebGLRenderer, target: WebGLRenderTarget | null): void {
     renderer.setRenderTarget(target);
     renderer.render(this.scene, passCamera);
+  }
+
+  /** Compile this pass's program ahead of its first use (non-blocking where KHR_parallel_shader_compile exists). */
+  compile(renderer: WebGLRenderer): Promise<void> {
+    return compileScene(renderer, this.scene, passCamera);
   }
 
   dispose(): void {

@@ -67,14 +67,21 @@ export function fft(re: Float64Array, im: Float64Array): void {
  * rolloff is dragged up by the far-high, far-quiet bins and stops meaning "how bright it sounds". `minHz` ignores everything
  * below it (skip the shared sub-bass thump to compare the CHARACTER of two sounds).
  */
-export function spectralCentroid(x: ArrayLike<number>, sampleRate: number, from = 0, len = 4096, minHz = 0): number {
+export function spectralCentroid(
+  x: ArrayLike<number>,
+  sampleRate: number,
+  from = 0,
+  len = 4096,
+  minHz = 0,
+): number {
   let n = 1;
   while (n < len) n <<= 1;
   const re = new Float64Array(n);
   const im = new Float64Array(n);
   const end = Math.min(x.length, from + len);
   const m = end - from;
-  for (let i = 0; i < m; i++) re[i] = x[from + i]! * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / Math.max(1, m - 1)));
+  for (let i = 0; i < m; i++)
+    re[i] = x[from + i]! * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / Math.max(1, m - 1)));
   fft(re, im);
   let num = 0;
   let den = 0;
@@ -103,7 +110,8 @@ export function bandShare(
   const im = new Float64Array(n);
   const end = Math.min(x.length, from + len);
   const m = end - from;
-  for (let i = 0; i < m; i++) re[i] = x[from + i]! * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / Math.max(1, m - 1)));
+  for (let i = 0; i < m; i++)
+    re[i] = x[from + i]! * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / Math.max(1, m - 1)));
   fft(re, im);
   let band = 0;
   let all = 0;

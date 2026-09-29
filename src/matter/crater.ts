@@ -24,6 +24,8 @@ export interface CraterOpts {
   craterR: number;
   /** Damage type index for resistance lookups. */
   type: number;
+  /** Upper bound on the energy one cell costs (a damage floor: no matter is harder to chew through than this). */
+  costCap: number;
 }
 
 export interface CraterOut {
@@ -48,7 +50,6 @@ const bins = new Float64Array(BINS + 1);
 const imp: Impact = { fx: 0, fy: 0, nx: 0, ny: -1, hasNormal: false };
 const pt: WorldPoint = { x: 0, y: 0 };
 const pt2: WorldPoint = { x: 0, y: 0 };
-const probe = { kind: 'point' as const, x: 0, y: 0, r: 1 };
 
 /** Hash-based bucket heads for grouping crater cells into 3×3 fragments. */
 const BLOCK = 5;
@@ -81,7 +82,6 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   const fy = imp.fy;
   const nx = imp.nx;
   const ny = imp.ny;
-  const q = core.q;
 
   /* ---- 2. material at the impact -> aspect ---- */
   let tough = 0;
@@ -117,37 +117,49 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   const Rd = Rl * aspect;
 
   /* ---- 4. candidates around the impact ---- */
+  // Everything below lives in body-local cell space, so the candidates are scanned straight from the local box around the
+  // impact (no world-space shape query): live, non-immune cells within elliptical distance 1.75 (the crater is at most 1.07, the
+  // lip reaches 1.75 x the threshold), in row-major order. `idx`/`dEff` hold the compacted list.
   localToWorldF(body, fx, fy, pt2);
-  probe.x = pt2.x;
-  probe.y = pt2.y;
-  probe.r = Math.max(Rl, Rd) * 1.85 + 1;
-  q.set(probe);
-  const n = body.collect(q, core.covIdx, core.covW);
   const idx = core.covIdx;
   const dEff = core.covW; // reuse the weight array to hold normalised elliptical distance
   bins.fill(0);
   const tx = -ny;
   const ty = nx;
-  for (let k = 0; k < n; k++) {
-    const i = idx[k]!;
-    const x = i % w;
-    const y = (i - x) / w;
-    const rx = x + 0.5 - fx;
+  const reach = Math.max(Rl, Rd * 1.3) * 1.75 + 1;
+  const xa = Math.max(0, Math.floor(fx - reach));
+  const xb = Math.min(w - 1, Math.ceil(fx + reach));
+  const ya = Math.max(0, Math.floor(fy - reach));
+  const yb = Math.min(body.h - 1, Math.ceil(fy + reach));
+  const invL2 = 1 / (Rl * Rl);
+  const invD2 = 1 / (Rd * Rd);
+  const lim2 = 1.75 * 1.75;
+  let n = 0;
+  for (let y = ya; y <= yb; y++) {
     const ry = y + 0.5 - fy;
-    const depth = -(rx * nx + ry * ny);
-    const lat = rx * tx + ry * ty;
-    const dd = depth >= 0 ? depth : -depth * 1.3;
-    const d = Math.sqrt((lat / Rl) * (lat / Rl) + (dd / Rd) * (dd / Rd));
-    if (resistOf(body, i, o.type) <= 0.001) {
+    for (let x = xa; x <= xb; x++) {
+      const i = y * w + x;
+      if (mat[i] === 0) continue;
+      const rx = x + 0.5 - fx;
+      const depth = -(rx * nx + ry * ny);
+      const lat = rx * tx + ry * ty;
+      const dd = depth >= 0 ? depth : -depth * 1.3;
+      const d2 = lat * lat * invL2 + dd * dd * invD2;
+      if (d2 > lim2) continue;
+      const res = resistOf(body, i, o.type);
       // Immune matter (the Black Hole's horizon) is never cratered, loosened or compacted.
-      dEff[k] = Infinity;
-      continue;
-    }
-    dEff[k] = d;
-    if (d <= 1) {
-      const cost =
-        (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.15, resistOf(body, i, o.type));
-      bins[Math.min(BINS - 1, Math.floor(d * BINS))]! += cost;
+      if (res <= 0.001) continue;
+      const d = Math.sqrt(d2);
+      idx[n] = i;
+      dEff[n] = d;
+      n++;
+      if (d <= 1) {
+        const cost = Math.min(
+          o.costCap,
+          (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.15, res),
+        );
+        bins[Math.min(BINS - 1, Math.floor(d * BINS))]! += cost;
+      }
     }
   }
   // Threshold: smallest radius whose cumulative cost pays the crater budget.
@@ -187,10 +199,15 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     const i = idx[k]!;
     const x = i % w;
     const y = (i - x) / w;
-    if (d > thr * (0.93 + 0.14 * valueNoise(x / 2.6, y / 2.6, seed))) continue;
+    // Ragged edge: the noise only matters in the band where it can change the outcome (same result, one noise call in ~10).
+    if (d > thr * 1.07) continue;
+    if (d > thr * 0.93 && d > thr * (0.93 + 0.14 * valueNoise(x / 2.6, y / 2.6, seed))) continue;
     const m = mat[i]!;
     const md = mats[m]!;
-    const cost = (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.15, resistOf(body, i, o.type));
+    const cost = Math.min(
+      o.costCap,
+      (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.15, resistOf(body, i, o.type)),
+    );
     spent += cost;
     const chunky = md.debris === 'chunk' || md.debris === 'shard';
     if (chunky && d > 0.3 && rng.next() < o.chunkProb) {
@@ -335,14 +352,35 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
         sprayCell(core, body, m, pt.x, pt.y, nOutWx * 30, nOutWy * 30, mass * keep, MODE_MECH);
       } else {
         map.integrity[i] = it < 1 ? 1 : it; // Uint8 truncates: never let a live cell round down to 0
-        // Shock-loosened: break a random bond so the rim can spall.
+        // Shock-loosened: the weakest bond of the cell lets go (rim spalls along its seams and grain boundaries).
         if (t < 0.45 && rng.next() < 0.16 * (1 - t)) {
-          const r = rng.next();
           const x = i % w;
-          if (r < 0.25 && x < w - 1) breakBondR(body, i);
-          else if (r < 0.5 && x > 0) breakBondR(body, i - 1);
-          else if (r < 0.75 && i + w < body.n) breakBondD(body, i);
-          else if (i >= w) breakBondD(body, i - w);
+          const bR = x < w - 1 ? map.bondR[i]! : 0;
+          const bL = x > 0 ? map.bondR[i - 1]! : 0;
+          const bD = i + w < body.n ? map.bondD[i]! : 0;
+          const bU = i >= w ? map.bondD[i - w]! : 0;
+          let best = 255 + 1;
+          let side = -1;
+          if (bR !== 0 && bR < best) {
+            best = bR;
+            side = 0;
+          }
+          if (bL !== 0 && bL < best) {
+            best = bL;
+            side = 1;
+          }
+          if (bD !== 0 && bD < best) {
+            best = bD;
+            side = 2;
+          }
+          if (bU !== 0 && bU < best) {
+            best = bU;
+            side = 3;
+          }
+          if (side === 0) breakBondR(body, i);
+          else if (side === 1) breakBondR(body, i - 1);
+          else if (side === 2) breakBondD(body, i);
+          else if (side === 3) breakBondD(body, i - w);
         }
       }
     }

@@ -27,7 +27,13 @@ try {
     const f = (n: number, d = 1): string => (Number.isFinite(n) ? n.toFixed(d) : String(n));
     console.log('name'.padEnd(34), 'peak dB', 'rms dB', 'centroid', 'tail s');
     for (const e of report.events)
-      console.log(e.name.padEnd(34), f(e.peakDb).padStart(7), f(e.rmsDb).padStart(6), f(e.centroidHz, 0).padStart(8), f(e.tailSec, 2).padStart(6));
+      console.log(
+        e.name.padEnd(34),
+        f(e.peakDb).padStart(7),
+        f(e.rmsDb).padStart(6),
+        f(e.centroidHz, 0).padStart(8),
+        f(e.tailSec, 2).padStart(6),
+      );
     const { events: _events, ...rest } = report;
     console.log(rest);
   }

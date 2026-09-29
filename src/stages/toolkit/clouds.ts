@@ -28,8 +28,11 @@ export interface CloudOpts {
   seed: number;
 }
 
-/** Puffs distributed by rejection sampling of a noise density: the soft particle body of a nebula. */
-export function makeCloud(o: CloudOpts): SpriteBuffer {
+/**
+ * Puffs distributed by rejection sampling of a noise density: the soft particle body of a nebula. A generator so a stage load can
+ * pause every ~1500 candidate points (≈ 10 ms) instead of stalling a frame; `makeCloud` runs it to completion.
+ */
+export function* makeCloudSteps(o: CloudOpts): Generator<number, SpriteBuffer, void> {
   const rng = new Rng(o.seed);
   const b = new SpriteBuilder();
   const { bounds: bd } = o;
@@ -39,6 +42,7 @@ export function makeCloud(o: CloudOpts): SpriteBuffer {
   let attempts = 0;
   const maxAttempts = o.count * 60;
   while (b.count < o.count && attempts++ < maxAttempts) {
+    if (attempts % CLOUD_SLICE === 0) yield 0;
     const x = bd.x0 + rng.next() * w;
     const y = bd.y0 + rng.next() * h;
     let d = o.noise.fbm(x * o.freq, y * o.freq, o.octaves ?? 5);
@@ -64,4 +68,16 @@ export function makeCloud(o: CloudOpts): SpriteBuffer {
     );
   }
   return b.build();
+}
+
+/** Candidate points examined between pause points of `makeCloudSteps`. */
+const CLOUD_SLICE = 1500;
+
+/** Blocking form of `makeCloudSteps`. */
+export function makeCloud(o: CloudOpts): SpriteBuffer {
+  const gen = makeCloudSteps(o);
+  for (;;) {
+    const r = gen.next();
+    if (r.done) return r.value;
+  }
 }

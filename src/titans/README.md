@@ -56,6 +56,7 @@ Seams/fault lines are distinct **materials** with weaker bonds (JSON `physics.bo
 | `chargePower`, `chargeReach` | hold-to-charge scaling: energy `×(1..1+chargePower)`, lengths `×chargeReach[0..1]` |
 | `ctl` | per-phase steering multiplier override (e.g. the Swarm gives the stick to the fragments) |
 | `swarm`, `cascade`, `spin`, `eyeFlare`, `halo` | behaviour parameters/flags for the titan's behaviour class |
+| `recoil` | 0..1: fraction of the damage dealt that comes back on the attacker (rams). Read by the AI only (it values such blows net); the matter world produces the actual backlash |
 
 Frame data is validated by `validateTitanDef` (feel targets) in `titans.test.ts`; `docs/TITANS.md` is generated from the JSON by `npx tsx tools/titans/docs.ts`.
 

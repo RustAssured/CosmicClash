@@ -10,7 +10,7 @@ import {
   type SimEvent,
 } from '@/contracts';
 import type { Match } from '@/sim';
-import { FighterImpl } from './fighter';
+import type { FighterImpl } from './fighter';
 import { topSpeed } from './stats';
 import { ManualSource, createFakeWorld, makeMatch, skipIntro } from './testing/harness';
 
@@ -234,7 +234,7 @@ describe('cancels: feint, guard, surge', () => {
 
 describe('hit-stun, hit-stop and the escape route', () => {
   it('hit-stop is clamped to 60–220 ms and scales with energy', () => {
-    const { a, b, f0, f1, events, step } = duel({ gap: 150 });
+    const { a, events, step } = duel({ gap: 150 });
     step(3);
     tap(a, Btn.STRIKE, step);
     step(30);
@@ -242,9 +242,6 @@ describe('hit-stun, hit-stop and the escape route', () => {
     expect(strike).toBeDefined();
     expect(strike!.ticks).toBeGreaterThanOrEqual(HITSTOP_MIN_TICKS);
     expect(strike!.ticks).toBeLessThanOrEqual(HITSTOP_MAX_TICKS);
-    void b;
-    void f0;
-    void f1;
     const crush = duel({ gap: 130 });
     crush.step(3);
     tap(crush.a, Btn.CRUSH, crush.step);
@@ -256,7 +253,7 @@ describe('hit-stun, hit-stop and the escape route', () => {
   });
 
   it('hit-stun is short for heavy titans and never a stun-lock; Surge breaks out after a brief window', () => {
-    const { a, b, f0, f1, events, step } = duel({ gap: 110 });
+    const { a, f1, step } = duel({ gap: 110 });
     step(3);
     // the asteroid (light) is battered by repeated lashes
     let longest = 0;
@@ -290,9 +287,6 @@ describe('hit-stun, hit-stop and the escape route', () => {
     tap(e2.b, Btn.SURGE, e2.step);
     expect(e2.f1.view.state).toBe('surge');
     expect(e2.f1.view.intangible).toBe(true);
-    void f0;
-    void b;
-    void events;
   });
 });
 

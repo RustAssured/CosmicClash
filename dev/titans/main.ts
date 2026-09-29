@@ -31,8 +31,20 @@ import { blitLayers, makeFrame, paintBackdrop } from './blit';
 
 const LIGHTS: Record<string, StageLighting> = {
   nursery: DEFAULT_LIGHTING,
-  cold: { dir: [-0.3, -0.6, 0.74], color: '#cfe6ff', ambient: '#0e1a3a', rim: '#7fc8ff', screenPos: [0.3, -0.1] },
-  noon: { dir: [0, -0.7, 0.71], color: '#fff3d6', ambient: '#2b2a3a', rim: '#ffd9a0', screenPos: [0.5, -0.2] },
+  cold: {
+    dir: [-0.3, -0.6, 0.74],
+    color: '#cfe6ff',
+    ambient: '#0e1a3a',
+    rim: '#7fc8ff',
+    screenPos: [0.3, -0.1],
+  },
+  noon: {
+    dir: [0, -0.7, 0.71],
+    color: '#fff3d6',
+    ambient: '#2b2a3a',
+    rim: '#ffd9a0',
+    screenPos: [0.5, -0.2],
+  },
 };
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -82,7 +94,10 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
 });
 window.addEventListener('keyup', (e: KeyboardEvent) => down.delete(e.code));
 
-function humanSource(map: Record<string, number>, keys: { l: string; r: string; u: string; d: string }): InputSource {
+function humanSource(
+  map: Record<string, number>,
+  keys: { l: string; r: string; u: string; d: string },
+): InputSource {
   let prev = 0;
   return {
     kind: 'human',
@@ -99,11 +114,27 @@ function humanSource(map: Record<string, number>, keys: { l: string; r: string; 
   };
 }
 const P1 = humanSource(
-  { KeyJ: Btn.STRIKE, KeyK: Btn.CRUSH, KeyL: Btn.SURGE, KeyI: Btn.SIGNATURE, KeyO: Btn.ULTIMATE, KeyU: Btn.GUARD, KeyQ: Btn.FEINT },
+  {
+    KeyJ: Btn.STRIKE,
+    KeyK: Btn.CRUSH,
+    KeyL: Btn.SURGE,
+    KeyI: Btn.SIGNATURE,
+    KeyO: Btn.ULTIMATE,
+    KeyU: Btn.GUARD,
+    KeyQ: Btn.FEINT,
+  },
   { l: 'KeyA', r: 'KeyD', u: 'KeyW', d: 'KeyS' },
 );
 const P2 = humanSource(
-  { Digit1: Btn.STRIKE, Digit2: Btn.CRUSH, Digit3: Btn.SURGE, Digit4: Btn.SIGNATURE, Digit5: Btn.ULTIMATE, Digit6: Btn.GUARD, Digit7: Btn.FEINT },
+  {
+    Digit1: Btn.STRIKE,
+    Digit2: Btn.CRUSH,
+    Digit3: Btn.SURGE,
+    Digit4: Btn.SIGNATURE,
+    Digit5: Btn.ULTIMATE,
+    Digit6: Btn.GUARD,
+    Digit7: Btn.FEINT,
+  },
   { l: 'ArrowLeft', r: 'ArrowRight', u: 'ArrowUp', d: 'ArrowDown' },
 );
 
@@ -118,7 +149,9 @@ let last = performance.now();
 let ticksAdvanced = 0;
 
 function titanOf(v: string): TitanId {
-  return (TITAN_IDS as readonly string[]).includes(v) && (IMPLEMENTED_TITANS as readonly string[]).includes(v) ? (v as TitanId) : 'lastone';
+  return (TITAN_IDS as readonly string[]).includes(v) && (IMPLEMENTED_TITANS as readonly string[]).includes(v)
+    ? (v as TitanId)
+    : 'lastone';
 }
 
 function start(): void {
@@ -132,7 +165,11 @@ function start(): void {
     mode: viewer ? 'training' : 'vsai',
     slots: [
       { titan: a, controller: 'human' },
-      { titan: b, controller: viewer ? 'dummy' : (sel.ctl.value as 'ai' | 'dummy' | 'human'), aiLevel: level },
+      {
+        titan: b,
+        controller: viewer ? 'dummy' : (sel.ctl.value as 'ai' | 'dummy' | 'human'),
+        aiLevel: level,
+      },
     ],
     startState: sel.state.value === '50' ? '50' : sel.state.value === '10' ? '10' : 'intact',
     infinite: true,
@@ -170,7 +207,13 @@ function start(): void {
   ticksAdvanced = 0;
   const t = parseInt(q.get('t') ?? '0', 10) || 0;
   for (let i = 0; i < t; i++) advance();
-  (window as unknown as { __TITANS__: unknown }).__TITANS__ = { match, get tick() { return match.tick; }, ticks: () => ticksAdvanced };
+  (window as unknown as { __TITANS__: unknown }).__TITANS__ = {
+    match,
+    get tick() {
+      return match.tick;
+    },
+    ticks: () => ticksAdvanced,
+  };
 }
 
 function advance(): void {
@@ -232,7 +275,8 @@ function drawDebug(view: ViewRect, zoom: number): void {
       ctx.strokeStyle = `#${(d.color & 0xffffff).toString(16).padStart(6, '0')}`;
       const s = d.shape;
       ctx.beginPath();
-      if (s.kind === 'point' || s.kind === 'field') ctx.arc((s.x - view.x0) * sx, (s.y - view.y0) * sx, s.r * sx, 0, 6.283);
+      if (s.kind === 'point' || s.kind === 'field')
+        ctx.arc((s.x - view.x0) * sx, (s.y - view.y0) * sx, s.r * sx, 0, 6.283);
       else if (s.kind === 'line') {
         ctx.moveTo((s.x0 - view.x0) * sx, (s.y0 - view.y0) * sx);
         ctx.lineTo((s.x1 - view.x0) * sx, (s.y1 - view.y0) * sx);
@@ -246,7 +290,12 @@ function drawDebug(view: ViewRect, zoom: number): void {
     }
     const v = f.view;
     ctx.strokeStyle = '#5f8';
-    ctx.strokeRect((v.boundsX0 - view.x0) * sx, (v.boundsY0 - view.y0) * sx, (v.boundsX1 - v.boundsX0) * sx, (v.boundsY1 - v.boundsY0) * sx);
+    ctx.strokeRect(
+      (v.boundsX0 - view.x0) * sx,
+      (v.boundsY0 - view.y0) * sx,
+      (v.boundsX1 - v.boundsX0) * sx,
+      (v.boundsY1 - v.boundsY0) * sx,
+    );
   }
   void zoom;
 }

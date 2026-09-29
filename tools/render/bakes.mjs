@@ -17,13 +17,13 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
 await page.goto('http://localhost:5201/dev/render/?stage=nursery&quality=1&freeze=1&t=5&text=0&ui=0');
 await page.waitForFunction("document.body.dataset.ready==='1'", null, { timeout: 120000 });
-const n = await page.evaluate(() => window.__RENDER__.renderer.scenery.bakes.length);
+const n = await page.evaluate(() => window.__RENDER__.renderer.active.scenery.bakes.length);
 for (let b = 0; b < n; b++) {
   for (const idx of [0, 1]) {
     const r = await page.evaluate(
       ([b, idx]) => {
         const R = window.__RENDER__.renderer;
-        const rt = R.scenery.bakes[b];
+        const rt = R.active.scenery.bakes[b];
         const buf = new Uint8Array(rt.width * rt.height * 4);
         R.three.readRenderTargetPixels(rt, 0, 0, rt.width, rt.height, buf, undefined, idx);
         let s = '';

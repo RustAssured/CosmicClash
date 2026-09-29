@@ -1,4 +1,5 @@
 name: CI
+
 on:
   push:
     branches: ['**']
@@ -9,9 +10,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   verify:
+    name: Typecheck, lint, unit tests, build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,12 +25,56 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint (eslint + prettier)
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
       - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist
           retention-days: 7
+
+  e2e:
+    name: Browser tests (Playwright, Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The browser download is the slow part of a cold run: cache it, keyed on the lockfile (which pins Playwright's version).
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium and its system libraries
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install system libraries only (browser restored from cache)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      # playwright.config.ts builds the app and serves it with `vite preview`; the UI/input/audio specs start their own Vite dev
+      # server for the pages under dev/ (tools/ui/devserver.ts), so nothing else needs to be running.
+      - name: Run browser tests
+        run: npm run e2e
+      - name: Upload screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: |
+            playwright-report
+            test-results
+            .scratch/e2e
+          if-no-files-found: ignore
+          retention-days: 14

@@ -1,4 +1,11 @@
-import { REGION_GRID, type FighterState, type FighterView, type MovePhase, type MoveSlot, type ThreatShape } from '@/contracts';
+import {
+  REGION_GRID,
+  type FighterState,
+  type FighterView,
+  type MovePhase,
+  type MoveSlot,
+  type ThreatShape,
+} from '@/contracts';
 
 /** Flattened copy of a public ThreatShape: an AABB is all the AI needs (it never sees the foe's pending input, only its telegraphs). */
 export interface ThreatSnap {
@@ -99,7 +106,14 @@ export class Snapshot {
   }
 }
 
-const TYPE_INDEX: Record<string, number> = { FRACTURE: 0, ASSIMILATION: 1, TIDAL: 2, THERMAL: 3, CRUSH: 4, KINETIC: 5 };
+const TYPE_INDEX: Record<string, number> = {
+  FRACTURE: 0,
+  ASSIMILATION: 1,
+  TIDAL: 2,
+  THERMAL: 3,
+  CRUSH: 4,
+  KINETIC: 5,
+};
 
 function copyThreat(dst: ThreatSnap, t: ThreatShape): void {
   const s = t.shape;

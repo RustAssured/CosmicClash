@@ -3,7 +3,7 @@ import { CONN_NOW, CONN_STEADY } from './body';
 import type { WorldCore } from './core';
 import { DX, DY, edgeBond, edgeCells, breakEdge, isSurfaceCorner } from './cuts';
 import { PK } from './particles';
-import { localToWorldF } from './dmg';
+import { T_FRACTURE, isImmune, localToWorldF } from './dmg';
 import { RAMP_SHARD } from './debris';
 
 const MAX_FRONTS = 160;
@@ -139,6 +139,14 @@ export function stepFronts(core: WorldCore, body: Body): void {
         break;
       }
       const bond = edgeBond(body, cx, cy, bestD);
+      if (
+        bond > 0 &&
+        edgeCells(body, cx, cy, bestD, cellsTmp) &&
+        (isImmune(body, cellsTmp[0]!, T_FRACTURE) || isImmune(body, cellsTmp[1]!, T_FRACTURE))
+      ) {
+        alive = false; // a crack cannot enter immune matter
+        break;
+      }
       if (bond > 0) {
         const tough = edgeTough(body, cx, cy, bestD);
         const need = bond * coh * (0.26 + 0.5 * tough);

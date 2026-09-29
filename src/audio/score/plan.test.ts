@@ -1,13 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '@/contracts';
-import { CHORD_BARS, STEPS_PER_BAR, nextChord, planStep, stepSeconds, type ScoreParams, type StepPlan } from './plan';
+import {
+  CHORD_BARS,
+  STEPS_PER_BAR,
+  nextChord,
+  planStep,
+  stepSeconds,
+  type ScoreParams,
+  type StepPlan,
+} from './plan';
 
 const bars = (p: ScoreParams, n: number, seed = 1): StepPlan[] => {
   const rng = new Rng(seed);
   return Array.from({ length: n * STEPS_PER_BAR }, (_, i) => planStep(i, p, rng));
 };
-const count = (plans: StepPlan[], k: 'sub' | 'taiko' | 'perc' | 'pulse'): number => plans.filter((p) => p[k] > 0).length;
-const fight = (intensity: number, lowIntegrity = 0): ScoreParams => ({ intensity, lowIntegrity, phase: 'fight' });
+const count = (plans: StepPlan[], k: 'sub' | 'taiko' | 'perc' | 'pulse'): number =>
+  plans.filter((p) => p[k] > 0).length;
+const fight = (intensity: number, lowIntegrity = 0): ScoreParams => ({
+  intensity,
+  lowIntegrity,
+  phase: 'fight',
+});
 
 describe('score plan', () => {
   it('is deterministic per seed and differs across seeds at high intensity', () => {
@@ -50,8 +63,12 @@ describe('score plan', () => {
   it('the heartbeat appears only when integrity is low, and does so even in a lull', () => {
     expect(count(bars(fight(0.0, 0.2), 8), 'pulse')).toBe(0);
     expect(count(bars(fight(0.0, 0.9), 8), 'pulse')).toBeGreaterThan(0);
-    const soft = bars(fight(0, 0.6), 4).filter((p) => p.pulse > 0).map((p) => p.pulse);
-    const hard = bars(fight(0, 1), 4).filter((p) => p.pulse > 0).map((p) => p.pulse);
+    const soft = bars(fight(0, 0.6), 4)
+      .filter((p) => p.pulse > 0)
+      .map((p) => p.pulse);
+    const hard = bars(fight(0, 1), 4)
+      .filter((p) => p.pulse > 0)
+      .map((p) => p.pulse);
     expect(Math.max(...hard)).toBeGreaterThan(Math.max(...soft));
   });
   it('menus and results get only sparse bells, never rhythm; pause is silent', () => {

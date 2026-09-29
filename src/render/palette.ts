@@ -239,28 +239,65 @@ function bestPair(
   out[2] = bestR;
 }
 
-export function buildDitherLut(pal: PaletteData, opts: LutOptions = {}): DitherLut {
-  const size = opts.size ?? 32;
-  const data = new Uint8Array(size * size * size * 4);
-  const lab = new Float32Array(3);
-  const res = new Float32Array(3);
-  const inv = 1 / (size - 1);
-  let o = 0;
-  for (let b = 0; b < size; b++) {
-    const tb = srgbToLinear(b * inv);
+/**
+ * Incremental LUT builder: one blue slice (size² nodes, ~2–4 ms) per `step()`, so a stage load can spread the work over frames
+ * (see slicer.ts). `buildDitherLut` is this run to completion; the result is identical either way.
+ */
+export class LutBuilder {
+  readonly size: number;
+  readonly data: Uint8Array;
+  private b = 0;
+  private readonly lab = new Float32Array(3);
+  private readonly res = new Float32Array(3);
+
+  constructor(
+    private readonly pal: PaletteData,
+    opts: LutOptions = {},
+  ) {
+    this.size = opts.size ?? 32;
+    this.data = new Uint8Array(this.size * this.size * this.size * 4);
+  }
+
+  get done(): boolean {
+    return this.b >= this.size;
+  }
+
+  /** Fraction of the LUT built, 0..1. */
+  get progress(): number {
+    return this.b / this.size;
+  }
+
+  /** Build the next blue slice. Returns true when the whole LUT is complete. */
+  step(): boolean {
+    if (this.done) return true;
+    const size = this.size;
+    const inv = 1 / (size - 1);
+    const tb = srgbToLinear(this.b * inv);
+    let o = this.b * size * size * 4;
     for (let g = 0; g < size; g++) {
       const tg = srgbToLinear(g * inv);
       for (let r = 0; r < size; r++) {
         // The target is re-derived from the node's sRGB coordinates each time (the LUT is indexed in sRGB).
-        bestPair(pal, srgbToLinear(r * inv), tg, tb, lab, res);
-        data[o++] = res[0]!;
-        data[o++] = res[1]!;
-        data[o++] = Math.round(res[2]! * 255);
-        data[o++] = 0;
+        bestPair(this.pal, srgbToLinear(r * inv), tg, tb, this.lab, this.res);
+        this.data[o++] = this.res[0]!;
+        this.data[o++] = this.res[1]!;
+        this.data[o++] = Math.round(this.res[2]! * 255);
+        this.data[o++] = 0;
       }
     }
+    this.b++;
+    return this.done;
   }
-  return { size, data };
+
+  result(): DitherLut {
+    return { size: this.size, data: this.data };
+  }
+}
+
+export function buildDitherLut(pal: PaletteData, opts: LutOptions = {}): DitherLut {
+  const b = new LutBuilder(pal, opts);
+  while (!b.step());
+  return b.result();
 }
 
 /** LUT node index for sRGB values in 0..1 — MUST match the shader's `(rgb*(size-1)+0.5)/size` nearest-node fetch. */

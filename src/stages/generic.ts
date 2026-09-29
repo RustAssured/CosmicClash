@@ -1,13 +1,13 @@
 import { Rng, type StageId, type StageInfo } from '@/contracts';
 import { STAGE_INFO } from './info';
-import type { SceneryFrame, SceneryInit, SceneryLook, StageScenery } from './types';
+import type { PrepareStep, SceneryInit, SceneryLook } from './types';
+import { SceneryBase } from './toolkit/base';
 import { makeCloud } from './toolkit/clouds';
 import { SceneryKit } from './toolkit/kit';
 import type { Rgb } from './toolkit/color';
 import { addNebula } from './toolkit/nebula';
 import { Noise2 } from './toolkit/noise';
 import { layerBounds, makeStarField } from './toolkit/stars';
-import type { WebGLRenderTarget } from 'three';
 
 /**
  * Data-driven fallback scenery for stages whose bespoke backdrops are still to come: deep parallax star fields, a
@@ -105,24 +105,22 @@ const LOOK: SceneryLook = {
   vignette: 0.5,
 };
 
-export class GenericScenery implements StageScenery {
+export class GenericScenery extends SceneryBase {
   readonly look: SceneryLook;
-  private kit: SceneryKit | null = null;
+  protected readonly noiseSeed: number;
   private info: StageInfo;
-  private renderer: SceneryInit['renderer'] | null = null;
 
   constructor(readonly id: StageId) {
+    super();
     this.info = STAGE_INFO[id];
+    this.noiseSeed = 0x600d + this.info.index;
     this.look = { ...LOOK, exposure: STYLES[id].exposure };
   }
 
-  init(ctx: SceneryInit): void {
-    this.renderer = ctx.renderer;
-    const kit = new SceneryKit(ctx, 0x600d + this.info.index);
-    this.kit = kit;
+  protected *build(kit: SceneryKit, _ctx: SceneryInit): Generator<PrepareStep, void, void> {
     const st = STYLES[this.id];
     const arena = this.info.arena;
-    const q = [0.4, 0.7, 1][ctx.quality]!;
+    const q = 1;
     const noise = new Noise2(0x1234 + this.info.index * 77);
     const seed = this.info.index * 1000;
 
@@ -274,22 +272,9 @@ export class GenericScenery implements StageScenery {
     });
   }
 
-  update(frame: SceneryFrame): void {
-    this.kit?.update(frame);
-  }
-
-  render(target: WebGLRenderTarget): void {
-    if (this.kit && this.renderer) this.kit.render(this.renderer, target);
-  }
-
   lightScreenPos(out: { x: number; y: number }): void {
     const l = this.info.lighting.screenPos;
     out.x = l[0] * 640;
     out.y = l[1] * 360;
-  }
-
-  dispose(): void {
-    this.kit?.dispose();
-    this.kit = null;
   }
 }

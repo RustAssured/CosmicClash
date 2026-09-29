@@ -216,8 +216,7 @@ void main() {
   vec2 wq = vec2(fbm(p * 0.011 + uSeed, 4), fbm(p * 0.011 + uSeed + vec2(7.7, 3.1), 4)) - 0.5;
   vec2 q = p + wq * uWarp;
   float d = 1e4;
-  for (int i = 0; i < ${MAX_SEGMENTS}; i++) {
-    if (i >= uNSeg) break;
+  for (int i = 0; i < uNSeg; i++) {
     // cheap reject: a segment whose bounding circle is far outside the current surface cannot change it
     vec2 mid = 0.5 * (uSegA[i].xy + uSegB[i].xy);
     float reach = 0.5 * length(uSegB[i].xy - uSegA[i].xy) + max(uSegA[i].z, uSegB[i].z);

@@ -61,7 +61,7 @@ for (const q of tiers) {
       const setStageMs = Math.round(performance.now() - t);
       const out = { setStageMs, runs: [] };
       out.runs.push(measure('full frame'));
-      const layers = rend.scenery.kit.layers;
+      const layers = rend.active.scenery.kit.layers;
       layers.forEach((l) => (l.mesh.visible = false));
       out.runs.push(measure('no scenery layers (dither + 2D + bloom + rays + post + present)'));
       layers.forEach((l) => (l.mesh.visible = true));

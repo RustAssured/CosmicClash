@@ -50,7 +50,11 @@ export function createControllerScreen(): Screen {
     toast = { text, until: ctx.t + 2.6, bad };
   };
 
-  const devices = (ctx: UICtx): readonly DeviceInfo[] => ctx.input.devices();
+  /** P1's device, then P2's, then everything else in connection order (keyboards last): the tab order matches the players. */
+  const devices = (ctx: UICtx): readonly DeviceInfo[] => {
+    const rank = (d: DeviceInfo): number => (d.slot !== null ? d.slot : d.kind === 'keyboard' ? 3 : 2);
+    return [...ctx.input.devices()].sort((a, b) => rank(a) - rank(b));
+  };
 
   /**
    * Which device is being inspected. Until the player cycles devices by hand, the screen follows whichever device they last
@@ -287,11 +291,10 @@ export function createControllerScreen(): Screen {
       drawRightPane(ctx, dev, live);
       drawOverlays(ctx, dev, live);
       if (toast && ctx.t < toast.until) {
-        const w = measureText(toast.text, { tracking: 1 }) + 20;
-        const x = PX + PW / 2 - w / 2;
-        cv.rect(x, PY + PH - 26, w, 18, alpha(C.ink0, 0.96));
-        cv.frame(x, PY + PH - 26, w, 18, toast.bad ? C.danger : C.celadonDeep);
-        drawText(cv, toast.text, PX + PW / 2, PY + PH - 23, {
+        // a plate over the hint line right under the tab bar: never covers a row the player is working on
+        cv.rect(PX + 8, PY + 29, PW - 16, 13, alpha(C.ink0, 0.97));
+        cv.frame(PX + 8, PY + 29, PW - 16, 13, toast.bad ? C.danger : C.celadonDeep);
+        drawText(cv, toast.text, PX + PW / 2, PY + 31, {
           color: toast.bad ? C.danger : C.celadonLight,
           align: 'center',
           tracking: 1,

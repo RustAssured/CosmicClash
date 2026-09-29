@@ -4,6 +4,7 @@ import { STAGES } from '@/stages';
 import { bayerRanks, bayerTexels, bayerThreshold, ditherQuantise } from './dither';
 import {
   CROSS_RAMP_MAX,
+  LutBuilder,
   PALETTE_TEX_W,
   buildDitherLut,
   ditherToIndex,
@@ -118,6 +119,22 @@ describe('palette + dither LUT', () => {
     const ms = performance.now() - t0;
     expect(Buffer.from(again.data).equals(Buffer.from(lut.data))).toBe(true);
     expect(ms).toBeLessThan(4000); // ~70 ms unloaded; generous so a busy CI box does not flake
+  });
+
+  it('the incremental builder matches the one-shot build exactly and reports progress', () => {
+    const b = new LutBuilder(pal, { size: 32 });
+    let steps = 0;
+    let last = 0;
+    while (!b.done) {
+      b.step();
+      steps++;
+      expect(b.progress).toBeGreaterThanOrEqual(last);
+      last = b.progress;
+    }
+    expect(steps).toBe(32);
+    expect(b.progress).toBe(1);
+    expect(Buffer.from(b.result().data).equals(Buffer.from(lut.data))).toBe(true);
+    expect(b.step()).toBe(true); // idempotent once finished
   });
 
   it('every LUT entry references valid palette indices with a ratio byte', () => {

@@ -2,12 +2,21 @@ import type { DamageResult } from '@/contracts';
 import { CONN_NOW, CONN_STEADY } from './body';
 import type { Body, WorldPoint } from './body';
 import type { Wave, WorldCore } from './core';
+import { breakBondD, breakBondR } from './cells';
 import { carveCrater, type CraterOpts, type CraterOut } from './crater';
 import { plantFrontToward } from './cracks';
 import { edgeBond } from './cuts';
 import { PK } from './particles';
 import { RAMP_DUST, spawnMassParticle } from './debris';
-import { T_CRUSH, coverageOf, finishDamage, localToWorldF, recordBlow, type DamageCtx } from './dmg';
+import {
+  T_CRUSH,
+  coverageOf,
+  finishDamage,
+  isImmune,
+  localToWorldF,
+  recordBlow,
+  type DamageCtx,
+} from './dmg';
 import { stepBlast } from './blast';
 
 const opts: CraterOpts = {
@@ -19,6 +28,7 @@ const opts: CraterOpts = {
   compact: 0.25,
   craterR: 0,
   type: T_CRUSH,
+  costCap: Infinity,
 };
 const out: CraterOut = {
   ok: false,
@@ -182,7 +192,7 @@ function stepShock(core: WorldCore, body: Body, wv: Wave): void {
       const d2 = dx * dx + dy * dy;
       if (d2 < lo || d2 > hi) continue;
       const i = y * w + x;
-      if (map.material[i] === 0) continue;
+      if (map.material[i] === 0 || isImmune(body, i, T_CRUSH)) continue;
       // Loosen: severed bonds (ragged, random) and a little bruising.
       // The wave exploits WEAK bonds (grain seams, faults, layer boundaries): a tectonic pattern, not random noise.
       const bR = x < w - 1 ? map.bondR[i]! : 0;
@@ -192,17 +202,13 @@ function stepShock(core: WorldCore, body: Body, wv: Wave): void {
       const pR = f * 0.9 * wR * wR;
       const pD = f * 0.9 * wD * wD;
       if (bR !== 0 && rng.next() < pR) {
-        map.bondR[i] = 0;
-        map.flags[i] = map.flags[i]! | 2;
-        map.flags[i + 1] = map.flags[i + 1]! | 2;
+        breakBondR(body, i);
         broke++;
         body.touchPoint(x, y);
         body.touchPoint(x + 1, y);
       }
       if (bD !== 0 && rng.next() < pD) {
-        map.bondD[i] = 0;
-        map.flags[i] = map.flags[i]! | 2;
-        map.flags[i + w] = map.flags[i + w]! | 2;
+        breakBondD(body, i);
         broke++;
         body.touchPoint(x, y);
         body.touchPoint(x, y + 1);

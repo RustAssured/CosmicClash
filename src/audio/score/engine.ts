@@ -198,7 +198,10 @@ export class ScoreEngine {
     const k = target > this.intensity ? 1 - Math.exp(-dt / 0.35) : 1 - Math.exp(-dt / 2.2);
     this.intensity += (target - this.intensity) * k;
     // tension ramps in below ~32% integrity and is full at ~10% (lowestIntegrity is the weaker titan's 0..1 integrity)
-    this.lowIntegrity = scene.phase === 'fight' || scene.phase === 'attract' ? clamp01((0.32 - scene.lowestIntegrity) / 0.22) : 0;
+    this.lowIntegrity =
+      scene.phase === 'fight' || scene.phase === 'attract'
+        ? clamp01((0.32 - scene.lowestIntegrity) / 0.22)
+        : 0;
     this.applyMix(now);
     this.scheduleUntil(now + LOOKAHEAD);
     this.lastUpdate = now;
@@ -220,7 +223,8 @@ export class ScoreEngine {
     const ts = 0.35 + 0.65 * this.timeScale; // slow-motion pulls pitch down like a tape slowing
     d.filter.frequency.setTargetAtTime((300 + 900 * I) * (1 - 0.35 * tense) * ts, now, 0.4);
     d.clusterGain.gain.setTargetAtTime(0.25 * tense, now, 0.8);
-    for (const o of [d.root, d.fifth[0], d.fifth[1], d.sub, d.shimmer, d.cluster]) o.detune.setTargetAtTime(1200 * Math.log2(ts) - 25 * tense, now, 0.15);
+    for (const o of [d.root, d.fifth[0], d.fifth[1], d.sub, d.shimmer, d.cluster])
+      o.detune.setTargetAtTime(1200 * Math.log2(ts) - 25 * tense, now, 0.15);
     this.padFilter.frequency.setTargetAtTime((700 + 1800 * I) * ts, now, 0.5);
     for (const v of this.padVoices) {
       v.oscs[0].detune.setTargetAtTime(-6 + 1200 * Math.log2(ts) - 40 * tense, now, 0.3);
@@ -241,13 +245,26 @@ export class ScoreEngine {
   }
 
   private scheduleStep(step: number, t: number): void {
-    if (step > 0 && step % (STEPS_PER_BAR * CHORD_BARS) === 0) this.setChord(nextChord(this.chord, this.music.chords.length, this.rng));
-    const plan = planStep(step, { intensity: this.intensity, lowIntegrity: this.lowIntegrity, phase: this.phase }, this.rng);
+    if (step > 0 && step % (STEPS_PER_BAR * CHORD_BARS) === 0)
+      this.setChord(nextChord(this.chord, this.music.chords.length, this.rng));
+    const plan = planStep(
+      step,
+      { intensity: this.intensity, lowIntegrity: this.lowIntegrity, phase: this.phase },
+      this.rng,
+    );
     const pan = (this.rng.next() - 0.5) * 0.3;
     if (plan.sub > 0) {
       // `this.c` is the MUSIC voice context (its dry/wet are the music bus and send), so these voices sit in the music mix
       const o = makeOut(this.c, 0, 0);
-      thump(this.c, o, t, midiToHz(this.music.root + 12) * 1.0, midiToHz(this.music.root - 12) * 1.0, 0.42, 0.34 * plan.sub);
+      thump(
+        this.c,
+        o,
+        t,
+        midiToHz(this.music.root + 12) * 1.0,
+        midiToHz(this.music.root - 12) * 1.0,
+        0.42,
+        0.34 * plan.sub,
+      );
     }
     if (plan.taiko > 0) this.taiko(t, plan.taiko, plan.taikoTune, pan);
     if (plan.perc > 0) this.perc(t, plan.perc, pan * 2);
@@ -259,13 +276,30 @@ export class ScoreEngine {
     const f = [78, 104, 139][tune]!;
     const o = makeOut(this.c, pan, 0.5);
     tone(this.c, o, t, { f0: f * 1.9, f1: f, dur: 0.55, gain: 0.3 * v, attack: 0.002, glide: 0.09 });
-    tone(this.c, o, t, { f0: f * 1.5, f1: f * 0.75, dur: 0.3, gain: 0.12 * v, type: 'triangle', attack: 0.002 });
-    noiseHit(this.c, o, t, { dur: 0.09, gain: 0.16 * v, filter: { type: 'bandpass', f0: 260, q: 1.1 }, attack: 0.001 });
+    tone(this.c, o, t, {
+      f0: f * 1.5,
+      f1: f * 0.75,
+      dur: 0.3,
+      gain: 0.12 * v,
+      type: 'triangle',
+      attack: 0.002,
+    });
+    noiseHit(this.c, o, t, {
+      dur: 0.09,
+      gain: 0.16 * v,
+      filter: { type: 'bandpass', f0: 260, q: 1.1 },
+      attack: 0.001,
+    });
   }
 
   private perc(t: number, v: number, pan: number): void {
     const o = makeOut(this.c, clamp(pan, -1, 1), 0.3);
-    noiseHit(this.c, o, t, { dur: 0.05 + this.rng.next() * 0.05, gain: 0.07 * v, filter: { type: 'highpass', f0: 5500 + this.rng.next() * 3000, q: 0.8 }, attack: 0.001 });
+    noiseHit(this.c, o, t, {
+      dur: 0.05 + this.rng.next() * 0.05,
+      gain: 0.07 * v,
+      filter: { type: 'highpass', f0: 5500 + this.rng.next() * 3000, q: 0.8 },
+      attack: 0.001,
+    });
   }
 
   private heartbeat(t: number, v: number): void {
@@ -297,11 +331,32 @@ export class ScoreEngine {
       // resolve: an open fifth + octave + the third bloom over the pad, and the tension drains away
       const o = makeOut(this.c, 0, 0.9);
       for (const [i, deg] of [0, 2, 4, 7].entries())
-        tone(this.c, o, t, { f0: degreeToHz(this.music.root + 24, this.music.mode, deg), dur: phase === 'match' ? 5.5 : 3.4, gain: 0.05, attack: 1.4, detune: (i - 1.5) * 4 });
-      thump(this.c, makeOut(this.c, 0, 0), t, midiToHz(this.music.root + 12), midiToHz(this.music.root - 12), 1.4, 0.35);
+        tone(this.c, o, t, {
+          f0: degreeToHz(this.music.root + 24, this.music.mode, deg),
+          dur: phase === 'match' ? 5.5 : 3.4,
+          gain: 0.05,
+          attack: 1.4,
+          detune: (i - 1.5) * 4,
+        });
+      thump(
+        this.c,
+        makeOut(this.c, 0, 0),
+        t,
+        midiToHz(this.music.root + 12),
+        midiToHz(this.music.root - 12),
+        1.4,
+        0.35,
+      );
     } else if (phase === 'intro') {
       const o = makeOut(this.c, 0, 0.7);
-      tone(this.c, o, t, { f0: midiToHz(this.music.root + 12), f1: midiToHz(this.music.root + 24), dur: 1.8, gain: 0.08, attack: 1.5, type: 'triangle' });
+      tone(this.c, o, t, {
+        f0: midiToHz(this.music.root + 12),
+        f1: midiToHz(this.music.root + 24),
+        dur: 1.8,
+        gain: 0.08,
+        attack: 1.5,
+        type: 'triangle',
+      });
     }
   }
 

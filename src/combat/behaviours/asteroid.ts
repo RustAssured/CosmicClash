@@ -105,7 +105,7 @@ export class AsteroidBehaviour extends Behaviour {
     this.emberRamp = [hex('#fff3c2'), hex('#ffc65a'), hex('#e8783a'), hex('#8a3a26')];
     this.back = new Overlay('asteroid-orbit-back', -1, 288, 256, 'normal', true);
     this.front = new Overlay('asteroid-orbit-front', 1, 288, 256, 'normal', true);
-    this.fx = new Overlay('asteroid-fx', 20, 480, 320, 'add', true);
+    this.fx = new Overlay('asteroid-fx', 20, 800, 384, 'add', true);
     const sw = f.slotMoves.signature?.extra?.['swarm'] as SwarmCfg | undefined;
     this.cfg = sw ?? null;
     f.resourceMax = f.def.resource.max;
@@ -544,10 +544,7 @@ export class AsteroidBehaviour extends Behaviour {
     const n = PEBBLES + (this.rubble ? 3 : 0);
     for (let i = 0; i < n; i++) {
       const r0 =
-        R *
-        (1.12 + 0.11 * (i % 3)) *
-        (guard ? 0.72 : 1) *
-        (this.rubble ? 1.15 + 0.1 * hash01(i, 1, 1) : 1);
+        R * (1.12 + 0.11 * (i % 3)) * (guard ? 0.72 : 1) * (this.rubble ? 1.15 + 0.1 * hash01(i, 1, 1) : 1);
       const w = (0.017 + 0.006 * (i % 4)) * spinUp * (i % 2 === 0 ? 1 : -0.8);
       const a = i * 1.7 + tick * w + f.slot;
       const cx = t.x + 2 + Math.cos(a) * r0 * 1.05;
@@ -624,8 +621,19 @@ export class AsteroidBehaviour extends Behaviour {
     const at = m.phase === 'active' ? m.phaseTick - 1 : -1;
     // a hot haze along the whole sweep so the storm reads as one attack, then the individual rocks on top of it
     if (at >= cfg.sweepFrom - 4 && at <= cfg.sweepTo + 10) {
-      const k = clamp01(1 - Math.abs(at - (cfg.sweepFrom + cfg.sweepTo) * 0.5) / (cfg.sweepTo - cfg.sweepFrom));
-      for (let g = 0; g < 6; g++) this.fx.glow(t.x + dir * (40 + g * 46), t.y + Math.sin(tick * 0.2 + g) * 10, 34, 230, 130, 60, 0.12 * k);
+      const k = clamp01(
+        1 - Math.abs(at - (cfg.sweepFrom + cfg.sweepTo) * 0.5) / (cfg.sweepTo - cfg.sweepFrom),
+      );
+      for (let g = 0; g < 6; g++)
+        this.fx.glow(
+          t.x + dir * (40 + g * 46),
+          t.y + Math.sin(tick * 0.2 + g) * 10,
+          34,
+          230,
+          130,
+          60,
+          0.12 * k,
+        );
     }
     // twice as many rocks as the damage model has hits: the storm should look like a wall, the hitboxes are what count
     for (let i = 0; i < cfg.count * 2; i++) {
@@ -644,7 +652,6 @@ export class AsteroidBehaviour extends Behaviour {
       this.pebble(this.front, x, y, size, i, 1);
       this.fx.glow(x, y, age < 4 ? 10 : 6, 255, 210, 130, age < 4 ? 0.7 : 0.3);
     }
-    void tick;
   }
 
   private drawRamFlare(tick: number, m: ActiveMove): void {

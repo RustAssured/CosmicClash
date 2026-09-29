@@ -127,10 +127,13 @@ export function applyThermal(ctx: DamageCtx, res: DamageResult): void {
     if (map.infection[i]! > 60) dT *= 1.5;
     if (coreUsed > 0) {
       const dose = binDose[Math.min(CORE_BINS - 1, Math.floor(wgt[k]! * CORE_BINS))]!;
-      if (dose > 0) dT += dose * dTneed[k]! * tr;
+      // The focused core melts through atmosphere/ocean in front of it (it is what makes the pit); shielding still blunts the wide heating.
+      if (dose > 0) dT += dose * dTneed[k]!;
     }
-    if (!pierce) trans[lane] = tr * (1 - absorb * 0.25);
-    if (dT <= 0) continue;
+    if (dT <= 0) {
+      if (!pierce) trans[lane] = tr * (1 - absorb * 0.25);
+      continue;
+    }
     ctx.note(i, wgt[k]!);
     let T = map.temperature[i]! + dT;
     if (T > 30000) T = 30000;
@@ -143,7 +146,9 @@ export function applyThermal(ctx: DamageCtx, res: DamageResult): void {
     if (vap > 0 && T >= vap * tol * (map.infection[i]! > 60 ? 0.85 : 1)) {
       vaporizeCell(core, body, i, ctx);
       removed++;
+      continue; // a vaporised cell no longer shields what lies behind it
     }
+    if (!pierce) trans[lane] = tr * (1 - absorb * 0.25);
   }
   if (maxX >= 0) {
     body.wakeRect(minX, minY, maxX, maxY, ACT_HEAT);

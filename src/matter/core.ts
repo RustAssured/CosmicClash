@@ -143,6 +143,8 @@ export class WorldCore {
    * section to `prof[section]`. The simulation itself never reads a clock.
    */
   clock: (() => number) | null = null;
+  /** Tests: always run the full connectivity flood (the local reconnection shortcut must give identical results). */
+  forceFullConn = false;
   readonly prof = new Float64Array(12);
 
   readonly waves: Wave[] = Array.from({ length: 16 }, () => new Wave());

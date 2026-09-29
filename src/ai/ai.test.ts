@@ -17,12 +17,20 @@ import { createFighter } from '@/combat';
 import { ManualSource, createFakeWorld, makeMatch, skipIntro } from '@/combat/testing/harness';
 import { createAiSource, createMatch, type Match } from '@/sim';
 import { getTitanDef } from '@/titans';
-import { UtilityAI } from './controller';
+import type { UtilityAI } from './controller';
 import { createAI } from './index';
 import { levelParams } from './levels';
 
 /** A full AI-controlled match on the fake world (fast). `dummy` makes a slot passive. */
-function play(seed: number, a: TitanId, b: TitanId, la: Difficulty, lb: Difficulty, dummy: '' | 'a' | 'b' = '', maxTicks = 60 * 60 * 3): { match: Match; ais: (UtilityAI | null)[] } {
+function play(
+  seed: number,
+  a: TitanId,
+  b: TitanId,
+  la: Difficulty,
+  lb: Difficulty,
+  dummy: '' | 'a' | 'b' = '',
+  maxTicks = 60 * 60 * 3,
+): { match: Match; ais: (UtilityAI | null)[] } {
   const cfg: MatchConfig = {
     seed,
     stage: 'nursery',
@@ -93,7 +101,8 @@ describe('AI contract and human limits', () => {
   it('reaction delay ranges 180–350 ms across the difficulty levels', () => {
     expect(REACTION_MS[1]).toBeLessThanOrEqual(350);
     expect(REACTION_MS[6]).toBeGreaterThanOrEqual(180);
-    for (let l = 1; l < 6; l++) expect(REACTION_MS[l as Difficulty]).toBeGreaterThan(REACTION_MS[(l + 1) as Difficulty]);
+    for (let l = 1; l < 6; l++)
+      expect(REACTION_MS[l as Difficulty]).toBeGreaterThan(REACTION_MS[(l + 1) as Difficulty]);
   });
 
   it('is causal: outputs cannot depend on what the foe does until the reaction delay has passed', () => {
@@ -144,11 +153,15 @@ describe('AI competence', () => {
     ['lastone', 'asteroid', 6],
     ['asteroid', 'lastone', 2],
     ['asteroid', 'lastone', 5],
-  ] as const)('%s beats a do-nothing %s at level %i', (a, b, level) => {
-    const { match } = play(level * 11 + 1, a, b, level as Difficulty, 1, 'b');
-    expect(match.winner).toBe(0);
-    expect(match.wins[0]).toBe(2);
-  }, 60_000);
+  ] as const)(
+    '%s beats a do-nothing %s at level %i',
+    (a, b, level) => {
+      const { match } = play(level * 11 + 1, a, b, level as Difficulty, 1, 'b');
+      expect(match.winner).toBe(0);
+      expect(match.wins[0]).toBe(2);
+    },
+    60_000,
+  );
 
   it('skill shows in mechanics: higher levels dodge a telegraphed Crush far more often', () => {
     /** Fraction of thrown Meteor Strikes (a lunging heavy, 26 ticks of startup) that hit an otherwise idle AI. */
@@ -156,7 +169,13 @@ describe('AI competence', () => {
       let thrown = 0;
       let hit = 0;
       for (let seed = 1; seed <= 24; seed++) {
-        const m = makeMatch({ seed, a: 'lastone', b: 'asteroid', createWorld: createFakeWorld, infinite: true });
+        const m = makeMatch({
+          seed,
+          a: 'lastone',
+          b: 'asteroid',
+          createWorld: createFakeWorld,
+          infinite: true,
+        });
         const ai = createAI(level, getTitanDef('lastone'), seed);
         const foe = new ManualSource();
         m.setSources(createAiSource(m, 0, ai), foe);
@@ -191,10 +210,15 @@ describe('AI competence', () => {
     expect(r3).toBeLessThan(r1);
   }, 240_000);
 
-  it('a higher level defeats a do-nothing dummy no slower than a lower one', () => {
+  it('a higher level defeats a do-nothing dummy no slower than a lower one, and never stalls a round out', () => {
     const ttk = (level: Difficulty): number => {
       let total = 0;
-      for (let seed = 1; seed <= 4; seed++) total += play(seed * 13, 'lastone', 'asteroid', level, 1, 'b').match.tick;
+      for (let seed = 1; seed <= 4; seed++) {
+        const t = play(seed * 13, 'lastone', 'asteroid', level, 1, 'b').match.tick;
+        // a round times out at 90 s (5400 ticks + intro): a whole best-of-three must take far less than one timed-out round
+        expect(t).toBeLessThan(5400);
+        total += t;
+      }
       return total / 4;
     };
     expect(ttk(6)).toBeLessThanOrEqual(ttk(2) * 1.1);
@@ -203,7 +227,10 @@ describe('AI competence', () => {
   it('a top-level AI is not beaten by a novice more often than not (mirror matches, both titans)', () => {
     let hi = 0;
     let n = 0;
-    for (const [a, b] of [['lastone', 'lastone'], ['asteroid', 'asteroid']] as const)
+    for (const [a, b] of [
+      ['lastone', 'lastone'],
+      ['asteroid', 'asteroid'],
+    ] as const)
       for (let seed = 1; seed <= 4; seed++) {
         n++;
         if (play(seed, a, b, 6, 1).match.winner === 0) hi++;

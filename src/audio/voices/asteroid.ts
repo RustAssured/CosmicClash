@@ -23,8 +23,18 @@ export function createAsteroidVoice(): TitanVoice {
   /** A rock striking: lowpassed noise crunch + gravel grains + a low boom. */
   const crunch = (c: VoiceCtx, t: number, pan: number, mag: number, wet = 0.25): void => {
     const o = makeOut(c, pan, wet);
-    noiseHit(c, o, t, { dur: 0.12 + 0.16 * mag, gain: 0.2 + 0.15 * mag, filter: { type: 'lowpass', f0: 1500, f1: 240, q: 1 } });
-    gravel(c, o, t + 0.008, { dur: 0.22 + 0.25 * mag, grains: 12 + Math.round(mag * 22), f: 900, spread: 2.8, gain: 0.2 + 0.1 * mag });
+    noiseHit(c, o, t, {
+      dur: 0.12 + 0.16 * mag,
+      gain: 0.2 + 0.15 * mag,
+      filter: { type: 'lowpass', f0: 1500, f1: 240, q: 1 },
+    });
+    gravel(c, o, t + 0.008, {
+      dur: 0.22 + 0.25 * mag,
+      grains: 12 + Math.round(mag * 22),
+      f: 900,
+      spread: 2.8,
+      gain: 0.2 + 0.1 * mag,
+    });
     thump(c, makeOut(c, pan * 0.3, 0), t, 74 - 20 * mag, 28, 0.25 + 0.4 * mag, 0.3 + 0.35 * mag);
   };
 
@@ -37,12 +47,23 @@ export function createAsteroidVoice(): TitanVoice {
       if (id.endsWith('shoulder')) {
         // stone grinding against stone
         const o = makeOut(c, pan, 0.2);
-        noiseHit(c, o, t, { dur: 0.22, gain: 0.09, filter: { type: 'bandpass', f0: 380, f1: 1100, q: 1.3 }, attack: 0.05 });
+        noiseHit(c, o, t, {
+          dur: 0.22,
+          gain: 0.09,
+          filter: { type: 'bandpass', f0: 380, f1: 1100, q: 1.3 },
+          attack: 0.05,
+        });
         tone(c, o, t, { f0: 170, f1: 110, dur: 0.25, gain: 0.08, type: 'triangle', attack: 0.06 });
       } else if (id.endsWith('meteor')) {
         // the big one gathers: a rising rumble with a thin whistle underneath
         const o = makeOut(c, pan, 0.45);
-        noiseHit(c, o, t, { dur: 0.55, gain: 0.2, filter: { type: 'lowpass', f0: 90, f1: 800, q: 1.4 }, kind: 'brown', attack: 0.3 });
+        noiseHit(c, o, t, {
+          dur: 0.55,
+          gain: 0.2,
+          filter: { type: 'lowpass', f0: 90, f1: 800, q: 1.4 },
+          kind: 'brown',
+          attack: 0.3,
+        });
         tone(c, o, t, { f0: 260, f1: 900, dur: 0.55, gain: 0.03, attack: 0.3 });
       } else if (id.endsWith('swarm')) {
         gravel(c, makeOut(c, pan, 0.3), t, { dur: 0.3, grains: 20, f: 2600, spread: 1.6, gain: 0.32, q: 2 });
@@ -62,7 +83,11 @@ export function createAsteroidVoice(): TitanVoice {
         // a cloud of iron shards let loose: a fast scatter of small pings
         const o = makeOut(c, pan, 0.45);
         for (let i = 0; i < 14; i++)
-          partials(c, o, t + c.rand() * 0.35, 800 + c.rand() * 2400, IRON, { decay: 0.09 + c.rand() * 0.12, gain: 0.07 + c.rand() * 0.06, maxHz: 9000 });
+          partials(c, o, t + c.rand() * 0.35, 800 + c.rand() * 2400, IRON, {
+            decay: 0.09 + c.rand() * 0.12,
+            gain: 0.07 + c.rand() * 0.06,
+            maxHz: 9000,
+          });
         gravel(c, o, t, { dur: 0.3, grains: 16, f: 3000, spread: 1.4, gain: 0.22, q: 4 });
       }
     },
@@ -71,7 +96,16 @@ export function createAsteroidVoice(): TitanVoice {
       // tumbling past: the whistle of a spinning body plus the grit of it rolling
       const pan = c.panOf(ev.x);
       const dir = Math.sign(ev.dirX || 1);
-      whistlePass(c, t, { f: 1150, dur: 0.55, gain: 0.09, panFrom: clamp(pan - 0.6 * dir, -1, 1), panTo: clamp(pan + 0.6 * dir, -1, 1), wet: 0.35, approach: 1.45, recede: 0.62 });
+      whistlePass(c, t, {
+        f: 1150,
+        dur: 0.55,
+        gain: 0.09,
+        panFrom: clamp(pan - 0.6 * dir, -1, 1),
+        panTo: clamp(pan + 0.6 * dir, -1, 1),
+        wet: 0.35,
+        approach: 1.45,
+        recede: 0.62,
+      });
       gravel(c, makeOut(c, pan, 0.15), t, { dur: 0.5, grains: 18, f: 500, spread: 2, gain: 0.1 });
     },
 
@@ -80,7 +114,13 @@ export function createAsteroidVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.35);
       partials(c, o, t, pick(c, IRON_HZ), IRON, { decay: 0.25 + 0.4 * mag, gain: 0.06 + 0.06 * mag });
-      gravel(c, o, t + 0.005, { dur: 0.2, grains: 8 + Math.round(mag * 8), f: 2200, spread: 1.6, gain: 0.08 });
+      gravel(c, o, t + 0.005, {
+        dur: 0.2,
+        grains: 8 + Math.round(mag * 8),
+        f: 2200,
+        spread: 1.6,
+        gain: 0.08,
+      });
     },
 
     onHitTaken(c, t, ev, mag) {
@@ -88,7 +128,11 @@ export function createAsteroidVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const open = 1 - clamp01(ev.blocked) * 0.7;
       crunch(c, t, pan, mag * open, 0.2);
-      if (ev.onDamaged > 0.3) partials(c, makeOut(c, pan, 0.4), t + 0.005, pick(c, IRON_HZ) * 1.5, IRON, { decay: 0.35, gain: 0.07 * open });
+      if (ev.onDamaged > 0.3)
+        partials(c, makeOut(c, pan, 0.4), t + 0.005, pick(c, IRON_HZ) * 1.5, IRON, {
+          decay: 0.35,
+          gain: 0.07 * open,
+        });
     },
 
     onGuard(c, t, ev) {
@@ -104,8 +148,15 @@ export function createAsteroidVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.7);
       gravel(c, o, t, { dur: 2.3, grains: 90, f: 700, spread: 3.4, gain: 0.26, q: 1, decayShape: 1.1 });
-      noiseHit(c, o, t, { dur: 2.2, gain: 0.2, filter: { type: 'lowpass', f0: 500, f1: 60, q: 1.2 }, kind: 'brown', attack: 0.02 });
-      for (let i = 0; i < 6; i++) partials(c, o, t + 0.2 + i * 0.28, pick(c, IRON_HZ) * 0.7, IRON, { decay: 0.6, gain: 0.05 });
+      noiseHit(c, o, t, {
+        dur: 2.2,
+        gain: 0.2,
+        filter: { type: 'lowpass', f0: 500, f1: 60, q: 1.2 },
+        kind: 'brown',
+        attack: 0.02,
+      });
+      for (let i = 0; i < 6; i++)
+        partials(c, o, t + 0.2 + i * 0.28, pick(c, IRON_HZ) * 0.7, IRON, { decay: 0.6, gain: 0.05 });
     },
 
     onUltimate(c, t, ev) {
@@ -113,9 +164,20 @@ export function createAsteroidVoice(): TitanVoice {
       const o = makeOut(c, pan * 0.3, 0.7);
       if (ev.phase === 'start') {
         // Kessler: a storm of debris builds around it
-        noiseHit(c, o, t, { dur: 2.4, gain: 0.3, filter: { type: 'lowpass', f0: 250, f1: 3200, q: 0.9 }, kind: 'brown', attack: 2.0 });
+        noiseHit(c, o, t, {
+          dur: 2.4,
+          gain: 0.3,
+          filter: { type: 'lowpass', f0: 250, f1: 3200, q: 0.9 },
+          kind: 'brown',
+          attack: 2.0,
+        });
         riser(c, o, t, 2.4, 0.12, 400, 6000);
-        for (let i = 0; i < 26; i++) partials(c, o, t + 0.3 + c.rand() * 2.0, 600 + c.rand() * 2600, IRON, { decay: 0.12, gain: 0.03, maxHz: 9000 });
+        for (let i = 0; i < 26; i++)
+          partials(c, o, t + 0.3 + c.rand() * 2.0, 600 + c.rand() * 2600, IRON, {
+            decay: 0.12,
+            gain: 0.03,
+            maxHz: 9000,
+          });
         thump(c, makeOut(c, 0, 0), t + 2.4, 55, 22, 1.8, 0.9);
       } else {
         gravel(c, o, t, { dur: 1.6, grains: 50, f: 900, spread: 3, gain: 0.2, decayShape: 1.2 });
@@ -129,7 +191,13 @@ export function createAsteroidVoice(): TitanVoice {
         partials(c, o, t, 1300 + 900 * clamp01(ev.amount), IRON, { decay: 0.2, gain: 0.09 });
         gravel(c, o, t, { dur: 0.15, grains: 6, f: 2200, spread: 1.4, gain: 0.08 });
       } else if (ev.id === 'rubble-pile') {
-        noiseHit(c, makeOut(c, pan, 0.5), t, { dur: 1.0, gain: 0.18, filter: { type: 'lowpass', f0: 240, f1: 60 }, kind: 'brown', attack: 0.05 });
+        noiseHit(c, makeOut(c, pan, 0.5), t, {
+          dur: 1.0,
+          gain: 0.18,
+          filter: { type: 'lowpass', f0: 240, f1: 60 },
+          kind: 'brown',
+          attack: 0.05,
+        });
       } else if (ev.id === 'momentum') {
         thump(c, makeOut(c, pan * 0.3, 0), t, 130, 70, 0.1, 0.1);
       }
@@ -139,7 +207,15 @@ export function createAsteroidVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       if (ev.kind !== 'detach') return false; // fire, cracks, harvest…: the generic matter sounds
       gravel(c, makeOut(c, pan, 0.25), t, { dur: 0.4, grains: 20, f: 1000, spread: 2.6, gain: 0.12 });
-      thump(c, makeOut(c, pan * 0.3, 0), t, 90, 40, 0.25, 0.16 + 0.2 * clamp01(Math.log10(Math.max(1, ev.mass)) / 3));
+      thump(
+        c,
+        makeOut(c, pan * 0.3, 0),
+        t,
+        90,
+        40,
+        0.25,
+        0.16 + 0.2 * clamp01(Math.log10(Math.max(1, ev.mass)) / 3),
+      );
       return true;
     },
 

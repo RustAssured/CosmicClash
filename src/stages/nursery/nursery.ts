@@ -2,14 +2,15 @@ import { HalfFloatType, LinearFilter, type WebGLRenderTarget } from 'three';
 import { Rng, type StageInfo } from '@/contracts';
 import { STAGE_INFO } from '../info';
 import { AmbientLife } from '../toolkit/ambient';
-import { makeBakeTarget, runBake } from '../toolkit/bake';
-import { makeCloud } from '../toolkit/clouds';
+import { makeBakeTarget, prepareBake } from '../toolkit/bake';
+import { makeCloudSteps } from '../toolkit/clouds';
 import { mixRgb, paletteRamps, rampAt, scale, type Rgb } from '../toolkit/color';
+import { SceneryBase } from '../toolkit/base';
 import { SceneryKit, SpriteBuilder } from '../toolkit/kit';
 import { addNebula } from '../toolkit/nebula';
 import { Noise2 } from '../toolkit/noise';
 import { layerBounds, makeStarField } from '../toolkit/stars';
-import type { SceneryFrame, SceneryInit, SceneryLook, StageScenery } from '../types';
+import type { PrepareStep, SceneryFrame, SceneryInit, SceneryLook } from '../types';
 import {
   FIELD_BAKE,
   SHADE_BAKE,
@@ -53,6 +54,7 @@ uniform vec3 uS3;
 uniform vec3 uS4;
 uniform vec3 uS5;
 uniform float uForceK;
+uniform int uOct;
 
 vec3 glowRamp(float I) {
   if (I < 0.04) return mix(uS0, uS1, I / 0.04);
@@ -68,9 +70,9 @@ void main() {
   vec2 wp = lp / uNScale;
   float t = uFlow * 0.03;
   vec2 q = vec2(fbm(wp * 0.6 + vec2(0.0, t * 0.3), 3), fbm(wp * 0.6 + vec2(5.2 - t * 0.2, 1.3), 3));
-  float n = fbm(wp + (q - 0.5) * 2.4, 5);
-  float n2 = fbm(wp * 2.7 + q * 3.0 + vec2(3.7, 1.1), 4);
-  float ridge = 1.0 - abs(2.0 * fbm(wp * 1.6 + q * 2.0 + vec2(9.1, 4.3), 4) - 1.0);
+  float n = fbm(wp + (q - 0.5) * 2.4, uOct);
+  float n2 = fbm(wp * 2.7 + q * 3.0 + vec2(3.7, 1.1), max(2, uOct - 1));
+  float ridge = 1.0 - abs(2.0 * fbm(wp * 1.6 + q * 2.0 + vec2(9.1, 4.3), max(2, uOct - 1)) - 1.0);
   vec2 dv = (lp - uLightPos) * vec2(1.0, 1.25);
   float base = exp(-length(dv) / uReach);
   float I = base * (0.2 + 1.1 * n + 0.6 * (n2 - 0.5) + 0.55 * ridge * ridge * ridge) - 0.02;
@@ -123,11 +125,10 @@ interface HeroStar {
   rot: number;
 }
 
-export class NurseryScenery implements StageScenery {
+export class NurseryScenery extends SceneryBase {
   readonly id = 'nursery' as const;
   readonly look: SceneryLook = { ...LOOK };
-  private kit: SceneryKit | null = null;
-  private renderer: SceneryInit['renderer'] | null = null;
+  protected readonly noiseSeed = 0x4e5572;
   private info: StageInfo = STAGE_INFO.nursery;
   private lightLayerX = 0;
   private lightLayerY = 0;
@@ -136,13 +137,11 @@ export class NurseryScenery implements StageScenery {
   private bakes: WebGLRenderTarget[] = [];
   private ambient: AmbientLife | null = null;
 
-  init(ctx: SceneryInit): void {
-    this.renderer = ctx.renderer;
-    const kit = new SceneryKit(ctx, 0x4e5572);
-    this.kit = kit;
+  protected *build(kit: SceneryKit, ctx: SceneryInit): Generator<PrepareStep, void, void> {
     const info = this.info;
     const arena = info.arena;
-    const q = [0.4, 0.7, 1][ctx.quality]!;
+    // Everything is generated at full density; quality tiers thin the clouds at draw time (SceneryKit.setQuality).
+    const q = 1;
     const R = paletteRamps(info);
     const [VOID, PLUM, MAG, COR, AMB, GOLD, STAR, TEAL] = [
       R[0]!,
@@ -179,6 +178,8 @@ export class NurseryScenery implements StageScenery {
       forceK: 0.3,
     });
 
+    yield 0.04;
+
     /* ---- 2. far stars ---- */
     let bd = layerBounds(arena, 0.03);
     kit.addSprites('stars-far', {
@@ -197,6 +198,8 @@ export class NurseryScenery implements StageScenery {
       twinkle: 0.18,
       forceK: 0.05,
     });
+
+    yield 0.07;
 
     /* ---- 2b. ambient life: comets and distant supernova flares (a pure function of the scenery clock) ---- */
     const ambParallax = 0.05;
@@ -219,9 +222,11 @@ export class NurseryScenery implements StageScenery {
     });
     this.ambient = ambient;
 
+    yield 0.09;
+
     /* ---- 3. the luminous haze: a gradient of ionised gas centred on the newborn stars ---- */
     const lightAt = atRef(78, -26, 0.09);
-    kit.addFullscreen('glow', GLOW_FRAGMENT, 'add', 0.09, {
+    const glowLayer = kit.addFullscreen('glow', GLOW_FRAGMENT, 'add', 0.09, {
       uLightPos: { value: [...lightAt] },
       uReach: { value: 360 },
       uNScale: { value: 210 },
@@ -233,6 +238,10 @@ export class NurseryScenery implements StageScenery {
       uS4: { value: [...scale(AMB[5]!, 1.05)] },
       uS5: { value: [1.5, 1.12, 0.78] },
       uForceK: { value: 0.5 },
+      uOct: { value: 5 },
+    });
+    kit.onQuality((qt) => {
+      glowLayer.uniforms.uOct!.value = 3 + qt;
     });
     const backlight = atRef(360, 190, 0.16);
     addNebula(kit, 'gas-mid', {
@@ -256,11 +265,13 @@ export class NurseryScenery implements StageScenery {
       forceK: 0.7,
     });
 
+    yield 0.13;
+
     /* ---- 4. particle nebula: the fine, volumetric body of the gas ---- */
     bd = layerBounds(arena, 0.12);
     const warmZone = atRef(120, 30, 0.12);
     kit.addSprites('nebula-far', {
-      buffer: makeCloud({
+      buffer: yield* makeCloudSteps({
         count: Math.round(5500 * q),
         bounds: bd,
         noise,
@@ -291,6 +302,8 @@ export class NurseryScenery implements StageScenery {
       driftSpeed: 0.09,
       forceK: 0.55,
     });
+
+    yield 0.3;
 
     /* ---- 5. stars: field + hero stars with diffraction spikes ---- */
     bd = layerBounds(arena, 0.2);
@@ -353,6 +366,8 @@ export class NurseryScenery implements StageScenery {
       });
     });
 
+    yield 0.36;
+
     /* ---- 6. the pillars ---- */
     const key = new Float32Array([lx, ly, lz]);
     const far: PillarColors = {
@@ -383,7 +398,7 @@ export class NurseryScenery implements StageScenery {
       haze: 0,
       hazeCol: [0, 0, 0],
     };
-    this.bakePillars(kit, ctx, {
+    yield* this.bakePillars(kit, ctx, {
       name: 'pillars-far',
       parallax: 0.34,
       seed: 501,
@@ -420,7 +435,7 @@ export class NurseryScenery implements StageScenery {
       alpha: 0.62,
       forceK: 0.8,
     });
-    const pillars = this.bakePillars(kit, ctx, {
+    const pillars = yield* this.bakePillars(kit, ctx, {
       name: 'pillars',
       parallax: 0.58,
       seed: 733,
@@ -439,6 +454,8 @@ export class NurseryScenery implements StageScenery {
       alpha: 1,
       glowGain: 1,
     });
+
+    yield 0.72;
 
     /* ---- 7. evaporating wisps off the crowns and lit edges, teal scatter on the shadow side ---- */
     const wb = new SpriteBuilder();
@@ -516,10 +533,12 @@ export class NurseryScenery implements StageScenery {
       forceK: 0.95,
     });
 
+    yield 0.85;
+
     /* ---- 8. near dust drifting past, and foreground motes ---- */
     bd = layerBounds(arena, 0.85);
     kit.addSprites('dust-near', {
-      buffer: makeCloud({
+      buffer: yield* makeCloudSteps({
         count: Math.round(90 * q),
         bounds: bd,
         noise,
@@ -554,7 +573,7 @@ export class NurseryScenery implements StageScenery {
     bd = layerBounds(arena, 1.55);
     const mrng = new Rng(91);
     kit.addSprites('motes', {
-      buffer: makeCloud({
+      buffer: yield* makeCloudSteps({
         count: Math.round(90 * q),
         bounds: bd,
         noise,
@@ -585,7 +604,7 @@ export class NurseryScenery implements StageScenery {
   }
 
   /** Bake one pillar field (dust + rim glow) into textures and add its two layers to the kit. */
-  private bakePillars(
+  private *bakePillars(
     kit: SceneryKit,
     ctx: SceneryInit,
     o: {
@@ -603,7 +622,7 @@ export class NurseryScenery implements StageScenery {
       alpha: number;
       glowGain: number;
     },
-  ): PillarLayout {
+  ): Generator<PrepareStep, PillarLayout, void> {
     const bounds = layerBounds(this.info.arena, o.parallax, 70);
     const layout = layoutPillars({
       bounds,
@@ -615,6 +634,7 @@ export class NurseryScenery implements StageScenery {
       fingers: o.fingers,
       lightDir: o.lightDir,
     });
+    yield 0; // layout done
     const w = Math.ceil(bounds.x1 - bounds.x0);
     const h = Math.ceil(bounds.y1 - bounds.y0);
     const field = makeBakeTarget(w, h, { type: HalfFloatType });
@@ -622,7 +642,7 @@ export class NurseryScenery implements StageScenery {
     const renderer = ctx.renderer;
     const noiseU = kit.uniforms.uNoise;
     const seed2: [number, number] = [(o.seed % 97) * 0.37, (o.seed % 53) * 0.61];
-    runBake(renderer, field, FIELD_BAKE, {
+    const fieldJob = prepareBake(renderer, field, FIELD_BAKE, {
       uNoise: noiseU,
       uOrigin: { value: [bounds.x0, bounds.y0] },
       uNSeg: { value: layout.count },
@@ -644,8 +664,8 @@ export class NurseryScenery implements StageScenery {
       uNImp: kit.uniforms.uNImp,
     });
     const c = o.colors;
-    field.rt.texture.minFilter = LinearFilter;
-    runBake(
+    field.rt.texture.minFilter = LinearFilter; // the shade pass samples the field bilinearly
+    const shadeJob = prepareBake(
       renderer,
       out,
       SHADE_BAKE,
@@ -681,6 +701,12 @@ export class NurseryScenery implements StageScenery {
       },
       { multi: true },
     );
+    // Both programs compile off-thread while the game keeps running (where the browser supports it), then the two draws run.
+    yield Promise.all([fieldJob.ready, shadeJob.ready]);
+    fieldJob.run();
+    yield 0; // signed-distance field baked
+    shadeJob.run();
+    yield 0; // lighting baked
     field.rt.dispose();
     this.bakes.push(out.rt);
     const rect: [number, number, number, number] = [bounds.x0, bounds.y0, w, h];
@@ -723,15 +749,10 @@ void main() {
     return layout;
   }
 
-  update(frame: SceneryFrame): void {
-    this.kit?.update(frame);
+  protected override onUpdate(frame: SceneryFrame): void {
     this.ambient?.update(frame.timeSec);
     this.view.x0 = frame.view.x0;
     this.view.y0 = frame.view.y0;
-  }
-
-  render(target: WebGLRenderTarget): void {
-    if (this.kit && this.renderer) this.kit.render(this.renderer, target);
   }
 
   lightScreenPos(out: { x: number; y: number }): void {
@@ -739,9 +760,7 @@ void main() {
     out.y = this.lightLayerY - this.view.y0 * this.lightParallax;
   }
 
-  dispose(): void {
-    this.kit?.dispose();
-    this.kit = null;
+  protected override disposeExtras(): void {
     this.ambient = null;
     for (const t of this.bakes) t.dispose();
     this.bakes = [];

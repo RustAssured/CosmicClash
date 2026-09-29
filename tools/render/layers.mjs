@@ -49,7 +49,7 @@ const hide = opt.hide ? String(opt.hide).split(',') : [];
 const names = await page.evaluate(
   ([only, hide]) => {
     const R = window.__RENDER__.renderer;
-    const layers = R.scenery.kit.layers;
+    const layers = R.active.scenery.kit.layers;
     for (const l of layers) l.mesh.visible = only ? only.includes(l.name) : !hide.includes(l.name);
     window.__RENDER__.drawNow();
     return layers.map((l) => l.name);

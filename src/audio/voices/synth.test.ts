@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '@/contracts';
 import { FakeContext, FakeGain, WebAudioViolation, asBase, takeViolations } from '../testing/fakeContext';
-import { GLASS, envelope, gravel, makeOut, noiseHit, partials, riser, thump, tone, whistlePass } from './synth';
+import {
+  GLASS,
+  envelope,
+  gravel,
+  makeOut,
+  noiseHit,
+  partials,
+  riser,
+  thump,
+  tone,
+  whistlePass,
+} from './synth';
 import type { VoiceCtx } from './types';
 
 function voiceCtx(seed: number): { c: VoiceCtx; ctx: FakeContext } {
@@ -43,7 +54,9 @@ describe('automation hygiene (Chromium diverges on overlapping ramps: gain 1e8, 
         const o = makeOut(c, 0, 0);
         expect(() => gravel(c, o, 0.05, { dur: 0.3, grains, f: 900, spread: 2.8, gain: 0.2 })).not.toThrow();
         expect(takeViolations(), `${grains} grains, seed ${seed}`).toEqual([]);
-        const grain = ctx.nodes.filter((n): n is FakeGain => n instanceof FakeGain).find((n) => n.gain.events.length > 4);
+        const grain = ctx.nodes
+          .filter((n): n is FakeGain => n instanceof FakeGain)
+          .find((n) => n.gain.events.length > 4);
         expect(grain).toBeDefined();
         const ev = grain!.gain.events;
         for (let i = 1; i < ev.length; i++) expect(ev[i]!.t).toBeGreaterThanOrEqual(ev[i - 1]!.t);
@@ -53,7 +66,12 @@ describe('automation hygiene (Chromium diverges on overlapping ramps: gain 1e8, 
     const { c } = voiceCtx(3);
     const o = makeOut(c, 0.2, 0.3);
     tone(c, o, 0.1, { f0: 300, f1: 100, dur: 0.05, gain: 0.2, attack: 0.5 }); // attack longer than the sound: must be clamped
-    noiseHit(c, o, 0.1, { dur: 0.01, gain: 0.2, attack: 0.3, filter: { type: 'lowpass', f0: 2000, f1: 100 } });
+    noiseHit(c, o, 0.1, {
+      dur: 0.01,
+      gain: 0.2,
+      attack: 0.3,
+      filter: { type: 'lowpass', f0: 2000, f1: 100 },
+    });
     partials(c, o, 0.1, 500, GLASS, { decay: 0.4, gain: 0.1, shimmer: 0.3 });
     thump(c, o, 0.1, 80, 30, 0.5, 0.5);
     riser(c, o, 0.1, 1, 0.1, 300, 5000);

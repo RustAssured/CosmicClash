@@ -52,7 +52,8 @@ export interface AudioEngine {
   /** Continuous state: adaptive score, per-titan drones. Called every frame. */
   update(scene: AudioScene, dtSec: number): void;
   setVolumes(v: Partial<AudioVolumes>): void;
-  /** Peak level since last call (0..1+ pre-limiter) — used by tests to prove the limiter holds. */
   readonly ready: boolean;
+  /** Peak level since the last call: `pre` = the mix before the dynamics (0..1+), `post` = what reaches the speakers. Tests use it to prove the limiter holds. */
+  readPeak(): { pre: number; post: number };
   dispose(): void;
 }

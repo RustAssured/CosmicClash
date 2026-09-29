@@ -6,14 +6,7 @@
  * does exactly the same work on every tick. `replay()` therefore runs it several times and keeps the per-tick MINIMUM, which
  * strips scheduler noise while keeping everything the simulation itself causes (allocation, GC, JIT-independent work).
  */
-import {
-  DamageFlag,
-  LOGICAL_H,
-  LOGICAL_W,
-  Rng,
-  type DamageEvent,
-  type DamageType,
-} from '@/contracts';
+import { DamageFlag, LOGICAL_H, LOGICAL_W, Rng, type DamageEvent, type DamageType } from '@/contracts';
 import { createMatterWorld, type MatterWorldEx } from '@/matter';
 import { celadonBody, layeredDisc } from '@/matter/testing/bodies';
 
@@ -51,7 +44,13 @@ export function makeScene(seed: number, r = 84): Scene {
   return { world, ids: [ia, ib], x: [330, 830] };
 }
 
-export function randomEvent(rng: Rng, targetX: number, srcX: number, srcId: number, kind: number): DamageEvent {
+export function randomEvent(
+  rng: Rng,
+  targetX: number,
+  srcX: number,
+  srcId: number,
+  kind: number,
+): DamageEvent {
   const type = TYPES[kind % TYPES.length]!;
   const dir = Math.sign(targetX - srcX) || 1;
   const ty = 250 + rng.next() * 100;
@@ -211,7 +210,14 @@ export function runFight(o: FightOpts): FightRun {
   const { world, ids, x } = makeScene(o.seed, o.radius ?? 84);
   world.core.clock = () => performance.now();
   if (o.prefill) fillPools(world);
-  world.setGravitySource(1, { x: x[1], y: 300, strength: 320, radius: 260, consumeRadius: 14, creditBodyId: ids[1] });
+  world.setGravitySource(1, {
+    x: x[1],
+    y: 300,
+    strength: 320,
+    radius: 260,
+    consumeRadius: 14,
+    creditBodyId: ids[1],
+  });
   const rng = new Rng(o.seed);
   const tick = new Float64Array(o.ticks);
   const step = new Float64Array(o.ticks);
@@ -224,7 +230,7 @@ export function runFight(o: FightOpts): FightRun {
   const nsec = SECTION_NAMES.length;
   const sec = new Float64Array(o.ticks * nsec);
   const lastProf = new Float64Array(nsec);
-  const cpu0 = process.threadCpuUsage();
+  const cpu0 = process.threadCpuUsage?.();
   for (let t = 0; t < o.ticks; t++) {
     const t0 = performance.now();
     if (t % o.everyN === 0) {
@@ -254,7 +260,7 @@ export function runFight(o: FightOpts): FightRun {
     if (d.chunks > peakChunks) peakChunks = d.chunks;
     if (d.particles > peakParticles) peakParticles = d.particles;
   }
-  const cpu1 = process.threadCpuUsage(cpu0);
+  const cpu1 = process.threadCpuUsage?.(cpu0);
   const sections = new Float64Array(SECTION_NAMES.length);
   for (let i = 0; i < sections.length; i++) sections[i] = world.core.prof[i]! / o.ticks;
   return {
@@ -266,7 +272,7 @@ export function runFight(o: FightOpts): FightRun {
     peakParticles,
     world,
     sections,
-    cpuPerTick: (cpu1.user + cpu1.system) / 1000 / o.ticks,
+    cpuPerTick: cpu1 ? (cpu1.user + cpu1.system) / 1000 / o.ticks : NaN,
     sec,
   };
 }

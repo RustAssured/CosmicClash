@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { AudioEvent, AudioScene, SimEvent, StageId, TitanId } from '@/contracts';
 import { STAGE_IDS, TITAN_IDS } from '@/contracts';
 import { createAudioEngine } from './engine';
-import { FakeContext, FakeGain, FakeOsc, FakeShaper, WebAudioViolation, asBase, takeViolations } from './testing/fakeContext';
+import {
+  FakeContext,
+  FakeGain,
+  FakeOsc,
+  FakeShaper,
+  WebAudioViolation,
+  asBase,
+  takeViolations,
+} from './testing/fakeContext';
 
 const scene = (o: Partial<AudioScene> = {}, a: TitanId = 'lastone', b: TitanId = 'asteroid'): AudioScene => ({
   phase: 'fight',
@@ -25,9 +33,41 @@ function allEvents(a: TitanId, b: TitanId): SimEvent[] {
   for (const slot of [0, 1] as const) {
     const titan = t[slot];
     for (const moveSlot of ['strike', 'crush', 'surge', 'signature', 'ultimate', 'guard'] as const) {
-      for (const suffix of ['lash', 'lunge', 'shatter', 'sidestep', 'gaze', 'lastlight', 'shoulder', 'meteor', 'tumble', 'swarm', 'kessler', 'guard', 'x']) {
-        ev.push({ t: 'move', slot, titan, moveId: `${titan}.${suffix}`, moveSlot, aim: 'forward', x: 700 + 200 * slot, y: 300 });
-        ev.push({ t: 'release', slot, titan, moveId: `${titan}.${suffix}`, moveSlot, x: 700 + 200 * slot, y: 300, power: 0.7 });
+      for (const suffix of [
+        'lash',
+        'lunge',
+        'shatter',
+        'sidestep',
+        'gaze',
+        'lastlight',
+        'shoulder',
+        'meteor',
+        'tumble',
+        'swarm',
+        'kessler',
+        'guard',
+        'x',
+      ]) {
+        ev.push({
+          t: 'move',
+          slot,
+          titan,
+          moveId: `${titan}.${suffix}`,
+          moveSlot,
+          aim: 'forward',
+          x: 700 + 200 * slot,
+          y: 300,
+        });
+        ev.push({
+          t: 'release',
+          slot,
+          titan,
+          moveId: `${titan}.${suffix}`,
+          moveSlot,
+          x: 700 + 200 * slot,
+          y: 300,
+          power: 0.7,
+        });
         for (const phase of ['start', 'hold', 'release'] as const)
           ev.push({ t: 'charge', slot, titan, moveId: `${titan}.${suffix}`, frac: 0.6, phase });
       }
@@ -39,12 +79,39 @@ function allEvents(a: TitanId, b: TitanId): SimEvent[] {
     ev.push({ t: 'ultimate', slot, titan, phase: 'start', x: 800, y: 300 });
     ev.push({ t: 'ultimate', slot, titan, phase: 'end', x: 800, y: 300 });
     for (const kind of ['gain', 'spend', 'break'] as const) ev.push({ t: 'resource', slot, kind, amount: 1 });
-    for (const id of ['tendril-sever', 'eye-exposed', 'rubble-pile', 'momentum', 'fragment-lost', 'something-new'])
+    for (const id of [
+      'tendril-sever',
+      'eye-exposed',
+      'rubble-pile',
+      'momentum',
+      'fragment-lost',
+      'something-new',
+    ])
       ev.push({ t: 'cue', slot, titan, id, x: 800, y: 300, amount: 0.5 });
   }
   for (const type of ['FRACTURE', 'ASSIMILATION', 'TIDAL', 'THERMAL', 'CRUSH', 'KINETIC'] as const)
-    for (const [blocked, heavy] of [[0, false], [0.6, true], [1, false]] as const)
-      ev.push({ t: 'hit', attacker: 0, target: 1, titan: b, x: 850, y: 300, dirX: 1, dirY: 0, type, energy: 500 + blocked * 3000, cellsRemoved: 30, massRemoved: 10, blocked, heavy, onDamaged: heavy ? 0.7 : 0 });
+    for (const [blocked, heavy] of [
+      [0, false],
+      [0.6, true],
+      [1, false],
+    ] as const)
+      ev.push({
+        t: 'hit',
+        attacker: 0,
+        target: 1,
+        titan: b,
+        x: 850,
+        y: 300,
+        dirX: 1,
+        dirY: 0,
+        type,
+        energy: 500 + blocked * 3000,
+        cellsRemoved: 30,
+        massRemoved: 10,
+        blocked,
+        heavy,
+        onDamaged: heavy ? 0.7 : 0,
+      });
   ev.push({ t: 'shockwave', x: 800, y: 300, strength: 0.8, radius: 200, hue: 0.1 });
   ev.push({ t: 'hitstop', ticks: 9 });
   ev.push({ t: 'shake', dirX: 1, dirY: 0, amp: 4 });
@@ -53,13 +120,25 @@ function allEvents(a: TitanId, b: TitanId): SimEvent[] {
   ev.push({ t: 'flash', amount: 0.5 });
   ev.push({ t: 'rumble', slot: 0, strong: 1, weak: 1, ms: 100 });
   ev.push({ t: 'timescale', scale: 0.3, ticks: 40 });
-  for (const kind of ['detach', 'ignite', 'crack', 'consume', 'harvest', 'impact', 'evaporate', 'boil'] as const)
+  for (const kind of [
+    'detach',
+    'ignite',
+    'crack',
+    'consume',
+    'harvest',
+    'impact',
+    'evaporate',
+    'boil',
+  ] as const)
     for (const slot of [-1, 0, 1] as const) ev.push({ t: 'matter', kind, x: 800, y: 300, mass: 120, slot });
-  for (const phase of ['intro', 'fight', 'ko', 'timeover', 'end', 'match'] as const) ev.push({ t: 'round', phase, round: 1, winner: 0 });
+  for (const phase of ['intro', 'fight', 'ko', 'timeover', 'end', 'match'] as const)
+    ev.push({ t: 'round', phase, round: 1, winner: 0 });
   return ev;
 }
 
-const ui: AudioEvent[] = (['move', 'confirm', 'back', 'select', 'error', 'start', 'pause', 'unpause', 'roundwin', 'tick'] as const).map((id) => ({ t: 'ui', id }));
+const ui: AudioEvent[] = (
+  ['move', 'confirm', 'back', 'select', 'error', 'start', 'pause', 'unpause', 'roundwin', 'tick'] as const
+).map((id) => ({ t: 'ui', id }));
 
 async function ready(seed = 3): Promise<{ eng: ReturnType<typeof createAudioEngine>; ctx: FakeContext }> {
   const ctx = new FakeContext();
@@ -130,7 +209,10 @@ describe('master chain (the "nothing clips" guarantee)', () => {
   });
   it('uses one long convolution reverb with a generated (not loaded) impulse response of 3+ seconds', async () => {
     const { ctx } = await ready();
-    const conv = ctx.nodes.find((n) => n.kind === 'convolver') as unknown as { buffer: { duration: number; numberOfChannels: number }; normalize: boolean };
+    const conv = ctx.nodes.find((n) => n.kind === 'convolver') as unknown as {
+      buffer: { duration: number; numberOfChannels: number };
+      normalize: boolean;
+    };
     expect(conv.buffer.duration).toBeGreaterThan(3.3);
     expect(conv.buffer.numberOfChannels).toBe(2);
     expect(conv.normalize).toBe(false);
@@ -164,13 +246,63 @@ describe('event handling', () => {
     // the engine contains a voice's exception, so a thrown violation never reaches the test: the fake records them
     expect(takeViolations()).toEqual([]);
   });
+  it('a Gaze charge that is held for a second, retargeted every tick, never overlaps its own automation', async () => {
+    const { eng, ctx } = await ready();
+    eng.updateAt(scene(), 1 / 60, 0);
+    const c = (phase: 'start' | 'hold' | 'release', frac: number): AudioEvent => ({
+      t: 'charge',
+      slot: 0,
+      titan: 'lastone',
+      moveId: 'lastone.gaze',
+      frac,
+      phase,
+    });
+    eng.handleAt([c('start', 0)], 1);
+    for (let i = 1; i <= 60; i++) eng.handleAt([c('hold', i / 60)], 1 + i / 60); // real play: one hold event per tick
+    eng.handleAt([c('release', 1)], 2.05);
+    expect(takeViolations()).toEqual([]);
+    expect(ctx.nodes.length).toBeGreaterThan(10);
+  });
+  it("the same for every titan's continuous voices held for a long time, with speeds changing every frame", async () => {
+    const { eng } = await ready();
+    for (let i = 0; i < 300; i++) {
+      const s = scene({ intensity: (i % 60) / 60 });
+      s.fighters![0].speed = (i * 37) % 700;
+      s.fighters![1].speed = (i * 53) % 700;
+      eng.updateAt(s, 1 / 60, 0.1);
+    }
+    expect(takeViolations()).toEqual([]);
+  });
   it('rethrows nothing even if a voice misbehaves: the strict fake would throw on a bad ramp, handle() must contain it', async () => {
     const { eng, ctx } = await ready();
     const bad = ctx.createGain();
     bad.gain.setValueAtTime(0, 0);
     expect(() => bad.gain.exponentialRampToValueAtTime(0, 1)).toThrow(WebAudioViolation);
     expect(takeViolations()).toHaveLength(1);
-    expect(() => eng.handleAt([{ t: 'hit', attacker: 0, target: 1, titan: 'lastone', x: NaN, y: 0, dirX: 0, dirY: 0, type: 'FRACTURE', energy: Infinity, cellsRemoved: 0, massRemoved: 0, blocked: NaN, heavy: false, onDamaged: 0 }], 0)).not.toThrow();
+    expect(() =>
+      eng.handleAt(
+        [
+          {
+            t: 'hit',
+            attacker: 0,
+            target: 1,
+            titan: 'lastone',
+            x: NaN,
+            y: 0,
+            dirX: 0,
+            dirY: 0,
+            type: 'FRACTURE',
+            energy: Infinity,
+            cellsRemoved: 0,
+            massRemoved: 0,
+            blocked: NaN,
+            heavy: false,
+            onDamaged: 0,
+          },
+        ],
+        0,
+      ),
+    ).not.toThrow();
     expect(takeViolations().length).toBeGreaterThan(0); // contained, but recorded
   });
   it('every UI sound builds and every source it starts is also stopped (no leaks)', async () => {
@@ -188,7 +320,12 @@ describe('event handling', () => {
     const { eng, ctx } = await ready();
     eng.updateAt(scene(), 1 / 60, 0.2);
     const persistent = ctx.leakedSources().length; // drones, pads, continuous voices are meant to run
-    eng.handleAt(allEvents('lastone', 'asteroid').filter((e) => e.t === 'hit' || e.t === 'ko' || e.t === 'matter' || e.t === 'shockwave' || e.t === 'guard'), 1);
+    eng.handleAt(
+      allEvents('lastone', 'asteroid').filter(
+        (e) => e.t === 'hit' || e.t === 'ko' || e.t === 'matter' || e.t === 'shockwave' || e.t === 'guard',
+      ),
+      1,
+    );
     expect(ctx.leakedSources().length).toBe(persistent);
   });
   it('is deterministic: the same seed and events build an identical graph', async () => {
@@ -203,11 +340,26 @@ describe('event handling', () => {
   it('the polyphony cap sheds low-priority sounds under a storm but keeps critical ones (KO, ultimate)', async () => {
     const { eng, ctx } = await ready();
     eng.updateAt(scene(), 1 / 60, 0);
-    const hits = Array.from({ length: 300 }, (_, i): AudioEvent => ({ t: 'move', slot: 0, titan: 'lastone', moveId: 'lastone.lash', moveSlot: 'strike', aim: 'forward', x: 700 + i, y: 0 }));
+    const hits = Array.from({ length: 300 }, (_, i): AudioEvent => ({
+      t: 'move',
+      slot: 0,
+      titan: 'lastone',
+      moveId: 'lastone.lash',
+      moveSlot: 'strike',
+      aim: 'forward',
+      x: 700 + i,
+      y: 0,
+    }));
     const n0 = ctx.nodes.length;
     eng.handleAt(hits, 2);
     const low = ctx.nodes.length - n0;
-    eng.handleAt([{ t: 'ultimate', slot: 0, titan: 'lastone', phase: 'start', x: 800, y: 300 }, { t: 'ko', slot: 1, x: 800, y: 300 }], 2);
+    eng.handleAt(
+      [
+        { t: 'ultimate', slot: 0, titan: 'lastone', phase: 'start', x: 800, y: 300 },
+        { t: 'ko', slot: 1, x: 800, y: 300 },
+      ],
+      2,
+    );
     const total = ctx.nodes.length - n0;
     expect(low).toBeLessThan(300 * 8); // nowhere near 300 full voices
     expect(total).toBeGreaterThan(low + 20); // the critical events still sounded
@@ -218,7 +370,10 @@ describe('event handling', () => {
     const before = ctx.nodes.length;
     eng.handleAt([{ t: 'cue', slot: 0, titan: 'lastone', id: 'tendril-sever', x: 100, y: 0, amount: 1 }], 1);
     eng.handleAt([{ t: 'cue', slot: 0, titan: 'lastone', id: 'tendril-sever', x: 1500, y: 0, amount: 1 }], 2);
-    const pans = ctx.nodes.slice(before).filter((n) => n.kind === 'panner').map((n) => (n as unknown as { pan: { value: number } }).pan.value);
+    const pans = ctx.nodes
+      .slice(before)
+      .filter((n) => n.kind === 'panner')
+      .map((n) => (n as unknown as { pan: { value: number } }).pan.value);
     expect(Math.min(...pans)).toBeLessThan(-0.6);
     expect(Math.max(...pans)).toBeGreaterThan(0.6);
     for (const p of pans) expect(Math.abs(p)).toBeLessThanOrEqual(1);
@@ -257,7 +412,9 @@ describe('continuous state and the adaptive score', () => {
   it('slow-motion (KO dilation) detunes the score', async () => {
     const { eng, ctx } = await ready();
     eng.updateAt(scene({ timeScale: 0.3 }), 1 / 60, 1);
-    const detunes = ctx.nodes.filter((n): n is FakeOsc => n instanceof FakeOsc).flatMap((o) => o.detune.events.filter((e) => e.type === 'target').map((e) => e.v));
+    const detunes = ctx.nodes
+      .filter((n): n is FakeOsc => n instanceof FakeOsc)
+      .flatMap((o) => o.detune.events.filter((e) => e.type === 'target').map((e) => e.v));
     expect(Math.min(...detunes)).toBeLessThan(-500);
   });
   it('readPeak works and resets', async () => {

@@ -60,10 +60,39 @@ async function heldCanon(page: Page, id = 'pad:0'): Promise<number[]> {
   }, id);
 }
 
-const CANON = { SOUTH: 0, EAST: 1, WEST: 2, NORTH: 3, L1: 4, R1: 5, L2: 6, R2: 7, SELECT: 8, START: 9, L3: 10, R3: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15, HOME: 16, CAPTURE: 17 } as const;
+const CANON = {
+  SOUTH: 0,
+  EAST: 1,
+  WEST: 2,
+  NORTH: 3,
+  L1: 4,
+  R1: 5,
+  L2: 6,
+  R2: 7,
+  SELECT: 8,
+  START: 9,
+  L3: 10,
+  R3: 11,
+  UP: 12,
+  DOWN: 13,
+  LEFT: 14,
+  RIGHT: 15,
+  HOME: 16,
+  CAPTURE: 17,
+} as const;
 
 /** Bits from `Btn` in src/contracts/input.ts (kept literal so this spec does not import the app). */
-const BTN = { STRIKE: 1, CRUSH: 2, SURGE: 4, SIGNATURE: 8, ULTIMATE: 16, GUARD: 32, FEINT: 64, PAUSE: 128, TRAINING: 256 } as const;
+const BTN = {
+  STRIKE: 1,
+  CRUSH: 2,
+  SURGE: 4,
+  SIGNATURE: 8,
+  ULTIMATE: 16,
+  GUARD: 32,
+  FEINT: 64,
+  PAUSE: 128,
+  TRAINING: 256,
+} as const;
 
 async function region(page: Page): Promise<number[]> {
   // the whole logical layer, thinned, as a cheap fingerprint of "did the screen change"
@@ -77,7 +106,9 @@ async function region(page: Page): Promise<number[]> {
 const changed = (a: number[], b: number[]): number => a.reduce((n, v, i) => n + (v !== b[i] ? 1 : 0), 0);
 
 test.describe('Switch Pro Controller, W3C standard mapping (Linux hid-nintendo, macOS, current Windows)', () => {
-  test('is detected, named and given Nintendo glyphs; every raw button lights its own position', async ({ page }) => {
+  test('is detected, named and given Nintendo glyphs; every raw button lights its own position', async ({
+    page,
+  }) => {
     await open(page);
     await plug(page, PRO_STANDARD);
     await frames(page, 4);
@@ -113,7 +144,9 @@ test.describe('Switch Pro Controller, W3C standard mapping (Linux hid-nintendo, 
     expect(errorsOf(page)).toEqual([]);
   });
 
-  test('default Nintendo layout in game: Y strike, X crush, B surge, A signature, ZR ultimate, ZL guard, L/R feint, + pause, − training', async ({ page }) => {
+  test('default Nintendo layout in game: Y strike, X crush, B surge, A signature, ZR ultimate, ZL guard, L/R feint, + pause, − training', async ({
+    page,
+  }) => {
     await open(page, 'screen=title');
     await plug(page, PRO_STANDARD);
     await frames(page, 3);
@@ -141,16 +174,31 @@ test.describe('Switch Pro Controller, W3C standard mapping (Linux hid-nintendo, 
       const seen = await page.evaluate(() => window.__sandbox!.game.seenPressed[0]);
       expect(seen & bit, `the tap of raw ${pos} must register as a pressed edge`).toBe(bit);
       if (label !== 'R') {
-        const text = await page.evaluate(([b]) => {
-          const map: Record<number, string> = { 1: 'strike', 2: 'crush', 4: 'surge', 8: 'signature', 16: 'ultimate', 32: 'guard', 64: 'feint', 128: 'pause', 256: 'training' };
-          return window.__sandbox!.input.actionLabel('pad:0', map[b!] as never);
-        }, [bit]);
+        const text = await page.evaluate(
+          ([b]) => {
+            const map: Record<number, string> = {
+              1: 'strike',
+              2: 'crush',
+              4: 'surge',
+              8: 'signature',
+              16: 'ultimate',
+              32: 'guard',
+              64: 'feint',
+              128: 'pause',
+              256: 'training',
+            };
+            return window.__sandbox!.input.actionLabel('pad:0', map[b!] as never);
+          },
+          [bit],
+        );
         if (label !== 'L') expect(text).toBe(label);
       }
     }
   });
 
-  test('a one-frame tap (about 16 ms) registers: the sim samples it at tick time and the edge is delivered', async ({ page }) => {
+  test('a one-frame tap (about 16 ms) registers: the sim samples it at tick time and the edge is delivered', async ({
+    page,
+  }) => {
     await open(page, 'screen=title');
     await plug(page, PRO_STANDARD);
     await tap(page, 0, CANON.SOUTH);
@@ -171,7 +219,9 @@ test.describe('Switch Pro Controller, W3C standard mapping (Linux hid-nintendo, 
 });
 
 test.describe('Switch Pro Controller, legacy DirectInput-style mapping (no mapping string, D-pad hat on axis 9)', () => {
-  test('raw B A Y X L R ZL ZR − + L3 R3 Home Capture map to their positions; the hat decodes to the D-pad', async ({ page }) => {
+  test('raw B A Y X L R ZL ZR − + L3 R3 Home Capture map to their positions; the hat decodes to the D-pad', async ({
+    page,
+  }) => {
     await open(page);
     await plug(page, PRO_LEGACY);
     await frames(page, 4);
@@ -183,7 +233,22 @@ test.describe('Switch Pro Controller, legacy DirectInput-style mapping (no mappi
     expect(info!.hasRumble).toBe(false);
 
     // documented raw order: 0 B, 1 A, 2 Y, 3 X, 4 L, 5 R, 6 ZL, 7 ZR, 8 −, 9 +, 10 L3, 11 R3, 12 Home, 13 Capture
-    const positions = [CANON.SOUTH, CANON.EAST, CANON.WEST, CANON.NORTH, CANON.L1, CANON.R1, CANON.L2, CANON.R2, CANON.SELECT, CANON.START, CANON.L3, CANON.R3, CANON.HOME, CANON.CAPTURE];
+    const positions = [
+      CANON.SOUTH,
+      CANON.EAST,
+      CANON.WEST,
+      CANON.NORTH,
+      CANON.L1,
+      CANON.R1,
+      CANON.L2,
+      CANON.R2,
+      CANON.SELECT,
+      CANON.START,
+      CANON.L3,
+      CANON.R3,
+      CANON.HOME,
+      CANON.CAPTURE,
+    ];
     for (let raw = 0; raw < positions.length; raw++) {
       await setButton(page, 0, raw, true);
       await frames(page, 3);
@@ -235,30 +300,42 @@ test.describe('Switch Pro Controller, legacy DirectInput-style mapping (no mappi
 });
 
 test.describe('stick', () => {
-  test('radial deadzone: a resting drift is ignored, a real push reaches the game and has the right sign (+y is down)', async ({ page }) => {
+  test('radial deadzone: a resting drift is ignored, a real push reaches the game and has the right sign (+y is down)', async ({
+    page,
+  }) => {
     await open(page, 'screen=title');
     await plug(page, PRO_STANDARD);
     await tap(page, 0, CANON.SOUTH);
     await setAxis(page, 0, 0, 0.09); // typical resting drift
     await setAxis(page, 0, 1, -0.07);
     await frames(page, 6);
-    expect(await page.evaluate(() => [window.__sandbox!.game.moveX[0], window.__sandbox!.game.moveY[0]])).toEqual([0, 0]);
+    expect(
+      await page.evaluate(() => [window.__sandbox!.game.moveX[0], window.__sandbox!.game.moveY[0]]),
+    ).toEqual([0, 0]);
     await setAxis(page, 0, 0, 1);
     await setAxis(page, 0, 1, 0);
     await frames(page, 6);
-    const right = await page.evaluate(() => [window.__sandbox!.game.moveX[0], window.__sandbox!.game.moveY[0]]);
+    const right = await page.evaluate(() => [
+      window.__sandbox!.game.moveX[0],
+      window.__sandbox!.game.moveY[0],
+    ]);
     expect(right[0]).toBeGreaterThan(0.95);
     expect(Math.abs(right[1]!)).toBeLessThan(0.05);
     await setAxis(page, 0, 0, 0);
     await setAxis(page, 0, 1, 1); // stick pushed DOWN: y is +1 in the raw Gamepad API and +y is down in InputFrame
     await frames(page, 6);
-    const down = await page.evaluate(() => [window.__sandbox!.game.moveX[0], window.__sandbox!.game.moveY[0]]);
+    const down = await page.evaluate(() => [
+      window.__sandbox!.game.moveX[0],
+      window.__sandbox!.game.moveY[0],
+    ]);
     expect(down[1]).toBeGreaterThan(0.95);
   });
 });
 
 test.describe('remapping and persistence', () => {
-  test('remap Strike to R through the Controller Check with the pad alone; it survives a reload and drives the game', async ({ page }) => {
+  test('remap Strike to R through the Controller Check with the pad alone; it survives a reload and drives the game', async ({
+    page,
+  }) => {
     await open(page);
     await plug(page, PRO_STANDARD);
     await frames(page, 4);
@@ -303,24 +380,33 @@ test.describe('remapping and persistence', () => {
     expect(errorsOf(page)).toEqual([]);
   });
 
-  test('the remap is stored as a RAW reference, so it survives the same pad appearing under a different browser mapping', async ({ page }) => {
+  test("a remap is stored as a RAW browser reference under the pad's own profile key (vendor:product:mapping)", async ({
+    page,
+  }) => {
     await open(page);
     await plug(page, PRO_LEGACY);
     await frames(page, 4);
     await tap(page, 0, 1);
     await page.evaluate(() => window.__sandbox!.input.beginCapture('pad:0', 'strike'));
+    // a press already down when the capture starts is taken to be the press that started it (it must be released first)
+    await frames(page, 3);
     await tap(page, 0, 5); // raw 5 = R on the legacy layout
     await page.waitForFunction(() => window.__sandbox!.input.live('pad:0')!.custom.includes('strike'));
     const stored = (await page.evaluate(() => localStorage.getItem('adeuk.input.v1'))) ?? '';
-    expect(stored).toContain('strike');
-    // the profile key (vendor:product:mapping) is part of the key: a wrong table can never poison another pad's bindings
-    expect(stored).toContain('057e');
+    const saved = JSON.parse(stored) as { devices: Record<string, { bindings?: Record<string, unknown[]> }> };
+    const keys = Object.keys(saved.devices);
+    // raw ref {k:'b', i:5}: button index 5 exactly as the browser reported it, not "the R position" from any table, so a wrong
+    // layout table can never corrupt it; keyed by vendor:product:mapping so it cannot leak onto a different pad either
+    expect(keys).toHaveLength(1);
+    expect(keys[0]).toContain('057e:2009');
+    expect(saved.devices[keys[0]!]!.bindings!.strike).toEqual([{ k: 'b', i: 5 }]);
   });
 
   test('corrupt stored settings are ignored instead of crashing the page', async ({ page }) => {
     await installFakePads(page);
     await page.addInitScript(() => {
-      for (const k of ['adeuk.input.v1', 'adeuk.input', 'adeuk.ui.v1']) localStorage.setItem(k, '{"not": [json');
+      for (const k of ['adeuk.input.v1', 'adeuk.input', 'adeuk.ui.v1'])
+        localStorage.setItem(k, '{"not": [json');
     });
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -333,28 +419,51 @@ test.describe('remapping and persistence', () => {
 });
 
 test.describe('hot-plug and multiple pads', () => {
-  const xboxLike: PadSpec = { id: 'Xbox 360 Controller (STANDARD GAMEPAD Vendor: 045e Product: 028e)', mapping: 'standard', buttons: 17, axes: [0, 0, 0, 0], rumble: true };
+  const xboxLike: PadSpec = {
+    id: 'Xbox 360 Controller (STANDARD GAMEPAD Vendor: 045e Product: 028e)',
+    mapping: 'standard',
+    buttons: 17,
+    axes: [0, 0, 0, 0],
+    rumble: true,
+  };
 
-  test('two pads become P1 and P2 in the order they appeared; unplugging one frees its slot without a stuck button', async ({ page }) => {
+  test("two pads take the two player slots (no keyboard left in); unplugging P1's pad frees the slot without a stuck button", async ({
+    page,
+  }) => {
     await open(page, 'screen=title');
-    // Chrome lists a pad only after its first press and hands out the lowest free index, so index order IS appearance order
     await plug(page, xboxLike);
     await frames(page, 4);
     await tap(page, 0, CANON.SOUTH);
     await plug(page, PRO_STANDARD);
     await frames(page, 4);
     await tap(page, 1, CANON.SOUTH);
-    expect(await page.evaluate(() => window.__sandbox!.input.assignment())).toEqual(['pad:0', 'pad:1']);
-    expect(await page.evaluate(() => window.__sandbox!.input.devices().filter((d) => d.id.startsWith('pad')).map((d) => d.family))).toEqual(['xbox', 'nintendo']);
+    const assign = await page.evaluate(() => window.__sandbox!.input.assignment());
+    expect([...assign].sort()).toEqual(['pad:0', 'pad:1']);
+    const families = await page.evaluate(() =>
+      window
+        .__sandbox!.input.devices()
+        .filter((d) => d.id.startsWith('pad'))
+        .map((d) => d.family),
+    );
+    expect(families).toEqual(['xbox', 'nintendo']);
 
-    // hold Strike on P1's pad and yank it out: the game must see it released, never stuck
-    await setButton(page, 0, CANON.WEST, true);
+    // hold Strike (west) on whichever pad is P1 and yank it out: the game must see it released, never stuck
+    const p1 = Number(assign[0]!.split(':')[1]);
+    await setButton(page, p1, CANON.WEST, true);
     await frames(page, 4);
     expect((await page.evaluate(() => window.__sandbox!.game.held[0])) & BTN.STRIKE).toBe(BTN.STRIKE);
-    await page.evaluate(() => (window as unknown as { __fp: { unplug(i: number): void } }).__fp.unplug(0));
+    await page.evaluate(
+      (i) => (window as unknown as { __fp: { unplug(i: number): void } }).__fp.unplug(i),
+      p1,
+    );
     await frames(page, 6);
     expect((await page.evaluate(() => window.__sandbox!.game.held[0])) & BTN.STRIKE).toBe(0);
-    expect(await page.evaluate(() => window.__sandbox!.input.devices().some((d) => d.id === 'pad:0' && d.connected))).toBe(false);
-    expect(await page.evaluate(() => window.__sandbox!.input.assignment())).not.toContain('pad:0');
+    expect(
+      await page.evaluate(
+        (id) => window.__sandbox!.input.devices().some((d) => d.id === id && d.connected),
+        `pad:${p1}`,
+      ),
+    ).toBe(false);
+    expect(await page.evaluate(() => window.__sandbox!.input.assignment())).not.toContain(`pad:${p1}`);
   });
 });

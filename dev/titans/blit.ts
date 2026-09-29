@@ -38,7 +38,13 @@ export function blitLayers(
     // cheap reject: layer bounds against the view
     const cx = T.x - view.x0;
     const cy = T.y - view.y0;
-    if (cx + L.w < -L.anchorX - 400 || cx - L.w > fw + 400 || cy + L.h < -L.anchorY - 400 || cy - L.h > fh + 400) continue;
+    if (
+      cx + L.w < -L.anchorX - 400 ||
+      cx - L.w > fw + 400 ||
+      cy + L.h < -L.anchorY - 400 ||
+      cy - L.h > fh + 400
+    )
+      continue;
     for (let ly = 0; ly < L.h; ly++) {
       const row = ly * L.w;
       for (let lx = 0; lx < L.w; lx++) {
@@ -105,7 +111,8 @@ export function paintBackdrop(frame: Uint32Array, w = LOGICAL_W, h = LOGICAL_H, 
       const r = 18 + 22 * t + 6 * g;
       const gr = 10 + 8 * t + 3 * g;
       const b = 34 + 26 * (1 - t) + 10 * g;
-      frame[y * w + x] = ((255 << 24) | (Math.max(0, b) << 16) | (Math.max(0, gr) << 8) | Math.max(0, r)) >>> 0;
+      frame[y * w + x] =
+        ((255 << 24) | (Math.max(0, b) << 16) | (Math.max(0, gr) << 8) | Math.max(0, r)) >>> 0;
     }
   }
   // a few stars

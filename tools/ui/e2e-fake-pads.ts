@@ -178,13 +178,17 @@ export const plug = (page: Page, spec: PadSpec): Promise<number> =>
 
 export const setButton = (page: Page, index: number, b: number, down: boolean | number): Promise<void> =>
   page.evaluate(
-    ([i, btn, d]) => (window as unknown as { __fp: { button(i: number, b: number, d: boolean | number): void } }).__fp.button(i, btn, d),
+    ([i, btn, d]) =>
+      (
+        window as unknown as { __fp: { button(i: number, b: number, d: boolean | number): void } }
+      ).__fp.button(i, btn, d),
     [index, b, down] as const,
   );
 
 export const setAxis = (page: Page, index: number, a: number, v: number): Promise<void> =>
   page.evaluate(
-    ([i, ax, val]) => (window as unknown as { __fp: { axis(i: number, a: number, v: number): void } }).__fp.axis(i, ax, val),
+    ([i, ax, val]) =>
+      (window as unknown as { __fp: { axis(i: number, a: number, v: number): void } }).__fp.axis(i, ax, val),
     [index, a, v] as const,
   );
 

@@ -71,7 +71,14 @@ function pattern(type: DamageType, kind: 'strike' | 'crush', variant: number): P
           ev: {
             ...base(E / 2),
             type,
-            shape: { kind: 'line', x0: EDGE - 60, y0: y + k * 2, x1: EDGE + 34, y1: y + k * 2, width: 12 - 2 * k },
+            shape: {
+              kind: 'line',
+              x0: EDGE - 60,
+              y0: y + k * 2,
+              x1: EDGE + 34,
+              y1: y + k * 2,
+              width: 12 - 2 * k,
+            },
             params: { penetration: 8 + 2 * k, scatter: 1 + 0.1 * k },
           },
         }));
@@ -161,7 +168,14 @@ function measure(key: string, type: DamageType, kind: 'strike' | 'crush', varian
   const world = createMatterWorld(1);
   const id = world.createBody(tb.spec).id;
   // A sink so tidal streams have somewhere to go.
-  world.setGravitySource(1, { x: CX + 300, y: CY, strength: 300, radius: 500, consumeRadius: 14, creditBodyId: -1 });
+  world.setGravitySource(1, {
+    x: CX + 300,
+    y: CY,
+    strength: 300,
+    radius: 500,
+    consumeRadius: 14,
+    creditBodyId: -1,
+  });
   const m0 = world.stats(id).mass;
   const c0 = world.stats(id).cells;
   const pat = pattern(type, kind, variant);

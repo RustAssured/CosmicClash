@@ -11,6 +11,7 @@ import {
   coverageOf,
   finishDamage,
   hardness,
+  isImmune,
   localToWorldF,
   recordBlow,
   resistOf,
@@ -30,6 +31,7 @@ const opts: CraterOpts = {
   compact: 0,
   craterR: 0,
   type: T_KINETIC,
+  costCap: Infinity,
 };
 const out: CraterOut = {
   ok: false,
@@ -104,7 +106,7 @@ export function embedShrapnel(
       const y = Math.floor(cr.fy + iy * depth + ty * lat);
       if (x < 0 || y < 0 || x >= w || y >= body.h) continue;
       const c = y * w + x;
-      if (map.material[c] === 0 || (map.flags[c]! & F_SHRAP) !== 0) continue;
+      if (map.material[c] === 0 || (map.flags[c]! & F_SHRAP) !== 0 || isImmune(body, c, T_KINETIC)) continue;
       map.flags[c] = map.flags[c]! | F_SHRAP;
       const f = body.fuseCount++;
       body.fuseCell[f] = c;
@@ -184,7 +186,7 @@ function burst(core: WorldCore, body: Body, c: number, energy: number, dirX: num
   for (let y = yMin; y <= yMax; y++) {
     for (let x = xMin; x <= xMax; x++) {
       const i = y * w + x;
-      if (mat[i] === 0) continue;
+      if (mat[i] === 0 || isImmune(body, i, T_KINETIC)) continue;
       const dx = x - x0;
       const dy = y - y0;
       const d2 = dx * dx + dy * dy;

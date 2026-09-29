@@ -2,9 +2,11 @@
   "name": "adeuk-titans",
   "version": "0.1.0",
   "private": true,
-  "description": "ADEUK: TITANS — a 2.5D cosmic pixel-art fighting game where colossal entities physically wear each other down.",
+  "description": "ADEUK: TITANS \u2014 a 2.5D cosmic pixel-art fighting game where colossal entities physically wear each other down.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -17,7 +19,9 @@
     "e2e": "playwright test",
     "perf": "tsx tools/lead/perf.ts",
     "capture": "tsx tools/lead/capture.ts",
-    "balance": "tsx tools/ai/balance.ts"
+    "balance": "tsx tools/ai/balance.ts",
+    "audio:verify": "tsx tools/ui/audio-verify.ts",
+    "ui:sheet": "tsx tools/ui/sheet.ts"
   },
   "dependencies": {
     "three": "^0.186.1"

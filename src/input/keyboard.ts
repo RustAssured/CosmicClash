@@ -160,6 +160,13 @@ export class KeyboardState {
   overrides: Partial<Record<Action, KeyRef[]>> = {};
   latchHeld = 0;
   latchDirs = 0;
+  /**
+   * The same idea for MENUS: a key tapped and released between two frame polls still counts as one press of that direction /
+   * confirm / back for the next nav frame. Kept apart from the sim latch above because the two are consumed by different
+   * callers on different clocks (the frame poll and the 60 Hz tick).
+   */
+  navLatchDirs = 0;
+  navLatch = 0;
   /** Fresh key presses since the last drain, for activation / capture. */
   fresh: string[] = [];
 
@@ -196,6 +203,8 @@ export class KeyboardState {
     this.fresh.push(code);
     this.latchHeld |= this.actionBitsOf(code);
     this.latchDirs |= this.dirBitsOf(code);
+    this.navLatchDirs |= this.dirBitsOf(code);
+    this.navLatch |= this.navBitsOf(code);
   }
 
   keyUp(code: string): void {
@@ -231,6 +240,16 @@ export class KeyboardState {
     return m;
   }
 
+  private navBitsOf(code: string): number {
+    const n = this.layout.nav;
+    let m = 0;
+    if (n.confirm.includes(code)) m |= 1;
+    if (n.back.includes(code)) m |= 2;
+    if (n.start.includes(code)) m |= 4;
+    if (n.tab.includes(code)) m |= 8;
+    return m;
+  }
+
   /** Currently held action bits. */
   heldActions(): number {
     let m = 0;
@@ -263,6 +282,11 @@ export class KeyboardState {
   consumeLatch(): void {
     this.latchHeld = 0;
     this.latchDirs = 0;
+  }
+
+  consumeNavLatch(): void {
+    this.navLatchDirs = 0;
+    this.navLatch = 0;
   }
 }
 

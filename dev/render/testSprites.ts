@@ -17,15 +17,55 @@ const LIGHT = (() => {
   return [-0.55 / l, -0.55 / l, 0.63 / l] as const;
 })();
 
-export function makeRockBody(id: string, seed: number, size = 128): TestBody {
+export type BodyStyle = 'rock' | 'celadon' | 'basalt';
+
+interface StyleDef {
+  ramp: number[];
+  glow: number[];
+  /** Silhouette radius as a fraction of the sprite size. */
+  radius: number;
+  /** A single eye: dark socket with a glowing pupil (the Last One's look), instead of a magma core. */
+  eye: boolean;
+}
+
+/**
+ * The three readability stress cases: a mid-tone rock, a PALE celadon body (the brightest thing a titan can be: it must not
+ * dissolve into a bright nebula) and near-black basalt (it must not sink into a dark one).
+ */
+function styleDef(style: BodyStyle): StyleDef {
+  if (style === 'celadon') {
+    return {
+      ramp: hueShiftRamp(0.4, 0.13, 8, { lMin: 0.34, lMax: 0.95, shadowHue: 0.45, lightHue: 0.3 }),
+      glow: hueShiftRamp(0.13, 0.5, 6, { lMin: 0.6, lMax: 0.98, shadowHue: 0.1, lightHue: 0.16 }),
+      radius: 0.42,
+      eye: true,
+    };
+  }
+  if (style === 'basalt') {
+    return {
+      ramp: hueShiftRamp(0.62, 0.3, 8, { lMin: 0.03, lMax: 0.4, shadowHue: 0.7, lightHue: 0.52 }),
+      glow: hueShiftRamp(0.02, 0.95, 6, { lMin: 0.3, lMax: 0.9, shadowHue: -0.02, lightHue: 0.1 }),
+      radius: 0.42,
+      eye: false,
+    };
+  }
+  return {
+    ramp: hueShiftRamp(0.07, 0.35, 8, { lMin: 0.08, lMax: 0.85, shadowHue: -0.02, lightHue: 0.11 }),
+    glow: hueShiftRamp(0.04, 0.95, 6, { lMin: 0.35, lMax: 0.95, shadowHue: -0.01, lightHue: 0.13 }),
+    radius: 0.4,
+    eye: false,
+  };
+}
+
+export function makeRockBody(id: string, seed: number, size = 128, style: BodyStyle = 'rock'): TestBody {
   const noise = new Noise2(seed);
   const layer = makeLayer(id, 'world', 0, size, size);
   layer.anchorX = size >> 1;
   layer.anchorY = size >> 1;
   layer.emissive = new Uint8Array(size * size);
-  const ramp = hueShiftRamp(0.07, 0.35, 8, { lMin: 0.08, lMax: 0.85, shadowHue: -0.02, lightHue: 0.11 });
-  const glow = hueShiftRamp(0.04, 0.95, 6, { lMin: 0.35, lMax: 0.95, shadowHue: -0.01, lightHue: 0.13 });
-  const R = size * 0.4;
+  const def = styleDef(style);
+  const { ramp, glow } = def;
+  const R = size * def.radius;
   const c = size / 2;
   const height = new Float32Array(size * size);
   for (let y = 0; y < size; y++)
@@ -40,7 +80,7 @@ export function makeRockBody(id: string, seed: number, size = 128): TestBody {
       const dome = Math.sqrt(Math.max(0, 1 - (d / rr) ** 2));
       height[y * size + x] = dome * 0.6 + noise.fbm(x / 14, y / 14, 5) * 0.5;
     }
-  const core = { x: c - 6, y: c + 4, r: 14 };
+  const core = def.eye ? { x: c + 4, y: c - 2, r: 11 } : { x: c - 6, y: c + 4, r: 14 };
   const paint = (): void => {
     for (let y = 0; y < size; y++)
       for (let x = 0; x < size; x++) {
@@ -63,6 +103,11 @@ export function makeRockBody(id: string, seed: number, size = 128): TestBody {
         );
         layer.pixels[i] = ramp[Math.max(0, cell)]!;
         layer.emissive![i] = 0;
+        if (def.eye) {
+          // sunken socket around the pupil, and a halo ring on the rim
+          const de = Math.hypot(x - core.x, y - core.y);
+          if (de < core.r + 5 && de >= core.r) layer.pixels[i] = ramp[Math.max(0, Math.min(1, cell - 2))]!;
+        }
       }
   };
   paint();

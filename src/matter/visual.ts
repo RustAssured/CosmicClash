@@ -70,6 +70,7 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
   const w = body.w;
   const h = body.h;
   const mats = body.materials;
+  const matEmi = body.matEmissive;
   const mat = map.material;
   const integ = map.integrity;
   const flags = map.flags;
@@ -95,7 +96,6 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         emi[i] = 0;
         continue;
       }
-      const md = mats[m]!;
       let col = base[i]!;
       if (col >>> 24 === 0) col = (col | 0xff000000) >>> 0;
       const fl = flags[i]!;
@@ -103,7 +103,7 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
       const T = temp[i]!;
       const inv = inf[i]!;
       const dn = dens[i]!;
-      let em = md.emissive;
+      let em = matEmi[m]!;
       // Fast path: pristine untouched cell.
       if (
         ig === 255 &&
@@ -117,6 +117,7 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         emi[i] = em;
         continue;
       }
+      const md = mats[m]!;
       const ramp = md.ramp;
       const dark = ramp[0]! | 0;
       const light = ramp[ramp.length - 1]! | 0;

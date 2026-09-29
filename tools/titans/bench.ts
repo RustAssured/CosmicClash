@@ -8,8 +8,10 @@ import { FighterImpl } from '@/combat';
 import { createScriptSource, makeMatch, skipIntro } from '@/combat/testing/harness';
 
 const N = +(process.argv[2] ?? 1800);
-const A = '1:right*40,45:strike,80:crush,140:surge,150:right*30,190:sig*50,260:guard*30,300:strike,310:upright*20,330:crush,400:ult,520:strike,560:crush,610:sig*40,700:strike,760:crush';
-const B = '1:left*50,60:strike,100:left*20,130:guard*40,200:crush,240:sig,300:surge,330:left*40,370:strike,420:ult,500:crush,540:strike,600:left*30,660:sig,720:crush';
+const A =
+  '1:right*40,45:strike,80:crush,140:surge,150:right*30,190:sig*50,260:guard*30,300:strike,310:upright*20,330:crush,400:ult,520:strike,560:crush,610:sig*40,700:strike,760:crush';
+const B =
+  '1:left*50,60:strike,100:left*20,130:guard*40,200:crush,240:sig,300:surge,330:left*40,370:strike,420:ult,500:crush,540:strike,600:left*30,660:sig,720:crush';
 
 function run(a: TitanId, b: TitanId): void {
   const m = makeMatch({ a, b, seed: 3, createWorld: (s) => createMatterWorld(s) });

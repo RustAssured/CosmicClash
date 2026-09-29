@@ -13,7 +13,7 @@ import {
   type StageId,
 } from '@/contracts';
 import { createCamera, createLoop } from '@/engine';
-import { createRenderer } from '@/render';
+import { createRenderer, type QualitySetting } from '@/render';
 import { STAGES } from '@/stages';
 import { makeGridLayer, makeRockBody, makeSparkLayer, makeStarBody, makeUiLayer } from './testSprites';
 
@@ -31,7 +31,9 @@ const num = (k: string, d: number): number => {
 const stageParam = q.get('stage') as StageId | null;
 let stage: StageId =
   stageParam && (STAGE_IDS as readonly string[]).includes(stageParam) ? stageParam : 'nursery';
-let quality = num('quality', 2) as 0 | 1 | 2;
+const qParam = q.get('quality');
+/** 'auto' lets the adaptive controller pick the tier; 0 | 1 | 2 fix it. */
+let quality: QualitySetting = qParam === 'auto' ? 'auto' : (num('quality', 2) as 0 | 1 | 2);
 const frozen = q.get('freeze') === '1';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -87,8 +89,11 @@ const impulses: { x: number; y: number; born: number; strength: number; radius: 
 let lensOn = q.get('lens') === '1';
 let koUntil = 0;
 
-const rock = makeRockBody('rock', 7);
-const star = makeStarBody('star', 11);
+// ?bodies=readability (default): a pale celadon body vs near-black basalt (the two readability stress cases);
+// ?bodies=classic: the original mid-tone rock vs an emissive star.
+const bodiesParam = q.get('bodies') ?? 'readability';
+const rock = makeRockBody('rock', 7, 128, bodiesParam === 'classic' ? 'rock' : 'celadon');
+const star = bodiesParam === 'classic' ? makeStarBody('star', 11) : makeRockBody('star', 11, 128, 'basalt');
 const grid = makeGridLayer();
 const sparks = makeSparkLayer();
 const ui = makeUiLayer();
@@ -259,6 +264,7 @@ function buildFrame(alpha: number): RenderFrame {
 }
 
 let last = 0;
+let loadingLine = '';
 let frameCount = 0;
 let wallStart = performance.now();
 let wallFps = 0;
@@ -278,8 +284,8 @@ function frame(alpha: number, dtSec: number): void {
     last = t;
     const st = renderer.stats;
     hud.textContent =
-      `${STAGES[stage].name} · ${STAGES[stage].nameKo}   quality ${quality}   ${wallFps.toFixed(1)} fps wall\n` +
-      `cpu ${st.frameMs.toFixed(1)} ms (scenery ${st.sceneryMs.toFixed(1)} / post ${st.postMs.toFixed(1)})   draws ${st.drawCalls}\n` +
+      `${STAGES[stage].name} · ${STAGES[stage].nameKo}   tier ${st.tier}${st.auto ? ' (auto, ' + st.tierChanges + ' changes)' : ''}   ${wallFps.toFixed(1)} fps wall${st.gpuMs !== null ? '   gpu ' + st.gpuMs.toFixed(1) + ' ms' : ''}\n` +
+      `cpu ${st.frameMs.toFixed(1)} ms (scenery ${st.sceneryMs.toFixed(1)} / post ${st.postMs.toFixed(1)})   draws ${st.drawCalls}   late ${(st.lateRate * 100).toFixed(0)}%${loadingLine}\n` +
       `view ${camView.x0},${camView.y0}  cam ${camState.x.toFixed(0)},${camState.y.toFixed(0)}  zoom ${camState.zoom.toFixed(3)}  t ${simTime.toFixed(1)}s`;
   }
 }
@@ -292,14 +298,23 @@ function fit(): void {
 
 async function boot(): Promise<void> {
   await renderer.init(canvas, { quality, preserveDrawingBuffer: true });
-  renderer.setStage(stage);
+  // The first stage is prepared in the background like any other: the loop is already drawing (black) while it loads.
+  const first = renderer.prepareStage(stage, (f) => {
+    loadingLine = `   preparing ${(f * 100).toFixed(0)}%`;
+  });
   fit();
   window.addEventListener('resize', fit);
   if (frozen) {
+    // deterministic captures wait for the stage, then step the sim and draw once
+    await first;
+    renderer.setStage(stage);
     loop.stepTicks(num('ticks', 120));
     api.drawNow();
   } else {
     loop.start();
+    void first.then(() => {
+      loadingLine = '';
+    });
   }
   document.body.dataset.ready = '1';
 }
@@ -309,7 +324,8 @@ window.addEventListener('keydown', (e) => {
   if (k >= '1' && k <= '9')
     fire(['shock', 'lens', 'flash', 'impulse', 'aberration', 'shake', 'zoom', 'roll', 'ko'][+k - 1]!);
   else if (k === 'q') {
-    quality = ((quality + 1) % 3) as 0 | 1 | 2;
+    const order: QualitySetting[] = [0, 1, 2, 'auto'];
+    quality = order[(order.indexOf(quality) + 1) % order.length]!;
     location.search = `?stage=${stage}&quality=${quality}`;
   } else if (k === 'f') {
     if (loop.paused) loop.resume();
@@ -320,7 +336,10 @@ window.addEventListener('keydown', (e) => {
   } else if (k === 'n') {
     const i = (STAGE_IDS.indexOf(stage) + 1) % STAGE_IDS.length;
     stage = STAGE_IDS[i]!;
-    renderer.setStage(stage);
+    // non-blocking: the previous stage keeps drawing while the next one builds over a few dozen frames
+    void renderer.prepareStage(stage, (f) => {
+      loadingLine = f < 1 ? `   preparing ${STAGES[stage].name} ${(f * 100).toFixed(0)}%` : '';
+    });
   } else keys.add(k);
 });
 window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));

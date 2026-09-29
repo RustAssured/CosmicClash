@@ -18,7 +18,12 @@
         margin: 0;
         background: var(--bg);
         color: var(--ink);
-        font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font:
+          12px/1.35 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
       }
       #wrap {
         display: grid;
@@ -89,22 +94,70 @@
       <canvas id="view" width="640" height="360"></canvas>
       <div id="panel">
         <h1>TITANS · sandbox</h1>
-        <label>Mode
-          <select id="mode"><option value="fight">Fight</option><option value="viewer">Sprite viewer</option></select></label>
-        <label>Slot A
-          <select id="a"><option>lastone</option><option>asteroid</option></select></label>
-        <label>Slot B
-          <select id="b"><option>asteroid</option><option>lastone</option></select></label>
-        <label>Slot B control
-          <select id="ctl"><option value="ai">AI</option><option value="dummy">Dummy</option><option value="human">Human 2</option></select></label>
-        <label>AI level
-          <select id="ai"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
-        <label>Light
-          <select id="light"><option value="nursery">Nursery</option><option value="cold">Cold</option><option value="noon">Noon</option></select></label>
-        <label>Start state
-          <select id="state"><option value="intact">Intact</option><option value="50">50%</option><option value="10">10%</option></select></label>
-        <label>Speed
-          <select id="speed"><option value="1">1×</option><option value="0.5">½×</option><option value="0.25">¼×</option></select></label>
+        <label
+          >Mode
+          <select id="mode">
+            <option value="fight">Fight</option>
+            <option value="viewer">Sprite viewer</option>
+          </select></label
+        >
+        <label
+          >Slot A
+          <select id="a">
+            <option>lastone</option>
+            <option>asteroid</option>
+          </select></label
+        >
+        <label
+          >Slot B
+          <select id="b">
+            <option>asteroid</option>
+            <option>lastone</option>
+          </select></label
+        >
+        <label
+          >Slot B control
+          <select id="ctl">
+            <option value="ai">AI</option>
+            <option value="dummy">Dummy</option>
+            <option value="human">Human 2</option>
+          </select></label
+        >
+        <label
+          >AI level
+          <select id="ai">
+            <option>1</option>
+            <option>2</option>
+            <option selected>3</option>
+            <option>4</option>
+            <option>5</option>
+            <option>6</option>
+          </select></label
+        >
+        <label
+          >Light
+          <select id="light">
+            <option value="nursery">Nursery</option>
+            <option value="cold">Cold</option>
+            <option value="noon">Noon</option>
+          </select></label
+        >
+        <label
+          >Start state
+          <select id="state">
+            <option value="intact">Intact</option>
+            <option value="50">50%</option>
+            <option value="10">10%</option>
+          </select></label
+        >
+        <label
+          >Speed
+          <select id="speed">
+            <option value="1">1×</option>
+            <option value="0.5">½×</option>
+            <option value="0.25">¼×</option>
+          </select></label
+        >
         <div class="row">
           <button id="restart">Restart</button>
           <button id="pause">Pause</button>

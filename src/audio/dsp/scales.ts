@@ -29,11 +29,61 @@ export interface StageMusic {
  * unresolved whole-tone; Tussenruimte — still celadon open fifths.
  */
 export const STAGE_MUSIC: Record<StageId, StageMusic> = {
-  nursery: { root: 38, mode: 'lydian', bpm: 68, chords: [[0, 2, 4], [1, 3, 5], [0, 3, 4], [4, 6, 1]] },
-  rim: { root: 33, mode: 'aeolian', bpm: 62, chords: [[0, 2, 4], [5, 0, 2], [3, 5, 0], [4, 6, 1]] },
-  redgiant: { root: 35, mode: 'phrygian', bpm: 58, chords: [[0, 2, 4], [1, 3, 5], [0, 1, 4], [6, 1, 3]] },
-  quasar: { root: 31, mode: 'wholetone', bpm: 76, chords: [[0, 2, 4], [1, 3, 5], [0, 3, 5], [2, 4, 1]] },
-  tussenruimte: { root: 36, mode: 'suspended', bpm: 52, chords: [[0, 2, 4], [0, 1, 3], [2, 3, 4], [0, 2, 3]] },
+  nursery: {
+    root: 38,
+    mode: 'lydian',
+    bpm: 68,
+    chords: [
+      [0, 2, 4],
+      [1, 3, 5],
+      [0, 3, 4],
+      [4, 6, 1],
+    ],
+  },
+  rim: {
+    root: 33,
+    mode: 'aeolian',
+    bpm: 62,
+    chords: [
+      [0, 2, 4],
+      [5, 0, 2],
+      [3, 5, 0],
+      [4, 6, 1],
+    ],
+  },
+  redgiant: {
+    root: 35,
+    mode: 'phrygian',
+    bpm: 58,
+    chords: [
+      [0, 2, 4],
+      [1, 3, 5],
+      [0, 1, 4],
+      [6, 1, 3],
+    ],
+  },
+  quasar: {
+    root: 31,
+    mode: 'wholetone',
+    bpm: 76,
+    chords: [
+      [0, 2, 4],
+      [1, 3, 5],
+      [0, 3, 5],
+      [2, 4, 1],
+    ],
+  },
+  tussenruimte: {
+    root: 36,
+    mode: 'suspended',
+    bpm: 52,
+    chords: [
+      [0, 2, 4],
+      [0, 1, 3],
+      [2, 3, 4],
+      [0, 2, 3],
+    ],
+  },
 };
 
 /** MIDI note of scale degree `d` (may exceed the mode length: wraps up octaves; negative wraps down). */
@@ -45,4 +95,5 @@ export function degreeToMidi(root: number, mode: ModeId, d: number): number {
   return root + oct * 12 + steps[idx]!;
 }
 
-export const degreeToHz = (root: number, mode: ModeId, d: number): number => midiToHz(degreeToMidi(root, mode, d));
+export const degreeToHz = (root: number, mode: ModeId, d: number): number =>
+  midiToHz(degreeToMidi(root, mode, d));

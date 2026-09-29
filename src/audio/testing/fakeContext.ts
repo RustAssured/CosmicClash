@@ -50,7 +50,10 @@ export class FakeParam {
       const r = ev[k]!;
       if (r.type !== 'lin' && r.type !== 'exp') continue;
       const start = k > 0 ? ev[k - 1]!.t : -Infinity;
-      if (t > start && t < r.t) fail(`${this.name}.${what} at ${t.toFixed(4)} lands inside a ${r.type} ramp (${start.toFixed(4)} → ${r.t.toFixed(4)}): overlapping automation`);
+      if (t > start && t < r.t)
+        fail(
+          `${this.name}.${what} at ${t.toFixed(4)} lands inside a ${r.type} ramp (${start.toFixed(4)} → ${r.t.toFixed(4)}): overlapping automation`,
+        );
     }
     ev.splice(i, 0, { type, v, t });
   }
@@ -185,7 +188,8 @@ export class FakeBufferSource extends FakeNode {
   }
   override start(when = 0, offset = 0, duration?: number): void {
     if (!this.buffer) fail('bufferSource.start without a buffer');
-    if (offset > this.buffer!.duration) fail(`bufferSource offset ${offset} beyond buffer ${this.buffer!.duration}`);
+    if (offset > this.buffer!.duration)
+      fail(`bufferSource offset ${offset} beyond buffer ${this.buffer!.duration}`);
     super.start(when, offset, duration);
   }
 }
@@ -290,7 +294,13 @@ export class FakeContext {
   }
   /** Sources that were started but never given a stop (leaks that would play forever). */
   leakedSources(): FakeNode[] {
-    return this.nodes.filter((n) => (n instanceof FakeOsc || n instanceof FakeBufferSource) && n.started && !n.stopped && !(n instanceof FakeBufferSource && n.loop === false && false));
+    return this.nodes.filter(
+      (n) =>
+        (n instanceof FakeOsc || n instanceof FakeBufferSource) &&
+        n.started &&
+        !n.stopped &&
+        !(n instanceof FakeBufferSource && n.loop === false && false),
+    );
   }
   count(kind: string): number {
     return this.nodes.filter((n) => n.kind === kind).length;

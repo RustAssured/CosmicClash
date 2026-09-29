@@ -39,6 +39,8 @@ export interface Device {
   navButtons(settings: InputSettings): number;
   /** True while something activation-worthy (a button/key, not a stick) is held. */
   anyDown(): boolean;
+  /** Called once after the nav frames of a poll were built: forget one-shot latches that only nav consumes. */
+  endNavFrame(): void;
 }
 
 const ACTIVATION_BUTTONS: readonly number[] = [
@@ -221,6 +223,10 @@ export class PadDevice implements Device {
     return false;
   }
 
+  endNavFrame(): void {
+    /* gamepad state has no events to latch: what a poll does not see, it cannot know about */
+  }
+
   get rumbleCapable(): boolean {
     return hasRumble(this.pad);
   }
@@ -262,15 +268,20 @@ export class KeyboardDevice implements Device {
 
   navDirs(): number {
     let n = 0;
-    if (this.dirs & DIR_BITS.u) n |= NAV.UP;
-    if (this.dirs & DIR_BITS.d) n |= NAV.DOWN;
-    if (this.dirs & DIR_BITS.l) n |= NAV.LEFT;
-    if (this.dirs & DIR_BITS.r) n |= NAV.RIGHT;
+    const d = this.dirs | this.keys.navLatchDirs;
+    if (d & DIR_BITS.u) n |= NAV.UP;
+    if (d & DIR_BITS.d) n |= NAV.DOWN;
+    if (d & DIR_BITS.l) n |= NAV.LEFT;
+    if (d & DIR_BITS.r) n |= NAV.RIGHT;
     return n;
   }
 
   navButtons(): number {
-    return this.keys.heldNav();
+    return this.keys.heldNav() | this.keys.navLatch;
+  }
+
+  endNavFrame(): void {
+    this.keys.consumeNavLatch();
   }
 
   anyDown(): boolean {

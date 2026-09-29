@@ -11,6 +11,11 @@ export type UIAction =
   | { type: 'restartRound' }
   | { type: 'unlockAudio' }
   | { type: 'setVolume'; master?: number; music?: number; sfx?: number }
+  | { type: 'setQuality'; quality: 0 | 1 | 2 }
+  /** Training: what the dummy does. */
+  | { type: 'setDummy'; mode: 'idle' | 'guard' | 'ai' }
+  | { type: 'resetPositions' }
+  | { type: 'healBoth' }
   | { type: 'toggleTraining' }
   | { type: 'setTrainingView'; overlay: 'off' | 'hitboxes' | 'matter' }
   | { type: 'attractStart' }

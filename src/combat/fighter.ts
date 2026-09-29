@@ -620,7 +620,13 @@ export class FighterImpl implements Fighter {
         dirX: m.dirX,
         dirY: m.dirY,
       });
-    fillDisplacement(m.disp, variant.movement, def.slot === 'surge' ? 0 : this.vx * this.facing, TICK_DT, T.glideHalfLife);
+    fillDisplacement(
+      m.disp,
+      variant.movement,
+      def.slot === 'surge' ? 0 : this.vx * this.facing,
+      TICK_DT,
+      T.glideHalfLife,
+    );
     this.behaviour.onMoveStart(m);
     this.fireKeys();
     this.updateIntangible();

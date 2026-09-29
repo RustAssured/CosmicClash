@@ -1,4 +1,13 @@
-import { AIM_DIRS, TICK_DT, type AimDir, type DamageType, type MoveDef, type MoveSlot, type ShapeTemplate, type TitanDef } from '@/contracts';
+import {
+  AIM_DIRS,
+  TICK_DT,
+  type AimDir,
+  type DamageType,
+  type MoveDef,
+  type MoveSlot,
+  type ShapeTemplate,
+  type TitanDef,
+} from '@/contracts';
 import { DamageFlag } from '@/contracts';
 import { instantiateTemplate, makeFatShape, shapeBounds } from '@/combat/shapes';
 
@@ -8,6 +17,8 @@ import { instantiateTemplate, makeFatShape, shapeBounds } from '@/combat/shapes'
  * "if I press this now, can it reach the foe, when, and for how much?" without simulating anything.
  */
 export interface MoveInfo {
+  /** Index in the titan's MoveInfo list (stable): keys the AI's per-variant "is this landing?" memory. */
+  idx: number;
   def: MoveDef;
   slot: MoveSlot;
   aim: AimDir;
@@ -30,6 +41,8 @@ export interface MoveInfo {
   /** Forward travel (px) accumulated by the movement keys before the active phase starts / during it. */
   lungeBefore: number;
   lungeDuring: number;
+  /** Fraction of the damage dealt that comes back on the attacker (rams: `extra.recoil` in the move JSON). */
+  recoil: number;
   meterCost: number;
   resourceCost: number;
   /** Tick range (relative to the first active tick) in which any hitbox is live. */
@@ -46,7 +59,11 @@ export interface MoveInfo {
 const tmp = makeFatShape();
 const bb = { x0: 0, y0: 0, x1: 0, y1: 0 };
 
-function templateExtent(t: ShapeTemplate, scale: number, into: { x0: number; y0: number; x1: number; y1: number }): void {
+function templateExtent(
+  t: ShapeTemplate,
+  scale: number,
+  into: { x0: number; y0: number; x1: number; y1: number },
+): void {
   instantiateTemplate(t, { x: 0, y: 0, facing: 1, scale }, tmp);
   shapeBounds(tmp as never, bb);
   into.x0 = Math.min(into.x0, bb.x0);
@@ -56,7 +73,11 @@ function templateExtent(t: ShapeTemplate, scale: number, into: { x0: number; y0:
 }
 
 /** Forward displacement of the anchor caused by a move's movement keys, simulated tick by tick with the same decay maths. */
-function travel(keys: readonly { at: number; ix: number; iy: number; damp?: number }[], until: number, from = 0): number {
+function travel(
+  keys: readonly { at: number; ix: number; iy: number; damp?: number }[],
+  until: number,
+  from = 0,
+): number {
   let v = 0;
   let x = 0;
   let damp = 1;
@@ -113,6 +134,7 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
       }
       const has = v.hitboxes.length > 0 && ext.x1 > -1e8;
       out.push({
+        idx: out.length,
         def: m,
         slot: m.slot,
         aim,
@@ -132,6 +154,7 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
         heavy: m.slot === 'crush' || m.slot === 'ultimate' || energy >= 700,
         lungeBefore: travel(v.movement, fr.startup),
         lungeDuring: travel(v.movement, fr.startup + fr.active, fr.startup),
+        recoil: (m.extra?.['recoil'] as number | undefined) ?? 0,
         meterCost: m.meterCost,
         resourceCost: m.resourceCost,
         hitFrom: has ? hitFrom : 0,

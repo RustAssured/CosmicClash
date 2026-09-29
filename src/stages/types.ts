@@ -63,12 +63,54 @@ export interface SceneryLook {
   godRayHalo: number;
   godRayDecay: number;
   vignette: number;
+  /**
+   * Fighter readability (all optional; the renderer supplies tasteful defaults). Everything the 2D layers draw casts a soft dark,
+   * slightly desaturated halo and a thin dark contact rim into the scenery beneath it, multiplied in before the palette dither.
+   */
+  spriteHalo?: {
+    /** Peak darkening under the halo, 0..~0.5 (the halo is capped: a look, not a black hole). */
+    strength: number;
+    /** Blur radius of the halo in logical px. */
+    radius: number;
+    /** 0..1 desaturation under the halo. */
+    desat: number;
+    /** Darkening of the 1–2 px contact rim just outside a silhouette, 0..1. */
+    rim: number;
+    /** Rim width in px (1 or 2). */
+    rimReach?: number;
+    /** Linear-light floor the surround of a DARK body is lifted to (a faint backlight rim), so dark bodies never sink into dark space. */
+    lift?: number;
+  };
+  /**
+   * The vertical band where fighters live (offsets in WORLD px from the arena's restY): scenery highlights above `ceiling`
+   * (linear light, after exposure) are compressed there so a bright cloud never sits right behind a body.
+   */
+  fightBand?: { top: number; bottom: number; feather: number; ceiling: number; keep: number };
+  /** 0..1: how much bloom / god rays are damped ON a sprite's own pixels (they still glow around it). [bloom, rays] */
+  glowDamp?: [number, number];
 }
+
+/**
+ * What a build generator may yield: a progress fraction 0..1, nothing (a plain pause point), or a Promise the loader waits for
+ * (e.g. `BakeJob.ready`, an off-thread shader compile).
+ */
+export type PrepareStep = number | void | Promise<unknown>;
 
 export interface StageScenery {
   readonly id: StageId;
   readonly look: SceneryLook;
+  /**
+   * Build every GL resource in small steps: a generator that yields at each point where pausing is safe (after a particle
+   * field, a bake pass, a layer…), reporting progress 0..1. The renderer drives it over several frames (`Renderer.prepareStage`)
+   * so a stage load never freezes the game; `init` runs it to completion.
+   */
+  prepare(ctx: SceneryInit): Generator<PrepareStep, void, void>;
+  /** `prepare` run to completion (blocking; sandboxes, tests, and the synchronous `setStage`). */
   init(ctx: SceneryInit): void;
+  /** Compile shader programs ahead of the first frame without blocking (KHR_parallel_shader_compile where available). */
+  compile(target: WebGLRenderTarget): Promise<void>;
+  /** Change quality tier without rebuilding: thins particle clouds (brightness compensated) and trims shader detail. */
+  setQuality(q: QualityTier): void;
   /** Advance and stage this frame (uniforms, ambient life). Must not allocate. */
   update(frame: SceneryFrame): void;
   /** Draw the whole backdrop into `target` (cleared by the scenery). */

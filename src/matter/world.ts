@@ -29,10 +29,11 @@ import { runConnectivity } from './connectivity';
 import { stepFronts } from './cracks';
 import { WorldCore } from './core';
 import { beginDamage, DamageCtx } from './dmg';
-import { applyFracture } from './fracture';
+import { CHISEL_DELAY, applyFracture, chisel } from './fracture';
 import { hashWorld } from './hash';
 import { applyKinetic, stepFuses } from './kinetic';
 import { KIND_ID } from './particles';
+import { mix32 } from './util';
 import { endSpray } from './debris';
 import { MatterRender } from './render';
 import { refreshVisuals } from './visual';
@@ -46,13 +47,17 @@ import { debugOverlay } from './debug';
 /** A multi-tick damage application waiting to deliver its remaining slices. */
 class Job {
   active = false;
+  /** 0 = deliver another slice of a multi-tick event; 1 = the deferred FRACTURE chisel. */
+  kind = 0;
   bodyId = -1;
   ev!: DamageEvent;
   remaining = 0;
   energy = 0;
+  /** Ticks to wait before the job first acts. */
+  delay = 0;
 }
 
-const MAX_JOBS = 32;
+const MAX_JOBS = 48;
 
 const DEFAULT_PARTICLE_DRAG: Record<string, number> = {
   spark: 0.4,
@@ -73,6 +78,8 @@ export interface MatterDiagnostics {
   chunkMass: number;
   particleMass: number;
   bodies: number;
+  /** Pending multi-tick damage slices and deferred chisels. */
+  jobs: number;
 }
 
 /** Everything the mass ledger tracks. `error` is the conservation residual (should be ~0). */
@@ -139,6 +146,8 @@ function newResult(): DamageResult {
 }
 
 const pt: WorldPoint = { x: 0, y: 0 };
+const f64 = new Float64Array(1);
+const u32 = new Uint32Array(f64.buffer);
 
 class MatterWorldImpl implements MatterWorldEx {
   readonly core: WorldCore;
@@ -222,10 +231,12 @@ class MatterWorldImpl implements MatterWorldEx {
         const j = this.jobs[i]!;
         if (j.active) continue;
         j.active = true;
+        j.kind = 0;
         j.bodyId = bodyId;
         j.ev = { ...ev, shape: { ...ev.shape }, params: { ...ev.params } };
         j.remaining = dur - 1;
         j.energy = e0;
+        j.delay = 0;
         break;
       }
     }
@@ -254,6 +265,7 @@ class MatterWorldImpl implements MatterWorldEx {
     switch (ev.type) {
       case 'FRACTURE':
         applyFracture(ctx, res);
+        if (ctx.chisel > 0) this.queueChisel(body, ev, ctx.chisel);
         break;
       case 'KINETIC':
         applyKinetic(ctx, res);
@@ -272,6 +284,26 @@ class MatterWorldImpl implements MatterWorldEx {
         break;
     }
     endSpray(core); // never leave mass parked in the spray accumulator across API calls
+  }
+
+  /** Defer the chisel share of a FRACTURE blow (see fracture.ts): it re-runs the blow's shape against what the cuts left behind. */
+  private queueChisel(body: Body, ev: DamageEvent, energy: number): void {
+    for (let i = 0; i < this.jobs.length; i++) {
+      const j = this.jobs[i]!;
+      if (j.active) continue;
+      j.active = true;
+      j.kind = 1;
+      j.bodyId = body.id;
+      j.ev = { ...ev, shape: { ...ev.shape }, params: { ...ev.params } };
+      j.remaining = 1;
+      j.energy = energy;
+      j.delay = CHISEL_DELAY;
+      return;
+    }
+    // Queue full: chisel at once rather than lose the energy.
+    const ctx = beginDamage(this.core, this.ctx, body, ev, energy, false);
+    if (ctx !== null) chisel(ctx, energy);
+    endSpray(this.core);
   }
 
   private applyEmpty(_t: string): void {
@@ -381,6 +413,17 @@ class MatterWorldImpl implements MatterWorldEx {
       if (!j.active) continue;
       const body = core.bodyById[j.bodyId];
       if (!body) {
+        j.active = false;
+        continue;
+      }
+      if (j.delay > 0) {
+        j.delay--;
+        continue;
+      }
+      if (j.kind === 1) {
+        const ctx = beginDamage(core, this.ctx, body, j.ev, j.energy, false);
+        if (ctx !== null) chisel(ctx, j.energy);
+        endSpray(core);
         j.active = false;
         continue;
       }
@@ -562,7 +605,18 @@ class MatterWorldImpl implements MatterWorldEx {
   /* ------------------------------------------------------------------ determinism */
 
   hash(): number {
-    return hashWorld(this.core, (h) => h);
+    // Pending multi-tick jobs and deferred chisels are simulation state too.
+    return hashWorld(this.core, (h) => {
+      for (let i = 0; i < this.jobs.length; i++) {
+        const j = this.jobs[i]!;
+        if (!j.active) continue;
+        h = mix32(h, i | (j.kind << 8) | (j.bodyId << 12));
+        h = mix32(h, j.remaining | (j.delay << 16));
+        f64[0] = j.energy;
+        h = mix32(mix32(h, u32[0]!), u32[1]!);
+      }
+      return h;
+    });
   }
 
   /* ------------------------------------------------------------------ extras */
@@ -612,6 +666,7 @@ class MatterWorldImpl implements MatterWorldEx {
       chunkMass: core.chunks.massLive,
       particleMass: core.particles.massLive,
       bodies: core.bodyList.length,
+      jobs: this.jobs.reduce((n, j) => n + (j.active ? 1 : 0), 0),
     };
   }
 

@@ -30,8 +30,7 @@ float fbm(vec2 p, int oct) {
   float s = 0.0;
   float a = 0.5;
   float n = 0.0;
-  for (int i = 0; i < 8; i++) {
-    if (i >= oct) break;
+  for (int i = 0; i < oct; i++) {   // uniform-bounded (not constant) so drivers do not unroll it 8x per call site
     s += a * vnoise(p);
     n += a;
     p = ROT * p * 2.03 + vec2(17.3, -9.1);
@@ -67,8 +66,7 @@ uniform vec4 uImp2[6];      // age 0..1, hue, -, -
 uniform int uNImp;
 
 vec2 warpByForces(vec2 c, float k) {
-  for (int i = 0; i < 8; i++) {
-    if (i >= uNShock) break;
+  for (int i = 0; i < uNShock; i++) {
     vec4 s = uShock[i];
     vec2 d = c - s.xy;
     float r = length(d) + 1e-3;
@@ -76,8 +74,7 @@ vec2 warpByForces(vec2 c, float k) {
     float ring = exp(-pow((r - s.z) / t, 2.0));
     c += d / r * ring * s.w * k;
   }
-  for (int i = 0; i < 6; i++) {
-    if (i >= uNImp) break;
+  for (int i = 0; i < uNImp; i++) {
     vec4 m = uImp[i];
     vec2 d = c - m.xy;
     float w = exp(-dot(d, d) / (m.z * m.z)) * m.w;
@@ -92,8 +89,7 @@ vec2 warpByForces(vec2 c, float k) {
 // Tint contributed by impulses that carry a hue (fire = orange), for glowing dust. Impulses with hue -1 add nothing.
 vec3 impulseGlow(vec2 c) {
   vec3 g = vec3(0.0);
-  for (int i = 0; i < 6; i++) {
-    if (i >= uNImp) break;
+  for (int i = 0; i < uNImp; i++) {
     vec4 m = uImp[i];
     float hue = uImp2[i].y;
     if (hue < 0.0) continue;                      // contract: hue -1 = no tint (the impulse still swirls)

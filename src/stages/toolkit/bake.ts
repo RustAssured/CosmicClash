@@ -57,14 +57,25 @@ export function makeBakeTarget(
 
 export const HALF = HalfFloatType;
 
-/** Run `fragment` (a shader body; see file comment) once into `target`. `withNoise` prepends the noise/forces chunks. */
-export function runBake(
+/** A bake whose shader can compile off-thread before it runs. */
+export interface BakeJob {
+  /** Resolves when the shader program is compiled (immediately without KHR_parallel_shader_compile). Yield it from a stage's build generator. */
+  ready: Promise<void>;
+  /** Execute the bake (draws once into the target). Safe to call without awaiting `ready`: it then compiles synchronously. */
+  run(): void;
+}
+
+/**
+ * Set up a bake of `fragment` (a shader body; see file comment) into `target` and start compiling its program in the background
+ * where the browser can. `run()` performs the draw.
+ */
+export function prepareBake(
   renderer: WebGLRenderer,
   target: BakeTarget,
   fragment: string,
   uniforms: Record<string, IUniform>,
   opts: { multi?: boolean } = {},
-): void {
+): BakeJob {
   if (!tri) {
     tri = new BufferGeometry();
     tri.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
@@ -94,11 +105,30 @@ ${fragment}`,
   const mesh = new Mesh(tri, mat);
   mesh.frustumCulled = false;
   scene.add(mesh);
-  const prev = renderer.getRenderTarget();
-  renderer.setRenderTarget(target.rt);
-  renderer.render(scene, cam);
-  renderer.setRenderTarget(prev);
-  mat.dispose();
+  const ready = renderer.extensions.has('KHR_parallel_shader_compile')
+    ? renderer.compileAsync(scene, cam).then(() => undefined)
+    : Promise.resolve();
+  return {
+    ready,
+    run() {
+      const prev = renderer.getRenderTarget();
+      renderer.setRenderTarget(target.rt);
+      renderer.render(scene, cam);
+      renderer.setRenderTarget(prev);
+      mat.dispose();
+    },
+  };
+}
+
+/** Blocking convenience: prepare and run one bake. */
+export function runBake(
+  renderer: WebGLRenderer,
+  target: BakeTarget,
+  fragment: string,
+  uniforms: Record<string, IUniform>,
+  opts: { multi?: boolean } = {},
+): void {
+  prepareBake(renderer, target, fragment, uniforms, opts).run();
 }
 
 export function disposeBakeGeometry(): void {

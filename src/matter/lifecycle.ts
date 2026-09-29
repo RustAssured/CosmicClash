@@ -47,6 +47,7 @@ function finishRebuild(body: Body): void {
   body.visAll = true;
   body.statsDirty = true;
   body.connDirty = CONN_NOW;
+  body.connFull = true;
   body.lastConnTick = -100;
 }
 

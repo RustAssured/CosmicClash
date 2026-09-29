@@ -1,20 +1,27 @@
 /**
  * Headless duel runner: plays N fights between two titans at given AI levels and prints results.
- *   npx tsx tools/ai/duel.ts [--a=lastone] [--b=asteroid] [--la=3] [--lb=3] [--n=10] [--seed=1] [--dummy=a|b] [--log] [--fake]
+ *   npx tsx tools/ai/duel.ts [--a=lastone] [--b=asteroid] [--la=3] [--lb=3] [--n=10] [--seed=1] [--dummy=a|b] [--swap] [--log] [--fake]
  * Uses the real Match, real Fighters and the real matter world (`--fake` swaps in the test double for speed).
- * `--dummy=b` makes slot b a do-nothing dummy. Prints per-fight winner/reason/rounds and an overall tally.
+ * `--dummy=b` makes titan b a do-nothing dummy; `--swap` alternates which titan starts on the left (tallies stay per titan). Prints per-fight winner/reason/rounds and an overall tally.
  */
-import { DEFAULT_ARENA, DEFAULT_LIGHTING, type Difficulty, type MatchConfig, type TitanId } from '@/contracts';
+import {
+  DEFAULT_ARENA,
+  DEFAULT_LIGHTING,
+  type Difficulty,
+  type MatchConfig,
+  type TitanId,
+} from '@/contracts';
 import { createMatterWorld } from '@/matter';
 import { createFighter } from '@/combat';
 import { createFakeWorld } from '@/combat/testing/fakeWorld';
 import { createMatch, createAiSource, type Match } from '@/sim';
 import { getTitanDef } from '@/titans';
 import { createAI } from '@/ai';
-import { UtilityAI } from '@/ai/controller';
+import type { UtilityAI } from '@/ai/controller';
 
 const args = process.argv.slice(2);
-const opt = (k: string, d: string): string => (args.find((a) => a.startsWith(`--${k}=`)) ?? `--${k}=${d}`).split('=').slice(1).join('=');
+const opt = (k: string, d: string): string =>
+  (args.find((a) => a.startsWith(`--${k}=`)) ?? `--${k}=${d}`).split('=').slice(1).join('=');
 const flag = (k: string): boolean => args.includes(`--${k}`);
 
 const a = opt('a', 'lastone') as TitanId;
@@ -34,7 +41,16 @@ export interface DuelResult {
   logs: [string[], string[]];
 }
 
-export function playMatch(seed: number, ta: TitanId, tb: TitanId, levelA: Difficulty, levelB: Difficulty, dummySlot: string, fake: boolean, maxTicks = 60 * 60 * 5): { match: Match; res: DuelResult; ais: (UtilityAI | null)[] } {
+export function playMatch(
+  seed: number,
+  ta: TitanId,
+  tb: TitanId,
+  levelA: Difficulty,
+  levelB: Difficulty,
+  dummySlot: string,
+  fake: boolean,
+  maxTicks = 60 * 60 * 5,
+): { match: Match; res: DuelResult; ais: (UtilityAI | null)[] } {
   const cfg: MatchConfig = {
     seed,
     stage: 'nursery',
@@ -80,18 +96,27 @@ export function playMatch(seed: number, ta: TitanId, tb: TitanId, levelA: Diffic
 }
 
 if (process.argv[1]?.endsWith('duel.ts')) {
+  // tallies are per TITAN (a, b, undecided) so that --swap (alternate which titan starts on the left) reads correctly
   const tally = [0, 0, 0];
   const t0 = performance.now();
   for (let i = 0; i < n; i++) {
-    const { res } = playMatch(seed0 + i, a, b, la, lb, dummy, flag('fake'));
-    tally[res.winner === -1 ? 2 : res.winner]!++;
+    const swapped = flag('swap') && i % 2 === 1;
+    const [ta, tb, l1, l2, dm] = swapped
+      ? [b, a, lb, la, dummy === 'a' ? 'b' : dummy === 'b' ? 'a' : dummy]
+      : [a, b, la, lb, dummy];
+    const { res } = playMatch(seed0 + i, ta, tb, l1, l2, dm, flag('fake'));
+    const slotOfA = swapped ? 1 : 0;
+    const who = res.winner === -1 ? 2 : res.winner === slotOfA ? 0 : 1;
+    tally[who]!++;
     console.log(
-      `fight ${i + 1}: winner ${res.winner === -1 ? '—' : res.winner === 0 ? a : b} (${res.wins[0]}–${res.wins[1]}) in ${(res.ticks / 60).toFixed(1)} s sim, integrity ${res.integrity[0]!.toFixed(0)}% / ${res.integrity[1]!.toFixed(0)}%${res.reason === 'tick cap' ? ' [tick cap]' : ''}`,
+      `fight ${i + 1}${swapped ? ' (swapped)' : ''}: winner ${res.winner === -1 ? '—' : res.winner === 0 ? ta : tb} (${res.wins[0]}–${res.wins[1]}) in ${(res.ticks / 60).toFixed(1)} s sim, integrity ${res.integrity[0]!.toFixed(0)}% / ${res.integrity[1]!.toFixed(0)}%${res.reason === 'tick cap' ? ' [tick cap]' : ''}`,
     );
     if (flag('log') && i === 0) {
-      console.log('--- A log (last 25) ---\n' + res.logs[0].slice(-25).join('\n'));
-      console.log('--- B log (last 25) ---\n' + res.logs[1].slice(-25).join('\n'));
+      console.log('--- left log (last 25) ---\n' + res.logs[0].slice(-25).join('\n'));
+      console.log('--- right log (last 25) ---\n' + res.logs[1].slice(-25).join('\n'));
     }
   }
-  console.log(`\n${a} L${la} ${tally[0]} — ${tally[1]} ${b} L${lb}  (${tally[2]} undecided) in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  console.log(
+    `\n${a} L${la} ${tally[0]} — ${tally[1]} ${b} L${lb}  (${tally[2]} undecided) in ${((performance.now() - t0) / 1000).toFixed(1)} s`,
+  );
 }

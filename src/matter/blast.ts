@@ -3,7 +3,7 @@ import { CONN_STEADY } from './body';
 import { breakAllBonds, killCell } from './cells';
 import type { Wave, WorldCore } from './core';
 import { MODE_BURN, RAMP_EMBER, sprayCell, spawnMassParticle } from './debris';
-import { localToWorldF } from './dmg';
+import { T_THERMAL, isImmune, localToWorldF } from './dmg';
 import { PK } from './particles';
 
 const pt: WorldPoint = { x: 0, y: 0 };
@@ -77,7 +77,7 @@ export function stepBlast(core: WorldCore, body: Body, wv: Wave): void {
       if (d2 < lo || d2 > hi) continue;
       const i = y * w + x;
       const m = map.material[i]!;
-      if (m === 0) continue;
+      if (m === 0 || isImmune(body, i, T_THERMAL)) continue;
       const fl = map.flags[i]!;
       const md = mats[m]!;
       // Only matter the fire has already loosened (or brittle matter) is vulnerable.

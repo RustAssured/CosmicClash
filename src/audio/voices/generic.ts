@@ -31,23 +31,48 @@ export function createGenericVoice(titan: TitanId): TitanVoice {
     onMove(c, t, ev) {
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.3);
-      noiseHit(c, o, t, { dur: 0.2, gain: 0.09, filter: { type: 'bandpass', f0: f.bodyHz * 0.6, f1: f.bodyHz * 1.6, q: 1.2 }, attack: 0.05 });
-      tone(c, o, t, { f0: f.sub * 2, f1: f.sub * 3.5, dur: 0.25, gain: 0.08, type: 'triangle', attack: 0.06 });
+      noiseHit(c, o, t, {
+        dur: 0.2,
+        gain: 0.09,
+        filter: { type: 'bandpass', f0: f.bodyHz * 0.6, f1: f.bodyHz * 1.6, q: 1.2 },
+        attack: 0.05,
+      });
+      tone(c, o, t, {
+        f0: f.sub * 2,
+        f1: f.sub * 3.5,
+        dur: 0.25,
+        gain: 0.08,
+        type: 'triangle',
+        attack: 0.06,
+      });
     },
     onRelease(c, t, ev) {
       const pan = c.panOf(ev.x);
       const p = clamp01(ev.power);
       thump(c, makeOut(c, pan * 0.3, 0), t, f.sub * 2.4, f.sub * 0.6, 0.3 + 0.4 * p, 0.2 + 0.3 * p);
-      gravel(c, makeOut(c, pan, 0.3), t, { dur: 0.3, grains: 12, f: f.crackle, spread: 1.6, gain: 0.08, q: 2.4 });
+      gravel(c, makeOut(c, pan, 0.3), t, {
+        dur: 0.3,
+        grains: 12,
+        f: f.crackle,
+        spread: 1.6,
+        gain: 0.08,
+        q: 2.4,
+      });
     },
     onHitTaken(c, t, ev, mag) {
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.4);
-      partials(c, o, t, f.ring.hz * (1.3 - 0.4 * mag), f.ring.set, { decay: 0.3 + 0.9 * mag, gain: 0.06 + 0.08 * mag });
+      partials(c, o, t, f.ring.hz * (1.3 - 0.4 * mag), f.ring.set, {
+        decay: 0.3 + 0.9 * mag,
+        gain: 0.06 + 0.08 * mag,
+      });
     },
     onGuard(c, t, ev) {
       const pan = c.panOf(ev.x);
-      partials(c, makeOut(c, pan, 0.4), t, f.ring.hz * 1.5, f.ring.set, { decay: ev.broke ? 0.9 : 0.4, gain: ev.broke ? 0.16 : 0.11 });
+      partials(c, makeOut(c, pan, 0.4), t, f.ring.hz * 1.5, f.ring.set, {
+        decay: ev.broke ? 0.9 : 0.4,
+        gain: ev.broke ? 0.16 : 0.11,
+      });
       thump(c, makeOut(c, pan * 0.3, 0), t, 105, 44, ev.broke ? 0.7 : 0.3, ev.broke ? 0.6 : 0.3);
     },
   };

@@ -1,11 +1,32 @@
-import { Rng, type AudioEngine, type AudioEvent, type AudioFighterScene, type AudioScene, type AudioVolumes, type SimEvent, type StageId, type TitanId } from '@/contracts';
+import {
+  Rng,
+  type AudioEngine,
+  type AudioEvent,
+  type AudioFighterScene,
+  type AudioScene,
+  type AudioVolumes,
+  type SimEvent,
+  type StageId,
+  type TitanId,
+} from '@/contracts';
 import { generateImpulseResponse } from './dsp/ir';
 import { clamp, clamp01, hardClipCurve, limiterCurve, volumeCurve } from './dsp/math';
 import { ScoreEngine } from './score/engine';
 import { createAsteroidVoice } from './voices/asteroid';
 import { createGenericVoice } from './voices/generic';
 import { createLastOneVoice } from './voices/lastone';
-import { magnitude, playCueGeneric, playGuard, playImpact, playKo, playKoSub, playMatter, playShockwave, playTypeLayer, playUltimate } from './voices/sfx';
+import {
+  magnitude,
+  playCueGeneric,
+  playGuard,
+  playImpact,
+  playKo,
+  playKoSub,
+  playMatter,
+  playShockwave,
+  playTypeLayer,
+  playUltimate,
+} from './voices/sfx';
 import { GLASS, makeOut, noiseHit, partials, riser, thump, tone, whistlePass } from './voices/synth';
 import type { TitanVoice, VoiceCtx } from './voices/types';
 import { UI_TRIM, playUi } from './voices/ui';
@@ -18,7 +39,14 @@ const LOOKAHEAD = 0.006;
  * 15-25 dB under the fighters' own idle bed, i.e. inaudible in a match. Trimming per class keeps the voices readable as
  * code and puts the mix decisions in one table.
  */
-const MOVE_TRIM: Readonly<Record<string, number>> = { strike: 3, crush: 1.8, signature: 2, surge: 3, ultimate: 1.4, guard: 2 };
+const MOVE_TRIM: Readonly<Record<string, number>> = {
+  strike: 3,
+  crush: 1.8,
+  signature: 2,
+  surge: 3,
+  ultimate: 1.4,
+  guard: 2,
+};
 const SURGE_TRIM = 3;
 const CUE_TRIM = 3;
 
@@ -129,7 +157,9 @@ class Engine implements AudioEngineExt {
     try {
       if (!this.ac) {
         const Ctor: typeof AudioContext | undefined =
-          typeof AudioContext !== 'undefined' ? AudioContext : (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          typeof AudioContext !== 'undefined'
+            ? AudioContext
+            : (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
         if (!Ctor) return;
         this.ac = new Ctor({ latencyHint: 'interactive' });
       }
@@ -240,27 +270,28 @@ class Engine implements AudioEngineExt {
     }
     const voiceRng = new Rng(this.seed * 131 + 9);
     const base = { ac, noise: white, brown, rand: (): number => voiceRng.next() };
-    const engine = this;
+    const pan = (x: number): number => this.panOf(x);
+    const timeScale = (): number => this.timeScale;
     this.sfxCtx = {
       ...base,
       dry: sfx,
       wet: sfxWet,
-      panOf: (x: number): number => engine.panOf(x),
-      take: (prio: number): boolean => engine.take(prio),
+      panOf: pan,
+      take: (prio: number): boolean => this.take(prio),
       release: (): void => undefined,
       get timeScale(): number {
-        return engine.timeScale;
+        return timeScale();
       },
     };
     this.musicCtx = {
       ...base,
       dry: music,
       wet: musicWet,
-      panOf: (x: number): number => engine.panOf(x),
+      panOf: pan,
       take: (): boolean => true,
       release: (): void => undefined,
       get timeScale(): number {
-        return engine.timeScale;
+        return timeScale();
       },
     };
     this.score = new ScoreEngine(ac, music, this.musicCtx, this.seed);
@@ -287,7 +318,12 @@ class Engine implements AudioEngineExt {
   private voiceFor(id: TitanId): TitanVoice {
     let v = this.voices.get(id);
     if (!v) {
-      v = id === 'lastone' ? createLastOneVoice() : id === 'asteroid' ? createAsteroidVoice() : createGenericVoice(id);
+      v =
+        id === 'lastone'
+          ? createLastOneVoice()
+          : id === 'asteroid'
+            ? createAsteroidVoice()
+            : createGenericVoice(id);
       this.voices.set(id, v);
     }
     return v;
@@ -314,7 +350,10 @@ class Engine implements AudioEngineExt {
   }
 
   private titanOf(slot: 0 | 1 | -1, fallback?: TitanId): TitanId {
-    if (slot >= 0) return this.scene?.fighters?.[slot as 0 | 1]?.titan ?? this.slotTitan[slot as 0 | 1] ?? fallback ?? 'lastone';
+    if (slot >= 0)
+      return (
+        this.scene?.fighters?.[slot as 0 | 1]?.titan ?? this.slotTitan[slot as 0 | 1] ?? fallback ?? 'lastone'
+      );
     return fallback ?? 'lastone';
   }
 
@@ -370,7 +409,15 @@ class Engine implements AudioEngineExt {
         const v = this.voiceFor(ev.titan);
         const tc = this.trimmed(SURGE_TRIM);
         if (v.onSurge) v.onSurge(tc, t, ev);
-        else whistlePass(tc, t, { f: 700, dur: 0.3, gain: 0.06, panFrom: c.panOf(ev.x) - 0.3, panTo: c.panOf(ev.x) + 0.3, wet: 0.2 });
+        else
+          whistlePass(tc, t, {
+            f: 700,
+            dur: 0.3,
+            gain: 0.06,
+            panFrom: c.panOf(ev.x) - 0.3,
+            panTo: c.panOf(ev.x) + 0.3,
+            wet: 0.2,
+          });
         return;
       }
       case 'hit': {
@@ -445,7 +492,12 @@ class Engine implements AudioEngineExt {
   }
 
   private genericMove(c: VoiceCtx, t: number, ev: Extract<SimEvent, { t: 'move' }>): void {
-    noiseHit(c, makeOut(c, c.panOf(ev.x), 0.2), t, { dur: 0.16, gain: 0.07, filter: { type: 'bandpass', f0: 700, f1: 1800, q: 1 }, attack: 0.05 });
+    noiseHit(c, makeOut(c, c.panOf(ev.x), 0.2), t, {
+      dur: 0.16,
+      gain: 0.07,
+      filter: { type: 'bandpass', f0: 700, f1: 1800, q: 1 },
+      attack: 0.05,
+    });
   }
 
   private roundSound(c: VoiceCtx, t: number, ev: Extract<SimEvent, { t: 'round' }>): void {
@@ -465,7 +517,12 @@ class Engine implements AudioEngineExt {
         break;
       case 'end':
       case 'match':
-        for (const [i, f] of [587.33, 739.99, 880, 1174.66].entries()) partials(c, o, t + 0.15 + i * 0.1, f, GLASS, { decay: ev.phase === 'match' ? 2.4 : 1.4, gain: 0.12, shimmer: 0.3 });
+        for (const [i, f] of [587.33, 739.99, 880, 1174.66].entries())
+          partials(c, o, t + 0.15 + i * 0.1, f, GLASS, {
+            decay: ev.phase === 'match' ? 2.4 : 1.4,
+            gain: 0.12,
+            shimmer: 0.3,
+          });
         break;
       default:
         break;
@@ -555,7 +612,11 @@ class Engine implements AudioEngineExt {
   }
 
   setVolumes(v: Partial<AudioVolumes>): void {
-    this.vol = { master: clamp01(v.master ?? this.vol.master), music: clamp01(v.music ?? this.vol.music), sfx: clamp01(v.sfx ?? this.vol.sfx) };
+    this.vol = {
+      master: clamp01(v.master ?? this.vol.master),
+      music: clamp01(v.music ?? this.vol.music),
+      sfx: clamp01(v.sfx ?? this.vol.sfx),
+    };
     const g = this.g;
     if (!g) return;
     const t = g.ac.currentTime;
@@ -577,7 +638,8 @@ class Engine implements AudioEngineExt {
     const ac = this.ac;
     this.g = null;
     this.trims.clear();
-    if (ac && 'close' in ac && ac.state !== 'closed') void (ac as AudioContext).close().catch(() => undefined);
+    if (ac && 'close' in ac && ac.state !== 'closed')
+      void (ac as AudioContext).close().catch(() => undefined);
     this.ac = null;
   }
 }
@@ -585,7 +647,12 @@ class Engine implements AudioEngineExt {
 /** Titan-neutral "move goes live" whoosh for titans with no release handler. */
 function playImpactWhoosh(c: VoiceCtx, t: number, pan: number, power: number): void {
   const o = makeOut(c, pan, 0.25);
-  noiseHit(c, o, t, { dur: 0.16 + 0.1 * power, gain: 0.1 + 0.08 * power, filter: { type: 'bandpass', f0: 500, f1: 2200, q: 0.9 }, attack: 0.02 });
+  noiseHit(c, o, t, {
+    dur: 0.16 + 0.1 * power,
+    gain: 0.1 + 0.08 * power,
+    filter: { type: 'bandpass', f0: 500, f1: 2200, q: 0.9 },
+    attack: 0.02,
+  });
   thump(c, makeOut(c, pan * 0.3, 0), t, 90, 40, 0.2, 0.15 + 0.2 * power);
 }
 

@@ -17,7 +17,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { LOGICAL_H, LOGICAL_W, type RenderLayer, type ViewRect } from '@/contracts';
-import { unitQuad } from './gl';
+import { compileScene, unitQuad } from './gl';
 import { makePlacement, placeLayer, type LayerPlacement } from './layerMap';
 import type { LayerTextures } from './layerTextures';
 import { LAYER_FRAG, LAYER_VERT } from './shaders';
@@ -35,7 +35,7 @@ interface Slot {
 }
 
 /**
- * Draws every `RenderLayer` (sorted by z) into the colour + emissive attachments of the frame target, with nearest
+ * Draws every `RenderLayer` (sorted by z) into the colour + emissive attachments of the layer target, with nearest
  * filtering at integer positions, mirror / row-shear done in the fragment shader (see `layerMap.ts`).
  */
 export class LayerCompositor {
@@ -123,7 +123,7 @@ export class LayerCompositor {
     layers: readonly RenderLayer[],
     view: ViewRect,
     alpha: number,
-  ): void {
+  ): number {
     const n = this.sortLayers(layers);
     let used = 0;
     for (let i = 0; i < MAX_LAYERS; i++) this.slots[i]!.mesh.visible = false;
@@ -159,9 +159,22 @@ export class LayerCompositor {
       setLayerBlend(slot.material, layer.blend);
     }
     this.drawn = used;
-    if (used === 0) return;
+    // The target is a dedicated layer target: it starts each frame transparent, so what it holds afterwards is exactly
+    // the premultiplied "over" chain of this frame's layers (colour + alpha, and emissive + alpha).
     renderer.setRenderTarget(target);
-    renderer.render(this.scene, this.camera);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear(true, false, false);
+    if (used > 0) renderer.render(this.scene, this.camera);
+    return used;
+  }
+
+  /** Compile the layer program (all slots share it) before the first frame. */
+  compile(renderer: WebGLRenderer): Promise<void> {
+    for (const s of this.slots) s.mesh.visible = false;
+    this.slots[0]!.mesh.visible = true;
+    return compileScene(renderer, this.scene, this.camera).then(() => {
+      this.slots[0]!.mesh.visible = false;
+    });
   }
 
   dispose(): void {

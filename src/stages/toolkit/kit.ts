@@ -30,6 +30,7 @@ import {
 } from 'three';
 import { MAX_IMPULSES, MAX_SHOCKS, type SceneryFrame, type SceneryInit } from '../types';
 import { FORCES_GLSL, NOISE_GLSL, SCENERY_HEAD } from './glsl';
+import { animationFrame } from '@/render/slicer';
 import { noiseTextureData } from './noise';
 
 /**
@@ -41,6 +42,9 @@ import { noiseTextureData } from './noise';
  * (x, y) − view.origin × p, where view.origin is the same INTEGER origin the 2D layers use. p = 0 is fixed to the
  * screen, p = 1 moves with the fighters, p > 1 slides past faster than the fight plane.
  */
+
+/** Fraction of an additive cloud's sprites drawn at each quality tier. */
+export const TIER_DENSITY = [0.45, 0.75, 1] as const;
 
 export type LayerBlend = 'add' | 'normal' | 'multiply';
 
@@ -135,6 +139,7 @@ uniform float uSoft;
 uniform float uBreakup;
 uniform float uGain;
 uniform float uProfile;   // 0 soft puff, 1 diffraction star, 2 thin ring / shell
+uniform float uAlphaScale; // 1 / density fraction: keeps a thinned-out cloud as bright as the full one
 in vec2 vQ;
 in vec4 vColor;
 in float vSeed;
@@ -149,7 +154,7 @@ void main() {
       float n = vnoise(vQ * 1.7 + vSeed * 91.0);
       a *= mix(1.0, smoothstep(0.2, 0.8, n) * 1.6, uBreakup);
     }
-    o = vec4(vColor.rgb * uGain, vColor.a * a);
+    o = vec4(vColor.rgb * uGain, vColor.a * a * uAlphaScale);
   } else if (uProfile < 1.5) {
     // A newborn star: a small hot core, layered halo, and a thin 4-point diffraction cross with fainter diagonals.
     // uSoft is the core radius in PIXELS so a star keeps its look at any sprite size; the spikes are ~1 px thick.
@@ -269,6 +274,8 @@ export interface SpriteSpec {
   /** How strongly shockwaves / impulses move this layer (near layers react more). */
   forceK?: number;
   gain?: number;
+  /** May quality tiers thin this layer out (draw a prefix of its sprites)? Default: yes for additive non-snapped clouds. */
+  tierScale?: boolean;
 }
 
 export interface KitLayer {
@@ -297,16 +304,23 @@ export class SceneryKit {
   readonly scene = new Scene();
   readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   readonly uniforms: KitUniforms;
-  readonly quality: 0 | 1 | 2;
   readonly layers: KitLayer[] = [];
   private readonly noiseTex: DataTexture;
   private order = 0;
   private flow = 0;
   private flowSeeded = false;
   private swirlEnergy = 0;
+  private readonly scalable: {
+    geo: InstancedBufferGeometry;
+    count: number;
+    uniforms: Record<string, IUniform>;
+    compensate: boolean;
+  }[] = [];
+  private readonly qualityHooks: ((q: 0 | 1 | 2) => void)[] = [];
+  private tierNow: 0 | 1 | 2 = 2;
 
   constructor(init: SceneryInit, noiseSeed = 0x5eed) {
-    this.quality = init.quality;
+    this.tierNow = init.quality;
     this.noiseTex = new DataTexture(noiseTextureData(noiseSeed), 256, 256, RGBAFormat, UnsignedByteType);
     this.noiseTex.wrapS = RepeatWrapping;
     this.noiseTex.wrapT = RepeatWrapping;
@@ -327,6 +341,32 @@ export class SceneryKit {
       uNImp: { value: 0 },
       uNoise: { value: this.noiseTex },
     };
+  }
+
+  /** Current quality tier. */
+  get quality(): 0 | 1 | 2 {
+    return this.tierNow;
+  }
+
+  /** Register something that depends on the tier (fbm octave counts…); called now and on every `setQuality`. */
+  onQuality(fn: (q: 0 | 1 | 2) => void): void {
+    this.qualityHooks.push(fn);
+    fn(this.tierNow);
+  }
+
+  /**
+   * Switch quality tier without rebuilding anything: additive clouds draw a prefix of their sprites (brightness compensated),
+   * and registered hooks adjust shader detail. Cheap enough to call mid-fight.
+   */
+  setQuality(q: 0 | 1 | 2): void {
+    this.tierNow = q;
+    const f = TIER_DENSITY[q];
+    for (const s of this.scalable) {
+      s.geo.instanceCount = Math.max(1, Math.round(s.count * f));
+      const u = s.uniforms.uAlphaScale as IUniform<number> | undefined;
+      if (u) u.value = s.compensate ? 1 / f : 1;
+    }
+    for (const h of this.qualityHooks) h(q);
   }
 
   private nextOrder(): number {
@@ -362,6 +402,7 @@ export class SceneryKit {
       uBreakup: { value: spec.breakup ?? 0 },
       uGain: { value: spec.gain ?? 1 },
       uProfile: { value: spec.profile === 'star' ? 1 : spec.profile === 'ring' ? 2 : 0 },
+      uAlphaScale: { value: 1 },
     });
     const mat = new RawShaderMaterial({
       glslVersion: GLSL3,
@@ -387,6 +428,98 @@ export class SceneryKit {
       },
     };
     this.layers.push(layer);
+    // Sprites are generated in random order, so any prefix is an unbiased thinning of the cloud.
+    if (spec.tierScale ?? spec.blend === 'add') {
+      this.scalable.push({
+        geo,
+        count: b.count,
+        uniforms,
+        compensate: spec.blend === 'add' && !spec.snap && (spec.profile ?? 'puff') === 'puff',
+      });
+    }
+    return layer;
+  }
+
+  /**
+   * A custom instanced-quad layer with your own vertex + fragment shader (3D-projected galaxies, jets of particles…).
+   * `vertex` is a shader BODY: it gets `position` (the unit quad −1..1), the attributes you declare (`in vec4 aXxx;` is added for
+   * you, itemSize 4), every kit uniform plus NOISE/FORCES helpers, and must set `gl_Position` (use `toNdc(screenPx)`); it may write
+   * the varyings you list in `varyings`. `fragment` is a shader body reading those varyings and writing `o`.
+   */
+  addInstanced(
+    name: string,
+    o: {
+      count: number;
+      attributes: Record<string, Float32Array>;
+      /** Varying declarations, e.g. ['vec4 vColor', 'float vSeed']. */
+      varyings: string[];
+      vertex: string;
+      fragment: string;
+      blend: LayerBlend;
+      uniforms?: Record<string, IUniform>;
+      /** Thin out with the quality tier like sprite clouds (prefix of the instances). */
+      tierScale?: boolean;
+      /** Uniform name that receives the 1/density alpha compensation when thinned (optional). */
+      compensate?: string;
+    },
+  ): KitLayer {
+    const geo = new InstancedBufferGeometry();
+    const q = spriteQuadGeometry();
+    geo.setAttribute('position', q.getAttribute('position'));
+    geo.setIndex(q.getIndex());
+    let decl = '';
+    for (const [k, arr] of Object.entries(o.attributes)) {
+      geo.setAttribute(k, new InstancedBufferAttribute(arr, 4));
+      decl += `in vec4 ${k};\n`;
+    }
+    geo.instanceCount = o.count;
+    const uniforms = this.shared({ ...(o.uniforms ?? {}) });
+    const varyOut = o.varyings.map((v) => `out ${v};`).join('\n');
+    const varyIn = o.varyings.map((v) => `in ${v};`).join('\n');
+    const mat = new RawShaderMaterial({
+      glslVersion: GLSL3,
+      vertexShader: `${SCENERY_HEAD}${NOISE_GLSL}${FORCES_GLSL}
+in vec3 position;
+${decl}${varyOut}
+vec4 toNdc(vec2 p) { return vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0); }
+void main() {
+${o.vertex}
+}`,
+      fragmentShader: `${SCENERY_HEAD}${NOISE_GLSL}
+${varyIn}
+out vec4 o;
+void main() {
+${o.fragment}
+}`,
+      uniforms,
+      depthTest: false,
+      depthWrite: false,
+      side: DoubleSide,
+    });
+    applyBlend(mat, o.blend);
+    const mesh = new Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = this.nextOrder();
+    this.scene.add(mesh);
+    const layer: KitLayer = {
+      name,
+      mesh,
+      uniforms,
+      dispose: () => {
+        geo.dispose();
+        mat.dispose();
+      },
+    };
+    this.layers.push(layer);
+    if (o.tierScale) {
+      const comp = o.compensate ? (uniforms[o.compensate] ?? null) : null;
+      this.scalable.push({
+        geo,
+        count: o.count,
+        uniforms: comp ? { uAlphaScale: comp } : {},
+        compensate: !!comp,
+      });
+    }
     return layer;
   }
 
@@ -515,6 +648,36 @@ ${opts.fragment}`;
     };
     this.layers.push(layer);
     return layer;
+  }
+
+  /**
+   * Compile every layer's shader program ahead of the first frame. With KHR_parallel_shader_compile the browser does it in
+   * parallel (no stall); without it, one layer per animation frame so no single frame pays for all of them.
+   */
+  async compile(renderer: SceneryInit['renderer'], target: WebGLRenderTarget): Promise<void> {
+    const prev = renderer.getRenderTarget();
+    renderer.setRenderTarget(target);
+    try {
+      if (renderer.extensions.has('KHR_parallel_shader_compile')) {
+        await renderer.compileAsync(this.scene, this.camera);
+        return;
+      }
+      const meshes = this.layers.map((l) => l.mesh);
+      const visible = meshes.map((m) => m.visible);
+      for (let i = 0; i < meshes.length; i++) {
+        meshes.forEach((m, k) => (m.visible = k === i));
+        renderer.compile(this.scene, this.camera);
+        if (i % 2 === 1) {
+          meshes.forEach((m, k) => (m.visible = visible[k]!));
+          renderer.setRenderTarget(prev);
+          await animationFrame();
+          renderer.setRenderTarget(target);
+        }
+      }
+      meshes.forEach((m, k) => (m.visible = visible[k]!));
+    } finally {
+      renderer.setRenderTarget(prev);
+    }
   }
 
   /** Push the frame's clocks, view and fight forces into the shared uniforms. */

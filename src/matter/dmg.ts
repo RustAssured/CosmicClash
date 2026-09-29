@@ -57,6 +57,8 @@ export class DamageCtx {
   originY = 0;
   duration = 1;
   first = true;
+  /** Energy a model wants spent later by the deferred chisel (FRACTURE); 0 = none. The world queues it. */
+  chisel = 0;
 
   /** Covered live cells: core.covIdx / core.covW hold the first `n`. */
   n = 0;
@@ -95,6 +97,10 @@ export function hardness(body: Body, i: number): number {
 export const resistOf = (body: Body, i: number, type: number): number =>
   body.resistTab[body.map.material[i]! * 6 + type]!;
 
+/** Matter with (near) zero resistance to a damage type is IMMUNE to it: never cut, cratered, loosened or removed (the horizon). */
+export const isImmune = (body: Body, i: number, type: number): boolean =>
+  body.resistTab[body.map.material[i]! * 6 + type]! <= 0.001;
+
 /** True if the cell was already weakened (drives `onDamagedFraction`). */
 export function isDamaged(body: Body, i: number): boolean {
   const map = body.map;
@@ -130,6 +136,7 @@ export function beginDamage(
   ctx.originY = ev.originY;
   ctx.duration = ev.duration;
   ctx.first = first;
+  ctx.chisel = 0;
   ctx.removed = 0;
   ctx.massRemoved = 0;
   ctx.massTransferred = 0;

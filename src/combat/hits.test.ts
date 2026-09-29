@@ -4,17 +4,17 @@ import {
   DamageFlag,
   KO_CORE_INTEGRITY,
   KO_MASS_FRAC,
-  ROUND_INTRO_TICKS,
   type DamageEvent,
   type DamageShape,
   type DamageType,
+  type DebugShape,
   type SimEvent,
 } from '@/contracts';
 import type { Match } from '@/sim';
-import { FighterImpl } from './fighter';
-import { AsteroidBehaviour } from './behaviours/asteroid';
-import { LastOneBehaviour } from './behaviours/lastone';
-import { asShape, makeFatShape } from './shapes';
+import type { LastOneRig } from '@/titans';
+import type { FighterImpl } from './fighter';
+import type { AsteroidBehaviour } from './behaviours/asteroid';
+import type { LastOneBehaviour } from './behaviours/lastone';
 import { ManualSource, createFakeWorld, makeMatch, skipIntro } from './testing/harness';
 import type { FakeWorld } from './testing/fakeWorld';
 
@@ -222,7 +222,6 @@ describe('Guard: a shell whose strength depends on damage type', () => {
     const g = guarded();
     const shape = pointAt(g.f1.px, g.f1.py, 30);
     const rg = g.f1.receive(blow('KINETIC', shape, 400), g.f0, []);
-    void shape;
     expect(g.f1.view.state).toBe('guard');
     const u = duel(300);
     u.step(3);
@@ -461,7 +460,7 @@ describe('The Last One: tendrils and the bared eye', () => {
     sysB.count.fill(0);
     bare.d.step(1);
     expect(bare.d.f1.view.parts).toBe(0);
-    const eyeRig = (bare.d.f1 as FighterImpl).rig as import('@/titans').LastOneRig;
+    const eyeRig = (bare.d.f1 as FighterImpl).rig as LastOneRig;
     // world position of the eye of each body
     const eyeAt = (f: FighterImpl): { x: number; y: number } => {
       const t = f.body.transform;
@@ -649,9 +648,9 @@ describe('threat telegraphs for the AI and the training overlay', () => {
   });
 
   it('debugShapes reports live hitboxes and the exposed eye target', () => {
-    const { f0, f1, sa, step } = duel(420);
+    const { f0, sa, step } = duel(420);
     step(3);
-    const out: import('@/contracts').DebugShape[] = [];
+    const out: DebugShape[] = [];
     f0.debugShapes(out);
     expect(out.some((s) => s.label?.startsWith('eye'))).toBe(true);
     out.length = 0;
@@ -659,9 +658,5 @@ describe('threat telegraphs for the AI and the training overlay', () => {
     while (f0.view.phase !== 'active') step();
     f0.debugShapes(out);
     expect(out.some((s) => s.label === 'shatter')).toBe(true);
-    void f1;
-    void asShape;
-    void makeFatShape;
-    void ROUND_INTRO_TICKS;
   });
 });

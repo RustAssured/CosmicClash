@@ -104,6 +104,8 @@ export function initBody(core: WorldCore, body: Body): void {
     }
   }
   body.coreDiscIdx = Int32Array.from(disc);
+  body.coreMask.fill(0);
+  for (const c of disc) body.coreMask[c] = 1;
   body.corePristine = Math.max(1, corePristine);
 
   body.regionPristine.fill(0);
@@ -144,6 +146,7 @@ export function initBody(core: WorldCore, body: Body): void {
   body.regionDirty.fill(1);
   body.refreshStats();
   body.connDirty = 0;
+  body.connFull = true;
   body.lastConnTick = core.tick;
 }
 

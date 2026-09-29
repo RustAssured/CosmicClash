@@ -30,7 +30,14 @@ const MAX_STEPS = 8;
  */
 export class Plan {
   name = '';
-  readonly steps: Step[] = Array.from({ length: MAX_STEPS }, () => ({ mask: 0, steer: Steer.Neutral, sx: 0, sy: 0, align: 0, ticks: 0 }));
+  readonly steps: Step[] = Array.from({ length: MAX_STEPS }, () => ({
+    mask: 0,
+    steer: Steer.Neutral,
+    sx: 0,
+    sy: 0,
+    align: 0,
+    ticks: 0,
+  }));
   count = 0;
   index = 0;
   tickInStep = 0;

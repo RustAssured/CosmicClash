@@ -260,24 +260,45 @@ class Manager implements InputManager {
   /* ---------------------------------------------------------------------------------------------- *
    *  devices
    * ---------------------------------------------------------------------------------------------- */
-  private deviceById(id: string | null): Device | null {
-    if (!id) return null;
-    if (id === 'kb1') return this.kb[0]!;
-    if (id === 'kb2') return this.kb[1]!;
-    if (id === 'hid:0') return this.hidDevice;
-    if (id.startsWith('pad:')) return this.pads.get(parseInt(id.slice(4), 10)) ?? null;
-    return null;
+  /**
+   * Device lookups run every frame and every sim tick, so they are cached: the list, the `DeviceInfo` list and the id map are
+   * rebuilt (as NEW arrays, so anything holding an older snapshot keeps a consistent one) only when a device appears,
+   * disappears or is replaced.
+   */
+  private devicesDirty = true;
+  private deviceList: Device[] = [];
+  private infoList: DeviceInfo[] = [];
+  private readonly byId = new Map<string, Device>();
+
+  private markDevicesDirty(): void {
+    this.devicesDirty = true;
   }
 
-  private allDevices(): Device[] {
+  private rebuildDevices(): void {
     const out: Device[] = [...this.kb];
     for (const i of [...this.pads.keys()].sort((a, b) => a - b)) out.push(this.pads.get(i)!);
     if (this.hidDevice) out.push(this.hidDevice);
-    return out;
+    this.deviceList = out;
+    this.infoList = out.map((d) => d.info);
+    this.byId.clear();
+    for (const d of out) this.byId.set(d.info.id, d);
+    this.devicesDirty = false;
+  }
+
+  private deviceById(id: string | null): Device | null {
+    if (!id) return null;
+    if (this.devicesDirty) this.rebuildDevices();
+    return this.byId.get(id) ?? null;
+  }
+
+  private allDevices(): readonly Device[] {
+    if (this.devicesDirty) this.rebuildDevices();
+    return this.deviceList;
   }
 
   devices(): readonly DeviceInfo[] {
-    return this.allDevices().map((d) => d.info);
+    if (this.devicesDirty) this.rebuildDevices();
+    return this.infoList;
   }
 
   private hidActive(): boolean {
@@ -315,12 +336,13 @@ class Manager implements InputManager {
     } catch {
       list = [];
     }
-    const seen = new Set<number>();
+    const seen = this.seenScratch;
+    seen.length = 0;
     let changed = false;
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
       if (!p || !p.connected) continue;
-      seen.add(p.index);
+      seen.push(p.index);
       let dev = this.pads.get(p.index);
       if (dev && dev.info.rawId !== p.id) {
         // A different controller took over this index.
@@ -328,22 +350,27 @@ class Manager implements InputManager {
         this.forgetPad(dev);
         dev = undefined;
         changed = true;
+        this.markDevicesDirty();
       }
       if (!dev) {
         dev = this.createPad(p);
         this.pads.set(p.index, dev);
         this.padOrder.push(dev.info.id);
         changed = true;
+        this.markDevicesDirty();
       }
       dev.info.hasRumble = hasRumble(p);
       dev.refresh(p);
     }
-    for (const [idx, dev] of this.pads) {
-      if (!seen.has(idx)) {
+    // (only walk the map when something went away: the common frame has nothing to remove)
+    if (this.pads.size !== seen.length) {
+      for (const [idx, dev] of [...this.pads]) {
+        if (seen.includes(idx)) continue;
         this.pads.delete(idx);
         this.forgetPad(dev);
         dev.clear();
         changed = true;
+        this.markDevicesDirty();
       }
     }
     if (this.hidPad && this.hidDevice) {
@@ -475,19 +502,22 @@ class Manager implements InputManager {
     this.stepCalibration();
 
     // activity ("press any button") + which device is the active one for prompts
-    const anyFresh: Record<string, boolean> = {};
-    for (const d of this.allDevices()) {
-      let fresh = false;
+    const fresh = this.freshIds;
+    fresh.length = 0;
+    const all = this.allDevices();
+    for (let i = 0; i < all.length; i++) {
+      const d = all[i]!;
+      let isFresh = false;
       if (d instanceof KeyboardDevice) {
-        fresh = d.keys.fresh.length > 0;
+        isFresh = d.keys.fresh.length > 0;
         d.keys.fresh.length = 0;
       } else {
         const down = d.anyDown();
-        fresh = down && !this.prevDown.get(d.info.id);
+        isFresh = down && !this.prevDown.get(d.info.id);
         this.prevDown.set(d.info.id, down);
       }
-      if (fresh) {
-        anyFresh[d.info.id] = true;
+      if (isFresh) {
+        fresh.push(d.info.id);
         this.lastActiveId = d.info.id;
         if (!captured) {
           this.activityQueue.push(d.info);
@@ -497,7 +527,8 @@ class Manager implements InputManager {
     }
     this.looseKeys.length = 0;
 
-    this.buildNav(now, anyFresh, captured);
+    this.buildNav(now, captured);
+    for (let i = 0; i < all.length; i++) all[i]!.endNavFrame();
   }
 
   /**
@@ -511,33 +542,40 @@ class Manager implements InputManager {
     if (this.clock() - this.lastPollWall > maxAgeMs) this.poll();
   }
 
-  private buildNav(now: number, anyFresh: Record<string, boolean>, suppress: boolean): void {
+  /** Ids of the devices with a fresh press this poll (reused every frame). */
+  private readonly freshIds: string[] = [];
+  /** Indices of the pads seen by the current `scan()`, reused. */
+  private readonly seenScratch: number[] = [];
+
+  private buildNav(now: number, suppress: boolean): void {
     const all = this.allDevices();
-    const dirsFor = (which: 0 | 1 | 'any'): { dirs: number; btn: number; fresh: boolean } => {
-      let dirs = 0;
-      let btn = 0;
-      let fresh = false;
-      const add = (d: Device | null): void => {
-        if (!d) return;
-        dirs |= d.navDirs();
-        btn |= d.navButtons(this.cfg);
-        if (anyFresh[d.info.id]) fresh = true;
-      };
-      if (which === 'any') for (const d of all) add(d);
-      else add(this.deviceById(this.assigned[which]));
-      return { dirs, btn, fresh };
-    };
-    const which: (0 | 1 | 'any')[] = [0, 1, 'any'];
     for (let i = 0; i < 3; i++) {
       const sc = this.scopes[i]!;
       const f = sc.frame;
+      let dirs = 0;
+      let btn = 0;
+      let fresh = false;
+      if (i === 2) {
+        for (let k = 0; k < all.length; k++) {
+          const d = all[k]!;
+          dirs |= d.navDirs();
+          btn |= d.navButtons(this.cfg);
+          if (this.freshIds.includes(d.info.id)) fresh = true;
+        }
+      } else {
+        const d = this.deviceById(this.assigned[i as 0 | 1]);
+        if (d) {
+          dirs = d.navDirs();
+          btn = d.navButtons(this.cfg);
+          fresh = this.freshIds.includes(d.info.id);
+        }
+      }
       if (suppress || this.capture.status === 'waiting') {
         Object.assign(f, this.emptyFrame);
         sc.repeater.step(now, 0);
-        sc.prevButtons = dirsFor(which[i]!).btn;
+        sc.prevButtons = btn;
         continue;
       }
-      const { dirs, btn, fresh } = dirsFor(which[i]!);
       const fire = sc.repeater.step(now, dirs);
       f.up = (fire & NAV.UP) !== 0;
       f.down = (fire & NAV.DOWN) !== 0;
@@ -908,7 +946,7 @@ class Manager implements InputManager {
       const ov = this.overridesFor(d);
       ov.bindings = { ...(ov.bindings ?? {}), [this.capture.action]: [ref] };
       this.save();
-      this.finishCapture(describeRef(ref));
+      this.finishCapture(this.labelOfRef(d, this.effFamily(d), ref));
     }
     return true;
   }
@@ -1111,6 +1149,7 @@ class Manager implements InputManager {
       profileKey: profile.key,
     };
     this.hidDevice = new PadDevice(info, profile, this.persisted.devices[profile.key] ?? {}, this.getCfg);
+    this.markDevicesDirty();
     this.hidState = 'connected';
     this.persisted.hid = true;
     this.save();
@@ -1121,6 +1160,7 @@ class Manager implements InputManager {
     const hp = this.hidPad;
     this.hidPad = null;
     this.hidDevice = null;
+    this.markDevicesDirty();
     this.hidState = status;
     this.persisted.hid = false;
     this.save();

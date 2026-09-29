@@ -1,4 +1,12 @@
-import { LOGICAL_H, LOGICAL_W, STAGE_IDS, emptyInput, type TitanId, type UIAction, type UIScreenId } from '@/contracts';
+import {
+  LOGICAL_H,
+  LOGICAL_W,
+  STAGE_IDS,
+  emptyInput,
+  type TitanId,
+  type UIAction,
+  type UIScreenId,
+} from '@/contracts';
 import { createInputManager } from '@/input';
 import { createUI, showScreen, titanInfoFromDef, type UIExtraAction } from '@/ui';
 import { FIXTURE_TITANS, fakeHud, fixturePortraitProvider } from '@/ui/fixtures';
@@ -32,13 +40,20 @@ declare global {
       frames: number;
       ready: boolean;
       /** What the game would see: each slot's InputFrame sampled at 60 Hz, edges accumulated until `resetSeen()`. */
-      game: { held: [number, number]; seenPressed: [number, number]; moveX: [number, number]; moveY: [number, number] };
+      game: {
+        held: [number, number];
+        seenPressed: [number, number];
+        moveX: [number, number];
+        moveY: [number, number];
+      };
       resetSeen(): void;
     };
   }
 }
 
 const q = new URLSearchParams(location.search);
+// the usage hint is for people who opened the bare URL; it would only get in the way of a screenshot of a chosen screen
+if (q.has('screen') || q.has('hud')) document.getElementById('hint')?.remove();
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const g = canvas.getContext('2d')!;
 const image = g.createImageData(LOGICAL_W, LOGICAL_H);
@@ -84,7 +99,12 @@ const ui = createUI({
   version: 'sandbox',
   attractAfterSec: Number(q.get('attract') ?? 60),
 });
-const game = { held: [0, 0] as [number, number], seenPressed: [0, 0] as [number, number], moveX: [0, 0] as [number, number], moveY: [0, 0] as [number, number] };
+const game = {
+  held: [0, 0] as [number, number],
+  seenPressed: [0, 0] as [number, number],
+  moveX: [0, 0] as [number, number],
+  moveY: [0, 0] as [number, number],
+};
 const box = {
   ui,
   input,
@@ -149,7 +169,14 @@ const frame = (now: number): void => {
   }
   audio.update(
     {
-      phase: ui.screen === 'attract' ? 'attract' : ui.screen === 'pause' ? 'pause' : ui.screen === 'hud' ? 'fight' : 'menu',
+      phase:
+        ui.screen === 'attract'
+          ? 'attract'
+          : ui.screen === 'pause'
+            ? 'pause'
+            : ui.screen === 'hud'
+              ? 'fight'
+              : 'menu',
       stage: 'nursery',
       intensity: 0.3,
       listenerX: 0,

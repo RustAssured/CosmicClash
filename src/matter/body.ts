@@ -17,6 +17,10 @@ import { K_CONE, K_LINE, type ShapeQ } from './shape';
 export const TILE = 16;
 export const TILE_SHIFT = 4;
 
+/** Capacities of the connectivity change frontier (Body.connSeed) and of its removal events. */
+export const CONN_SEED_CAP = 4096;
+export const CONN_EVT_CAP = 8192;
+
 /** Connectivity-check urgency (Body.connDirty): soft = burn erosion, steady = a process is still cutting, now = a direct hit. */
 export const CONN_SOFT = 1;
 export const CONN_STEADY = 2;
@@ -99,6 +103,8 @@ export class Body implements MatterBody {
   lastTidalTick = -100;
   /** 1 for fluid materials (gas/plasma/liquid clouds: never anchor other cells). */
   readonly matFluid: Uint8Array;
+  /** Material emissive levels (0..255) by id: lets the visual fast path skip the material object. */
+  readonly matEmissive: Uint8Array;
   /** Materials that occur on the pristine outer surface (others count as "interior" when exposed). */
   readonly surfaceMat: Uint8Array;
   /** Interned particle ramp ids per material: index m*5 + {0 dust, 1 shard, 2 ember, 3 gas, 4 infect}. Filled at creation. */
@@ -142,6 +148,8 @@ export class Body implements MatterBody {
   readonly stats: BodyStats;
   /** Core disc offsets (relative cell indices) built once. */
   coreDiscIdx: Int32Array = new Int32Array(0);
+  /** 1 for cells of the core disc (the anchor of connectivity): losing one of them forces a full flood. */
+  readonly coreMask: Uint8Array;
   corePristine = 1;
   /** Live bounding box in local cells (updated with stats). */
   liveX0 = 0;
@@ -154,6 +162,28 @@ export class Body implements MatterBody {
   connDirty = CONN_NOW;
   lastConnTick = -100;
   anchoredFrac = 1;
+  /**
+   * Frontier of the changes since the last connectivity pass: live cells next to a removed cell or a broken bond (deduplicated
+   * through `seedMark`). Each removal is an EVENT; events that touch (a shared frontier cell, or 4-adjacent removed cells) are
+   * unioned, so the frontier cells of one connected removed region share a cluster (connectivity.ts uses this to decide whether
+   * anything was cut off).
+   */
+  readonly connSeed = new Int32Array(CONN_SEED_CAP);
+  connSeedN = 0;
+  readonly connEvtParent = new Int32Array(CONN_EVT_CAP);
+  connEvtN = 0;
+  readonly seedMark: Int32Array;
+  /** Event that first put each frontier cell on the list (valid while seedMark[c] === seedGen). */
+  readonly cellEvt: Int32Array;
+  readonly killMark: Int32Array;
+  readonly killEvt: Int32Array;
+  seedGen = 1;
+  /** Group labels for the local reconnection search (always all-zero between passes). */
+  readonly connLabel: Int32Array;
+  /** A full flood is required: first pass, matter was added, or the frontier overflowed. */
+  connFull = true;
+  /** Bodies with fluid materials need the directed (solid -> fluid only) flood: they always take the full pass. */
+  readonly hasFluid: boolean;
 
   /* ---- mass economy ---- */
   /** Mass received from sinks that has not yet been built into cells (see grow()). Counts toward `map.mass`. */
@@ -250,6 +280,8 @@ export class Body implements MatterBody {
       this.condTab[i] = 0.25 * Math.max(0, Math.min(1, spec.materials[i]!.conductivity));
     this.looseMat = new Uint8Array(256);
     for (let i = 1; i < spec.materials.length; i++) this.looseMat[i] = spec.materials[i]!.bond <= 60 ? 1 : 0;
+    this.matEmissive = new Uint8Array(256);
+    for (let i = 0; i < spec.materials.length; i++) this.matEmissive[i] = spec.materials[i]!.emissive;
     this.matFluid = new Uint8Array(256);
     for (let i = 0; i < spec.materials.length; i++) this.matFluid[i] = spec.materials[i]!.fluid ? 1 : 0;
     this.surfaceMat = new Uint8Array(256);
@@ -258,6 +290,15 @@ export class Body implements MatterBody {
     this.vein = new Uint8Array(this.n);
     this.stamp = new Uint32Array(this.n);
     this.aux = new Float32Array(this.n);
+    this.coreMask = new Uint8Array(this.n);
+    this.seedMark = new Int32Array(this.n);
+    this.cellEvt = new Int32Array(this.n);
+    this.killMark = new Int32Array(this.n);
+    this.killEvt = new Int32Array(this.n);
+    this.connLabel = new Int32Array(this.n);
+    let fluidAny = false;
+    for (let i = 1; i < spec.materials.length; i++) if (spec.materials[i]!.fluid) fluidAny = true;
+    this.hasFluid = fluidAny;
 
     this.tilesX = (this.w + TILE - 1) >> TILE_SHIFT;
     this.tilesY = (this.h + TILE - 1) >> TILE_SHIFT;
@@ -419,6 +460,86 @@ export class Body implements MatterBody {
   /* -------------------------------------------------------------------------------------------- *
    *  Dirty tracking
    * -------------------------------------------------------------------------------------------- */
+
+  private findEvt(a: number): number {
+    const par = this.connEvtParent;
+    while (par[a] !== a) {
+      par[a] = par[par[a]!]!;
+      a = par[a]!;
+    }
+    return a;
+  }
+
+  private unionEvt(a: number, b: number): void {
+    const ra = this.findEvt(a);
+    const rb = this.findEvt(b);
+    if (ra !== rb) this.connEvtParent[ra] = rb;
+  }
+
+  /** Start a removal event; -1 (and a full flood requested) if the event list is full. */
+  private newEvt(): number {
+    if (this.connEvtN >= CONN_EVT_CAP) {
+      this.connFull = true;
+      return -1;
+    }
+    const e = this.connEvtN++;
+    this.connEvtParent[e] = e;
+    return e;
+  }
+
+  private seedTouch(c: number, e: number): void {
+    if (this.seedMark[c] === this.seedGen) {
+      this.unionEvt(this.cellEvt[c]!, e);
+      return;
+    }
+    if (this.connSeedN >= CONN_SEED_CAP) {
+      this.connFull = true;
+      return;
+    }
+    this.seedMark[c] = this.seedGen;
+    this.cellEvt[c] = e;
+    this.connSeed[this.connSeedN++] = c;
+  }
+
+  /** Cell `i` is about to be removed: its live 4-neighbours join the change frontier, and removed neighbours join its event. */
+  noteKill(i: number): void {
+    if (this.connFull) return;
+    if (this.coreMask[i] !== 0) {
+      // An anchor cell died: the components it anchored may be orphaned without any cut. Only the full flood decides that.
+      this.connFull = true;
+      return;
+    }
+    const e = this.newEvt();
+    if (e < 0) return;
+    const w = this.w;
+    const mat = this.map.material;
+    const x = i % w;
+    this.killMark[i] = this.seedGen;
+    this.killEvt[i] = e;
+    if (x > 0) this.touchNeighbour(i - 1, e, mat);
+    if (x < w - 1) this.touchNeighbour(i + 1, e, mat);
+    if (i >= w) this.touchNeighbour(i - w, e, mat);
+    if (i + w < this.n) this.touchNeighbour(i + w, e, mat);
+  }
+
+  private touchNeighbour(j: number, e: number, mat: Uint8Array): void {
+    if (mat[j] !== 0) this.seedTouch(j, e);
+    else if (this.killMark[j] === this.seedGen) this.unionEvt(e, this.killEvt[j]!);
+  }
+
+  /** The bond between live cells `u` and `v` was just broken. */
+  noteBreak(u: number, v: number): void {
+    if (this.connFull) return;
+    const e = this.newEvt();
+    if (e < 0) return;
+    this.seedTouch(u, e);
+    this.seedTouch(v, e);
+  }
+
+  /** Root of a frontier cell's event cluster. */
+  clusterOf(c: number): number {
+    return this.findEvt(this.cellEvt[c]!);
+  }
 
   /** Mark an inclusive local cell rect as changed: visuals, region stats. Cheap; call after any mutation. */
   touch(x0: number, y0: number, x1: number, y1: number): void {

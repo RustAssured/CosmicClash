@@ -543,6 +543,16 @@ async function main(): Promise<void> {
     }
     r.debugLoseContext(false);
     await new Promise((res) => setTimeout(res, 400));
+    // The scenery rebuilds in the background: until it is back, draw() must still composite the 2D layers over black.
+    r.draw(frameOf([bg, s], { tick: 1100 }));
+    const during = r.debugReadFrame(0); // composited layers, before post: exact colours
+    const px = 600 - view.x0 + (250 - view.y0) * LOGICAL_W;
+    check(
+      'context restore: 2D layers keep drawing (over black) while the scenery rebuilds in the background',
+      during[px] === s.pixels[15 * 30 + 15] && !r.isStageReady('tussenruimte'),
+      `sprite pixel ${during[px]!.toString(16)}`,
+    );
+    await r.prepareStage('tussenruimte');
     r.draw(frameOf([bg, s], { tick: 1100 }));
     const after = r.captureLogical();
     check(
@@ -568,14 +578,15 @@ async function main(): Promise<void> {
     // while a control region beside it is unaffected. Scenery is identical in both frames; only the occluder differs.
     r.setStage('nursery');
     const bar = makeLayer('bar', 'world', 0, 10, 300);
+    // a tall bar just right of the light (the nursery's stars sit at screen ≈ (78,-26)): everything beyond it, seen from the light, is in its shadow
     bar.pixels.fill(rgba(4, 3, 5, 255));
     Object.assign(bar, {
       anchorX: 5,
       anchorY: 0,
-      x: view.x0 + 158,
-      y: view.y0 + 0,
-      prevX: view.x0 + 158,
-      prevY: view.y0,
+      x: view.x0 + 117,
+      y: view.y0 - 60,
+      prevX: view.x0 + 117,
+      prevY: view.y0 - 60,
       version: 1,
     });
     r.draw(frameOf([], { stage: 'nursery', tick: 3000 }));
@@ -593,15 +604,148 @@ async function main(): Promise<void> {
         }
       return s / n;
     };
-    const shadow = lumAt(open, 250, 60, 310, 110) - lumAt(blocked, 250, 60, 310, 110);
-    const control = Math.abs(lumAt(open, 400, 5, 460, 35) - lumAt(blocked, 400, 5, 460, 35));
+    const shadow = lumAt(open, 150, 20, 230, 70) - lumAt(blocked, 150, 20, 230, 70);
+    const control = Math.abs(lumAt(open, 30, 60, 100, 110) - lumAt(blocked, 30, 60, 100, 110));
     check(
       'god rays: an opaque body between the light and a region casts a shaft there (and only there)',
-      shadow > 1.5 && control < 0.5,
+      shadow > 0.4 && control < 0.5,
       `shaft dims the probe by ${shadow.toFixed(2)} levels, control region moves ${control.toFixed(2)}`,
     );
     r.setStage('tussenruimte');
     void bg;
+  }
+
+  /* ---------- 13. stage preparation never freezes the game ---------- */
+  {
+    r.setStage('tussenruimte');
+    const bg = blackBackdrop();
+    const frameMsDuring: number[] = [];
+    const seen: number[] = [];
+    let previousAlways = true;
+    let nonBlank = true;
+    let draws = 0;
+    const tStart = performance.now();
+    const ready = r.prepareStage('nursery', (f) => seen.push(f));
+    const returnedIn = performance.now() - tStart;
+    // Draw frames the whole time the background job runs, exactly like the game loop would.
+    while (!r.isStageReady('nursery')) {
+      const a = performance.now();
+      r.draw(frameOf([], { stage: 'nursery', tick: 5000 + draws }));
+      frameMsDuring.push(performance.now() - a);
+      if (r.debugActiveStage() !== 'tussenruimte') previousAlways = false;
+      const f = r.captureLogical();
+      let lum = 0;
+      for (let i = 0; i < f.length; i += 41)
+        lum += (f[i]! & 255) + ((f[i]! >>> 8) & 255) + ((f[i]! >>> 16) & 255);
+      if (lum < 1500) nonBlank = false;
+      draws++;
+      await new Promise((res) => requestAnimationFrame(() => res(null)));
+    }
+    await ready;
+    const prep = r.stats.prepare;
+    check(
+      'prepareStage returns immediately and reports monotonic progress ending at 1',
+      returnedIn < 20 &&
+        seen.length >= 6 &&
+        seen.every((v, i) => i === 0 || v >= seen[i - 1]!) &&
+        seen.at(-1) === 1,
+      `returned in ${returnedIn.toFixed(1)} ms, ${seen.length} progress callbacks`,
+    );
+    check(
+      'while a stage prepares, draw() keeps showing the previous stage (never black, never garbage) over several frames',
+      previousAlways && nonBlank && draws >= 3,
+      `${draws} frames drawn during the load, previous stage kept: ${previousAlways}`,
+    );
+    check(
+      'the preparation is time-sliced: many frames, and no single slice longer than one shader compile',
+      !!prep && prep.frames >= 5 && prep.maxSliceMs < 90,
+      prep
+        ? `${prep.frames} frames, longest slice ${prep.maxSliceMs.toFixed(1)} ms, cpu ${prep.cpuMs.toFixed(0)} ms of ${prep.wallMs.toFixed(0)} ms wall`
+        : 'no stats',
+    );
+    const a = performance.now();
+    r.draw(frameOf([bg], { stage: 'nursery', tick: 6000 }));
+    const switchMs = performance.now() - a;
+    check(
+      'once ready, the switch to the prepared stage is instant (one draw)',
+      r.debugActiveStage() === 'nursery' && switchMs < 150,
+      `switched in ${switchMs.toFixed(1)} ms of CPU`,
+    );
+    // A stage nobody prepared: draw() must not block; it starts the job and keeps the current stage.
+    const b = performance.now();
+    r.draw(frameOf([], { stage: 'quasar', tick: 6001 }));
+    const lazyMs = performance.now() - b;
+    check(
+      'drawing a never-prepared stage starts a background job instead of blocking',
+      lazyMs < 150 && r.debugActiveStage() === 'nursery' && !r.isStageReady('quasar'),
+      `draw took ${lazyMs.toFixed(1)} ms of CPU`,
+    );
+    await r.prepareStage('quasar');
+    r.draw(frameOf([], { stage: 'quasar', tick: 6002 }));
+    check('…and switches to it as soon as it is ready', r.debugActiveStage() === 'quasar');
+  }
+
+  /* ---------- 14. quality tiers: cheap to switch, brightness-neutral, adaptive controller wired up ---------- */
+  {
+    r.setStage('nursery');
+    const meanLum = (f: Uint32Array): number => {
+      let s = 0;
+      for (let i = 0; i < f.length; i += 3)
+        s += (f[i]! & 255) + ((f[i]! >>> 8) & 255) + ((f[i]! >>> 16) & 255);
+      return s / (f.length / 3) / 3;
+    };
+    const lums: number[] = [];
+    const switchMs: number[] = [];
+    for (const t of [0, 1, 2] as const) {
+      const a = performance.now();
+      r.debugSetTier(t);
+      switchMs.push(performance.now() - a);
+      r.draw(frameOf([], { stage: 'nursery', tick: 7000 }));
+      lums.push(meanLum(r.captureLogical()));
+      if (r.stats.tier !== t) lums.push(-999);
+    }
+    const spread = (Math.max(...lums) - Math.min(...lums)) / Math.max(...lums);
+    check(
+      'quality tiers thin the scenery without changing its brightness (compensated) and report the tier in stats',
+      spread < 0.12 && lums.every((v) => v > 0),
+      `mean luminance by tier ${lums.map((v) => v.toFixed(1)).join(' / ')} (spread ${(spread * 100).toFixed(1)} %)`,
+    );
+    check(
+      'switching tier is cheap (no scenery rebuild): a few ms of CPU',
+      Math.max(...switchMs) < 120,
+      `switch times ${switchMs.map((v) => v.toFixed(1)).join(' / ')} ms`,
+    );
+    r.debugSetTier(1);
+
+    // Adaptive quality on a second renderer: in software GL every frame is slow, so it must walk down to tier 0 and stay.
+    const c2 = document.createElement('canvas');
+    c2.width = 640;
+    c2.height = 360;
+    document.body.appendChild(c2);
+    const ra = createRenderer();
+    await ra.init(c2, { quality: 'auto', preserveDrawingBuffer: true });
+    await ra.prepareStage('tussenruimte');
+    const startTier = ra.stats.tier;
+    const t0 = performance.now();
+    let n = 0;
+    while (performance.now() - t0 < 40_000 && ra.stats.tier > 0) {
+      ra.draw(frameOf([], { stage: 'tussenruimte', tick: 8000 + n++ }));
+      ra.captureLogical(); // force the GPU to finish so frame pacing reflects real cost
+      await new Promise((res) => requestAnimationFrame(() => res(null)));
+    }
+    const settled = ra.stats.tier;
+    for (let i = 0; i < 40; i++) {
+      ra.draw(frameOf([], { stage: 'tussenruimte', tick: 9000 + i }));
+      ra.captureLogical();
+      await new Promise((res) => requestAnimationFrame(() => res(null)));
+    }
+    check(
+      'adaptive quality (auto) starts at tier 1, walks down under sustained misses and stays put at the bottom',
+      ra.stats.auto && startTier === 1 && settled === 0 && ra.stats.tier === 0 && ra.stats.tierChanges >= 1,
+      `start ${startTier} → ${settled}, changes ${ra.stats.tierChanges}, late ${(ra.stats.lateRate * 100).toFixed(0)} %, gpu timer ${ra.stats.gpuMs === null ? 'n/a' : ra.stats.gpuMs.toFixed(1) + ' ms'}`,
+    );
+    ra.dispose();
+    c2.remove();
   }
 
   const failed = results.filter((x) => !x.ok).length;

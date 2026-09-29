@@ -15,6 +15,7 @@ import {
   getTitanDef,
   paintTitanMap,
   renderPortrait,
+  type LastOneRig,
 } from '@/titans';
 import { buildMaterialTable } from '@/matter';
 
@@ -210,7 +211,7 @@ describe.each(IMPLEMENTED_TITANS)('generator: %s', (id) => {
     const ids = Object.values(rig.ids);
     for (const v of ids) expect(v).toBeGreaterThan(0);
     if (id === 'lastone') {
-      const r = rig as import('@/titans').LastOneRig;
+      const r = rig as LastOneRig;
       expect(r.roots.length).toBe(def.resource.max);
       for (const root of r.roots) expect(solid(Math.round(root.x), Math.round(root.y))).toBe(true);
       expect(solid(Math.round(r.eye.x), Math.round(r.eye.y))).toBe(true);
@@ -245,7 +246,7 @@ describe('Last One specifics', () => {
   it('layers: shell over lattice over a core hidden behind the eye, halo attached by spokes, tendril roots on matter', () => {
     const def = getTitanDef('lastone');
     const { map, rig } = paintTitanMap(def, 7, DEFAULT_LIGHTING);
-    const r = rig as import('@/titans').LastOneRig;
+    const r = rig as LastOneRig;
     const counts = new Map<number, number>();
     for (let i = 0; i < map.material.length; i++)
       counts.set(map.material[i]!, (counts.get(map.material[i]!) ?? 0) + 1);

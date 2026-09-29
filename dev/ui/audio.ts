@@ -21,6 +21,8 @@ declare global {
     __verify?: (opts?: { quick?: boolean }) => Promise<VerifyReport>;
     __report?: VerifyReport;
     __audio?: ReturnType<typeof createAudioEngine>;
+    /** Largest level seen by the meter since the page loaded, before and after the limiter. */
+    __meter?: { maxPre: number; maxPost: number };
   }
 }
 
@@ -69,7 +71,11 @@ const scene = (): AudioScene => {
   };
 };
 
-const hit = (a: TitanId, type: DamageType, over: Partial<Extract<AudioEvent, { t: 'hit' }>> = {}): AudioEvent => ({
+const hit = (
+  a: TitanId,
+  type: DamageType,
+  over: Partial<Extract<AudioEvent, { t: 'hit' }>> = {},
+): AudioEvent => ({
   t: 'hit',
   attacker: 0,
   target: 1,
@@ -99,6 +105,10 @@ const MOVES: Record<string, string[]> = {
 };
 const moveIds = (t: TitanId): string[] => MOVES[t] ?? [`${t}.strike`, `${t}.crush`];
 
+const gaze = (phase: 'start' | 'hold' | 'release', frac: number): AudioEvent[] => [
+  { t: 'charge', slot: 0, titan: 'lastone', moveId: 'lastone.gaze', frac, phase },
+];
+
 const groups: { name: string; entries: (a: TitanId, b: TitanId) => Entry[] }[] = [
   {
     name: 'Hits by damage type (A hits B)',
@@ -106,31 +116,83 @@ const groups: { name: string; entries: (a: TitanId, b: TitanId) => Entry[] }[] =
       ...TYPES.map((t) => ({ label: t.toLowerCase(), events: () => [hit(a, t)] })),
       { label: 'heavy CRUSH', events: () => [hit(a, 'CRUSH', { energy: 9000, heavy: true, onDamaged: 1 })] },
       { label: 'blocked', events: () => [hit(a, 'KINETIC', { blocked: 0.9 })] },
-      { label: 'tiny chip', events: () => [hit(a, 'FRACTURE', { energy: 90, cellsRemoved: 2, massRemoved: 0.4 })] },
+      {
+        label: 'tiny chip',
+        events: () => [hit(a, 'FRACTURE', { energy: 90, cellsRemoved: 2, massRemoved: 0.4 })],
+      },
     ],
   },
   {
     name: 'Moves (A): wind-up and release',
-    entries: (a) =>
-      moveIds(a).flatMap((id) => [
-        {
-          label: `${id.split('.')[1]} windup`,
-          events: () => [{ t: 'move', slot: 0, titan: a, moveId: id, moveSlot: 'strike', aim: 'forward', x: 700, y: 300 } as AudioEvent],
-        },
+    entries: (a) => [
+      ...moveIds(a).flatMap((id) => [
+        ...(id.endsWith('gaze')
+          ? [] // the Gaze's windup is the sustained charge voice, below
+          : [
+              {
+                label: `${id.split('.')[1]} windup`,
+                events: () => [
+                  {
+                    t: 'move',
+                    slot: 0,
+                    titan: a,
+                    moveId: id,
+                    moveSlot: 'strike',
+                    aim: 'forward',
+                    x: 700,
+                    y: 300,
+                  } as AudioEvent,
+                ],
+              },
+            ]),
         {
           label: `${id.split('.')[1]} release`,
-          events: () => [{ t: 'release', slot: 0, titan: a, moveId: id, moveSlot: 'strike', x: 700, y: 300, power: 0.85 } as AudioEvent],
+          events: () => [
+            {
+              t: 'release',
+              slot: 0,
+              titan: a,
+              moveId: id,
+              moveSlot: 'strike',
+              x: 700,
+              y: 300,
+              power: 0.85,
+            } as AudioEvent,
+          ],
         },
       ]),
+      ...(a === 'lastone'
+        ? [
+            { label: 'gaze charge (start, 60 %)', events: () => gaze('start', 0).concat(gaze('hold', 0.6)) },
+            { label: 'gaze charge (hold 100 %)', events: () => gaze('hold', 1) },
+            { label: 'gaze charge (release)', events: () => gaze('release', 1) },
+          ]
+        : []),
+    ],
   },
   {
     name: 'Movement and defence',
     entries: (a, b) => [
-      { label: 'surge A', events: () => [{ t: 'surge', slot: 0, titan: a, x: 700, y: 300, dirX: 1, dirY: 0 }] },
-      { label: 'surge B', events: () => [{ t: 'surge', slot: 1, titan: b, x: 900, y: 300, dirX: -1, dirY: 0 }] },
-      { label: 'guard holds', events: () => [{ t: 'guard', slot: 0, x: 700, y: 300, type: 'FRACTURE', broke: false }] },
-      { label: 'guard breaks', events: () => [{ t: 'guard', slot: 1, x: 900, y: 300, type: 'KINETIC', broke: true }] },
-      { label: 'shockwave', events: () => [{ t: 'shockwave', x: 800, y: 300, strength: 0.9, radius: 240, hue: 0.1 }] },
+      {
+        label: 'surge A',
+        events: () => [{ t: 'surge', slot: 0, titan: a, x: 700, y: 300, dirX: 1, dirY: 0 }],
+      },
+      {
+        label: 'surge B',
+        events: () => [{ t: 'surge', slot: 1, titan: b, x: 900, y: 300, dirX: -1, dirY: 0 }],
+      },
+      {
+        label: 'guard holds',
+        events: () => [{ t: 'guard', slot: 0, x: 700, y: 300, type: 'FRACTURE', broke: false }],
+      },
+      {
+        label: 'guard breaks',
+        events: () => [{ t: 'guard', slot: 1, x: 900, y: 300, type: 'KINETIC', broke: true }],
+      },
+      {
+        label: 'shockwave',
+        events: () => [{ t: 'shockwave', x: 800, y: 300, strength: 0.9, radius: 240, hue: 0.1 }],
+      },
     ],
   },
   {
@@ -144,8 +206,14 @@ const groups: { name: string; entries: (a: TitanId, b: TitanId) => Entry[] }[] =
   {
     name: 'Big moments',
     entries: (a, b) => [
-      { label: 'ultimate A', events: () => [{ t: 'ultimate', slot: 0, titan: a, phase: 'start', x: 700, y: 300 }] },
-      { label: 'ultimate B', events: () => [{ t: 'ultimate', slot: 1, titan: b, phase: 'start', x: 900, y: 300 }] },
+      {
+        label: 'ultimate A',
+        events: () => [{ t: 'ultimate', slot: 0, titan: a, phase: 'start', x: 700, y: 300 }],
+      },
+      {
+        label: 'ultimate B',
+        events: () => [{ t: 'ultimate', slot: 1, titan: b, phase: 'start', x: 900, y: 300 }],
+      },
       { label: 'KO A', events: () => [{ t: 'ko', slot: 0, x: 700, y: 300 }] },
       { label: 'KO B', events: () => [{ t: 'ko', slot: 1, x: 900, y: 300 }] },
       { label: 'round intro', events: () => [{ t: 'round', phase: 'intro', round: 1, winner: -1 }] },
@@ -158,14 +226,33 @@ const groups: { name: string; entries: (a: TitanId, b: TitanId) => Entry[] }[] =
   {
     name: 'Titan cues',
     entries: (a, b) => [
-      { label: 'tendril-sever', events: () => [{ t: 'cue', slot: 0, titan: a, id: 'tendril-sever', x: 700, y: 300, amount: 1 }] },
-      { label: 'fragment-lost', events: () => [{ t: 'cue', slot: 1, titan: b, id: 'fragment-lost', x: 900, y: 300, amount: 1 }] },
+      {
+        label: 'tendril-sever',
+        events: () => [{ t: 'cue', slot: 0, titan: a, id: 'tendril-sever', x: 700, y: 300, amount: 1 }],
+      },
+      {
+        label: 'fragment-lost',
+        events: () => [{ t: 'cue', slot: 1, titan: b, id: 'fragment-lost', x: 900, y: 300, amount: 1 }],
+      },
     ],
   },
   {
     name: 'Menu',
     entries: () =>
-      (['move', 'confirm', 'back', 'select', 'error', 'start', 'pause', 'unpause', 'roundwin', 'tick'] as UiSoundId[]).map((id) => ({
+      (
+        [
+          'move',
+          'confirm',
+          'back',
+          'select',
+          'error',
+          'start',
+          'pause',
+          'unpause',
+          'roundwin',
+          'tick',
+        ] as UiSoundId[]
+      ).map((id) => ({
         label: id,
         events: () => [{ t: 'ui', id } as AudioEvent],
       })),
@@ -179,7 +266,12 @@ const groups: { name: string; entries: (a: TitanId, b: TitanId) => Entry[] }[] =
           const out: AudioEvent[] = [];
           for (let i = 0; i < 24; i++) {
             out.push(
-              hit(i % 2 ? b : a, TYPES[i % 6]!, { energy: 7000, heavy: i % 3 === 0, onDamaged: 0.8, x: 300 + i * 40 }),
+              hit(i % 2 ? b : a, TYPES[i % 6]!, {
+                energy: 7000,
+                heavy: i % 3 === 0,
+                onDamaged: 0.8,
+                x: 300 + i * 40,
+              }),
               { t: 'shockwave', x: 800, y: 300, strength: 1, radius: 260, hue: 0.1 },
               { t: 'matter', kind: 'detach', x: 700, y: 300, mass: 900, slot: (i % 2) as 0 | 1 },
             );
@@ -244,11 +336,15 @@ const meter = $<HTMLCanvasElement>('meter');
 const g = meter.getContext('2d')!;
 let last = performance.now();
 const hist: { pre: number; post: number }[] = [];
+const seen = { maxPre: 0, maxPost: 0 };
+window.__meter = seen;
 const frame = (t: number): void => {
   const dt = Math.min(0.1, (t - last) / 1000);
   last = t;
   if (state.scoreOn) engine.update(scene(), dt);
   const p = engine.readPeak();
+  seen.maxPre = Math.max(seen.maxPre, p.pre);
+  seen.maxPost = Math.max(seen.maxPost, p.post);
   hist.push(p);
   if (hist.length > meter.width) hist.shift();
   g.clearRect(0, 0, meter.width, meter.height);
@@ -262,7 +358,9 @@ const frame = (t: number): void => {
     g.fillStyle = '#6fd3ff';
     g.fillRect(i, H - Math.min(1.25, h.post) * (H / 1.25), 1, Math.min(1.25, h.post) * (H / 1.25));
   }
-  $('status').textContent = engine.ready ? `running · ${engine.latencyMs().toFixed(0)} ms output latency` : 'suspended (click to start)';
+  $('status').textContent = engine.ready
+    ? `running · ${engine.latencyMs().toFixed(0)} ms output latency`
+    : 'suspended (click to start)';
   requestAnimationFrame(frame);
 };
 requestAnimationFrame(frame);

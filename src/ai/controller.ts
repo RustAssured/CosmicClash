@@ -16,21 +16,33 @@ import {
 import { levelParams, type LevelParams } from './levels';
 import { buildMoveInfos, surgeDistance, type MoveInfo } from './moves';
 import { NGram, type Token } from './predict';
-import { ObservationRing, Snapshot } from './observe';
+import type { Snapshot } from './observe';
+import { ObservationRing } from './observe';
 import { Plan, Steer } from './plan';
 
 const TYPES: DamageType[] = ['FRACTURE', 'ASSIMILATION', 'TIDAL', 'THERMAL', 'CRUSH', 'KINETIC'];
 const GLIDE_TAU = 0.35 / Math.LN2;
 const LOG_MAX = 80;
-/** A foe that has shown no threatening move or guard for this long (2.5 s) is treated as passive. */
-const PASSIVE_TICKS = 150;
+/** A foe that has shown no move, guard or surge for PASSIVE_FROM ticks (6 s) starts to be treated as passive, fully so PASSIVE_RAMP ticks (6 s) later. */
+const PASSIVE_FROM = 360;
+const PASSIVE_RAMP = 360;
 
 interface Cand {
   score: number;
   name: string;
   kind: Plan['kind'];
   /** What to build when chosen. */
-  what: 'wait' | 'approach' | 'retreat' | 'strafe' | 'attack' | 'sidestep' | 'guard' | 'ultimate' | 'feint' | 'escape';
+  what:
+    | 'wait'
+    | 'approach'
+    | 'retreat'
+    | 'strafe'
+    | 'attack'
+    | 'sidestep'
+    | 'guard'
+    | 'ultimate'
+    | 'feint'
+    | 'escape';
   info: MoveInfo | null;
   charge: number;
   dirX: number;
@@ -129,6 +141,13 @@ export class UtilityAI implements AIController {
   private foeActedTick = Number.NaN;
 
   /* own bookkeeping */
+  /** "Is it landing?" memory: consecutive whiffs per move variant (decays), so an AI that keeps missing tries something else. */
+  private readonly whiffs: Uint8Array;
+  private readonly whiffTick: Int32Array;
+  private pendIdx = -1;
+  private pendMass = 1;
+  private pendUntil = 0;
+  private pendSaw = false;
   private lastSurgeTick = -1e9;
   private stunAge = 0;
 
@@ -138,14 +157,17 @@ export class UtilityAI implements AIController {
     this.P = levelParams(level);
     this.persona = personaOf(def);
     this.infos = buildMoveInfos(def);
+    this.whiffs = new Uint8Array(this.infos.length);
+    this.whiffTick = new Int32Array(this.infos.length);
     for (const mi of this.infos) (this.bySlot[mi.slot] ??= []).push(mi);
     this.surgeDist = surgeDistance(def);
     const guard = def.moves.find((m) => m.slot === 'guard');
-    this.guardAbsorb = ((guard?.extra?.['shell'] as { absorb?: Partial<Record<DamageType, number>> } | undefined)?.absorb ?? {}) as Partial<
-      Record<DamageType, number>
-    >;
+    this.guardAbsorb = ((
+      guard?.extra?.['shell'] as { absorb?: Partial<Record<DamageType, number>> } | undefined
+    )?.absorb ?? {}) as Partial<Record<DamageType, number>>;
     const surge = def.moves.find((m) => m.slot === 'surge');
-    this.followUp = (surge?.extra?.['followUp'] as { from: number; to: number; move: string } | undefined) ?? null;
+    this.followUp =
+      (surge?.extra?.['followUp'] as { from: number; to: number; move: string } | undefined) ?? null;
     this.rng = new Rng(seed);
     this.reset(seed);
   }
@@ -165,6 +187,8 @@ export class UtilityAI implements AIController {
     this.prevState = '';
     this.prevProcessedTick = -1;
     this.foeActedTick = Number.NaN;
+    this.whiffs.fill(0);
+    this.pendIdx = -1;
     this.lastSurgeTick = -1e9;
     this.stunAge = 0;
   }
@@ -190,12 +214,14 @@ export class UtilityAI implements AIController {
     }
     if (S.state === 'ko' || S.state === 'victory' || S.state === 'intro' || ctx.roundTick <= 0) {
       this.plan.cancel();
+      this.pendIdx = -1;
       return;
     }
+    if (this.pendIdx >= 0 && ctx.tick >= this.pendUntil) this.settleAttack(F, ctx.tick);
     // own state is always known exactly (proprioception): hit-stun bookkeeping for the escape route
     this.stunAge = S.state === 'hitstun' ? this.stunAge + 1 : 0;
     if (S.state === 'hitstun' || S.state === 'guardbreak') {
-      this.stunned(S, F, out);
+      this.stunned(S, out);
       return;
     }
 
@@ -220,7 +246,8 @@ export class UtilityAI implements AIController {
       }
       this.lastVuln = vuln;
     } else this.lastVuln = this.vulnerableTicks(F, age);
-    if (!this.plan.active && !busy && ctx.tick - this.lastThink >= this.P.thinkEvery) this.think(ctx, S, F, age);
+    if (!this.plan.active && !busy && ctx.tick - this.lastThink >= this.P.thinkEvery)
+      this.think(ctx, S, F, age);
     else if (busy && this.plan.kind === 'attack' && !this.plan.active) this.considerFeint(ctx, S, F, age);
 
     this.plan.run(out, dx, dy);
@@ -230,9 +257,32 @@ export class UtilityAI implements AIController {
    *  perception
    * ---------------------------------------------------------------------------------------------- */
 
+  /** Judge the attack we committed to a while ago from what the (delayed) foe view shows: did it lose matter or get staggered? */
+  private settleAttack(F: Snapshot, tick: number): void {
+    const i = this.pendIdx;
+    this.pendIdx = -1;
+    if (F.guardUp || F.state === 'guard' || F.intangible) return; // blocked or dodged with a defence: not informative about aim
+    const landed = this.pendSaw || this.pendMass - F.massFrac > 0.003;
+    if (landed) this.whiffs[i] = 0;
+    else if (this.whiffs[i]! < 4) this.whiffs[i]!++;
+    this.whiffTick[i] = tick;
+  }
+
+  /** Multiplier on a move variant's hit probability after consecutive whiffs (forgotten after ten seconds). */
+  private whiffFactor(mi: MoveInfo): number {
+    const n = this.whiffs[mi.idx]!;
+    if (n === 0) return 1;
+    if (this.nowTick - this.whiffTick[mi.idx]! > 600) {
+      this.whiffs[mi.idx] = 0;
+      return 1;
+    }
+    return Math.pow(0.4, n);
+  }
+
   private observeFoe(F: Snapshot): void {
     if (Number.isNaN(this.foeActedTick) || F.moveId !== null || F.state === 'guard' || F.state === 'surge')
       this.foeActedTick = F.tick;
+    if (this.pendIdx >= 0 && F.state === 'hitstun') this.pendSaw = true;
     let tok: Token | null = null;
     if (F.moveId !== null && F.moveId !== this.prevMoveId) {
       tok = (F.moveSlot as Token | null) ?? 'idle';
@@ -259,7 +309,15 @@ export class UtilityAI implements AIController {
   }
 
   /** Overlap fraction between a hit region and a body's bounds (the body is treated as ~80% of its box). */
-  private coverage(hx0: number, hy0: number, hx1: number, hy1: number, F: Snapshot, shiftX: number, shiftY: number): number {
+  private coverage(
+    hx0: number,
+    hy0: number,
+    hx1: number,
+    hy1: number,
+    F: Snapshot,
+    shiftX: number,
+    shiftY: number,
+  ): number {
     const w = F.bx1 - F.bx0;
     const h = F.by1 - F.by0;
     const fx0 = F.bx0 + shiftX + w * 0.1;
@@ -356,12 +414,17 @@ export class UtilityAI implements AIController {
     const sy = this.foeShift(F, t, 'y') + this.noiseY;
     const disp = f * mi.lungeBefore;
     const x0 = f === 1 ? S.x + mi.x0 * rs + disp : S.x - mi.x1 * rs + disp;
-    const x1 = f === 1 ? S.x + mi.x1 * rs + disp + f * mi.lungeDuring * 0.5 : S.x - mi.x0 * rs + disp + f * mi.lungeDuring * 0.5;
+    const x1 =
+      f === 1
+        ? S.x + mi.x1 * rs + disp + f * mi.lungeDuring * 0.5
+        : S.x - mi.x0 * rs + disp + f * mi.lungeDuring * 0.5;
     const lo = Math.min(x0, x1);
     const hi = Math.max(x0, x1);
     const y0 = S.y + mi.y0 * rs;
     const y1 = S.y + mi.y1 * rs;
-    let p = mi.line ? this.lineCoverage(mi.line, S, F, f, rs, disp, sx, sy) : this.coverage(lo, y0, hi, y1, F, sx, sy);
+    let p = mi.line
+      ? this.lineCoverage(mi.line, S, F, f, rs, disp, sx, sy)
+      : this.coverage(lo, y0, hi, y1, F, sx, sy);
     if (p <= 0) return;
     // a foe that is already moving away / has a surge ready dodges some of it; a guarding foe blocks some
     p = Math.min(1, p * 1.25);
@@ -422,7 +485,12 @@ export class UtilityAI implements AIController {
       const ox = Math.min(th.x1, mx1) - Math.max(th.x0, mx0);
       const oy = Math.min(th.y1, my1) - Math.max(th.y0, my0);
       if (ox <= 0 || oy <= 0) continue;
-      const cov = clamp((ox * oy) / (Math.max(8, Math.min(th.x1 - th.x0, mx1 - mx0)) * Math.max(8, Math.min(th.y1 - th.y0, my1 - my0))), 0, 1);
+      const cov = clamp(
+        (ox * oy) /
+          (Math.max(8, Math.min(th.x1 - th.x0, mx1 - mx0)) * Math.max(8, Math.min(th.y1 - th.y0, my1 - my0))),
+        0,
+        1,
+      );
       // every hitbox of one move that will overlap me adds up (a lash is four separate whips)
       b.danger += (th.energy / 400) * (0.4 + 0.6 * cov);
       if (th.energy > topEnergy) {
@@ -447,7 +515,14 @@ export class UtilityAI implements AIController {
     b.y1 = uy1;
     if (quick) {
       // urgent: it goes live within the surge's protective window and is not trivial
-      return this.P.defends > 0.3 && b.danger > 0.5 && b.until <= 12 && b.until >= -2 && this.plan.kind !== 'defend' && this.rollDefend();
+      return (
+        this.P.defends > 0.3 &&
+        b.danger > 0.5 &&
+        b.until <= 12 &&
+        b.until >= -2 &&
+        this.plan.kind !== 'defend' &&
+        this.rollDefend()
+      );
     }
     return true;
   }
@@ -500,7 +575,10 @@ export class UtilityAI implements AIController {
     const lowHp = S.integrityPct < 34 && !behind;
     const vuln = this.vulnerableTicks(F, age);
     const predAttack = this.P.predicts && this.ngram.weight > 6 ? this.predictAttackProb() : 0.25;
-    const surgeReady = this.def.moves.some((m) => m.slot === 'surge') && ctx.tick - this.lastSurgeTick > 40 && S.moveId === null;
+    const surgeReady =
+      this.def.moves.some((m) => m.slot === 'surge') &&
+      ctx.tick - this.lastSurgeTick > 40 &&
+      S.moveId === null;
 
     /* ---- defend ---- */
     if (this.scanThreats(S, F, age)) {
@@ -510,7 +588,13 @@ export class UtilityAI implements AIController {
       if (surgeReady && this.P.defends > 0.2) {
         const dir = this.bestSidestepDir(S, th);
         const sc = th.danger * (0.95 + 0.5 * pers.patience) * this.P.defends;
-        const c = this.add('sidestep', 'defend', 'sidestep', sc, `threat ${TYPES[th.type]} in ${th.until.toFixed(0)}t`);
+        const c = this.add(
+          'sidestep',
+          'defend',
+          'sidestep',
+          sc,
+          `threat ${TYPES[th.type]} in ${th.until.toFixed(0)}t`,
+        );
         c.dirX = dir[0];
         c.dirY = dir[1];
         c.delay = sideDelay + this.jitter();
@@ -519,11 +603,18 @@ export class UtilityAI implements AIController {
         c.charge = this.followUp ? 1 : 0;
       }
       const absorb = this.guardAbsorb[TYPES[th.type]!] ?? 0.35;
-      const gsc = th.danger * absorb * (0.5 + 0.5 * S.guardHealth) * 0.85 * this.P.defends * (th.detached ? 0.6 : 1);
+      const gsc =
+        th.danger * absorb * (0.5 + 0.5 * S.guardHealth) * 0.85 * this.P.defends * (th.detached ? 0.6 : 1);
       const g = this.add('guard', 'defend', 'guard', gsc, `guard vs ${TYPES[th.type]} (absorb ${absorb})`);
       g.delay = Math.max(0, until - 5) + this.jitter();
       g.ticks = Math.min(60, Math.round(until + th.live + 6));
-      const rs = this.add('back off', 'defend', 'retreat', th.danger * 0.35 * this.P.defends * (0.5 + pers.retreat), 'give ground');
+      const rs = this.add(
+        'back off',
+        'defend',
+        'retreat',
+        th.danger * 0.35 * this.P.defends * (0.5 + pers.retreat),
+        'give ground',
+      );
       rs.ticks = 16;
       rs.delay = this.jitter();
       // counter: something fast that lands before the threat goes live
@@ -531,7 +622,13 @@ export class UtilityAI implements AIController {
         this.evalMove(mi, S, F, age, this.ev);
         const startup = mi.startup / Math.max(0.6, S.stats.tempoMul);
         if (this.ev.p > 0.5 && startup + 3 < until) {
-          const cc = this.add(`counter ${mi.def.name}`, 'defend', 'attack', th.danger * 0.75 * this.ev.p * this.P.punishSkill, `counter before t-${until.toFixed(0)}`);
+          const cc = this.add(
+            `counter ${mi.def.name}`,
+            'defend',
+            'attack',
+            th.danger * 0.75 * this.ev.p * this.P.punishSkill,
+            `counter before t-${until.toFixed(0)}`,
+          );
           cc.info = mi;
           cc.delay = this.jitter();
         }
@@ -550,7 +647,13 @@ export class UtilityAI implements AIController {
         this.evalMove(mi, S, F, age, this.ev);
         if (this.ev.p > 0.35 || vuln > mi.startup * 0.6) {
           const sc = (this.ev.dmg / 450) * (vuln > 30 ? 1.3 : 0.85) + 0.2;
-          const c = this.add(`ultimate ${mi.def.name}`, 'attack', 'ultimate', sc, `meter full, hitP ${this.ev.p.toFixed(2)}`);
+          const c = this.add(
+            `ultimate ${mi.def.name}`,
+            'attack',
+            'ultimate',
+            sc,
+            `meter full, hitP ${this.ev.p.toFixed(2)}`,
+          );
           c.info = mi;
           c.delay = this.jitter();
         }
@@ -565,24 +668,65 @@ export class UtilityAI implements AIController {
     const range = this.attackRange(S) + pers.patience * 40 + pers.zoning * 30;
     const approachNeed = clamp((dist - this.attackRange(S) * 0.95) / 200, 0, 1.4);
     const tooClose = clamp((this.attackRange(S) * 0.3 - dist) / 50, 0, 1);
-    const a = this.add('approach', 'space', 'approach', 0.25 + 0.55 * approachNeed * (0.5 + pers.aggression) - (lowHp ? 0.25 : 0) + (behind && late ? 0.3 : 0) - (ahead && late ? 0.25 : 0), 'close the gap');
+    const a = this.add(
+      'approach',
+      'space',
+      'approach',
+      0.25 +
+        0.55 * approachNeed * (0.5 + pers.aggression) -
+        (lowHp ? 0.25 : 0) +
+        (behind && late ? 0.3 : 0) -
+        (ahead && late ? 0.25 : 0),
+      'close the gap',
+    );
     a.ticks = 10 + Math.round(this.rng.next() * 12);
     if (surgeReady && dist > range + 160 && pers.aggression > 0.5) {
-      const dash = this.add('dash in', 'space', 'sidestep', 0.3 + 0.35 * approachNeed * pers.aggression, 'gap-close surge');
+      const dash = this.add(
+        'dash in',
+        'space',
+        'sidestep',
+        0.3 + 0.35 * approachNeed * pers.aggression,
+        'gap-close surge',
+      );
       dash.dirX = Math.sign(dx) || S.facing;
       dash.dirY = clamp(dy / 120, -0.5, 0.5);
       dash.delay = this.jitter();
     }
-    const r = this.add('retreat', 'space', 'retreat', 0.1 + 0.6 * tooClose * (0.4 + pers.retreat) + (lowHp ? 0.5 : 0) + (ahead && late ? 0.25 : 0) + (dist < range * 0.8 && vuln <= 0 ? 0.08 * pers.retreat : 0) + (vuln <= 0 && F.phase === 'startup' ? 0.12 * pers.patience : 0), 'make room');
+    const r = this.add(
+      'retreat',
+      'space',
+      'retreat',
+      0.1 +
+        0.6 * tooClose * (0.4 + pers.retreat) +
+        (lowHp ? 0.5 : 0) +
+        (ahead && late ? 0.25 : 0) +
+        (dist < range * 0.8 && vuln <= 0 ? 0.08 * pers.retreat : 0) +
+        (vuln <= 0 && F.phase === 'startup' ? 0.12 * pers.patience : 0),
+      'make room',
+    );
     r.ticks = 10 + Math.round(this.rng.next() * 14);
-    const st = this.add('strafe', 'space', 'strafe', 0.16 + Math.abs(dy) / 260 * 0.4, 'line up height');
+    const st = this.add('strafe', 'space', 'strafe', 0.16 + (Math.abs(dy) / 260) * 0.4, 'line up height');
     st.dirY = Math.sign(dy) || (this.rng.chance(0.5) ? 1 : -1);
     st.ticks = 10;
-    const w = this.add('wait', 'wait', 'wait', 0.2 + 0.35 * pers.patience * (F.phase === 'startup' || predAttack > 0.4 ? 1 : 0.3) - 0.15 * pers.aggression, 'let them come');
+    const w = this.add(
+      'wait',
+      'wait',
+      'wait',
+      0.2 +
+        0.35 * pers.patience * (F.phase === 'startup' || predAttack > 0.4 ? 1 : 0.3) -
+        0.15 * pers.aggression,
+      'let them come',
+    );
     w.ticks = 8 + Math.round(this.rng.next() * 10);
     // a pre-emptive guard only when an attack is genuinely expected AND the foe is close enough to deliver it
     if (dist < 240 && predAttack > 0.5 && vuln <= 0 && (F.moveId !== null || F.state === 'move')) {
-      const g2 = this.add('guard up', 'defend', 'guard', 0.06 + (predAttack - 0.5) * 0.4 * this.P.defends * (lowHp ? 1.5 : 1), 'expect an attack');
+      const g2 = this.add(
+        'guard up',
+        'defend',
+        'guard',
+        0.06 + (predAttack - 0.5) * 0.4 * this.P.defends * (lowHp ? 1.5 : 1),
+        'expect an attack',
+      );
       g2.ticks = 12;
     }
 
@@ -596,7 +740,8 @@ export class UtilityAI implements AIController {
     if (this.nowTick - this.cachedRangeTick > 30) {
       let best = 0;
       for (const slot of ['strike', 'crush'] as MoveSlot[])
-        for (const mi of this.bySlot[slot] ?? []) if (mi.hasHitboxes) best = Math.max(best, (mi.x1 + mi.lungeBefore * 0.5) * S.stats.reachMul);
+        for (const mi of this.bySlot[slot] ?? [])
+          if (mi.hasHitboxes) best = Math.max(best, (mi.x1 + mi.lungeBefore * 0.5) * S.stats.reachMul);
       this.cachedRange = best + 45;
       this.cachedRangeTick = this.nowTick;
     }
@@ -606,7 +751,12 @@ export class UtilityAI implements AIController {
   /** Likelihood the foe attacks in the near future, from its observed habits. */
   private predictAttackProb(): number {
     this.ngram.predict();
-    return this.ngram.prob('strike') + this.ngram.prob('crush') + this.ngram.prob('signature') + this.ngram.prob('ultimate') * 0.5;
+    return (
+      this.ngram.prob('strike') +
+      this.ngram.prob('crush') +
+      this.ngram.prob('signature') +
+      this.ngram.prob('ultimate') * 0.5
+    );
   }
 
   private jitter(): number {
@@ -614,7 +764,10 @@ export class UtilityAI implements AIController {
   }
 
   /** Best of 8 directions to dash out of a threat region (largest clearance from its box), preferring backwards/sideways. */
-  private bestSidestepDir(S: FighterView, th: { x0: number; y0: number; x1: number; y1: number }): [number, number] {
+  private bestSidestepDir(
+    S: FighterView,
+    th: { x0: number; y0: number; x1: number; y1: number },
+  ): [number, number] {
     let best = -1e9;
     let bx = -S.facing as number;
     let by = 0;
@@ -643,7 +796,14 @@ export class UtilityAI implements AIController {
     return [Math.abs(bx) < 0.05 ? 0 : bx, Math.abs(by) < 0.05 ? 0 : by];
   }
 
-  private attackCandidates(S: FighterView, F: Snapshot, age: number, dist: number, vuln: number, punish: boolean): void {
+  private attackCandidates(
+    S: FighterView,
+    F: Snapshot,
+    age: number,
+    dist: number,
+    vuln: number,
+    punish: boolean,
+  ): void {
     const pers = this.persona;
     const wantSlots: MoveSlot[] = ['strike', 'crush', 'signature'];
     const foeGuards = F.guardUp || F.state === 'guard';
@@ -655,8 +815,10 @@ export class UtilityAI implements AIController {
         const cr = (mi.def.extra?.['chargeReach'] as [number, number] | undefined) ?? [1, 1];
         // charged beams: judge them at full-charge reach, then hold only as long as the distance requires
         this.evalMove(mi, S, F, age, this.ev, mi.chargeMax > 0 ? cr[1] : 1);
-        let p = this.ev.p;
-        let dmg = this.ev.dmg;
+        const wf = this.whiffFactor(mi);
+        const p = this.ev.p * wf;
+        // rams hurt the ram too: value the blow net of what comes back
+        let dmg = this.ev.dmg * wf * (1 - 0.75 * mi.recoil);
         let chargeTicks = 0;
         if (mi.chargeMax > 0 && p > 0) {
           const need = (dist + 24) / Math.max(20, mi.x1 * S.stats.reachMul);
@@ -675,18 +837,29 @@ export class UtilityAI implements AIController {
           score = per * (0.35 + pers.punish * 0.5) * this.P.punishSkill;
           if (startupEff + 2 > vuln) score *= 0.1;
         } else {
-          // a foe that has done nothing for a while (idle dummy, AFK, stunned-out) cannot punish anything: simply maximise damage per second
-          const passive = F.tick - this.foeActedTick >= PASSIVE_TICKS;
           // neutral: a poke is cheap, a heavy is a commitment a reacting foe can punish — weigh by time and by whether it can react
           const react = clamp((startupEff - 16) / 34, 0, 1);
           let commit = react * (foeIdle ? 0.55 : 0.1);
           if (foeGuards && mi.slot === 'crush') commit -= 0.35; // crushes break guards
           const time = (mi.total / 60) * 0.32;
           score = per * (0.4 + pers.aggression * 0.55) * 0.85 - time - commit * (0.5 + pers.patience);
-          if (passive) score = (dmg / Math.max(24, startupEff + mi.active + mi.recovery)) * (60 / 350) * (0.5 + 0.5 * pers.aggression);
-          const risk = ((mi.recovery + startupEff) / 100) * (1 - p) * (0.3 + 0.6 * pers.patience) * (1 - 0.5 * pers.retreat);
-          if (!passive) score -= risk;
+          const risk =
+            ((mi.recovery + startupEff) / 100) *
+            (1 - p) *
+            (0.3 + 0.6 * pers.patience) *
+            (1 - 0.5 * pers.retreat);
+          score -= risk;
           if (F.phase === 'startup' || F.phase === 'charge') score -= 0.1; // do not walk into a windup
+          // a foe that has done nothing for a long while (idle dummy, AFK, stunned-out) cannot punish anything: fade toward simply
+          // maximising damage per second, with no commitment or risk terms
+          const quiet = clamp((F.tick - this.foeActedTick - PASSIVE_FROM) / PASSIVE_RAMP, 0, 1);
+          if (quiet > 0) {
+            const dps =
+              (dmg / Math.max(24, startupEff + mi.active + mi.recovery)) *
+              (60 / 350) *
+              (0.5 + 0.5 * pers.aggression);
+            score += (dps - score) * quiet;
+          }
           if (mi.slot === 'signature') score += 0.3 * (pers.gaze + pers.zoning) * (mi.beam ? 1 : 0.55);
         }
         if (mi.projectile && dist < 90) score *= 0.5;
@@ -704,7 +877,13 @@ export class UtilityAI implements AIController {
     }
     // approaching to punish a stunned foe is worth it if it is far but will stay down a while
     if (punish && vuln > 24 && dist > 130) {
-      const a = this.add('rush', 'attack', 'approach', 0.6 * this.P.punishSkill * pers.punish, `foe down ${vuln.toFixed(0)}t`);
+      const a = this.add(
+        'rush',
+        'attack',
+        'approach',
+        0.6 * this.P.punishSkill * pers.punish,
+        `foe down ${vuln.toFixed(0)}t`,
+      );
       a.ticks = Math.min(20, Math.round(vuln * 0.4));
     }
   }
@@ -736,7 +915,8 @@ export class UtilityAI implements AIController {
     }
     const c = this.cands[pick]!;
     this.build(c, ctx, S, F);
-    if (c.what !== 'wait' && c.what !== 'strafe') this.pushLog(ctx.tick, `${c.name}: ${c.why} [score ${c.score.toFixed(2)}]`);
+    if (c.what !== 'wait' && c.what !== 'strafe')
+      this.pushLog(ctx.tick, `${c.name}: ${c.why} [score ${c.score.toFixed(2)}]`);
   }
 
   private build(c: Cand, ctx: AIContext, S: FighterView, F: Snapshot): void {
@@ -775,19 +955,40 @@ export class UtilityAI implements AIController {
       case 'ultimate':
       case 'attack': {
         const mi = c.info!;
-        const btn = mi.slot === 'strike' ? Btn.STRIKE : mi.slot === 'crush' ? Btn.CRUSH : mi.slot === 'signature' ? Btn.SIGNATURE : Btn.ULTIMATE;
+        this.pendIdx = mi.idx;
+        this.pendMass = F.massFrac;
+        this.pendSaw = false;
+        this.pendUntil =
+          ctx.tick + c.delay + Math.round(mi.startup) + c.charge + mi.active + this.P.reactionTicks + 6;
+        const btn =
+          mi.slot === 'strike'
+            ? Btn.STRIKE
+            : mi.slot === 'crush'
+              ? Btn.CRUSH
+              : mi.slot === 'signature'
+                ? Btn.SIGNATURE
+                : Btn.ULTIMATE;
         const sy = this.aimSign(mi.aim);
         const hold = mi.chargeMax > 0 ? 1 + Math.round(mi.startup) + c.charge : 3;
         // approach first if the move reaches only when we are a little closer (lunges do part of the work)
         const dist = Math.abs(dx);
         const reachNow = mi.x1 * S.stats.reachMul + mi.lungeBefore + 40;
         if (mi.slot !== 'signature' && dist > reachNow + 20 && c.kind === 'attack' && c.what === 'attack') {
-          const walk = clamp(Math.round((dist - reachNow) / (this.def.attributes.tempo * 13 + 130) * 60 * 0.8), 2, 24);
+          const walk = clamp(
+            Math.round(((dist - reachNow) / (this.def.attributes.tempo * 13 + 130)) * 60 * 0.8),
+            2,
+            24,
+          );
           p.add(0, Steer.Toward, walk, 0, 0, 1);
         }
         p.add(btn, Steer.Fixed, hold, 0, sy);
         // aimed variants need the stick held only while pressing; then let the fighter finish on its own
-        if (this.P.feints && mi.slot === 'crush' && this.rng.chance(0.06 * this.persona.trap * 6) && mi.startup > 20) {
+        if (
+          this.P.feints &&
+          mi.slot === 'crush' &&
+          this.rng.chance(0.06 * this.persona.trap * 6) &&
+          mi.startup > 20
+        ) {
           p.count = 0;
           p.add(btn, Steer.Fixed, 6 + Math.floor(this.rng.next() * 8), 0, sy);
           p.add(Btn.FEINT, Steer.Neutral, 2);
@@ -806,7 +1007,13 @@ export class UtilityAI implements AIController {
     if (this.scanThreats(S, F, age)) {
       const th = this.bestThreat;
       const remaining = S.moveTotal > 0 ? S.moveTick : 0;
-      if (th.danger > 1.2 && th.until >= 0 && th.until < 14 && remaining >= 0 && this.rng.chance(this.P.defends)) {
+      if (
+        th.danger > 1.2 &&
+        th.until >= 0 &&
+        th.until < 14 &&
+        remaining >= 0 &&
+        this.rng.chance(this.P.defends)
+      ) {
         this.plan.begin('feint out', 'defend', ctx.tick, 0).add(Btn.FEINT, Steer.Neutral, 2);
         this.pushLog(ctx.tick, 'feint out of a windup: incoming threat lands first');
       }
@@ -814,14 +1021,13 @@ export class UtilityAI implements AIController {
   }
 
   /** In hit-stun: after the brief window, break out with Surge (levels that know the trick). */
-  private stunned(S: FighterView, F: Snapshot, out: InputFrame): void {
+  private stunned(S: FighterView, out: InputFrame): void {
     this.plan.cancel();
     if (this.P.defends > 0.45 && this.stunAge >= 9 + this.jitter() && S.state === 'hitstun') {
       out.held = Btn.SURGE;
       out.moveX = -S.facing;
       if (this.stunAge === 9 + 0) this.pushLog(this.nowTick, `stun escape after ${this.stunAge} ticks`);
     }
-    void F;
   }
 
   private pushLog(tick: number, msg: string): void {

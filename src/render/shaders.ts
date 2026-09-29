@@ -59,6 +59,16 @@ uniform int uNumLens;
 uniform float uBloomThreshold;
 uniform float uBloomGain;
 uniform float uFlash;
+// Fighter readability: everything drawn by the 2D layers casts a soft dark, slightly desaturated halo and a thin dark
+// contact rim INTO the scenery beneath it (multiplied in before the palette dither, so it dithers like the rest), and a
+// luminance ceiling in the vertical band where the fighters live keeps highlights from sitting right behind a body.
+uniform sampler2D uHalo;       // blurred layer coverage (half res, linear)
+uniform sampler2D uCover;      // layer colour target: alpha = coverage of the 2D layers (nearest)
+uniform int uHasLayers;
+uniform vec4 uHaloParams;      // strength, desaturation, rim darkness, rim reach (px)
+uniform vec2 uHaloLift;        // x = linear luminance floor lifted behind DARK bodies (a faint backlight rim)
+uniform vec4 uBand;            // screen-space top, bottom, feather (px), ceiling (linear, after exposure)
+uniform float uBandRatio;      // how much of the excess above the ceiling survives (0 = hard clamp)
 
 in vec2 vUv;
 layout(location = 0) out vec4 oColor;
@@ -84,10 +94,51 @@ vec4 sampleScene(vec2 p) {
                  texture(uScene, uv + vec2(-o.x, o.y)) + texture(uScene, uv + vec2(o.x, o.y)));
 }
 
+// Coverage of the 2D layers in the ring of pixels just around this one (dilation by reach px, 1 or 2).
+float ringCoverage(ivec2 q, int reach) {
+  float c = 0.0;
+  for (int k = 1; k <= 2; k++) {
+    if (k > reach) break;
+    for (int j = 0; j < 8; j++) {
+      float a = float(j) * 0.785398;
+      ivec2 o = ivec2(int(floor(cos(a) * float(k) + 0.5)), int(floor(sin(a) * float(k) + 0.5)));
+      ivec2 t = clamp(q + o, ivec2(0), ivec2(uRes) - 1);
+      c = max(c, texelFetch(uCover, ivec2(t.x, int(uRes.y) - 1 - t.y), 0).a);
+    }
+  }
+  return c;
+}
+
 void main() {
   vec2 p = fragPx();
   vec4 hdr = sampleScene(lensPx(p));
   vec3 x = max(hdr.rgb, 0.0) * uExposure;
+
+  if (uHasLayers == 1) {
+    float own = texelFetch(uCover, ivec2(int(p.x), int(uRes.y) - 1 - int(p.y)), 0).a;
+    vec2 hb = texture(uHalo, pxToUv(p)).rg;
+    float h = smoothstep(0.0, 0.75, hb.x);
+    // How bright is the body casting this halo? (blurred colour luminance / blurred coverage)
+    float Ls = hb.y / max(hb.x, 0.02);
+    // Oppose the sprite's value: a pale body gets a darkened, desaturated surround; a dark body gets a faintly LIFTED surround
+    // (reads as a rim of backlight) so it never sinks into a dark nebula; mid-tones get a little of the former.
+    float wDark = 0.3 + 0.7 * smoothstep(0.3, 0.7, Ls);
+    float wLift = 1.0 - smoothstep(0.12, 0.4, Ls);
+    float rim = ringCoverage(ivec2(int(p.x), int(p.y)), int(uHaloParams.w + 0.5)) * (1.0 - own);
+    float lum0 = luma(x);
+    x = mix(x, vec3(lum0), uHaloParams.y * h * wDark);
+    x *= (1.0 - uHaloParams.x * h * wDark);
+    vec3 tint = (x + 0.03) / max(luma(x) + 0.03, 0.03);
+    x = max(x, tint * uHaloLift.x * h * wLift);
+    x *= 1.0 - uHaloParams.z * rim * (1.0 - 0.6 * wLift);
+  }
+  // The fight band: highlights above the ceiling are compressed where the fighters live (feathered top and bottom).
+  {
+    float band = smoothstep(uBand.x - uBand.z, uBand.x, p.y) * (1.0 - smoothstep(uBand.y, uBand.y + uBand.z, p.y));
+    float L = luma(x);
+    float Lc = L > uBand.w ? uBand.w + (L - uBand.w) * uBandRatio : L;
+    x *= mix(1.0, Lc / max(L, 1e-4), band);
+  }
   // Hue-preserving tone map: identity below the knee (so colours authored on a palette ramp stay on it), a soft
   // shoulder above it, and very bright light bleeds toward white the way an overexposed sensor does.
   float m = max(x.r, max(x.g, x.b));
@@ -112,8 +163,8 @@ void main() {
   bool useB = uDither > 0.5 ? (th < r) : (r > 0.5);
   vec3 col = texelFetch(uPalSrgb, ivec2(useB ? ib : ia, 0), 0).rgb;
 
-  float l = luma(max(hdr.rgb, 0.0) * uExposure);
-  vec3 bloom = hdr.rgb * uExposure * smoothstep(uBloomThreshold, uBloomThreshold + 1.6, l) * uBloomGain;
+  float l = luma(x);
+  vec3 bloom = x * smoothstep(uBloomThreshold, uBloomThreshold + 1.6, l) * uBloomGain;
   oColor = vec4(col, clamp(hdr.a, 0.0, 1.0));
   oEmis = vec4(clamp(bloom, 0.0, 1.0), 1.0);
 }
@@ -210,6 +261,43 @@ void main() {
 `;
 
 /* ------------------------------------------------------------------------------------------------ *
+ *  Layer coverage → soft halo: separable 9-tap gaussian at half resolution on the alpha of the 2D layer target.
+ * ------------------------------------------------------------------------------------------------ */
+export const HALO_BLUR_FRAG = /* glsl */ `${HEAD}
+uniform sampler2D uSrc;
+uniform vec2 uStep;   // uv step between taps
+uniform int uFromLayers; // 1: read the layer target (coverage, luminance), 0: read the previous blur pass
+in vec2 vUv;
+out vec4 o;
+// x = coverage, y = coverage-weighted luminance of the sprite colour (premultiplied colour carries the weight already)
+vec2 fetch(vec2 uv) {
+  vec4 t = texture(uSrc, uv);
+  return uFromLayers == 1 ? vec2(t.a, dot(t.rgb, vec3(0.2126, 0.7152, 0.0722))) : t.rg;
+}
+void main() {
+  float w[5] = float[5](0.2270, 0.1946, 0.1216, 0.0541, 0.0162);
+  vec2 s = fetch(vUv) * w[0];
+  for (int i = 1; i < 5; i++) {
+    s += (fetch(vUv + uStep * float(i)) + fetch(vUv - uStep * float(i))) * w[i];
+  }
+  o = vec4(s, 0.0, 1.0);
+}
+`;
+
+/** Lays the 2D layer target over the dithered scenery. Premultiplied "over" (the layer target already holds premultiplied colour). */
+export const LAYER_COMPOSITE_FRAG = /* glsl */ `${HEAD}${COMMON}
+uniform sampler2D uColor;
+uniform sampler2D uEmis;
+layout(location = 0) out vec4 oColor;
+layout(location = 1) out vec4 oEmis;
+void main() {
+  ivec2 q = ivec2(gl_FragCoord.xy);
+  oColor = texelFetch(uColor, q, 0);
+  oEmis = texelFetch(uEmis, q, 0);
+}
+`;
+
+/* ------------------------------------------------------------------------------------------------ *
  *  God rays: radial march toward the stage light through the frame, occluded by layer + dust alpha. Half-res.
  * ------------------------------------------------------------------------------------------------ */
 export const GODRAYS_FRAG = /* glsl */ `${HEAD}${COMMON}
@@ -227,6 +315,11 @@ void main() {
   vec2 p = vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y);
   vec2 delta = (uLight - p) * uDensity / float(uSamples);
   vec2 q = p;
+  // Per-sample constants are expressed for a reference of 44 taps so every quality tier integrates the same beam
+  // (fewer taps = coarser steps, not a brighter or more opaque scene).
+  float k = 44.0 / float(uSamples);
+  float decay = pow(uDecay, k);
+  float occ = 1.0 - pow(1.0 - uOcc, k);
   float w = 1.0;
   float T = 1.0;             // transmittance of the beam between the light and the sample: occluders cast SHAFTS
   float acc = 0.0;
@@ -241,12 +334,12 @@ void main() {
     float lightD = length(q - uLight);
     float halo = exp(-lightD / uHaloR);
     float gas = smoothstep(0.32, 0.85, luma(s.rgb)) * uGasK * open;
-    acc += (halo * open + gas) * T * w;
-    tint += s.rgb * gas * T * w;
-    T *= 1.0 - s.a * uOcc;
-    w *= uDecay;
+    acc += (halo * open + gas) * T * w * k;
+    tint += s.rgb * gas * T * w * k;
+    T *= 1.0 - s.a * occ;
+    w *= decay;
   }
-  float n = float(uSamples);
+  float n = 44.0;
   o = vec4(acc / n, tint.r / n, tint.g / n, tint.b / n);
 }
 `;
@@ -260,6 +353,9 @@ uniform sampler2D uFrame;
 uniform sampler2D uBloom;
 uniform sampler2D uGod;
 uniform sampler2D uBayer;
+uniform sampler2D uCover;    // layer colour target (alpha = coverage of the 2D layers)
+uniform int uHasLayers;
+uniform vec2 uGlowDamp;      // how much bloom / god rays are damped ON the pixels of a sprite (0..1)
 uniform vec4 uShock[8];      // x, y (logical px), radius px, displacement px
 uniform int uNumShock;
 uniform float uAberration;   // 0..1 extra
@@ -312,7 +408,9 @@ void main() {
   vec4 g = texture(uGod, uv);
   vec3 rays = (uGodColor * g.r + g.gba * uGodTint) * uGodGain;
   rays = vec3(ditherQ(rays.r, uBloomLevels, th), ditherQ(rays.g, uBloomLevels, th), ditherQ(rays.b, uBloomLevels, th));
-  col = col + bloom + rays;
+  // Glow never washes out a sprite's own pixels (silhouettes stay crisp); it still blooms around them.
+  float cov = uHasLayers == 1 ? texelFetch(uCover, pxToTexel(clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1)), 0).a : 0.0;
+  col = col + bloom * (1.0 - uGlowDamp.x * cov) + rays * (1.0 - uGlowDamp.y * cov);
 
   float vig = 1.0 - uVignette * pow(smoothstep(0.55, 1.45, length(fromC * vec2(0.85, 1.0))), 1.6);
   col *= ditherQ(vig, 12.0, th);

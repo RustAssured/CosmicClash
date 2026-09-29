@@ -316,6 +316,7 @@
       "meterCost": 0,
       "tags": ["hop"],
       "extra": {
+        "recoil": 0.55,
         "pose": {
           "startup": {
             "lean": -5
@@ -486,6 +487,7 @@
       "meterCost": 0,
       "tags": ["ram", "heavy", "embed"],
       "extra": {
+        "recoil": 0.9,
         "pose": {
           "startup": {
             "lean": -9
@@ -745,7 +747,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 150,
+                "energy": 100,
                 "duration": 1,
                 "flags": 1,
                 "params": {
@@ -755,8 +757,8 @@
                 }
               },
               "knockback": {
-                "x": 160,
-                "y": -30
+                "x": -35,
+                "y": -6
               },
               "guardPressure": 0.3,
               "rehit": 6
@@ -773,7 +775,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 2600,
+                "energy": 2200,
                 "duration": 1,
                 "flags": 40,
                 "params": {
@@ -822,7 +824,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 150,
+                "energy": 100,
                 "duration": 1,
                 "flags": 1,
                 "params": {
@@ -832,8 +834,8 @@
                 }
               },
               "knockback": {
-                "x": 160,
-                "y": -30
+                "x": -35,
+                "y": -6
               },
               "guardPressure": 0.3,
               "rehit": 6
@@ -850,7 +852,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 2600,
+                "energy": 2200,
                 "duration": 1,
                 "flags": 40,
                 "params": {
@@ -899,7 +901,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 150,
+                "energy": 100,
                 "duration": 1,
                 "flags": 1,
                 "params": {
@@ -909,8 +911,8 @@
                 }
               },
               "knockback": {
-                "x": 160,
-                "y": -30
+                "x": -35,
+                "y": -6
               },
               "guardPressure": 0.3,
               "rehit": 6
@@ -927,7 +929,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 2600,
+                "energy": 2200,
                 "duration": 1,
                 "flags": 40,
                 "params": {

@@ -1,6 +1,15 @@
 import type { AudioEvent, AudioScene, StageId, TitanId } from '@/contracts';
 import { createAudioEngine, type AudioEngineExt } from '@/audio/engine';
-import { bandShare, decayTime, envelopeDb, firstAbove, peak, rms, spectralCentroid, toDb } from '@/audio/dsp/analysis';
+import {
+  bandShare,
+  decayTime,
+  envelopeDb,
+  firstAbove,
+  peak,
+  rms,
+  spectralCentroid,
+  toDb,
+} from '@/audio/dsp/analysis';
 
 /**
  * Numeric verification of the REAL audio engine in a real browser: every scenario renders through an OfflineAudioContext
@@ -102,7 +111,11 @@ async function render(
   opts: { unsafeBypassLimiter?: boolean; seed?: number } = {},
 ): Promise<Rendered> {
   const ctx = new OfflineAudioContext(2, Math.ceil(SR * seconds), SR);
-  const eng = createAudioEngine({ context: ctx, seed: opts.seed ?? 1, unsafeBypassLimiter: opts.unsafeBypassLimiter });
+  const eng = createAudioEngine({
+    context: ctx,
+    seed: opts.seed ?? 1,
+    unsafeBypassLimiter: opts.unsafeBypassLimiter,
+  });
   await eng.unlock();
   setup(eng, ctx);
   const buf = await ctx.startRendering();
@@ -164,12 +177,33 @@ function storm(seconds: number, eng: AudioEngineExt): number {
   for (let i = 0; i < 480; i++) {
     const t = 0.05 + (i / 480) * (seconds - 0.5);
     const evs: AudioEvent[] = [
-      hit({ type: types[i % 6]!, energy: 6000 + (i % 5) * 700, heavy: i % 3 === 0, onDamaged: 0.8, attacker: (i % 2) as 0 | 1, target: ((i + 1) % 2) as 0 | 1, x: 200 + ((i * 97) % 1200) }),
+      hit({
+        type: types[i % 6]!,
+        energy: 6000 + (i % 5) * 700,
+        heavy: i % 3 === 0,
+        onDamaged: 0.8,
+        attacker: (i % 2) as 0 | 1,
+        target: ((i + 1) % 2) as 0 | 1,
+        x: 200 + ((i * 97) % 1200),
+      }),
       { t: 'shockwave', x: 800, y: 300, strength: 1, radius: 260, hue: 0.1 },
       { t: 'matter', kind: 'detach', x: 700, y: 300, mass: 900, slot: (i % 2) as 0 | 1 },
-      { t: 'release', slot: (i % 2) as 0 | 1, titan: i % 2 ? 'asteroid' : 'lastone', moveId: i % 2 ? 'asteroid.meteor' : 'lastone.shatter', moveSlot: 'crush', x: 800, y: 300, power: 1 },
+      {
+        t: 'release',
+        slot: (i % 2) as 0 | 1,
+        titan: i % 2 ? 'asteroid' : 'lastone',
+        moveId: i % 2 ? 'asteroid.meteor' : 'lastone.shatter',
+        moveSlot: 'crush',
+        x: 800,
+        y: 300,
+        power: 1,
+      },
     ];
-    if (i % 40 === 0) evs.push({ t: 'ko', slot: (i % 2) as 0 | 1, x: 800, y: 300 }, { t: 'ultimate', slot: 0, titan: 'lastone', phase: 'start', x: 800, y: 300 });
+    if (i % 40 === 0)
+      evs.push(
+        { t: 'ko', slot: (i % 2) as 0 | 1, x: 800, y: 300 },
+        { t: 'ultimate', slot: 0, titan: 'lastone', phase: 'start', x: 800, y: 300 },
+      );
     eng.handleAt(evs, t);
     n += evs.length;
   }
@@ -197,7 +231,12 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
     }
     return b;
   };
-  const one = async (name: string, ev: AudioEvent[], seconds = 2.6, s: AudioScene = scene()): Promise<Float32Array> => {
+  const one = async (
+    name: string,
+    ev: AudioEvent[],
+    seconds = 2.6,
+    s: AudioScene = scene(),
+  ): Promise<Float32Array> => {
     const bed = await bedFor(seconds, s);
     const withEv = await render(seconds, setupFor(ev, s), { unsafeBypassLimiter: true });
     const diff = new Float32Array(withEv.mono.length);
@@ -212,8 +251,12 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
   const silenceRmsDb = toDb(rms(empty.mono));
 
   // --- individual events
-  const lastHit = await one('hit FRACTURE lastone→lastone', [hit({ type: 'FRACTURE', target: 0, attacker: 0, titan: 'lastone' })]);
-  const rockHit = await one('hit KINETIC asteroid→asteroid', [hit({ type: 'KINETIC', target: 1, attacker: 1, titan: 'asteroid' })]);
+  const lastHit = await one('hit FRACTURE lastone→lastone', [
+    hit({ type: 'FRACTURE', target: 0, attacker: 0, titan: 'lastone' }),
+  ]);
+  const rockHit = await one('hit KINETIC asteroid→asteroid', [
+    hit({ type: 'KINETIC', target: 1, attacker: 1, titan: 'asteroid' }),
+  ]);
   await one('hit heavy CRUSH', [hit({ type: 'CRUSH', energy: 8000, heavy: true })], 6);
   await one('hit blocked', [hit({ blocked: 0.9 })]);
   await one('hit THERMAL', [hit({ type: 'THERMAL' })]);
@@ -234,31 +277,105 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
   ] as const;
   for (const [titan, m, moveSlot] of MOVES) {
     const moveId = `${titan}.${m}`;
-    await one(`move ${moveId}`, [{ t: 'move', slot: 0, titan, moveId, moveSlot, aim: 'forward', x: 700, y: 300 }]);
-    await one(`release ${moveId}`, [{ t: 'release', slot: 0, titan, moveId, moveSlot, x: 700, y: 300, power: 0.8 }]);
+    await one(`move ${moveId}`, [
+      { t: 'move', slot: 0, titan, moveId, moveSlot, aim: 'forward', x: 700, y: 300 },
+    ]);
+    await one(`release ${moveId}`, [
+      { t: 'release', slot: 0, titan, moveId, moveSlot, x: 700, y: 300, power: 0.8 },
+    ]);
   }
   await one('charge lastone.gaze start+hold', [
     { t: 'charge', slot: 0, titan: 'lastone', moveId: 'lastone.gaze', frac: 0, phase: 'start' },
     { t: 'charge', slot: 0, titan: 'lastone', moveId: 'lastone.gaze', frac: 0.7, phase: 'hold' },
   ]);
+  // the four titans without a dedicated voice file yet (flavour table in voices/generic.ts): they must sit at sensible levels too
+  for (const titan of ['nexus', 'blackhole', 'supernova', 'planet'] as const) {
+    const sc = scene({}, titan, 'asteroid');
+    await one(`generic ${titan} hit`, [hit({ type: 'THERMAL', titan, target: 0, attacker: 1 })], 2.6, sc);
+    await one(
+      `generic ${titan} windup`,
+      [
+        {
+          t: 'move',
+          slot: 0,
+          titan,
+          moveId: `${titan}.strike`,
+          moveSlot: 'strike',
+          aim: 'forward',
+          x: 700,
+          y: 300,
+        },
+      ],
+      2.6,
+      sc,
+    );
+    await one(
+      `generic ${titan} release`,
+      [
+        {
+          t: 'release',
+          slot: 0,
+          titan,
+          moveId: `${titan}.strike`,
+          moveSlot: 'strike',
+          x: 700,
+          y: 300,
+          power: 0.8,
+        },
+      ],
+      2.6,
+      sc,
+    );
+    await one(`generic ${titan} ko`, [{ t: 'ko', slot: 0, x: 700, y: 300 }], 5, sc);
+  }
   await one('surge lastone', [{ t: 'surge', slot: 0, titan: 'lastone', x: 700, y: 300, dirX: 1, dirY: 0 }]);
-  await one('surge asteroid', [{ t: 'surge', slot: 1, titan: 'asteroid', x: 900, y: 300, dirX: -1, dirY: 0 }]);
+  await one('surge asteroid', [
+    { t: 'surge', slot: 1, titan: 'asteroid', x: 900, y: 300, dirX: -1, dirY: 0 },
+  ]);
   await one('guard lastone', [{ t: 'guard', slot: 0, x: 700, y: 300, type: 'FRACTURE', broke: false }]);
   await one('guard broke asteroid', [{ t: 'guard', slot: 1, x: 900, y: 300, type: 'KINETIC', broke: true }]);
   await one('shockwave', [{ t: 'shockwave', x: 800, y: 300, strength: 0.9, radius: 240, hue: 0.1 }], 4);
   await one('ko lastone', [{ t: 'ko', slot: 0, x: 700, y: 300 }], 5);
   await one('ko asteroid', [{ t: 'ko', slot: 1, x: 900, y: 300 }], 5);
-  await one('ultimate lastone start', [{ t: 'ultimate', slot: 0, titan: 'lastone', phase: 'start', x: 700, y: 300 }], 6);
-  await one('ultimate asteroid start', [{ t: 'ultimate', slot: 1, titan: 'asteroid', phase: 'start', x: 900, y: 300 }], 6);
+  await one(
+    'ultimate lastone start',
+    [{ t: 'ultimate', slot: 0, titan: 'lastone', phase: 'start', x: 700, y: 300 }],
+    6,
+  );
+  await one(
+    'ultimate asteroid start',
+    [{ t: 'ultimate', slot: 1, titan: 'asteroid', phase: 'start', x: 900, y: 300 }],
+    6,
+  );
   for (const kind of ['detach', 'ignite', 'crack', 'consume', 'impact'] as const)
     await one(`matter ${kind}`, [{ t: 'matter', kind, x: 800, y: 300, mass: 300, slot: 1 }]);
-  await one('cue tendril-sever', [{ t: 'cue', slot: 0, titan: 'lastone', id: 'tendril-sever', x: 700, y: 300, amount: 1 }]);
-  await one('cue fragment-lost', [{ t: 'cue', slot: 1, titan: 'asteroid', id: 'fragment-lost', x: 900, y: 300, amount: 1 }]);
+  await one('cue tendril-sever', [
+    { t: 'cue', slot: 0, titan: 'lastone', id: 'tendril-sever', x: 700, y: 300, amount: 1 },
+  ]);
+  await one('cue fragment-lost', [
+    { t: 'cue', slot: 1, titan: 'asteroid', id: 'fragment-lost', x: 900, y: 300, amount: 1 },
+  ]);
   await one('round intro', [{ t: 'round', phase: 'intro', round: 1, winner: -1 }], 3);
   await one('round fight', [{ t: 'round', phase: 'fight', round: 1, winner: -1 }], 3);
   await one('round end', [{ t: 'round', phase: 'end', round: 1, winner: 0 }], 5);
-  for (const id of ['move', 'confirm', 'back', 'select', 'error', 'start', 'pause', 'unpause', 'roundwin', 'tick'] as const)
-    await one(`ui ${id}`, [{ t: 'ui', id }], id === 'start' || id === 'roundwin' ? 3.5 : 1.4, scene({ phase: 'menu', fighters: null }));
+  for (const id of [
+    'move',
+    'confirm',
+    'back',
+    'select',
+    'error',
+    'start',
+    'pause',
+    'unpause',
+    'roundwin',
+    'tick',
+  ] as const)
+    await one(
+      `ui ${id}`,
+      [{ t: 'ui', id }],
+      id === 'start' || id === 'roundwin' ? 3.5 : 1.4,
+      scene({ phase: 'menu', fighters: null }),
+    );
 
   if (opts.quick) {
     const nan = Number.NaN;
@@ -308,10 +425,34 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
       const titan = titans[(seed + i) % titans.length]!;
       const other = titans[(seed * 3 + i) % titans.length]!;
       evs.push(
-        hit({ type: kinds[(seed + i) % 6]!, titan, energy: 300 + ((seed * 977 + i * 331) % 9000), heavy: (seed + i) % 3 === 0, onDamaged: (i % 4) / 3, target: (i % 2) as 0 | 1, attacker: ((i + 1) % 2) as 0 | 1 }),
-        { t: 'release', slot: (i % 2) as 0 | 1, titan, moveId: `${titan}.strike`, moveSlot: 'strike', x: 700, y: 300, power: (i % 5) / 4 },
+        hit({
+          type: kinds[(seed + i) % 6]!,
+          titan,
+          energy: 300 + ((seed * 977 + i * 331) % 9000),
+          heavy: (seed + i) % 3 === 0,
+          onDamaged: (i % 4) / 3,
+          target: (i % 2) as 0 | 1,
+          attacker: ((i + 1) % 2) as 0 | 1,
+        }),
+        {
+          t: 'release',
+          slot: (i % 2) as 0 | 1,
+          titan,
+          moveId: `${titan}.strike`,
+          moveSlot: 'strike',
+          x: 700,
+          y: 300,
+          power: (i % 5) / 4,
+        },
         { t: 'guard', slot: (i % 2) as 0 | 1, x: 800, y: 300, type: kinds[i % 6]!, broke: i % 3 === 0 },
-        { t: 'matter', kind: (['detach', 'ignite', 'crack', 'consume', 'impact'] as const)[i % 5]!, x: 800, y: 300, mass: 50 + i * 90, slot: (i % 2) as 0 | 1 },
+        {
+          t: 'matter',
+          kind: (['detach', 'ignite', 'crack', 'consume', 'impact'] as const)[i % 5]!,
+          x: 800,
+          y: 300,
+          mass: 50 + i * 90,
+          slot: (i % 2) as 0 | 1,
+        },
         { t: 'surge', slot: (i % 2) as 0 | 1, titan: other, x: 800, y: 300, dirX: 1, dirY: 0 },
       );
     }
@@ -320,7 +461,8 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
       (eng) => {
         eng.setVolumes({ music: 0 });
         eng.updateAt(scene({}, titans[seed % 6]!, titans[(seed + 1) % 6]!), 1 / 60, 0);
-        for (let i = 0; i < evs.length; i += 5) eng.handleAt(evs.slice(i, i + 5), 0.05 + (i / evs.length) * 3);
+        for (let i = 0; i < evs.length; i += 5)
+          eng.handleAt(evs.slice(i, i + 5), 0.05 + (i / evs.length) * 3);
       },
       { unsafeBypassLimiter: true, seed },
     );
@@ -348,7 +490,13 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
   const heavyBed = await bedFor(9, scene());
   const heavyWith = await render(
     9,
-    setupFor([hit({ type: 'CRUSH', energy: 9000, heavy: true }), { t: 'shockwave', x: 800, y: 300, strength: 1, radius: 300, hue: 0 }], scene()),
+    setupFor(
+      [
+        hit({ type: 'CRUSH', energy: 9000, heavy: true }),
+        { t: 'shockwave', x: 800, y: 300, strength: 1, radius: 300, hue: 0 },
+      ],
+      scene(),
+    ),
     { unsafeBypassLimiter: true },
   );
   const heavyDiff = new Float32Array(heavyWith.mono.length);

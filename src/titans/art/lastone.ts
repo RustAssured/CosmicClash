@@ -498,7 +498,7 @@ export function paintLastOne(
   const colors = cv.render({ ramps, params: shade, lighting });
 
   // ---------- 4. hand-painted parts ----------
-  bleedCoreLight(cv, colors, L, def, ids);
+  bleedCoreLight(cv, colors, L, ids);
   paintEye(cv, colors, L, def, lighting, ids);
   paintCore(cv, colors, L, def, ids);
   paintHaloDetail(cv, colors, L, def, ids, seed);
@@ -514,17 +514,10 @@ export function paintLastOne(
 }
 
 /** Warm light leaking from the core through the glaze: quantised to three tints so the palette stays clean. */
-function bleedCoreLight(
-  cv: ArtCanvas,
-  colors: Uint32Array,
-  L: Layout,
-  def: TitanDef,
-  ids: LastOneRig['ids'],
-): void {
+function bleedCoreLight(cv: ArtCanvas, colors: Uint32Array, L: Layout, ids: LastOneRig['ids']): void {
   const W = cv.w;
   const warm = hex('#ffd98a');
   const R = L.p.core.r;
-  void def;
   for (let y = Math.floor(L.coreY - R - 26); y <= Math.ceil(L.coreY + R + 26); y++) {
     for (let x = Math.floor(L.coreX - R - 26); x <= Math.ceil(L.coreX + R + 26); x++) {
       const i = y * W + x;

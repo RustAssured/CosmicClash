@@ -102,7 +102,7 @@ export class LastOneBehaviour extends Behaviour {
     this.back = new Overlay('lastone-tendrils-back', -1, 320, 300, 'normal', true);
     this.front = new Overlay('lastone-tendrils-front', 1, 320, 300, 'normal', true);
     this.eye = new Overlay('lastone-eye', 0.5, 64, 64, 'normal');
-    this.fx = new Overlay('lastone-fx', 20, 512, 352, 'add', true);
+    this.fx = new Overlay('lastone-fx', 20, 768, 560, 'add', true);
     f.resourceMax = this.sys.n;
     f.resource = this.sys.n;
     this.prevAlive = this.sys.n;
@@ -695,7 +695,7 @@ export class LastOneBehaviour extends Behaviour {
         const u = perp / w;
         const shimmer = 0.5 + 0.5 * Math.sin(along * 0.28 - phase);
         // brightness along the beam: full at the eye, a little dimmer at the far end, a soft round cap behind the source
-        const cap = (along < 0 ? 1 + along / halfW : 1) * (s > 0.84 ? (1 - s) / 0.16 : 1);
+        const cap = (along < 0 ? 1 + along / halfW : 1) * (s > 0.7 ? Math.pow((1 - s) / 0.3, 1.6) : 1);
         if (cap <= 0) continue;
         let r: number;
         let g: number;

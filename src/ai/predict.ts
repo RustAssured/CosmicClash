@@ -3,7 +3,18 @@
  * idle); the model learns P(next | last two tokens) with exponential forgetting, so it adapts as the player changes style.
  * It only ever consumes tokens the AI observed (after its reaction delay): it predicts habits, it does not read inputs.
  */
-export const TOKENS = ['idle', 'approach', 'retreat', 'strike', 'crush', 'surge', 'signature', 'ultimate', 'guard', 'hurt'] as const;
+export const TOKENS = [
+  'idle',
+  'approach',
+  'retreat',
+  'strike',
+  'crush',
+  'surge',
+  'signature',
+  'ultimate',
+  'guard',
+  'hurt',
+] as const;
 export type Token = (typeof TOKENS)[number];
 export const TOKEN_COUNT = TOKENS.length;
 const IDX: Record<string, number> = Object.fromEntries(TOKENS.map((t, i) => [t, i]));

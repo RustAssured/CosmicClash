@@ -51,7 +51,14 @@ export function closeAfter(o: Out, src: AudioScheduledSourceNode | null): void {
 }
 
 /** Exponential-decay gain envelope on a GainNode: 0 → peak over `a`, then to ~0 by `t + dur`. */
-export function envelope(g: GainNode, t: number, peakGain: number, a: number, dur: number, curve: 'exp' | 'lin' = 'exp'): void {
+export function envelope(
+  g: GainNode,
+  t: number,
+  peakGain: number,
+  a: number,
+  dur: number,
+  curve: 'exp' | 'lin' = 'exp',
+): void {
   const p = g.gain;
   // the attack must end strictly before the decay does: a ramp that ends after the one that follows it overlaps it, and
   // overlapping automation is undefined behaviour (see `gravel`)
@@ -65,7 +72,11 @@ export function envelope(g: GainNode, t: number, peakGain: number, a: number, du
 }
 
 /** A source node for noise (white or brown) starting at a random point in the shared buffer. */
-export function noiseSource(c: VoiceCtx, kind: 'white' | 'brown' = 'white', loop = false): AudioBufferSourceNode {
+export function noiseSource(
+  c: VoiceCtx,
+  kind: 'white' | 'brown' = 'white',
+  loop = false,
+): AudioBufferSourceNode {
   const s = c.ac.createBufferSource();
   s.buffer = kind === 'white' ? c.noise : c.brown;
   s.loop = loop;
@@ -79,13 +90,23 @@ export function tone(
   c: VoiceCtx,
   o: Out,
   t: number,
-  o1: { type?: OscillatorType; f0: number; f1?: number; dur: number; gain: number; attack?: number; detune?: number; glide?: number },
+  o1: {
+    type?: OscillatorType;
+    f0: number;
+    f1?: number;
+    dur: number;
+    gain: number;
+    attack?: number;
+    detune?: number;
+    glide?: number;
+  },
 ): OscillatorNode {
   const ac = c.ac;
   const osc = ac.createOscillator();
   osc.type = o1.type ?? 'sine';
   osc.frequency.setValueAtTime(o1.f0, t);
-  if (o1.f1 !== undefined && o1.f1 !== o1.f0) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o1.f1), t + (o1.glide ?? o1.dur));
+  if (o1.f1 !== undefined && o1.f1 !== o1.f0)
+    osc.frequency.exponentialRampToValueAtTime(Math.max(1, o1.f1), t + (o1.glide ?? o1.dur));
   if (o1.detune) osc.detune.value = o1.detune;
   const g = ac.createGain();
   envelope(g, t, o1.gain, o1.attack ?? 0.004, o1.dur);
@@ -97,10 +118,23 @@ export function tone(
 }
 
 /** Sub-bass impact: a sine that drops in pitch, plus a soft click. Never sent to the reverb (the caller's `Out` has wet 0). */
-export function thump(c: VoiceCtx, o: Out, t: number, f0: number, f1: number, dur: number, gain: number): void {
+export function thump(
+  c: VoiceCtx,
+  o: Out,
+  t: number,
+  f0: number,
+  f1: number,
+  dur: number,
+  gain: number,
+): void {
   tone(c, o, t, { f0, f1, dur, gain, attack: 0.003, glide: dur * 0.6 });
   // a short filtered noise "knock" so the hit reads on small speakers that cannot reproduce the sub
-  noiseHit(c, o, t, { dur: 0.05, gain: gain * 0.5, filter: { type: 'lowpass', f0: 900, f1: 200, q: 0.7 }, attack: 0.001 });
+  noiseHit(c, o, t, {
+    dur: 0.05,
+    gain: gain * 0.5,
+    filter: { type: 'lowpass', f0: 900, f1: 200, q: 0.7 },
+    attack: 0.001,
+  });
 }
 
 export interface NoiseOpts {
@@ -125,7 +159,8 @@ export function noiseHit(c: VoiceCtx, o: Out, t: number, n: NoiseOpts): AudioBuf
     f.type = n.filter.type;
     f.Q.value = n.filter.q ?? 0.8;
     f.frequency.setValueAtTime(n.filter.f0, t);
-    if (n.filter.f1 !== undefined) f.frequency.exponentialRampToValueAtTime(Math.max(20, n.filter.f1), t + n.dur);
+    if (n.filter.f1 !== undefined)
+      f.frequency.exponentialRampToValueAtTime(Math.max(20, n.filter.f1), t + n.dur);
     node.connect(f);
     node = f;
   }
@@ -153,11 +188,23 @@ export interface PartialSet {
 }
 
 /** Glassy / ceramic bell: inharmonic partials (roughly a struck glass bowl). */
-export const GLASS: PartialSet = { ratios: [1, 2.32, 4.25, 6.63, 9.38], amps: [1, 0.55, 0.32, 0.18, 0.09], decays: [1, 0.7, 0.5, 0.35, 0.25] };
+export const GLASS: PartialSet = {
+  ratios: [1, 2.32, 4.25, 6.63, 9.38],
+  amps: [1, 0.55, 0.32, 0.18, 0.09],
+  decays: [1, 0.7, 0.5, 0.35, 0.25],
+};
 /** Struck iron / nickel plate: lower, denser, slightly out of tune. */
-export const IRON: PartialSet = { ratios: [1, 2.41, 4.52, 6.93, 9.7], amps: [1, 0.7, 0.45, 0.28, 0.16], decays: [1, 0.8, 0.6, 0.45, 0.3] };
+export const IRON: PartialSet = {
+  ratios: [1, 2.41, 4.52, 6.93, 9.7],
+  amps: [1, 0.7, 0.45, 0.28, 0.16],
+  decays: [1, 0.8, 0.6, 0.45, 0.3],
+};
 /** Ceramic "tink": a short bar mode set. */
-export const TINK: PartialSet = { ratios: [1, 2.76, 5.4, 8.93], amps: [1, 0.6, 0.35, 0.2], decays: [1, 0.55, 0.3, 0.18] };
+export const TINK: PartialSet = {
+  ratios: [1, 2.76, 5.4, 8.93],
+  amps: [1, 0.6, 0.35, 0.2],
+  decays: [1, 0.55, 0.3, 0.18],
+};
 
 /** Sum of decaying sine partials — bells, glass, plates. `shimmer` adds a detuned twin of the fundamental for beating. */
 export function partials(
@@ -196,7 +243,15 @@ export function gravel(
   c: VoiceCtx,
   o: Out,
   t: number,
-  g0: { dur: number; grains: number; f: number; spread: number; gain: number; q?: number; decayShape?: number },
+  g0: {
+    dur: number;
+    grains: number;
+    f: number;
+    spread: number;
+    gain: number;
+    q?: number;
+    decayShape?: number;
+  },
 ): AudioBufferSourceNode {
   const ac = c.ac;
   const src = noiseSource(c, 'white');
@@ -234,7 +289,15 @@ export function gravel(
 }
 
 /** Riser: filtered noise + a tone stack sweeping upward into a peak at `t + dur`, then cut. */
-export function riser(c: VoiceCtx, o: Out, t: number, dur: number, gain: number, f0: number, f1: number): void {
+export function riser(
+  c: VoiceCtx,
+  o: Out,
+  t: number,
+  dur: number,
+  gain: number,
+  f0: number,
+  f1: number,
+): void {
   const ac = c.ac;
   const src = noiseSource(c, 'white');
   const bp = ac.createBiquadFilter();
@@ -257,7 +320,16 @@ export function riser(c: VoiceCtx, o: Out, t: number, dur: number, gain: number,
 export function whistlePass(
   c: VoiceCtx,
   t: number,
-  w: { f: number; dur: number; gain: number; panFrom: number; panTo: number; wet: number; approach?: number; recede?: number },
+  w: {
+    f: number;
+    dur: number;
+    gain: number;
+    panFrom: number;
+    panTo: number;
+    wet: number;
+    approach?: number;
+    recede?: number;
+  },
 ): void {
   const ac = c.ac;
   const p = ac.createStereoPanner();
@@ -284,7 +356,7 @@ export function whistlePass(
   const curve = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     // smooth step from the "approaching" pitch to the "receding" pitch, steepest at the pass-by
-    const s = 0.5 + 0.5 * Math.tanh(((i / (n - 1)) - 0.5) * 6);
+    const s = 0.5 + 0.5 * Math.tanh((i / (n - 1) - 0.5) * 6);
     curve[i] = w.f * (a + (r - a) * s);
   }
   osc.frequency.setValueCurveAtTime(curve, t, w.dur);
@@ -310,4 +382,5 @@ export function whistlePass(
 }
 
 /** Random pick from an array using the voice RNG. */
-export const pick = <T>(c: VoiceCtx, a: readonly T[]): T => a[Math.min(a.length - 1, Math.floor(c.rand() * a.length))]!;
+export const pick = <T>(c: VoiceCtx, a: readonly T[]): T =>
+  a[Math.min(a.length - 1, Math.floor(c.rand() * a.length))]!;

@@ -504,6 +504,22 @@ describe('menu navigation', () => {
     r.frame();
     expect(r.m.nav(0).start).toBe(true);
   });
+  it('a menu key tapped AND released between two frame polls still navigates exactly once (key events are latched for nav)', () => {
+    const r = rig();
+    r.frame();
+    r.key('ArrowDown', true);
+    r.key('ArrowDown', false); // gone before the next poll: a level-only reader would never see it
+    r.frame();
+    expect(r.m.nav('any').down).toBe(true);
+    r.frame();
+    expect(r.m.nav('any').down).toBe(false); // one tap, one move
+    r.key('Space', true);
+    r.key('Space', false);
+    r.frame();
+    expect(r.m.nav('any').confirm).toBe(true);
+    r.frame();
+    expect(r.m.nav('any').confirm).toBe(false);
+  });
   it('keyboard nav: arrows, Enter, Escape', () => {
     const r = rig();
     r.frame();
@@ -553,7 +569,7 @@ describe('remap (Controller Check)', () => {
     r.frame();
     p.set(7, true); // player presses ZR
     r.frame();
-    expect(r.m.capture).toMatchObject({ status: 'done', action: 'strike', result: 'button 7' });
+    expect(r.m.capture).toMatchObject({ status: 'done', action: 'strike', result: 'ZR' });
     p.releaseAll();
     r.frame();
     // menus were suppressed during capture
@@ -624,7 +640,7 @@ describe('remap (Controller Check)', () => {
     r.frame();
     p.axis(9, HAT_VALUES.u);
     r.frame();
-    expect(r.m.capture).toMatchObject({ status: 'done', result: 'hat U' });
+    expect(r.m.capture).toMatchObject({ status: 'done', result: 'UP' });
     p.axis(9, 1.2857);
     r.frame();
     p.axis(9, HAT_VALUES.u);

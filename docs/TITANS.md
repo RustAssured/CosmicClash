@@ -189,7 +189,7 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 260.
 
-Data-driven extras: `{"pose":{"startup":{"lean":-5},"active":{"lean":8}}}`
+Data-driven extras: `{"recoil":0.55,"pose":{"startup":{"lean":-5},"active":{"lean":8}}}`
 
 #### Meteor Strike · 유성 강타  `asteroid.meteor`  — crush
 
@@ -203,7 +203,7 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1350.
 
-Data-driven extras: `{"pose":{"startup":{"lean":-9},"active":{"lean":13},"recovery":{"lean":4}}}`
+Data-driven extras: `{"recoil":0.9,"pose":{"startup":{"lean":-9},"active":{"lean":13},"recovery":{"lean":4}}}`
 
 #### Tumble · 구르기  `asteroid.tumble`  — surge
 
@@ -233,10 +233,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| storm | 8–60 | line | KINETIC | 150 /6t | PIERCE | scatter=1.2, crater=5, penetration=8 | 160,-30 | 0.3 |
-| slam | 64–74 | point | KINETIC | 2600 | EMBED|UNBLOCKABLE | embed=10, embedDelay=36, crater=28, penetration=30, scatter=1.6 | 900,-160 | 1 |
+| storm | 8–60 | line | KINETIC | 100 /6t | PIERCE | scatter=1.2, crater=5, penetration=8 | -35,-6 | 0.3 |
+| slam | 64–74 | point | KINETIC | 2200 | EMBED|UNBLOCKABLE | embed=10, embedDelay=36, crater=28, penetration=30, scatter=1.6 | 900,-160 | 1 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 2750.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 2300.
 
 Data-driven extras: `{"pose":{"startup":{"lean":-6},"active":{"lean":6}},"cascade":{"count":40,"energy":0,"life":84,"sweepFrom":8,"sweepTo":64},"ctl":{"startup":0.1,"active":0.1,"recovery":0.3}}`
 

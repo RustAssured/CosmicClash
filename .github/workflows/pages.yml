@@ -1,4 +1,8 @@
 name: Deploy to GitHub Pages
+
+# One-time repository setup (otherwise the deploy step fails):
+#   Settings -> Pages -> Build and deployment -> Source: "GitHub Actions"
+
 on:
   push:
     branches: [main]
@@ -16,6 +20,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,16 +28,22 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      # vite.config.ts sets base './', so the build works from any sub-path (https://<owner>.github.io/<repo>/).
+      - name: Build
+        run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -63,7 +63,7 @@ export function applyTidal(ctx: DamageCtx, res: DamageResult): void {
     const holdFrac = Math.min(1, bsum / ref);
     if (!surf && body.materials[m]!.bond > 60) continue; // interior solids are held by their neighbours
     // Exposure: does the outline here face the source?
-    let expose = 0.6;
+    let expose = 0.08; // loose matter deep inside has no way out: the outline goes first
     if (surf) {
       let nx = 0;
       let ny = 0;

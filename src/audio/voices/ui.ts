@@ -61,7 +61,8 @@ export function playUi(c: VoiceCtx, t: number, id: UiSoundId): void {
       tone(c, o, t, { f0: 240, f1: 740, dur: 0.2, gain: 0.08, attack: 0.005 });
       break;
     case 'roundwin':
-      for (const [i, f] of [587.33, 739.99, 880, 1174.66].entries()) partials(c, o, t + i * 0.09, f, GLASS, { decay: 0.9, gain: 0.08, shimmer: 0.3 });
+      for (const [i, f] of [587.33, 739.99, 880, 1174.66].entries())
+        partials(c, o, t + i * 0.09, f, GLASS, { decay: 0.9, gain: 0.08, shimmer: 0.3 });
       thump(c, makeOut(c, 0, 0), t, 73.4, 36, 1.0, 0.45);
       break;
     case 'tick':

@@ -15,6 +15,7 @@ export function killCell(body: Body, i: number): number {
   const map = body.map;
   const w = body.w;
   const m = body.cellMass(i);
+  body.noteKill(i);
   map.material[i] = 0;
   map.density[i] = 0;
   map.integrity[i] = 0;
@@ -63,6 +64,7 @@ export function breakBondR(body: Body, i: number): boolean {
   if (map.material[i] !== 0 && map.material[i + 1] !== 0) {
     map.flags[i] = map.flags[i]! | F_CRACK;
     map.flags[i + 1] = map.flags[i + 1]! | F_CRACK;
+    body.noteBreak(i, i + 1);
   }
   return true;
 }
@@ -76,6 +78,7 @@ export function breakBondD(body: Body, i: number): boolean {
   if (map.material[i] !== 0 && map.material[j] !== 0) {
     map.flags[i] = map.flags[i]! | F_CRACK;
     map.flags[j] = map.flags[j]! | F_CRACK;
+    body.noteBreak(i, j);
   }
   return true;
 }

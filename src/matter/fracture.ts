@@ -1,6 +1,7 @@
 import { CellFlag, type DamageResult } from '@/contracts';
 import { CONN_NOW } from './body';
 import type { Body, WorldPoint } from './body';
+import { breakBondD, breakBondR } from './cells';
 import { plantFrontToward } from './cracks';
 import { RAMP_SHARD, MODE_MECH } from './debris';
 import { cohesionBondScale } from './bodyinit';
@@ -21,6 +22,7 @@ import {
   destroyCell,
   finishDamage,
   hardness,
+  isImmune,
   localToWorldF,
   outwardNormal,
   recordBlow,
@@ -56,11 +58,12 @@ const gougeOpts: CraterOpts = {
   budget: 0,
   lipFrac: 0.1,
   aspect: 0.55,
-  chunkProb: 0.6,
+  chunkProb: 0.08,
   speedMul: 0.8,
   compact: 0,
   craterR: 0,
   type: T_FRACTURE,
+  costCap: 1.8,
 };
 const gougeOut: CraterOut = {
   ok: false,
@@ -76,7 +79,7 @@ const gougeOut: CraterOut = {
   thr: 0,
 };
 /** Share of a blow's raw energy that always goes to the chisel (on top of unspent shear energy). */
-const GOUGE_BASE = 0.32;
+const GOUGE_BASE = 0.5;
 /** Corners along this event's cuts, remembered as places where SEED_CRACK fronts can start (on the surviving side). */
 const seedCorners: number[] = [];
 
@@ -146,11 +149,11 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
     }
     if (chanB > 0) carveChannel(ctx, chanB, pierce);
     if (seamB > 0) seamPop(ctx, seamB, brit);
-    if (!continuous) {
-      const g = Eraw * GOUGE_BASE + Math.max(0, cutB - cutTotal);
-      gougeOpts.budget = g;
-      if (g >= 4) carveCrater(ctx, gougeOpts, gougeOut);
-    }
+    // The chisel is deferred a few ticks: connectivity first releases the slabs the cuts isolated (intact, as chunks), then the
+    // chisel bites the contact that is left. Its budget = the base share + shear energy the cuts could not use (tough matter).
+    // Brittle matter shears into slabs and wastes little on grinding; tough matter can only be chewed.
+    if (!continuous)
+      ctx.chisel = Math.max(0.05, 1 - 0.95 * brit) * (Eraw * GOUGE_BASE + Math.max(0, cutB - cutTotal));
     if (ctx.has(DF.SEED_CRACK)) plantSeeds(ctx, E, brit);
     else if (tipCorner >= 0 && !cutStats.complete && E > 20) {
       // A cut that ran out of energy leaves a live crack tip.
@@ -170,6 +173,16 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
   }
   recordBlow(ctx, isLine ? 0.08 : 0.16);
   finishDamage(ctx, res, coverageOf(ctx), 1);
+}
+
+/** Delay (ticks) before the deferred chisel runs: past the CONN_NOW pass that frees the slabs. */
+export const CHISEL_DELAY = 3;
+
+/** The deferred chisel of a FRACTURE blow (world.ts runs it from the job queue): chips a pit out of what the cuts left at the contact. */
+export function chisel(ctx: DamageCtx, budget: number): void {
+  if (budget < 4) return;
+  gougeOpts.budget = budget;
+  carveCrater(ctx, gougeOpts, gougeOut);
 }
 
 /* --------------------------------------------------------------------------------------------- *
@@ -471,6 +484,12 @@ function runCut(ctx: DamageCtx, finder: CutFinder, budget: number, grindBudget: 
       edgeCells(body, ux, uy, d, eC);
       const a = eC[0]!;
       const b = eC[1]!;
+      if (isImmune(body, a, T_FRACTURE) || isImmune(body, b, T_FRACTURE)) {
+        // Immune matter cannot be cut: the crack stops at its edge.
+        complete = false;
+        tip = u;
+        break;
+      }
       const r = (resistOf(body, a, T_FRACTURE) + resistOf(body, b, T_FRACTURE)) * 0.5;
       const cost = ((bond / 255) * K_E * coh) / Math.max(0.2, r);
       if (spent + cost > budget) {
@@ -526,7 +545,7 @@ function runCut(ctx: DamageCtx, finder: CutFinder, budget: number, grindBudget: 
 function grindCell(ctx: DamageCtx, i: number, energy: number): void {
   const { body } = ctx;
   const map = body.map;
-  if (map.material[i] === 0) return;
+  if (map.material[i] === 0 || isImmune(body, i, T_FRACTURE)) return;
   const h = hardness(body, i);
   const loss = Math.min(150, (energy * 255) / (2 * h * Math.max(0.2, resistOf(body, i, T_FRACTURE))));
   const it = map.integrity[i]! - loss;
@@ -571,13 +590,13 @@ function carveChannel(ctx: DamageCtx, budget: number, pierce: boolean): void {
     return (pt.x - q.x) * q.ux + (pt.y - q.y) * q.uy;
   };
   for (let k = 0; k < n; k++) {
-    if (wgt[k]! < 0.8) continue;
+    if (wgt[k]! < 0.8 || isImmune(body, idx[k]!, T_FRACTURE)) continue;
     const t = tOf(idx[k]!);
     if (t < tMin) tMin = t;
   }
   if (tMin === Infinity) return;
   for (let k = 0; k < n && m < tOrder.length; k++) {
-    if (wgt[k]! < 0.8) continue;
+    if (wgt[k]! < 0.8 || isImmune(body, idx[k]!, T_FRACTURE)) continue;
     const t = tOf(idx[k]!) - tMin;
     if (t > maxDepth) continue;
     const b = Math.min(buckets - 1, Math.max(0, Math.floor(t)));
@@ -588,7 +607,7 @@ function carveChannel(ctx: DamageCtx, budget: number, pierce: boolean): void {
   const order = new Int32Array(m);
   const fill = counts.slice();
   for (let k = 0; k < n; k++) {
-    if (wgt[k]! < 0.8) continue;
+    if (wgt[k]! < 0.8 || isImmune(body, idx[k]!, T_FRACTURE)) continue;
     const t = tOf(idx[k]!) - tMin;
     if (t > maxDepth) continue;
     const b = Math.min(buckets - 1, Math.max(0, Math.floor(t)));
@@ -656,12 +675,14 @@ function seamPop(ctx: DamageCtx, budget: number, brit: number): void {
   let sy1 = -1;
   for (let k = 0; k < n && spent < budget; k++) {
     const i = idx[k]!;
+    if (isImmune(body, i, T_FRACTURE)) continue;
     const x = i % w;
     const A = mats[mat[i]!]!;
     for (let side = 0; side < 2; side++) {
       const b = side === 0 ? (x < w - 1 ? map.bondR[i]! : 0) : map.bondD[i]!;
       if (b === 0) continue;
       const j = side === 0 ? i + 1 : i + w;
+      if (isImmune(body, j, T_FRACTURE)) continue;
       const B = mats[mat[j]!]!;
       const ref = Math.min(A.bond, B.bond) * cohInit;
       if (ref <= 0 || b >= ref * 0.8) continue; // only seams/faults, not the bulk bond
@@ -669,10 +690,8 @@ function seamPop(ctx: DamageCtx, budget: number, brit: number): void {
       if (rng.next() < p * (0.6 + weakness * 2)) {
         const cost = (b / 255) * K_E * 0.5;
         spent += cost;
-        if (side === 0) map.bondR[i] = 0;
-        else map.bondD[i] = 0;
-        map.flags[i] = map.flags[i]! | F_CRACK;
-        map.flags[j] = map.flags[j]! | F_CRACK;
+        if (side === 0) breakBondR(body, i);
+        else breakBondD(body, i);
         ctx.note(i, 0.5);
         const y = (i - x) / w;
         if (x < sx0) sx0 = x;

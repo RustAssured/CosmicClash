@@ -86,7 +86,7 @@ void main() {
 export function addNebula(kit: SceneryKit, name: string, opts: NebulaOpts): KitLayer {
   const blend: LayerBlend = opts.mode === 'emit' ? 'add' : 'normal';
   const mask = opts.mask ?? [0, 0, 1e6, 1e6];
-  return kit.addFullscreen(name, FRAGMENT, blend, opts.parallax, {
+  const layer = kit.addFullscreen(name, FRAGMENT, blend, opts.parallax, {
     uScale: { value: opts.scale },
     uWarp: { value: opts.warp },
     uOct: { value: opts.octaves },
@@ -107,4 +107,9 @@ export function addNebula(kit: SceneryKit, name: string, opts: NebulaOpts): KitL
     uForceK: { value: opts.forceK ?? 1 },
     uDust: { value: opts.mode === 'dust' ? 1 : 0 },
   });
+  // fewer fbm octaves on lower tiers (the large soft shapes survive, the fine wisps go)
+  kit.onQuality((q) => {
+    layer.uniforms.uOct!.value = Math.max(2, opts.octaves - (2 - q));
+  });
+  return layer;
 }

@@ -17,8 +17,20 @@ const defs: Record<string, TitanDef> = {
 };
 const lights: Record<string, StageLighting> = {
   nursery: DEFAULT_LIGHTING,
-  cold: { dir: [-0.3, -0.6, 0.74], color: '#cfe6ff', ambient: '#0e1a3a', rim: '#7fc8ff', screenPos: [0.3, -0.1] },
-  noon: { dir: [0.0, -0.7, 0.71], color: '#fff3d6', ambient: '#2b2a3a', rim: '#ffd9a0', screenPos: [0.5, -0.2] },
+  cold: {
+    dir: [-0.3, -0.6, 0.74],
+    color: '#cfe6ff',
+    ambient: '#0e1a3a',
+    rim: '#7fc8ff',
+    screenPos: [0.3, -0.1],
+  },
+  noon: {
+    dir: [0.0, -0.7, 0.71],
+    color: '#fff3d6',
+    ambient: '#2b2a3a',
+    rim: '#ffd9a0',
+    screenPos: [0.5, -0.2],
+  },
 };
 const args = process.argv.slice(2);
 const which = args.filter((a) => !a.startsWith('--'));
@@ -81,7 +93,8 @@ function thumbnail(src: SheetItem, target: number): SheetItem {
           a++;
         }
       if (a === 0 || a / n < 0.4) continue;
-      pixels[y * w + x] = ((255 << 24) | (Math.round(b / a) << 16) | (Math.round(g / a) << 8) | Math.round(r / a)) >>> 0;
+      pixels[y * w + x] =
+        ((255 << 24) | (Math.round(b / a) << 16) | (Math.round(g / a) << 8) | Math.round(r / a)) >>> 0;
     }
   return { pixels, w, h };
 }
@@ -121,7 +134,9 @@ for (const id of which.length ? which : Object.keys(defs)) {
     if (st.frac === 1) writePng(`${outDir}/${id}-${lightName}-4x.png`, c.pixels, c.w, c.h, 4);
     world.removeBody(body.id);
   }
-  console.log(`${id}: ${g.map.w}x${g.map.h} painted+cloned in ${ms.toFixed(0)} ms; sprites ${items.map((i) => `${i.w}x${i.h}`).join(' ')}`);
+  console.log(
+    `${id}: ${g.map.w}x${g.map.h} painted+cloned in ${ms.toFixed(0)} ms; sprites ${items.map((i) => `${i.w}x${i.h}`).join(' ')}`,
+  );
   writeContactSheet(`${outDir}/${id}-${lightName}-states.png`, items, 3, 3, 6);
   writeContactSheet(`${outDir}/${id}-${lightName}-thumbs.png`, thumbs, 3, 6, 4);
   // 1:1 (what the player sees on a 1× canvas) next to the 64 px thumbnails

@@ -12,11 +12,21 @@ import {
   spectralCentroid,
 } from './analysis';
 import { generateImpulseResponse } from './ir';
-import { centsToRatio, dbToGain, gainToDb, hardClipCurve, hash01, limiterCurve, midiToHz, volumeCurve } from './math';
+import {
+  centsToRatio,
+  dbToGain,
+  gainToDb,
+  hardClipCurve,
+  hash01,
+  limiterCurve,
+  midiToHz,
+  volumeCurve,
+} from './math';
 import { MODES, STAGE_MUSIC, degreeToHz, degreeToMidi } from './scales';
 
 const SR = 48000;
-const sine = (f: number, n: number, sr = SR): Float32Array => Float32Array.from({ length: n }, (_, i) => Math.sin((2 * Math.PI * f * i) / sr));
+const sine = (f: number, n: number, sr = SR): Float32Array =>
+  Float32Array.from({ length: n }, (_, i) => Math.sin((2 * Math.PI * f * i) / sr));
 
 describe('math', () => {
   it('converts dB, MIDI and cents', () => {
@@ -55,7 +65,7 @@ describe('limiter curve (the "nothing ever clips" guarantee)', () => {
     const mid = (c.length - 1) / 2;
     expect(c[mid]).toBeCloseTo(0, 9);
     const x = 0.5;
-    expect(c[Math.round((x + 1) / 2 * (c.length - 1))]).toBeCloseTo(0.5, 3);
+    expect(c[Math.round(((x + 1) / 2) * (c.length - 1))]).toBeCloseTo(0.5, 3);
     for (let i = 0; i < c.length; i++) expect(c[i]!).toBeCloseTo(-c[c.length - 1 - i]!, 6);
   });
   it('is continuous with unit slope at the knee (no audible kink)', () => {
@@ -142,7 +152,10 @@ describe('analysis', () => {
     expect(spectralCentroid(new Float32Array(4096), SR)).toBe(0);
   });
   it('bandShare reports where the power lives', () => {
-    const mix = Float32Array.from({ length: 16384 }, (_, i) => Math.sin((2 * Math.PI * 100 * i) / SR) + 0.3 * Math.sin((2 * Math.PI * 5000 * i) / SR));
+    const mix = Float32Array.from(
+      { length: 16384 },
+      (_, i) => Math.sin((2 * Math.PI * 100 * i) / SR) + 0.3 * Math.sin((2 * Math.PI * 5000 * i) / SR),
+    );
     expect(bandShare(mix, SR, 20, 300)).toBeGreaterThan(0.9);
     expect(bandShare(mix, SR, 3000, 8000)).toBeLessThan(0.1);
     expect(bandShare(new Float32Array(4096), SR, 0, 1000)).toBe(0);
@@ -159,7 +172,7 @@ describe('analysis', () => {
   it('decayTime measures an exponential tail', () => {
     const n = SR * 4;
     const x = new Float32Array(n);
-    const tau = 0.5 / Math.log(1000) * 1; // −60 dB at 0.5 s
+    const tau = (0.5 / Math.log(1000)) * 1; // −60 dB at 0.5 s
     for (let i = 0; i < n; i++) x[i] = Math.sin(i * 0.3) * Math.exp(-i / SR / tau);
     const t = decayTime(x, SR, 60);
     expect(t).toBeGreaterThan(0.4);
