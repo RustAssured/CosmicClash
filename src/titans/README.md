@@ -7,7 +7,7 @@ reveal as damage carves it.
 
 | export | what |
 |---|---|
-| `IMPLEMENTED_TITANS: TitanId[]` | `['lastone', 'asteroid']` (Phase 2 adds the other four — they are *content*, see below) |
+| `IMPLEMENTED_TITANS: TitanId[]` | the playable roster (`lastone`, `asteroid`, `nexus`, `blackhole` and the Supernova/Planet from the other builder); a new titan is *content*, see below |
 | `TITAN_DEFS`, `getTitanDef(id): TitanDef` | the JSON definitions (`lastone.json`, `asteroid.json`); throws for unimplemented titans |
 | `generateTitanBody(def, seed, lighting): { map, materials, rig }` | ready for `world.createBody`: painted `MatterMap` (material ids, densities, lit `baseColor`, relief `height`, `coreX/Y/Radius`), resolved material table (`specs[i]` ⇒ id `i+1`, 0 = void) and the **rig** |
 | `paintTitanMap(def, seed, lighting)` | the painting step alone (no material table) |
@@ -29,7 +29,7 @@ Generic, layered, and the same for every titan — a new titan is a new *painter
 | `field.ts` | exact Euclidean distance transform, box blur, largest-connected-component |
 | `canvas.ts` | `ArtCanvas`: material ids + relief + tone offsets + colour overrides → `render()`; `buildLitRamps` |
 | `color.ts` | `blend` (opaque, rounded) |
-| `lastone.ts`, `asteroid.ts` | the per-titan feature passes (silhouette, layering, features, rig) |
+| `lastone.ts`, `asteroid.ts`, `nexus.ts`, `blackhole.ts` | the per-titan feature passes (silhouette, layering, features, rig); `chainLink.ts` is the shared chain-link rasteriser (painted links and the live chain overlay use the same one) |
 
 Pipeline: **domain-warped SDF silhouette → distance-to-boundary layering (crust → mantle → core, veins, strata, inclusions) → relief height → normals lit by the stage key light
 (`lightXBias` tames the horizontal component so mirrored sprites stay top-lit) → cavity AO → ramp index → ordered dither between ramp steps → rim light on the lit silhouette edge and a selective dark
@@ -56,6 +56,8 @@ Seams/fault lines are distinct **materials** with weaker bonds (JSON `physics.bo
 | `chargePower`, `chargeReach` | hold-to-charge scaling: energy `×(1..1+chargePower)`, lengths `×chargeReach[0..1]` |
 | `ctl` | per-phase steering multiplier override (e.g. the Swarm gives the stick to the fragments) |
 | `swarm`, `cascade`, `spin`, `eyeFlare`, `halo` | behaviour parameters/flags for the titan's behaviour class |
+| `root`, `cage` | Nexus: Constrict roots the foe (`mul`, `ticks`, `chains`, `snap` energy that breaks it); the ultimate's cage (`segments`, `radius`, `build`, `closeFrom/closeTo`, `hp`, `crush`) |
+| `well`, `noCredit` | Black Hole: gravity well radius/strength/consume/foe pull for the signature and the ultimate; `noCredit` makes a move's streams credit nobody (see `docs/BALANCE.md`) |
 | `recoil` | 0..1: fraction of the damage dealt that comes back on the attacker (rams). Read by the AI only (it values such blows net); the matter world produces the actual backlash |
 
 Frame data is validated by `validateTitanDef` (feel targets) in `titans.test.ts`; `docs/TITANS.md` is generated from the JSON by `npx tsx tools/titans/docs.ts`.

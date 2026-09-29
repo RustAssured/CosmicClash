@@ -82,6 +82,75 @@ is delayed (cracks spreading, connectivity detaching chunks, embedded shrapnel, 
 given second matters less than where the first few heavy hits landed. Both are properties of the fight structure and the destruction model rather than of the AI, but that is a hypothesis to test in Phase 3 (for example by measuring how much of each round's matter loss happens in the seconds after a hit).
 Do not "fix" it by making the AI cheat; look at how much of a blow's effect is delayed and random.
 
+## Round 2 snapshot: the roster grows to four (Nexus, Black Hole)
+
+Tools: `tools/ai/moves.ts` (a per-move table: mass removed, as a percentage of the defender's initial mass, over 300 ticks after one press at gaps
+70 to 295 px against an idle and a guarding dummy on the real world) and `tools/ai/duel.ts` (now also prints round-length statistics).
+Everything below was measured after the P0 fix (a blow that touches only a foe's parts no longer uses itself up; a lunging once-per-move
+hitbox is applied at its deepest overlap) and with `ROUND_HEAL_FRACTION = 0.6`. B2's delayed-damage rebalance had not landed, so **re-run
+both tools when it does**; the numbers move.
+
+Pacing target: Strike about 2 to 5 %, Crush 6 to 15 %, Ultimate 25 to 45 % of an opposing body (idle dummy, mean over the gaps that connect).
+
+| Move | vs Asteroid | vs Last One | Note |
+|---|---:|---:|---|
+| nexus.constrict (crush) | 5 to 8 % | 4 to 11 % | roots the foe (0.5x speed for 90 ticks, breaks at 450 energy); 850 energy |
+| nexus.harvest (signature) | 8 % | 12 % | tears out infected lattice; what the foe loses while it runs is banked and built into new lattice |
+| nexus.latch (strike) | 0 % now | 0 % now | plants an infection; the payoff is Harvest, so read it as a setup (about 400 infected cells) |
+| nexus.oog (ultimate) | 17 % | 19 % | under target: the cage crush is capped by what CRUSH can bore, raising energy did nothing (see below) |
+| blackhole.shear (strike) | 2.4 % | 4.2 % | tidal field plus a kinetic rake |
+| blackhole.maw (crush) | 6 % | 7 % | tidal field plus a jaws-closing crush point |
+| blackhole.well (signature) | 6 % | 5 % | 9 field ticks; costs 30 of the Accreted bar |
+| blackhole.spaghetti (ultimate) | 25 % | 19 % | the Asteroid is at the bottom of the band, the Last One below it |
+
+The Nexus ultimate stays under the band because the cage's closing blow is a CRUSH at a point: the world bores only so deep whatever the
+energy (2800, 5200 and 9000 all read 16 to 19 %). Making it larger would need more compress/crater, or a follow-up the cage shape owns; that
+is a design call for Phase 3.
+
+### Duels at level 3, n = 20 (real world, sides alternated, seed 200), final settings of this round
+
+| Matchup | Result | Mean round | Round 1 |
+|---|---|---:|---:|
+| Nexus v Asteroid | 19 to 1 | 12 s | 17 s |
+| Nexus v Last One | 20 to 0 | 14 s | 23 s |
+| Black Hole v Asteroid | 17 to 3 | 18 s | 25 s |
+| Black Hole v Last One | 5 to 15 | 24 s | 35 s |
+| Black Hole v Nexus | 6 to 14 | 18 s | 23 s |
+
+**The Nexus is not balanced: it wins 95 to 100 % against the two Phase 1 titans.** Idle it dies in about 13 s (as fast as an idle Asteroid),
+so it is not durable; the asymmetry is that a moving Nexus keeps the fight at a range where its Harvest field and Constrict connect and the
+foe's blows mostly find the gaps between its nodes (in one traced round the Nexus lost 3 % of its mass while the Asteroid lost 82 %).
+Levers tried without effect: Constrict energy 1300 to 650, root 150 to 30 ticks, latch amounts, node resist, harvest strength, AI personality.
+The one that mattered was crediting: harvested matter used to be credited to the Nexus's pool (mass above 1.0), which made it unkillable;
+the harvest now carries `extra.noCredit` and building is paid from what the foe loses. Remaining candidates: bulk up the nodes so blows land,
+shorten the Harvest reach, or give the Constrict a real whiff cost. A Phase 3 balance pass should start here.
+
+The Black Hole is a rock-paper-scissors: strong against the Asteroid, behind against the Last One and the Nexus. Its story, because it
+cost most of the round:
+
+* Its AI personality is the largest lever measured anywhere: with `aggression 0.3, patience 0.85, zoning 0.9` it won 20 to 0 against everyone, even
+  at a quarter of its damage; with `0.65, 0.4, 0.5` it lost 1 to 9. The shipped `0.36 / 0.72 / 0.8` is where the sweep landed (it keeps
+  its distance, which is thematic, but no longer outwaits the foe AIs).
+* Its horizon is immune, so mass floors: at density 3 the horizon alone was 48 % of the hole's mass and `KO_MASS_FRAC = 0.22` could never be
+  reached. The horizon is now 0.15 density (about 5 % of the hole).
+* `massGained` is credited to a body's pool and counts toward `massFrac`, so an accretor that eats the foe's debris climbs past 1.0 without
+  bound (4.7x in one match) and can never be KO'd. The Black Hole's tidal moves therefore carry `extra.noCredit` (the fighter then sets
+  `sourceBodyId = -1`) and the gravity well credits nobody; the Accreted bar is fed from the foe's mass loss instead and pays for disk regrowth.
+* `world.shed` removes cells (not pool mass), so it cannot be used to bleed accretion: 22 % of the body per call in an early build.
+* `resist` reads opposite ways in different damage modules (KINETIC and FRACTURE divide by it, TIDAL multiplies), so a per-titan override needs
+  measuring, not reasoning.
+
+### The AI ladder (level 6 against level 1, mirrors, real world)
+
+The Last One mirror is a ladder only weakly (18 to 22 at n = 40 with the final settings; 34 to 16 at n = 50 with a noisier level table that failed the
+dodge test); the Asteroid mirror reads 13 to 27 and the Nexus mirror 11 to 29. Measured with `.scratch` scripts on this build, mass dealt is about
+equal between levels while level 6 acts almost twice as often and lands a smaller share of what it throws (a slow Crush thrown at a foe that
+keeps moving). Changes made: the blunder rate of levels 1 and 2 (45 % and 28 %), a long-run per-move landing-rate and damage-worth memory from
+level 3 up (`docs/AI.md`), an assimilation setup/payoff rule, and the foe's infected share in the snapshot. None of them yields the 70 % target in
+the Asteroid and Nexus mirrors. Delayed damage is the main confounder: a healed loser starts the next round with spreading cracks and can
+lose 60 % of its mass with no hit landed on it (measured against a do-nothing dummy), which turns rounds 2 and 3 into a lottery.
+Re-measure after B2's rebalance before changing the AI further.
+
 ## Phase 3 plan: `tools/ai/balance.ts`
 
 1. Roster loop over `IMPLEMENTED_TITANS`: every ordered pair (a, b), a <= b, both sides of the screen, levels 2, 4, 6 (and 1 v 6 for

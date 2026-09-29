@@ -271,10 +271,10 @@ Validation against the feel targets: all clear.
 | crystal | crystal | — | 46 | `#0f0a2a` `#241556` `#4a2792` `#8a39bd` `#c760d6` `#8fc4ff` `#d4ecff` `#ffffff` |
 | hubcore | core | — | 230 | `#8a1050` `#e0307a` `#ff7aa8` `#ffc4d8` `#fff2f6` |
 | chain | chain | — | 0 | `#140609` `#2a0d13` `#48141e` `#6a1c26` `#8f262f` `#b83a38` `#dc5f4a` `#ffb59a` |
-| node | node | — | 84 | `#1e0410` `#4a0818` `#7c0c28` `#b0143a` `#dc1e48` `#f8506a` `#ffb0b8` |
-| nodecore | node | — | 230 | `#7a0c30` `#d4204a` `#ff5a78` `#ffb0bc` `#fff0f2` |
+| node | node | resist={"FRACTURE":0.9,"KINETIC":0.9,"CRUSH":0.75} | 84 | `#1e0410` `#4a0818` `#7c0c28` `#b0143a` `#dc1e48` `#f8506a` `#ffb0b8` |
+| nodecore | node | resist={"FRACTURE":0.9,"KINETIC":0.9,"CRUSH":0.75} | 230 | `#7a0c30` `#d4204a` `#ff5a78` `#ffb0bc` `#fff0f2` |
 | lattice | lattice | — | 36 | `#2a0612` `#5c0e28` `#8e1a3c` `#c2304e` `#ee6078` `#ffb0bc` |
-| deadnode | node | — | 0 | `#141012` `#241e20` `#382f32` `#50464a` `#6c6266` `#8a8084` |
+| deadnode | node | resist={"FRACTURE":0.9,"KINETIC":0.9,"CRUSH":0.75} | 0 | `#141012` `#241e20` `#382f32` `#50464a` `#6c6266` `#8a8084` |
 
 ### Moves
 
@@ -296,7 +296,7 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| latch | 0–8 | line (sweeps) | ASSIMILATION | 240 | LATCH | latch=210 | 40,0 | 0.15 |
+| latch | 0–8 | line (sweeps) | ASSIMILATION | 240 | LATCH | latch=120 | 40,0 | 0.15 |
 
 Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 240.
 
@@ -310,12 +310,12 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| grip | 0–10 | point | CRUSH | 1300 | — | compress=7, crater=12 | -260,0 | 0.8 |
-| bind | 0–10 | point | ASSIMILATION | 220 | LATCH | latch=230 | -40,0 | 0.2 |
+| grip | 0–10 | point | CRUSH | 850 | — | compress=7, crater=12 | -260,0 | 0.8 |
+| bind | 0–10 | point | ASSIMILATION | 220 | LATCH | latch=140 | -40,0 | 0.2 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1520.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1070.
 
-Data-driven extras: `{"root":{"mul":0.3,"ticks":150,"chains":3,"snap":700},"recoil":0.05,"pose":{"startup":{"lean":-7},"active":{"lean":8},"recovery":{"lean":2}}}`
+Data-driven extras: `{"root":{"mul":0.5,"ticks":90,"chains":3,"snap":450},"recoil":0.05,"pose":{"startup":{"lean":-7},"active":{"lean":8},"recovery":{"lean":2}}}`
 
 #### Slither · 미끄러짐  `nexus.slither`  — surge
 
@@ -331,11 +331,11 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| harvest | 0–30 | field | ASSIMILATION | 55 /4t | CONTINUOUS | latch=70, harvest=0.9 | -22,0 | 0.05 |
+| harvest | 0–30 | field | ASSIMILATION | 38 /4t | CONTINUOUS | latch=70, harvest=0.9 | -22,0 | 0.05 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1650.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1140.
 
-Data-driven extras: `{"chargePower":1,"chargeReach":[0.9,1.35],"pose":{"startup":{"lean":-3},"charge":{"lean":-5},"active":{"lean":3}}}`
+Data-driven extras: `{"chargePower":1,"chargeReach":[0.9,1.35],"pose":{"startup":{"lean":-3},"charge":{"lean":-5},"active":{"lean":3}},"noCredit":true}`
 
 #### Ingesloten Oog · 갇힌 눈  `nexus.oog`  — ultimate
 
@@ -345,11 +345,11 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| spiral | 0–40 | line (sweeps) | ASSIMILATION | 220 /8t | LATCH | latch=200 | 0,0 | 0.1 |
+| spiral | 0–40 | line (sweeps) | ASSIMILATION | 220 /8t | LATCH | latch=130 | 0,0 | 0.1 |
 
 Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 220.
 
-Data-driven extras: `{"cage":{"segments":8,"radius":[175,44],"build":56,"closeFrom":60,"closeTo":100,"hp":260,"breakAt":3,"crush":{"energy":9000,"latch":240,"compress":20,"crater":32}},"ctl":{"startup":0.1,"active":0.15,"recovery":0.3},"pose":{"startup":{"lean":-6},"active":{"lean":3},"recovery":{"lean":0}}}`
+Data-driven extras: `{"cage":{"segments":8,"radius":[175,44],"build":56,"closeFrom":60,"closeTo":100,"hp":260,"breakAt":3,"crush":{"energy":9000,"latch":150,"compress":20,"crater":32}},"ctl":{"startup":0.1,"active":0.15,"recovery":0.3},"pose":{"startup":{"lean":-6},"active":{"lean":3},"recovery":{"lean":0}}}`
 
 #### Chain Mesh · 사슬 그물  `nexus.guard`  — guard
 
@@ -406,10 +406,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| shear | 0–10 | field | TIDAL | 1380 | — | pull=1.2 | -60,0 | 0.15 |
-| shear-rake | 0–10 | point | KINETIC | 126.5 | — | — | -30,0 | 0.15 |
+| shear | 0–10 | field | TIDAL | 2001 | — | pull=1.2 | -60,0 | 0.15 |
+| shear-rake | 0–10 | point | KINETIC | 183.4 | — | — | -30,0 | 0.15 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1507.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 2184.
 
 Data-driven extras: `{"pose":{"startup":{"lean":-3},"active":{"lean":3}},"noCredit":true}`
 
@@ -421,10 +421,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| maw | 0–16 | field | TIDAL | 10350 | — | pull=1.6 | -140,0 | 0.7 |
-| maw-crush | 6–14 | point | CRUSH | 483 | — | — | -60,0 | 0.7 |
+| maw | 0–16 | field | TIDAL | 15007.5 | — | pull=1.6 | -140,0 | 0.7 |
+| maw-crush | 6–14 | point | CRUSH | 700.4 | — | — | -60,0 | 0.7 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 10833.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 15708.
 
 Data-driven extras: `{"pose":{"startup":{"lean":-6},"active":{"lean":4}},"noCredit":true}`
 
@@ -442,11 +442,11 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| well | 0–50 | field | TIDAL | 16.1 /3t | CONTINUOUS | pull=1.1 | -25,0 | 0.05 |
+| well | 0–50 | field | TIDAL | 23.3 /3t | CONTINUOUS | pull=1.1 | -25,0 | 0.05 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 805.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1165.
 
-Data-driven extras: `{"chargePower":1,"chargeReach":[0.9,1.35],"well":{"radius":[140,260],"strength":[900,2200],"consume":26,"pullFoe":260},"ctl":{"active":0.5},"noCredit":true}`
+Data-driven extras: `{"chargePower":1,"chargeReach":[0.9,1.35],"well":{"radius":[110,190],"strength":[900,2200],"consume":26,"pullFoe":260},"ctl":{"active":0.5},"noCredit":true}`
 
 #### Spaghettification · 스파게티화  `blackhole.spaghetti`  — ultimate
 
@@ -456,11 +456,11 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| tide | 0–120 | field | TIDAL | 39.1 /3t | CONTINUOUS | pull=1.8 | -40,0 | 0.1 |
+| tide | 0–120 | field | TIDAL | 56.7 /3t | CONTINUOUS | pull=1.8 | -40,0 | 0.1 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 4692.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 6804.
 
-Data-driven extras: `{"well":{"radius":[200,340],"strength":[1600,3200],"consume":30,"pullFoe":450},"ctl":{"startup":0.1,"active":0.1,"recovery":0.3},"noCredit":true}`
+Data-driven extras: `{"well":{"radius":[170,270],"strength":[1600,3200],"consume":30,"pullFoe":450},"ctl":{"startup":0.1,"active":0.1,"recovery":0.3},"noCredit":true}`
 
 #### Disk Shield · 강착 방패  `blackhole.guard`  — guard
 

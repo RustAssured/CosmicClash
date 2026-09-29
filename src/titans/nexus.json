@@ -1,7 +1,7 @@
 {
   "id": "nexus",
   "name": "The Nexus",
-  "nameKo": "넥서스",
+  "nameKo": "\ub125\uc11c\uc2a4",
   "epithet": "De Nexus",
   "attributes": {
     "mass": 6,
@@ -14,7 +14,7 @@
   "resource": {
     "id": "nodes",
     "name": "Nodes",
-    "nameKo": "마디",
+    "nameKo": "\ub9c8\ub514",
     "max": 16,
     "start": 12,
     "display": "pips"
@@ -71,6 +71,13 @@
         "char": "#2a0c14",
         "crack": "#12040a",
         "debris": "#f0405a"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 0.9,
+          "KINETIC": 0.9,
+          "CRUSH": 0.75
+        }
       }
     },
     {
@@ -82,6 +89,13 @@
         "char": "#4a1020",
         "crack": "#2a0810",
         "debris": "#ff5a78"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 0.9,
+          "KINETIC": 0.9,
+          "CRUSH": 0.75
+        }
       }
     },
     {
@@ -104,6 +118,13 @@
         "char": "#1a1416",
         "crack": "#0a0608",
         "debris": "#50464a"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 0.9,
+          "KINETIC": 0.9,
+          "CRUSH": 0.75
+        }
       }
     }
   ],
@@ -233,7 +254,7 @@
       "id": "nexus.latch",
       "slot": "strike",
       "name": "Latch",
-      "nameKo": "고리 걸기",
+      "nameKo": "\uace0\ub9ac \uac78\uae30",
       "frame": {
         "startup": 12,
         "active": 8,
@@ -263,7 +284,7 @@
                 "duration": 1,
                 "flags": 4,
                 "params": {
-                  "latch": 210
+                  "latch": 120
                 }
               },
               "knockback": {
@@ -311,7 +332,7 @@
                 "duration": 1,
                 "flags": 4,
                 "params": {
-                  "latch": 210
+                  "latch": 120
                 }
               },
               "knockback": {
@@ -359,7 +380,7 @@
                 "duration": 1,
                 "flags": 4,
                 "params": {
-                  "latch": 210
+                  "latch": 120
                 }
               },
               "knockback": {
@@ -414,7 +435,7 @@
       "id": "nexus.constrict",
       "slot": "crush",
       "name": "Constrict",
-      "nameKo": "조이기",
+      "nameKo": "\uc870\uc774\uae30",
       "frame": {
         "startup": 30,
         "active": 12,
@@ -438,7 +459,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1300,
+                "energy": 850,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -469,7 +490,7 @@
                 "duration": 1,
                 "flags": 4,
                 "params": {
-                  "latch": 230
+                  "latch": 140
                 }
               },
               "knockback": {
@@ -509,7 +530,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1300,
+                "energy": 850,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -540,7 +561,7 @@
                 "duration": 1,
                 "flags": 4,
                 "params": {
-                  "latch": 230
+                  "latch": 140
                 }
               },
               "knockback": {
@@ -580,7 +601,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1300,
+                "energy": 850,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -611,7 +632,7 @@
                 "duration": 1,
                 "flags": 4,
                 "params": {
-                  "latch": 230
+                  "latch": 140
                 }
               },
               "knockback": {
@@ -643,10 +664,10 @@
       "tags": ["chain", "grab", "root"],
       "extra": {
         "root": {
-          "mul": 0.3,
-          "ticks": 150,
+          "mul": 0.5,
+          "ticks": 90,
           "chains": 3,
-          "snap": 700
+          "snap": 450
         },
         "recoil": 0.05,
         "pose": {
@@ -666,7 +687,7 @@
       "id": "nexus.slither",
       "slot": "surge",
       "name": "Slither",
-      "nameKo": "미끄러짐",
+      "nameKo": "\ubbf8\ub044\ub7ec\uc9d0",
       "frame": {
         "startup": 3,
         "active": 22,
@@ -722,7 +743,7 @@
       "id": "nexus.harvest",
       "slot": "signature",
       "name": "Harvest",
-      "nameKo": "수확",
+      "nameKo": "\uc218\ud655",
       "frame": {
         "startup": 14,
         "active": 30,
@@ -747,7 +768,7 @@
               },
               "damage": {
                 "type": "ASSIMILATION",
-                "energy": 55,
+                "energy": 38,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -788,7 +809,7 @@
               },
               "damage": {
                 "type": "ASSIMILATION",
-                "energy": 55,
+                "energy": 38,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -829,7 +850,7 @@
               },
               "damage": {
                 "type": "ASSIMILATION",
-                "energy": 55,
+                "energy": 38,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -872,14 +893,15 @@
           "active": {
             "lean": 3
           }
-        }
+        },
+        "noCredit": true
       }
     },
     {
       "id": "nexus.oog",
       "slot": "ultimate",
       "name": "Ingesloten Oog",
-      "nameKo": "갇힌 눈",
+      "nameKo": "\uac07\ud78c \ub208",
       "frame": {
         "startup": 66,
         "active": 110,
@@ -909,7 +931,7 @@
                 "duration": 1,
                 "flags": 4,
                 "params": {
-                  "latch": 200
+                  "latch": 130
                 }
               },
               "knockback": {
@@ -951,7 +973,7 @@
                 "duration": 1,
                 "flags": 4,
                 "params": {
-                  "latch": 200
+                  "latch": 130
                 }
               },
               "knockback": {
@@ -993,7 +1015,7 @@
                 "duration": 1,
                 "flags": 4,
                 "params": {
-                  "latch": 200
+                  "latch": 130
                 }
               },
               "knockback": {
@@ -1030,7 +1052,7 @@
           "breakAt": 3,
           "crush": {
             "energy": 9000,
-            "latch": 240,
+            "latch": 150,
             "compress": 20,
             "crater": 32
           }
@@ -1057,7 +1079,7 @@
       "id": "nexus.guard",
       "slot": "guard",
       "name": "Chain Mesh",
-      "nameKo": "사슬 그물",
+      "nameKo": "\uc0ac\uc2ac \uadf8\ubb3c",
       "frame": {
         "startup": 3,
         "active": 0,

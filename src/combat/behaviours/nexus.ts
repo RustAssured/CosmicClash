@@ -101,7 +101,10 @@ export class NexusBehaviour extends Behaviour {
   private emissiveOf!: Uint8Array;
 
   /* growth */
-  private grownMass = 0;
+  private bank = 0;
+  private lastFoeMass = 0;
+  private harvesting = false;
+  private lastHarvest = -1000;
   private grownCells = 0;
   private lastGrow = -1000;
   private budIdx = 0;
@@ -568,12 +571,17 @@ export class NexusBehaviour extends Behaviour {
   private grow(): void {
     const f = this.f;
     const tick = f.tickNo;
+    // what the foe loses while a harvest runs is what the Nexus can build with (its own mass pool is not credited: see extra.noCredit)
+    const foeMass = (f.foe.view.bodyStats as { mass: number }).mass;
+    if (f.mv.def?.id === 'nexus.harvest') this.lastHarvest = tick;
+    this.harvesting = tick - this.lastHarvest < 40;
+    if (this.harvesting && foeMass < this.lastFoeMass) this.bank += (this.lastFoeMass - foeMass) * 0.5;
+    this.lastFoeMass = foeMass;
     if (tick - this.lastGrow < 45 || f.ko) return;
-    const gained = f.view.bodyStats.massGained;
     const lattice = f.body.materials.findIndex((m) => m.key === 'lattice');
     if (lattice < 0) return;
     const per = f.body.materials[lattice]!.density;
-    const pool = gained - this.grownMass;
+    const pool = this.bank;
     const cells = Math.min(48, Math.floor((pool * 0.9) / Math.max(0.05, per)));
     if (cells < 12 || this.rig.buds.length === 0) return;
     const bud = this.rig.buds[this.budIdx++ % this.rig.buds.length]!;
@@ -586,7 +594,7 @@ export class NexusBehaviour extends Behaviour {
     });
     this.lastGrow = tick;
     if (added <= 0) return;
-    this.grownMass += added * per;
+    this.bank = Math.max(0, this.bank - (added * per) / 0.9);
     this.grownCells += added;
     f.events.push({
       t: 'cue',

@@ -54,6 +54,17 @@ Every committed attack is judged a little later from the delayed foe view: did t
 same move variant multiply its hit probability by 0.4 each (forgotten after 10 s, cleared by any success), so an AI whose beam keeps
 passing through a notch it cannot see tries a different aim. A blocked or dodged attack is not counted.
 
+From level 3 (the levels that model the foe) the AI also keeps a **long-run record per move variant** for the whole match, in two forms.
+*Landing rate*: the observed share of uses that connected, shrunk toward the model's own prediction by three pseudo-samples, scales the
+hit probability (0.25x to 1.25x), so a slow blow a mobile foe keeps sidestepping stops being chosen. *Damage worth*: the matter the foe
+really lost after each use, relative to what the model promised (against the same ratio over everything tried), scales the expected
+damage (0.35x to 3x), so damage the model cannot see (delayed cracks, orbiting swarms) is discovered by trying. Both are
+public information only (the delayed view of the foe's mass).
+
+An **assimilation setup/payoff** is understood from the move data, not per titan: a move whose damage plants an infection (`latch`)
+is worth more while little of the foe is infected, a move that tears infected matter out (`harvest`) is worth what is already
+infected (the foe's public `infectedCells / cells`).
+
 ### Habits
 
 `predict.ts` keeps a small n-gram model over the foe's coarse action tokens (approach, retreat, strike, crush, signature, guard,
@@ -64,8 +75,8 @@ walking in. It only ever sees actions after the reaction delay.
 
 | Level | Reaction | Blunder | Jitter (ticks) | Position error (px) | Think every | Temperature | Habits | Feints | Punish skill | Defends |
 |---:|---:|---:|---:|---:|---:|---:|:-:|:-:|---:|---:|
-| 1 | 350 ms | 32% | 6 | 24 | 16 | 0.90 | no | no | 0.35 | 0.25 |
-| 2 | 310 ms | 20% | 5 | 18 | 13 | 0.70 | no | no | 0.55 | 0.50 |
+| 1 | 350 ms | 45% | 6 | 24 | 16 | 0.90 | no | no | 0.35 | 0.25 |
+| 2 | 310 ms | 28% | 5 | 18 | 13 | 0.70 | no | no | 0.55 | 0.50 |
 | 3 | 270 ms | 12% | 4 | 13 | 10 | 0.50 | yes | no | 0.72 | 0.70 |
 | 4 | 230 ms | 7% | 3 | 9 | 8 | 0.38 | yes | yes | 0.85 | 0.85 |
 | 5 | 200 ms | 3.5% | 2 | 5 | 6 | 0.26 | yes | yes | 0.94 | 0.94 |
@@ -126,11 +137,17 @@ so the Phase 3 tournament (`tools/ai/balance.ts`, `worker_threads`) is a small w
 
 ## Known limits
 
-* **Level does not yet translate into win rate in every matchup.** The Last One mirror shows a ladder (level 6 beats level 1 about 70 % of
-  the time), but the Asteroid mirror and Last One v Asteroid are flat within noise (n = 40 to 120, real matter world), although the mechanical tests
-  show the skill (dodging, punishing, no stalling). Fights are attritional and a large share of matter loss is delayed and
-  chaotic; details and numbers in `docs/BALANCE.md`. The unit tests therefore assert the ladder mechanically and only require
-  that level 6 is not beaten by level 1 more often than not on the test double.
+* **Level does not translate into win rate (round 2 measurement).** Level 6 against level 1 in mirrors, real world, n = 40 to 50: Last One
+  18 to 22, Asteroid 13 to 27, Nexus 5 to 35 (before a Nexus retune: 11 to 29). The mechanical tests show the skill (dodging a telegraphed
+  Crush: level 1 lands it half the time, level 6 never; punishing; no stalling) but in fights mass dealt is about equal between
+  levels while level 6 acts almost twice as often and lands a smaller share of what it throws. Two structural confounders, both outside
+  the AI: (1) the healed loser of a round starts the next one with spreading cracks and can lose most of its mass with no hit landed
+  (measured against a do-nothing dummy), so rounds 2 and 3 are a lottery; (2) a large share of matter loss is delayed and chaotic.
+  Tried and kept: a long-run per-move landing and damage memory (levels 3+), an infection setup/payoff rule, higher blunder rates at
+  levels 1 and 2. Tried and dropped: raising position noise, jitter and think interval at low levels (it made level 6 beat level 1
+  in the Last One mirror 34 to 16 but broke the dodge test's ordering of levels 1 and 3). Re-measure after B2's delayed-damage rebalance.
+* A titan's `ai.weights` swing results far more than a level does (the Black Hole went from 20 to 0 to 1 to 9 against the same opponents by
+  moving three weights); balance passes must treat them as balance levers.
 * The AI cannot read silhouettes, so a beam aimed at a carved notch is only corrected after it whiffs (whiff memory, above).
 * It does not model the tendril shield: it counts a blow that only touches the Last One's tendrils as a hit on the body until the
   foe's mass fails to drop and the whiff memory notices.

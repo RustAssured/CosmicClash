@@ -17,11 +17,11 @@ tick(ctx) ─ note presses in the 9-tick buffer ─ refreshStats (world.stats �
 | file | role |
 |---|---|
 | `fighter.ts` | `FighterImpl implements Fighter` — everything above |
-| `behaviour.ts`, `behaviours/*` | `Behaviour` base (all hooks default to no-ops) and the per-titan behaviours: `lastone.ts` (tendrils, eye, halo, beams), `asteroid.ts` (pebbles, momentum, rubble pile, swarm, storm), `tendrils.ts` (verlet chains) |
+| `behaviour.ts`, `behaviours/*` | `Behaviour` base (all hooks default to no-ops) and the per-titan behaviours: `lastone.ts` (tendrils, eye, halo, beams), `asteroid.ts` (pebbles, momentum, rubble pile, swarm, storm), `tendrils.ts` (verlet chains), `nexus.ts` (bond-graph failure mode, chains, rooting, cage), `blackhole.ts` (rotating disk, gravity well, accretion bar, lens fields) |
 | `move.ts` | `ActiveMove` (preallocated runtime of the move in progress), frame resolution, aim from stick, displacement prediction |
 | `shapes.ts` | `FatShape` (one mutable object that can play any `DamageShape`), template → world instantiation with sweeps, containment/intersection tests |
 | `inputBuffer.ts`, `stats.ts`, `tuning.ts` | 9-tick buffer; live stats from mass; **every feel knob in one place** |
-| `fx/overlay.ts` | tiny software-rasterised world-space layer (dirty-box tracked, closure-free capsules, additive glow) |
+| `fx/overlay.ts`, `fx/chain.ts` | tiny software-rasterised world-space layer (dirty-box tracked, closure-free capsules, additive glow); `chain.ts` draws chain links along a sagging path |
 | `testing/fakeWorld.ts`, `testing/harness.ts` | `MatterWorld` test double; Match/duel helpers used by tests and tools |
 
 ## Public API

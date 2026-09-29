@@ -148,9 +148,9 @@
     "coreRadius": 8,
     "params": {
       "centre": [112, 104],
-      "horizon": 30,
+      "horizon": 23,
       "ring": 3.2,
-      "diskIn": 36,
+      "diskIn": 29,
       "diskOut": 88,
       "squash": 0.3,
       "tilt": -0.2,
@@ -190,7 +190,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 1380.0,
+                "energy": 2001.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -216,7 +216,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 126.5,
+                "energy": 183.4,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -253,7 +253,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 1380.0,
+                "energy": 2001.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -279,7 +279,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 126.5,
+                "energy": 183.4,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -316,7 +316,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 1380.0,
+                "energy": 2001.0,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -342,7 +342,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 126.5,
+                "energy": 183.4,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -409,7 +409,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 10350.0,
+                "energy": 15007.5,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -435,7 +435,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 483.0,
+                "energy": 700.4,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -472,7 +472,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 10350.0,
+                "energy": 15007.5,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -498,7 +498,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 483.0,
+                "energy": 700.4,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -535,7 +535,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 10350.0,
+                "energy": 15007.5,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -561,7 +561,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 483.0,
+                "energy": 700.4,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -682,7 +682,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 16.1,
+                "energy": 23.3,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -715,7 +715,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 16.1,
+                "energy": 23.3,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -748,7 +748,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 16.1,
+                "energy": 23.3,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -774,7 +774,7 @@
         "chargePower": 1,
         "chargeReach": [0.9, 1.35],
         "well": {
-          "radius": [140, 260],
+          "radius": [110, 190],
           "strength": [900, 2200],
           "consume": 26,
           "pullFoe": 260
@@ -814,7 +814,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 39.1,
+                "energy": 56.7,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -847,7 +847,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 39.1,
+                "energy": 56.7,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -880,7 +880,7 @@
               },
               "damage": {
                 "type": "TIDAL",
-                "energy": 39.1,
+                "energy": 56.7,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -904,7 +904,7 @@
       "tags": ["ultimate", "field", "armor", "gravity"],
       "extra": {
         "well": {
-          "radius": [200, 340],
+          "radius": [170, 270],
           "strength": [1600, 3200],
           "consume": 30,
           "pullFoe": 450
@@ -964,10 +964,10 @@
   "ai": {
     "style": "Zones and pulls: keeps its distance, sets wells, lets the foe come, punishes with Maw when the foe is pinned.",
     "weights": {
-      "aggression": 0.3,
-      "patience": 0.85,
-      "zoning": 0.9,
-      "retreat": 0.5,
+      "aggression": 0.36,
+      "patience": 0.72,
+      "zoning": 0.8,
+      "retreat": 0.42,
       "trap": 0.6,
       "punish": 0.8,
       "gaze": 0
