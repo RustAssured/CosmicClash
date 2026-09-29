@@ -11,3 +11,5 @@ export {
 export type { LastOneRig, TendrilRoot } from './art/lastone';
 export type { AsteroidRig } from './art/asteroid';
 export { renderPortrait, type Portrait } from './portrait';
+export { blend } from './art/color';
+export { hash01 } from './art/noise';

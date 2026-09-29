@@ -39,12 +39,23 @@ const base: MaterialPhysics = {
   fluid: false,
 };
 
-const m = (o: Partial<MaterialPhysics>): MaterialPhysics => ({ ...base, ...o, resist: o.resist ?? base.resist });
+const m = (o: Partial<MaterialPhysics>): MaterialPhysics => ({
+  ...base,
+  ...o,
+  resist: o.resist ?? base.resist,
+});
 
 export const MATERIAL_ARCHETYPES: Record<string, MaterialPhysics> = {
   /* ---------------------------------- rocks & metals ---------------------------------- */
   /** Bulk crust rock: brittle-ish, chunky debris. */
-  rock: m({ density: 1, bond: 150, toughness: 0.55, brittleness: 0.65, resist: R(1, 0.9, 1, 0.7, 1, 1), vaporize: 1900 }),
+  rock: m({
+    density: 1,
+    bond: 150,
+    toughness: 0.55,
+    brittleness: 0.65,
+    resist: R(1, 0.9, 1, 0.7, 1, 1),
+    vaporize: 1900,
+  }),
   /** Loose surface dust: low bond, low toughness -> KINETIC/CRUSH erode it to dust, wide soft craters. */
   regolith: m({
     density: 0.8,
@@ -70,9 +81,9 @@ export const MATERIAL_ARCHETYPES: Record<string, MaterialPhysics> = {
   /** Iron-nickel: dense, tough, ductile. Resists FRACTURE and KINETIC, conducts heat fast, craters deep and clean. */
   ironNickel: m({
     density: 2.4,
-    bond: 225,
-    toughness: 0.9,
-    brittleness: 0.25,
+    bond: 205,
+    toughness: 0.85,
+    brittleness: 0.3,
     resist: R(0.55, 0.6, 0.9, 0.65, 0.85, 0.7),
     heatCapacity: 0.8,
     conductivity: 0.6,
@@ -396,5 +407,12 @@ export const DEFAULT_VISUALS: Record<string, MaterialVisual> = {
 };
 
 /** Generic ember glow ramp, cool -> white-hot: dark red, red, orange, amber, pale yellow, white. */
-export const DEFAULT_GLOW_RAMP: readonly string[] = ['#3a0a05', '#a01c08', '#e2560c', '#ffb52e', '#fff2b0', '#ffffff'];
+export const DEFAULT_GLOW_RAMP: readonly string[] = [
+  '#3a0a05',
+  '#a01c08',
+  '#e2560c',
+  '#ffb52e',
+  '#fff2b0',
+  '#ffffff',
+];
 export const DEFAULT_INFECT = '#c8102e';

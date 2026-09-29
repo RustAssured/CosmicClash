@@ -101,6 +101,8 @@ export function validateStageInfo(s: StageInfo): string[] {
   if (n < STAGE_PALETTE_MIN || n > STAGE_PALETTE_MAX)
     errs.push(`${s.id}: palette has ${n} colours (need ${STAGE_PALETTE_MIN}–${STAGE_PALETTE_MAX})`);
   for (const c of s.palette) if (!/^#[0-9a-fA-F]{6}$/.test(c)) errs.push(`${s.id}: bad palette colour ${c}`);
+  if (s.ramps && s.ramps.reduce((a, b) => a + b, 0) !== n)
+    errs.push(`${s.id}: ramps sum to ${s.ramps.reduce((a, b) => a + b, 0)} but palette has ${n} colours`);
   const [x, y, z] = s.lighting.dir;
   if (Math.abs(Math.hypot(x, y, z) - 1) > 1e-3) errs.push(`${s.id}: lighting.dir must be unit length`);
   if (s.arena.maxX <= s.arena.minX || s.arena.maxY <= s.arena.minY) errs.push(`${s.id}: degenerate arena`);

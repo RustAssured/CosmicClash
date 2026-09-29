@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Matter sandbox</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: #05060a;
+        color: #b9c2cc;
+        font:
+          12px/1.35 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
+        display: flex;
+        gap: 12px;
+        padding: 10px;
+      }
+      #left {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      canvas {
+        width: 1280px;
+        height: 720px;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        background: #0a0c14;
+        cursor: crosshair;
+        outline: 1px solid #222a36;
+      }
+      #panel {
+        width: 300px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      fieldset {
+        border: 1px solid #263040;
+        padding: 6px 8px;
+        margin: 0;
+      }
+      legend {
+        color: #7f93a8;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 2px 0;
+      }
+      input[type='range'] {
+        flex: 1;
+      }
+      select,
+      button,
+      input {
+        background: #10141c;
+        color: #cdd6df;
+        border: 1px solid #2a3444;
+        padding: 2px 4px;
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover {
+        background: #18202c;
+      }
+      #stats {
+        white-space: pre;
+        color: #9fd0b8;
+        min-height: 12em;
+      }
+      .row {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="left">
+      <canvas id="c" width="640" height="360"></canvas>
+      <div>
+        click = fire at cursor · drag = set direction (line/cone: start→end) · right-click drag = fire the
+        other way
+      </div>
+    </div>
+    <div id="panel">
+      <fieldset>
+        <legend>damage</legend>
+        <label
+          >type
+          <select id="type"></select
+        ></label>
+        <label
+          >shape
+          <select id="shape">
+            <option>point</option>
+            <option>line</option>
+            <option>cone</option>
+            <option>ring</option>
+            <option>field</option>
+          </select></label
+        >
+        <label
+          >energy <input id="energy" type="range" min="20" max="3000" value="500" /><span id="energyV"
+            >500</span
+          ></label
+        >
+        <label
+          >radius <input id="radius" type="range" min="3" max="60" value="10" /><span id="radiusV"
+            >10</span
+          ></label
+        >
+        <label
+          >target
+          <select id="target">
+            <option value="1">right body</option>
+            <option value="0">left body</option>
+          </select></label
+        >
+        <div class="row" id="flags"></div>
+        <label
+          >heat <input id="heat" type="number" value="0" style="width: 60px" /> shock
+          <input id="shock" type="number" value="0" style="width: 60px"
+        /></label>
+      </fieldset>
+      <fieldset>
+        <legend>sim</legend>
+        <div class="row">
+          <button id="pause">pause</button><button id="step">step</button><button id="step10">+10</button>
+          <button id="reset">reset</button><button id="c50">carve 50%</button
+          ><button id="c10">carve 10%</button> <button id="heal">heal 50%</button
+          ><button id="restore">restore</button>
+        </div>
+        <label>speed <input id="speed" type="range" min="1" max="4" value="1" /></label>
+        <label
+          >left
+          <select id="presetL"></select
+        ></label>
+        <label
+          >right
+          <select id="presetR"></select
+        ></label>
+        <label
+          >debug
+          <select id="dbg">
+            <option value="">off</option>
+          </select></label
+        >
+        <label><input id="bh" type="checkbox" /> gravity well on right body (r 300)</label>
+      </fieldset>
+      <fieldset>
+        <legend>live</legend>
+        <div id="stats"></div>
+      </fieldset>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

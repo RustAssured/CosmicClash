@@ -1,7 +1,7 @@
 import { CellFlag } from '@/contracts';
 import { TILE, TILE_SHIFT, type Body } from './body';
 import type { WorldCore } from './core';
-import { hash2, lerpPx, lumaPx, scalePx } from './util';
+import { BAYER4, hashI, lerpPx, scalePx } from './util';
 
 const F_BURN = CellFlag.BURNING;
 const F_CRACK = CellFlag.CRACKED;
@@ -97,7 +97,7 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
       }
       const md = mats[m]!;
       let col = base[i]!;
-      if ((col >>> 24) === 0) col = (col | 0xff000000) >>> 0;
+      if (col >>> 24 === 0) col = (col | 0xff000000) >>> 0;
       const fl = flags[i]!;
       const ig = integ[i]!;
       const T = temp[i]!;
@@ -105,14 +105,21 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
       const dn = dens[i]!;
       let em = md.emissive;
       // Fast path: pristine untouched cell.
-      if (ig === 255 && (fl & ~F_SURF) === 0 && T <= GLOW_START * 0.2 && inv === 0 && dn === 128 && (fl & F_SURF) === (snapFlags[i]! & F_SURF)) {
+      if (
+        ig === 255 &&
+        (fl & ~F_SURF) === 0 &&
+        T <= GLOW_START * 0.2 &&
+        inv === 0 &&
+        dn === 128 &&
+        (fl & F_SURF) === (snapFlags[i]! & F_SURF)
+      ) {
         px[i] = col;
         emi[i] = em;
         continue;
       }
       const ramp = md.ramp;
-      const dark = ramp[0]!;
-      const light = ramp[ramp.length - 1]!;
+      const dark = ramp[0]! | 0;
+      const light = ramp[ramp.length - 1]! | 0;
 
       /* ---- freshly exposed surface re-lit with the stage light ---- */
       if ((fl & F_SURF) !== 0 && (snapFlags[i]! & F_SURF) === 0) {
@@ -146,7 +153,7 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         if (nl > 0.01) {
           const lit = (nx * L.lx + ny * L.ly) / nl; // -1 (facing away) .. 1 (facing the light)
           if (lit > 0.15) {
-            const hl = lerpPx(light, L.key, 56);
+            const hl = lerpPx(light, L.key | 0, 56);
             col = lerpPx(col, hl, Math.min(230, (lit * 200) | 0));
           } else if (lit < -0.1) {
             col = lerpPx(col, dark, Math.min(220, (-lit * 190) | 0));
@@ -170,23 +177,26 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
       /* ---- char ---- */
       if ((fl & F_CHAR) !== 0) {
         const t = 90 + (((255 - ig) * 110) >> 8);
-        col = lerpPx(col, md.char, t);
+        col = lerpPx(col, md.char | 0, t);
       }
 
       /* ---- assimilation: crimson lattice ---- */
       if (inv > 0) {
-        const k = (inv * 200) >> 8;
-        col = lerpPx(col, md.infect, k);
         if ((fl & F_ASSIM) !== 0) {
-          // Lattice: bright wire lines on a dark crimson body, glowing nodes at the crossings.
+          // Converted: a wire lattice (diagonal strands, glowing nodes where they cross) over a dark, crimson-tinted body.
           const a = (x + y) & 3;
           const b = (x - y) & 3;
-          if (a === 0 || b === 0) {
-            col = lerpPx(col, lerpPx(md.infect, 0xffd9c8, 70), 120);
-            if (a === 0 && b === 0) em = em > 90 ? em : 90;
-          } else {
-            col = scalePx(col, 190);
-          }
+          const body = lerpPx(scalePx(col, 120), scalePx(md.infect | 0, 64), 176);
+          if (a === 0 && b === 0) {
+            col = lerpPx(md.infect | 0, -1, 150);
+            if (em < 120) em = 120;
+          } else if (a === 0 || b === 0) {
+            col = lerpPx(md.infect | 0, 0xffffe4d6 | 0, 40);
+            if (em < 44) em = 44;
+          } else col = body;
+        } else if (inv >= BAYER4[((y & 3) << 2) | (x & 3)]! * 16 + 12) {
+          // Creeping front: ordered dither of crimson into the untouched matter, denser as infection deepens.
+          col = lerpPx(col, md.infect | 0, 190);
         }
       }
 
@@ -198,8 +208,9 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         if (y < h - 1 && bondD[i] === 0 && mat[i + w] !== 0) strong = true;
         if (x > 0 && bondR[i - 1] === 0 && mat[i - 1] !== 0) weak = true;
         if (y > 0 && bondD[i - w] === 0 && mat[i - w] !== 0) weak = true;
-        if (strong) col = lerpPx(col, md.crack, 235);
-        else if (weak) col = lerpPx(col, md.crack, 120);
+        // A chasm: the far wall is dark, the near lip catches the light.
+        if (strong) col = lerpPx(col, md.crack | 0, 235);
+        else if (weak) col = lerpPx(col, light, 70);
       }
 
       /* ---- heat glow ---- */
@@ -210,8 +221,8 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         const gr = md.glowRamp;
         const gi = Math.min(gr.length - 1, (f * (gr.length - 0.001)) | 0);
         const s = Math.min(240, ((T - GLOW_START) * 256) / 260) | 0;
-        col = lerpPx(col, gr[gi]!, s);
-        const flick = (fl & F_BURN) !== 0 ? hash2(x, y, tick >> 1) & 31 : 0;
+        col = lerpPx(col, gr[gi]! | 0, s);
+        const flick = (fl & F_BURN) !== 0 ? hashI(x, y, tick >> 1) & 31 : 0;
         const e = 70 + f * 185 + flick;
         if (e > em) em = e > 255 ? 255 : e | 0;
       }
@@ -220,7 +231,7 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
       if ((fl & F_SHRAP) !== 0) {
         const ph = (tick + (i & 15)) & 15;
         if (ph < 3) {
-          col = lerpPx(col, 0xffffffff, ph === 1 ? 210 : 140);
+          col = lerpPx(col, -1, ph === 1 ? 210 : 140);
           if (em < 200) em = 200;
         } else col = lerpPx(col, light, 70);
       }
@@ -229,5 +240,4 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
       emi[i] = em;
     }
   }
-  void lumaPx;
 }

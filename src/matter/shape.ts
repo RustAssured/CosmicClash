@@ -44,6 +44,37 @@ export class ShapeQ {
   by1 = 0;
   /** Geometric area in cells (for coverage). */
   area = 1;
+  /** World x extent of the shape on the row last passed to `rowSpan`. */
+  sx0 = 0;
+  sx1 = 0;
+
+  /**
+   * Narrow the x scan of a row at world y `wy`: circular shapes (point/field/ring) only need their chord, other kinds their
+   * bounding box. Returns false if the row misses the shape entirely.
+   */
+  rowSpan(wy: number): boolean {
+    if (this.kind === K_POINT || this.kind === K_FIELD) {
+      const dy = wy - this.y;
+      const d2 = this.r2 - dy * dy;
+      if (d2 < 0) return false;
+      const h = Math.sqrt(d2);
+      this.sx0 = this.x - h;
+      this.sx1 = this.x + h;
+      return true;
+    }
+    if (this.kind === K_RING) {
+      const dy = wy - this.y;
+      const d2 = this.r12 - dy * dy;
+      if (d2 < 0) return false;
+      const h = Math.sqrt(d2);
+      this.sx0 = this.x - h;
+      this.sx1 = this.x + h;
+      return true;
+    }
+    this.sx0 = this.bx0;
+    this.sx1 = this.bx1;
+    return true;
+  }
 
   set(s: DamageShape): this {
     switch (s.kind) {

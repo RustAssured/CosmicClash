@@ -39,7 +39,9 @@ export function mapWorldAABB(
 ): { x0: number; y0: number; x1: number; y1: number } {
   const xa = t.x + (0 - t.anchorX) * t.facing;
   const xb = t.x + (w - t.anchorX) * t.facing;
-  const pad = Math.abs(t.lean);
+  // Rows below a high anchor shift by up to |lean|·(h−1−anchorY)/anchorY (see leanShift), which can exceed |lean|.
+  const rowSpan = Math.max(Math.abs(t.anchorY), Math.abs(t.anchorY - (h - 1)));
+  const pad = t.lean === 0 ? 0 : Math.ceil((Math.abs(t.lean) * rowSpan) / Math.max(1, t.anchorY)) + 1;
   return {
     x0: Math.min(xa, xb) - pad,
     x1: Math.max(xa, xb) + pad,

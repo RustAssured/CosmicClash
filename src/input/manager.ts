@@ -460,7 +460,8 @@ class Manager implements InputManager {
    * ---------------------------------------------------------------------------------------------- */
   poll(nowMs?: number): void {
     const now = nowMs ?? this.clock();
-    if (now === this.lastPollNow) return;
+    // Idempotent per frame: the app and the UI may both call poll() in one frame.
+    if (Math.abs(now - this.lastPollNow) < 3) return;
     this.lastPollNow = now;
     // Sub-tick taps are latched for the sim; with no sim running (menus) nothing will consume them, and a stale latch
     // would surface as a phantom button press on the first tick of the next match.
@@ -595,7 +596,12 @@ class Manager implements InputManager {
    *  rumble
    * ---------------------------------------------------------------------------------------------- */
   rumble(slot: 0 | 1, strong: number, weak: number, ms: number): void {
-    const dev = this.deviceById(this.assigned[slot]);
+    const id = this.assigned[slot];
+    if (id) this.rumbleDevice(id, strong, weak, ms);
+  }
+
+  rumbleDevice(deviceId: string, strong: number, weak: number, ms: number): void {
+    const dev = this.deviceById(deviceId);
     if (!dev || dev instanceof KeyboardDevice) return;
     const k = this.cfg.rumble;
     if (k <= 0) return;
@@ -745,6 +751,7 @@ class Manager implements InputManager {
         hasCalibration: false,
         rotation: 0,
         bindings: {},
+        custom: [],
       };
       this.liveCache.set(deviceId, lv);
     }
@@ -770,6 +777,7 @@ class Manager implements InputManager {
       lv.hasCalibration = d.calL !== null || d.calR !== null;
       lv.rotation = d.rotation;
       lv.bindings = d.overrides.bindings ?? {};
+      lv.custom = Object.keys(lv.bindings) as Action[];
     } else if (d instanceof KeyboardDevice) {
       lv.rawButtons.length = 0;
       lv.rawAxes.length = 0;
@@ -781,6 +789,7 @@ class Manager implements InputManager {
       lv.hasCalibration = false;
       lv.rotation = 0;
       lv.bindings = {};
+      lv.custom = Object.keys(d.keys.overrides) as Action[];
     }
     return lv;
   }

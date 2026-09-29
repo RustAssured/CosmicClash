@@ -11,6 +11,7 @@ export const RAMP_DUST = 0;
 export const RAMP_SHARD = 1;
 export const RAMP_EMBER = 2;
 export const RAMP_GAS = 3;
+export const RAMP_INFECT = 4;
 
 /** Why a cell is being turned into debris: decides which particles it becomes. */
 export const MODE_MECH = 0;
@@ -26,13 +27,18 @@ export function buildRamps(core: WorldCore, body: Body): void {
     const L = r[r.length - 1]!;
     const M = r[r.length >> 1]!;
     const D = r[0]!;
-    body.rampIds[m * 4 + RAMP_DUST] = P.internRamp([lerpPx(L, M, 110), M, lerpPx(M, D, 150)]);
-    body.rampIds[m * 4 + RAMP_SHARD] = P.internRamp([lerpPx(L, 0xffffffff, 170), L, M, D]);
+    body.rampIds[m * 5 + RAMP_DUST] = P.internRamp([lerpPx(L, M, 110), M, lerpPx(M, D, 150)]);
+    body.rampIds[m * 5 + RAMP_SHARD] = P.internRamp([lerpPx(L, 0xffffffff, 170), L, M, D]);
     const g = md.glowRamp;
     const ember: number[] = [];
     for (let k = g.length - 1; k >= 0 && ember.length < 7; k--) ember.push(g[k]!);
-    body.rampIds[m * 4 + RAMP_EMBER] = P.internRamp(ember);
-    body.rampIds[m * 4 + RAMP_GAS] = P.internRamp([lerpPx(M, L, 90), M, lerpPx(M, D, 100)]);
+    body.rampIds[m * 5 + RAMP_EMBER] = P.internRamp(ember);
+    body.rampIds[m * 5 + RAMP_GAS] = P.internRamp([lerpPx(M, L, 90), M, lerpPx(M, D, 100)]);
+    body.rampIds[m * 5 + RAMP_INFECT] = P.internRamp([
+      lerpPx(md.infect, 0xffffffff, 150),
+      md.infect,
+      lerpPx(md.infect, D, 140),
+    ]);
   }
 }
 
@@ -43,7 +49,7 @@ export function buildRamps(core: WorldCore, body: Body): void {
 
 // [lifeMin, lifeSpan, sizeMin, sizeSpan, emissive, drag, jitter px/s]
 const PART: Record<number, readonly number[]> = {
-  [PK.dust]: [36, 60, 1, 2, 0, 1.3, 26],
+  [PK.dust]: [36, 60, 1, 1, 0, 1.3, 26],
   [PK.shard]: [26, 44, 1, 1, 40, 0.7, 34],
   [PK.ember]: [40, 90, 1, 2, 210, 0.6, 30],
   [PK.gas]: [60, 90, 2, 2, 0, 1.7, 16],
@@ -87,7 +93,16 @@ export function spawnMassParticle(
 /** Flush the pending spray mass as one particle at the last recorded position. */
 export function endSpray(core: WorldCore): void {
   if (core.sprayMass > 0) {
-    spawnMassParticle(core, core.sprayKind, core.sprayRamp, core.sprayX, core.sprayY, core.sprayVx, core.sprayVy, core.sprayMass);
+    spawnMassParticle(
+      core,
+      core.sprayKind,
+      core.sprayRamp,
+      core.sprayX,
+      core.sprayY,
+      core.sprayVx,
+      core.sprayVy,
+      core.sprayMass,
+    );
     core.sprayMass = 0;
   }
 }
@@ -174,7 +189,7 @@ export function sprayCell(
   core.sprayVx = vx;
   core.sprayVy = vy;
   core.sprayKind = kind;
-  core.sprayRamp = body.rampIds[m * 4 + rk]!;
+  core.sprayRamp = body.rampIds[m * 5 + rk]!;
   if (rng.next() < prob) {
     spawnMassParticle(core, kind, core.sprayRamp, x, y, vx, vy, core.sprayMass);
     core.sprayMass = 0;
@@ -248,7 +263,7 @@ export function extractChunk(
     const wy = Y + (j - t.anchorY);
     const o = (wy - minWY) * sw + (wx - minWX);
     let col = map.pixels[c]!;
-    if ((col >>> 24) === 0) col = (map.baseColor[c]! | 0xff000000) >>> 0;
+    if (col >>> 24 === 0) col = (map.baseColor[c]! | 0xff000000) >>> 0;
     pix[o] = col;
     const e = map.emissive[c]!;
     if (e > 0) {
@@ -273,7 +288,6 @@ export function extractChunk(
   // Remove the cells (mass now belongs to the chunk).
   for (let k = 0; k < n; k++) killCell(body, cells[k]!);
   body.touch(lx0, ly0, lx1, ly1);
-  body.connDirty = Math.max(body.connDirty, 2);
   const heat = heatN > 0 ? Math.min(255, (heatSum / heatN) * 0.28) : 0;
   const ch = core.chunks.add(
     core,
@@ -313,7 +327,15 @@ export interface Launch {
  * removed so slabs slide off rather than into their old body; radial blows scatter from the contact). Otherwise the piece
  * just drifts away from the body core (elastic release).
  */
-export function detachVelocity(core: WorldCore, body: Body, cx: number, cy: number, mass: number, rad: number, out: Launch): void {
+export function detachVelocity(
+  core: WorldCore,
+  body: Body,
+  cx: number,
+  cy: number,
+  mass: number,
+  rad: number,
+  out: Launch,
+): void {
   const t = body.transform;
   const rng = core.rng;
   let nx = cx - t.x;
@@ -353,7 +375,8 @@ export function detachVelocity(core: WorldCore, body: Body, cx: number, cy: numb
       dx = ux;
       dy = uy;
       const sm = Math.pow(Math.max(0.3, blow.sourceMass) / 5, 0.25);
-      speed = 190 * Math.sqrt(blow.energy / (mass + 25)) * sm * (0.55 + 0.45 * fresh) * (0.85 + rng.next() * 0.3);
+      speed =
+        190 * Math.sqrt(blow.energy / (mass + 25)) * sm * (0.55 + 0.45 * fresh) * (0.85 + rng.next() * 0.3);
       speed = Math.max(24, Math.min(430, speed));
       contactX = blow.x;
       contactY = blow.y;
@@ -366,6 +389,6 @@ export function detachVelocity(core: WorldCore, body: Body, cx: number, cy: numb
   const ly = cy - contactY;
   const cross = lx * dy - ly * dx;
   const arm = Math.sqrt(lx * lx + ly * ly) + 1;
-  const s = ((cross / arm) * speed) / (rad + 5) * 0.55 + rng.gauss() * 0.7;
+  const s = (((cross / arm) * speed) / (rad + 5)) * 0.55 + rng.gauss() * 0.7;
   out.spin = Math.max(-9, Math.min(9, s));
 }

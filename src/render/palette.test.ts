@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { STAGE_IDS } from '@/contracts';
 import { STAGES } from '@/stages';
+import { STAGE_RAMPS } from '@/stages/info';
 import { bayerRanks, bayerTexels, bayerThreshold, ditherQuantise } from './dither';
 import {
+  CROSS_RAMP_MAX,
   PALETTE_TEX_W,
   buildDitherLut,
   ditherToIndex,
@@ -96,7 +98,7 @@ describe('bayer matrices', () => {
 });
 
 describe('palette + dither LUT', () => {
-  const pal = preparePalette(STAGES.nursery.palette);
+  const pal = preparePalette(STAGES.nursery.palette, STAGE_RAMPS.nursery);
   const lut = buildDitherLut(pal);
   const bayer = bayerRanks(8);
 
@@ -115,24 +117,33 @@ describe('palette + dither LUT', () => {
     const t0 = performance.now();
     const again = buildDitherLut(pal);
     const ms = performance.now() - t0;
-    expect(again.data).toEqual(lut.data);
-    expect(ms).toBeLessThan(1500);
+    expect(Buffer.from(again.data).equals(Buffer.from(lut.data))).toBe(true);
+    expect(ms).toBeLessThan(4000); // ~70 ms unloaded; generous so a busy CI box does not flake
   });
 
   it('every LUT entry references valid palette indices with a ratio byte', () => {
-    for (let i = 0; i < lut.data.length; i += 4) {
-      expect(lut.data[i]!).toBeLessThan(pal.count);
-      expect(lut.data[i + 1]!).toBeLessThan(pal.count);
-    }
+    let invalid = 0;
+    for (let i = 0; i < lut.data.length; i += 4)
+      if (lut.data[i]! >= pal.count || lut.data[i + 1]! >= pal.count) invalid++;
+    expect(invalid).toBe(0);
   });
 
-  it('an exact palette colour maps to itself under every threshold (no stray pixels)', () => {
+  it('an exact palette colour is reproduced (its tile averages to within a hair of itself)', () => {
+    const lut48 = buildDitherLut(pal, { size: 48 });
+    let worst = 0;
     for (let i = 0; i < pal.count; i++) {
-      const m = tile(pal.linear[i * 3]!, pal.linear[i * 3 + 1]!, pal.linear[i * 3 + 2]!);
-      // the LUT is coarse, so allow the nearest node's neighbour, but the palette colour itself must dominate
-      const own = m.get(i) ?? 0;
-      expect(own).toBeGreaterThanOrEqual(48);
+      const tl = pal.linear.subarray(i * 3, i * 3 + 3);
+      const m = new Map<number, number>();
+      for (let y = 0; y < 8; y++)
+        for (let x = 0; x < 8; x++) {
+          const k = ditherToIndex(pal, lut48, tl[0]!, tl[1]!, tl[2]!, bayerThreshold(bayer, 8, x, y));
+          m.set(k, (m.get(k) ?? 0) + 1);
+        }
+      const avg = [0, 0, 0];
+      for (const [idx, c] of m) for (let k = 0; k < 3; k++) avg[k] += (pal.linear[idx * 3 + k]! * c) / 64;
+      worst = Math.max(worst, dist(lab(avg[0]!, avg[1]!, avg[2]!), lab(tl[0]!, tl[1]!, tl[2]!)));
     }
+    expect(worst).toBeLessThan(0.03);
   });
 
   it('midway between two adjacent palette colours the tile is a mix of exactly those two', () => {
@@ -170,7 +181,13 @@ describe('palette + dither LUT', () => {
         ditherErr += dist(lab(avg[0]!, avg[1]!, avg[2]!), lab(target[0]!, target[1]!, target[2]!));
         let best = Infinity;
         for (let i = 0; i < pal.count; i++)
-          best = Math.min(best, dist([pal.lab[i * 3]!, pal.lab[i * 3 + 1]!, pal.lab[i * 3 + 2]!], lab(target[0]!, target[1]!, target[2]!)));
+          best = Math.min(
+            best,
+            dist(
+              [pal.lab[i * 3]!, pal.lab[i * 3 + 1]!, pal.lab[i * 3 + 2]!],
+              lab(target[0]!, target[1]!, target[2]!),
+            ),
+          );
         nearestErr += best;
         n++;
       }
@@ -178,25 +195,35 @@ describe('palette + dither LUT', () => {
     expect(ditherErr / n).toBeLessThan(nearestErr / n);
   });
 
-  it('the spread penalty keeps mixed pairs close (clean ramps, not confetti)', () => {
-    const clean = buildDitherLut(pal, { spread: 0.35 });
-    const noisy = buildDitherLut(pal, { spread: 0 });
-    const meanSpan = (l: typeof lut): number => {
-      let s = 0;
-      let c = 0;
-      for (let i = 0; i < l.data.length; i += 4) {
-        const a = l.data[i]!;
-        const b = l.data[i + 1]!;
-        if (a === b) continue;
-        s += dist(
-          [pal.lab[a * 3]!, pal.lab[a * 3 + 1]!, pal.lab[a * 3 + 2]!],
-          [pal.lab[b * 3]!, pal.lab[b * 3 + 1]!, pal.lab[b * 3 + 2]!],
+  it('only mixes neighbouring steps of one ramp (or near-identical colours): clean ramps, never confetti', () => {
+    const ramps = STAGE_RAMPS.nursery;
+    expect(pal.rampOf[pal.count - 1]).toBe(ramps.length - 1);
+    let mixed = 0;
+    let cross = 0;
+    for (let i = 0; i < lut.data.length; i += 4) {
+      const a = lut.data[i]!;
+      const b = lut.data[i + 1]!;
+      if (a === b) continue;
+      mixed++;
+      if (pal.rampOf[a] === pal.rampOf[b]) {
+        expect(Math.abs(a - b)).toBe(1);
+      } else {
+        cross++;
+        const d = Math.hypot(
+          pal.lab[a * 3]! - pal.lab[b * 3]!,
+          pal.lab[a * 3 + 1]! - pal.lab[b * 3 + 1]!,
+          pal.lab[a * 3 + 2]! - pal.lab[b * 3 + 2]!,
         );
-        c++;
+        expect(d).toBeLessThanOrEqual(CROSS_RAMP_MAX + 1e-6);
       }
-      return s / Math.max(1, c);
-    };
-    expect(meanSpan(clean)).toBeLessThan(meanSpan(noisy));
+    }
+    expect(mixed).toBeGreaterThan(1000);
+    expect(cross).toBeLessThan(mixed);
+  });
+
+  it('infers ramps from lightness drops when boundaries are not given', () => {
+    const inferred = preparePalette(STAGES.nursery.palette);
+    expect(Array.from(inferred.rampOf)).toEqual(Array.from(pal.rampOf));
   });
 
   it('lutNode agrees with the shader convention at the corners', () => {
@@ -225,6 +252,8 @@ describe('palette + dither LUT', () => {
 
   it('rejects palettes that are too small or too large', () => {
     expect(() => preparePalette(['#000000'])).toThrow();
-    expect(() => preparePalette(Array.from({ length: 65 }, (_, i) => `#${(i * 3).toString(16).padStart(2, '0')}0000`))).toThrow();
+    expect(() =>
+      preparePalette(Array.from({ length: 65 }, (_, i) => `#${(i * 3).toString(16).padStart(2, '0')}0000`)),
+    ).toThrow();
   });
 });

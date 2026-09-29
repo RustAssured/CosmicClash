@@ -82,7 +82,8 @@ const nurseryLighting: StageLighting = {
 const nurseryRamps: readonly RampSpec[] = [
   ramp(0.7, 0.55, 7, 0.02, 0.25, 0.74, 0.79), // void: indigo → violet-black sky
   ramp(0.93, 0.36, 6, 0.045, 0.32, 0.85, 0.98), // plum dust
-  ramp(0.9, 0.78, 9, 0.11, 0.78, 0.8, 0.965), // magenta emission
+  ramp(0.91, 0.68, 9, 0.11, 0.78, 0.8, 0.97), // magenta emission
+  ramp(0.005, 0.62, 5, 0.34, 0.76, -0.03, 0.05), // coral: the bridge from magenta to amber
   ramp(0.085, 0.92, 9, 0.15, 0.86, -0.01, 0.135), // amber / orange
   ramp(0.135, 0.72, 4, 0.76, 0.97, 0.12, 0.17), // hot pale gold
   ramp(0.585, 0.85, 6, 0.3, 0.96, 0.65, 0.5), // newborn blue-white stars

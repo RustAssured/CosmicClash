@@ -1,9 +1,11 @@
-import { CellFlag } from '@/contracts';
 import type { WorldPoint } from './body';
+import { CONN_NOW } from './body';
 import { breakBondD, breakBondR, killCell } from './cells';
-import { MODE_MECH, endSpray, extractChunk, sprayCell } from './debris';
-import { hardness, localToWorldF, outwardNormal, resistOf, type DamageCtx } from './dmg';
-import { noise2 } from './util';
+import { MODE_MECH, RAMP_SHARD, endSpray, extractChunk, sprayCell } from './debris';
+import { PK } from './particles';
+import { hardness, localToWorldF, resistOf, type DamageCtx } from './dmg';
+import { findImpact, type Impact } from './impact';
+import { valueNoise } from './util';
 
 export interface CraterOpts {
   /** Effective energy to spend (after resist averaging). */
@@ -43,14 +45,13 @@ export interface CraterOut {
 
 const BINS = 48;
 const bins = new Float64Array(BINS + 1);
-const nrm: WorldPoint = { x: 0, y: 0 };
+const imp: Impact = { fx: 0, fy: 0, nx: 0, ny: -1, hasNormal: false };
 const pt: WorldPoint = { x: 0, y: 0 };
 const pt2: WorldPoint = { x: 0, y: 0 };
 const probe = { kind: 'point' as const, x: 0, y: 0, r: 1 };
-const F_CRACK = CellFlag.CRACKED;
 
 /** Hash-based bucket heads for grouping crater cells into 3×3 fragments. */
-const BLOCK = 3;
+const BLOCK = 5;
 let blockHead = new Int32Array(1);
 let blockNext = new Int32Array(1);
 const usedBlocks: number[] = [];
@@ -74,46 +75,13 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   out.chunks = 0;
   out.removedMass = 0;
 
-  /* ---- 1. first contact: nearest covered cell to the shape origin, averaged over the contact patch ---- */
+  /* ---- 1. first contact ---- */
+  if (!findImpact(ctx, imp)) return false;
+  const fx = imp.fx;
+  const fy = imp.fy;
+  const nx = imp.nx;
+  const ny = imp.ny;
   const q = core.q;
-  const n0 = ctx.n;
-  const idx0 = core.covIdx;
-  const ox = q.originX();
-  const oy = q.originY();
-  let dmin = Infinity;
-  for (let k = 0; k < n0; k++) {
-    const i = idx0[k]!;
-    const x = i % w;
-    body.cellWorld(x, (i - x) / w, pt);
-    const d = (pt.x - ox) * (pt.x - ox) + (pt.y - oy) * (pt.y - oy);
-    if (d < dmin) dmin = d;
-  }
-  if (dmin === Infinity) return false;
-  const lim = (Math.sqrt(dmin) + 3.5) * (Math.sqrt(dmin) + 3.5);
-  let sx = 0;
-  let sy = 0;
-  let sw = 0;
-  for (let k = 0; k < n0; k++) {
-    const i = idx0[k]!;
-    const x = i % w;
-    const y = (i - x) / w;
-    body.cellWorld(x, y, pt);
-    const d = (pt.x - ox) * (pt.x - ox) + (pt.y - oy) * (pt.y - oy);
-    if (d > lim) continue;
-    sx += x + 0.5;
-    sy += y + 0.5;
-    sw += 1;
-  }
-  const fx = sx / sw;
-  const fy = sy / sw;
-  outwardNormal(body, Math.floor(fx), Math.floor(fy), 4, nrm);
-  let nx = nrm.x;
-  let ny = nrm.y;
-  // If the blow arrives head-on to a flat surface the local normal is reliable; if not (blob interior), fall back to -dir.
-  if (nx === 0 && ny === -1 && ctx.ldx * ctx.ldx + ctx.ldy * ctx.ldy > 0) {
-    nx = -ctx.ldx;
-    ny = -ctx.ldy;
-  }
 
   /* ---- 2. material at the impact -> aspect ---- */
   let tough = 0;
@@ -169,7 +137,8 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     const d = Math.sqrt((lat / Rl) * (lat / Rl) + (dd / Rd) * (dd / Rd));
     dEff[k] = d;
     if (d <= 1) {
-      const cost = (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.15, resistOf(body, i, o.type));
+      const cost =
+        (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.15, resistOf(body, i, o.type));
       bins[Math.min(BINS - 1, Math.floor(d * BINS))]! += cost;
     }
   }
@@ -197,7 +166,6 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   const keep = 1 - o.compact; // fraction of removed mass that is routed to debris
   let spent = 0;
   let removedMass = 0;
-  let chunkCells = 0;
   // Bucket lists for fragment blocks.
   const bw = Math.ceil(w / BLOCK) + 1;
   const need = bw * (Math.ceil(body.h / BLOCK) + 1);
@@ -211,7 +179,7 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     const i = idx[k]!;
     const x = i % w;
     const y = (i - x) / w;
-    if (d > thr * (0.9 + 0.2 * noise2(x, y, seed))) continue;
+    if (d > thr * (0.93 + 0.14 * valueNoise(x / 2.6, y / 2.6, seed))) continue;
     const m = mat[i]!;
     const md = mats[m]!;
     const cost = (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.15, resistOf(body, i, o.type));
@@ -284,7 +252,12 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     let vy = rvy * 0.7 + nOutWy * 0.7 + dirTy * 0.3;
     const vl = Math.sqrt(vx * vx + vy * vy) + 1e-6;
     // Heavier fragments move slower.
-    const sp = (40 + 150 * Math.pow(1 - Math.min(1, rl / (Rl * thr + 1)), 1.2)) * (0.55 + rng.next() * 0.9) * powerBoost * scatter / Math.sqrt(1 + cnt2 * 0.25);
+    const sp =
+      ((40 + 150 * Math.pow(1 - Math.min(1, rl / (Rl * thr + 1)), 1.2)) *
+        (0.55 + rng.next() * 0.9) *
+        powerBoost *
+        scatter) /
+      Math.sqrt(1 + cnt2 * 0.25);
     vx = (vx / vl) * sp;
     vy = (vy / vl) * sp;
     // Account the removal for the result before extractChunk kills the cells.
@@ -296,10 +269,9 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
       ctx.massRemoved += mm * keep;
     }
     ctx.removed += cnt2;
-    if (cnt2 >= 3) {
+    if (cnt2 >= 6) {
       const ch = extractChunk(core, body, list.data, cnt2, vx, vy, (rng.next() - 0.5) * 14, keep);
       if (ch) {
-        chunkCells += cnt2;
         out.chunks++;
       }
     } else {
@@ -316,7 +288,11 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   spent += 0;
 
   /* ---- 6. lip: the leftover energy loosens the rim (bruises, cracks, shock-loosened bonds) ---- */
-  const lipE = Math.max(0, budget - Math.min(budget * (1 - o.lipFrac), spent));
+  // Leftover energy loosens the rim, but never more than ~1.3x its share: overkill on cheap matter (gas) just dissipates.
+  const lipE = Math.min(
+    budget * o.lipFrac * 1.3,
+    Math.max(0, budget - Math.min(budget * (1 - o.lipFrac), spent)),
+  );
   let lipW = 0;
   const lipHi = thr * 1.75;
   for (let k = 0; k < n; k++) {
@@ -337,7 +313,8 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
       const share = ((1 - t) * (1 - t)) / lipW;
       const e = lipE * share * Math.max(0.2, resistOf(body, i, o.type));
       const loss = (e * 255) / hardness(body, i);
-      const it = map.integrity[i]! - loss;
+      // The lip is bruised, not pulverised: only its innermost edge can die outright.
+      const it = t > 0.12 ? Math.max(28, map.integrity[i]! - loss) : map.integrity[i]! - loss;
       ctx.note(i, 0.35);
       if (it <= 0) {
         const x = i % w;
@@ -349,31 +326,55 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
         removedMass += mass;
         sprayCell(core, body, m, pt.x, pt.y, nOutWx * 30, nOutWy * 30, mass * keep, MODE_MECH);
       } else {
-        map.integrity[i] = it;
+        map.integrity[i] = it < 1 ? 1 : it; // Uint8 truncates: never let a live cell round down to 0
         // Shock-loosened: break a random bond so the rim can spall.
-        if (rng.next() < 0.28 * (1 - t)) {
+        if (t < 0.45 && rng.next() < 0.16 * (1 - t)) {
           const r = rng.next();
           const x = i % w;
           if (r < 0.25 && x < w - 1) breakBondR(body, i);
           else if (r < 0.5 && x > 0) breakBondR(body, i - 1);
           else if (r < 0.75 && i + w < body.n) breakBondD(body, i);
           else if (i >= w) breakBondD(body, i - w);
-        } else if (rng.next() < 0.2) {
-          map.flags[i] = map.flags[i]! | F_CRACK;
         }
       }
     }
   }
   endSpray(core);
 
+  // Flash of sparks at the point of impact: the moment reads as a hit, not just a hole.
+  {
+    const sparks = Math.min(16, 5 + Math.floor(Math.sqrt(budget) * 0.35));
+    const rid = body.rampIds[(mat[Math.floor(fy) * w + Math.floor(fx)] || 1) * 5 + RAMP_SHARD]!;
+    for (let k = 0; k < sparks; k++) {
+      const a = Math.atan2(nOutWy, nOutWx) + (rng.next() - 0.5) * 2.6;
+      const sp = 70 + rng.next() * 190 * powerBoost;
+      core.particles.spawn(
+        core,
+        PK.spark,
+        pt2.x,
+        pt2.y,
+        Math.cos(a) * sp,
+        Math.sin(a) * sp,
+        8 + rng.int(14),
+        1,
+        255,
+        rid,
+        0.3,
+        1.2,
+        0,
+      );
+    }
+  }
+
   /* ---- 7. compaction: some of the removed mass is packed into the rim (CRUSH) ---- */
   if (o.compact > 0 && removedMass > 0) {
     absorbMass(ctx, removedMass * o.compact, thr, thr * 1.8, dEff, n);
   }
 
-  const r = Math.max(4, Math.ceil(Rl * 1.85));
+  // Everything the crater touched lies within ~1.8x its true (thresholded) radius.
+  const r = Math.max(6, Math.ceil(Math.max(Rl, Rd) * thr * 1.8) + 3);
   body.touch(Math.floor(fx - r), Math.floor(fy - r), Math.ceil(fx + r), Math.ceil(fy + r));
-  body.connDirty = 2;
+  body.connDirty = CONN_NOW;
   out.ok = true;
   out.fx = fx;
   out.fy = fy;
@@ -384,12 +385,18 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   out.removed = ctx.removed;
   out.removedMass = removedMass;
   out.thr = thr;
-  void chunkCells;
   return true;
 }
 
 /** Pack `mass` into the density of live cells whose elliptical distance is in (d0, d1]. Raises density, never above 255. */
-export function absorbMass(ctx: DamageCtx, mass: number, d0: number, d1: number, dEff: Float32Array, n: number): number {
+export function absorbMass(
+  ctx: DamageCtx,
+  mass: number,
+  d0: number,
+  d1: number,
+  dEff: Float32Array,
+  n: number,
+): number {
   const { core, body } = ctx;
   const map = body.map;
   const idx = core.covIdx;
@@ -401,7 +408,10 @@ export function absorbMass(ctx: DamageCtx, mass: number, d0: number, d1: number,
     if (map.material[i] === 0) continue;
     cap += ((255 - map.density[i]!) / 128) * body.matDensity[map.material[i]!]!;
   }
-  if (cap <= 0) return 0;
+  if (cap <= 0) {
+    core.ledger.dissipated += mass; // nowhere to pack it: the compacted share crumbles away
+    return 0;
+  }
   const take = Math.min(mass, cap * 0.9);
   const frac = take / cap;
   let absorbed = 0;

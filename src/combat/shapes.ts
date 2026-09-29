@@ -130,7 +130,14 @@ export function shapeBounds(s: DamageShape, out: Bounds): Bounds {
 }
 
 /** Distance from (px,py) to the segment (ax,ay)-(bx,by). */
-export function distToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+export function distToSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
   const vx = bx - ax;
   const vy = by - ay;
   const l2 = vx * vx + vy * vy;
@@ -292,4 +299,14 @@ export function instantiateTemplate(
       break;
     }
   }
+}
+
+/** Translate a FatShape in place. */
+export function translateShape(s: FatShape, dx: number, dy: number): void {
+  s.x += dx;
+  s.y += dy;
+  s.x0 += dx;
+  s.x1 += dx;
+  s.y0 += dy;
+  s.y1 += dy;
 }

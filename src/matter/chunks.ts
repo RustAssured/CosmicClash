@@ -182,7 +182,7 @@ function computeChunkGeometry(c: Chunk): void {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      if ((pixels[i]! >>> 24) === 0) continue;
+      if (pixels[i]! >>> 24 === 0) continue;
       cells++;
       const dx = x + 0.5 - c.cx;
       const dy = y + 0.5 - c.cy;
@@ -190,10 +190,10 @@ function computeChunkGeometry(c: Chunk): void {
       if (d2 > r2) r2 = d2;
       let nx = 0;
       let ny = 0;
-      if (x === 0 || (pixels[i - 1]! >>> 24) === 0) nx -= 1;
-      if (x === w - 1 || (pixels[i + 1]! >>> 24) === 0) nx += 1;
-      if (y === 0 || (pixels[i - w]! >>> 24) === 0) ny -= 1;
-      if (y === h - 1 || (pixels[i + w]! >>> 24) === 0) ny += 1;
+      if (x === 0 || pixels[i - 1]! >>> 24 === 0) nx -= 1;
+      if (x === w - 1 || pixels[i + 1]! >>> 24 === 0) nx += 1;
+      if (y === 0 || pixels[i - w]! >>> 24 === 0) ny -= 1;
+      if (y === h - 1 || pixels[i + w]! >>> 24 === 0) ny += 1;
       if (nx !== 0 || ny !== 0) {
         let a = Math.atan2(ny, nx);
         if (a < 0) a += Math.PI * 2;
@@ -216,14 +216,27 @@ export function degradeToDust(core: WorldCore, c: Chunk): void {
   const step = Math.max(1, Math.floor(c.pixels.length / (n + 1)));
   for (let i = 0; i < c.pixels.length && k < n; i += step) {
     let j = i;
-    while (j < c.pixels.length && (c.pixels[j]! >>> 24) === 0) j++;
+    while (j < c.pixels.length && c.pixels[j]! >>> 24 === 0) j++;
     if (j >= c.pixels.length) break;
     const col = c.pixels[j]!;
     const rid = p.internRamp([col, scalePx(col, 190), scalePx(col, 120)]);
     const ang = core.rng.next() * Math.PI * 2;
     const sp = 10 + core.rng.next() * 30;
-    p.spawn(core, PK.dust, c.x + (core.rng.next() - 0.5) * c.radius, c.y + (core.rng.next() - 0.5) * c.radius,
-      c.vx * 0.5 + Math.cos(ang) * sp, c.vy * 0.5 + Math.sin(ang) * sp, 50 + core.rng.int(40), 2, 0, rid, 1, 0.8, per);
+    p.spawn(
+      core,
+      PK.dust,
+      c.x + (core.rng.next() - 0.5) * c.radius,
+      c.y + (core.rng.next() - 0.5) * c.radius,
+      c.vx * 0.5 + Math.cos(ang) * sp,
+      c.vy * 0.5 + Math.sin(ang) * sp,
+      50 + core.rng.int(40),
+      2,
+      0,
+      rid,
+      1,
+      0.8,
+      per,
+    );
     k++;
   }
   if (k === 0) core.ledger.dissipated += c.mass;
@@ -238,7 +251,15 @@ export function degradeToDust(core: WorldCore, c: Chunk): void {
  * Split a chunk into `k` shards by a jittered Voronoi partition of its opaque pixels (impact fracture). Momentum
  * conserving: shards inherit the parent velocity plus a radial burst from (ix, iy). Mass is split by pixel share.
  */
-export function splitChunk(core: WorldCore, pool: ChunkPool, c: Chunk, k: number, ix: number, iy: number, burst: number): boolean {
+export function splitChunk(
+  core: WorldCore,
+  pool: ChunkPool,
+  c: Chunk,
+  k: number,
+  ix: number,
+  iy: number,
+  burst: number,
+): boolean {
   if (c.cells < k * 4) return false;
   const rng = core.rng;
   const w = c.w;
@@ -249,7 +270,7 @@ export function splitChunk(core: WorldCore, pool: ChunkPool, c: Chunk, k: number
   while (seedX.length < k && guard++ < 64) {
     const sx = rng.int(w);
     const sy = rng.int(h);
-    if ((c.pixels[sy * w + sx]! >>> 24) === 0) continue;
+    if (c.pixels[sy * w + sx]! >>> 24 === 0) continue;
     seedX.push(sx);
     seedY.push(sy);
   }
@@ -263,7 +284,7 @@ export function splitChunk(core: WorldCore, pool: ChunkPool, c: Chunk, k: number
   const maxY = new Int32Array(kk).fill(-1);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
-      if ((c.pixels[y * w + x]! >>> 24) === 0) continue;
+      if (c.pixels[y * w + x]! >>> 24 === 0) continue;
       let best = 0;
       let bd = Infinity;
       for (let s = 0; s < kk; s++) {
@@ -286,7 +307,17 @@ export function splitChunk(core: WorldCore, pool: ChunkPool, c: Chunk, k: number
   const parentAngle = c.angle;
   const cos = Math.cos(c.angle);
   const sin = Math.sin(c.angle);
-  const parent = { x: c.x, y: c.y, vx: c.vx, vy: c.vy, spin: c.spin, mass: c.mass, origin: c.origin, brittle: c.brittle, heat: c.heat };
+  const parent = {
+    x: c.x,
+    y: c.y,
+    vx: c.vx,
+    vy: c.vy,
+    spin: c.spin,
+    mass: c.mass,
+    origin: c.origin,
+    brittle: c.brittle,
+    heat: c.heat,
+  };
   const cxp = c.cx;
   const cyp = c.cy;
   const srcPix = c.pixels;
@@ -294,6 +325,7 @@ export function splitChunk(core: WorldCore, pool: ChunkPool, c: Chunk, k: number
   // Free the parent first so the pool has room and ledger masses stay consistent.
   pool.free(c);
   let massLeft = parent.mass;
+  let lastChunk: Chunk | null = null;
   for (let s = 0; s < kk; s++) {
     const n = counts[s]!;
     if (n === 0) continue;
@@ -314,7 +346,7 @@ export function splitChunk(core: WorldCore, pool: ChunkPool, c: Chunk, k: number
       }
     sx /= n;
     sy /= n;
-    const m = s === kk - 1 ? massLeft : (parent.mass * n) / total;
+    const m = (parent.mass * n) / total;
     massLeft -= m;
     // World position of this shard's CoM: rotate its offset from the parent pivot by the parent angle.
     const ox = sx - cxp;
@@ -327,11 +359,33 @@ export function splitChunk(core: WorldCore, pool: ChunkPool, c: Chunk, k: number
     dx /= dl;
     dy /= dl;
     const sp = burst * (0.6 + 0.8 * rng.next());
-    const ch = pool.add(core, pix, emi, bw, bh, sx - minX[s]!, sy - minY[s]!, wx, wy, parent.vx + dx * sp, parent.vy + dy * sp,
-      parent.spin + (rng.next() - 0.5) * 6, m, parent.origin, parent.brittle, parent.heat);
+    const ch = pool.add(
+      core,
+      pix,
+      emi,
+      bw,
+      bh,
+      sx - minX[s]!,
+      sy - minY[s]!,
+      wx,
+      wy,
+      parent.vx + dx * sp,
+      parent.vy + dy * sp,
+      parent.spin + (rng.next() - 0.5) * 6,
+      m,
+      parent.origin,
+      parent.brittle,
+      parent.heat,
+    );
     ch.angle = parentAngle;
     ch.grace = 12;
+    lastChunk = ch;
   }
+  // Rounding remainder (and the share of any empty group) stays with the last shard so mass is conserved exactly.
+  if (lastChunk !== null && massLeft !== 0) {
+    lastChunk.mass += massLeft;
+    pool.massLive += massLeft;
+  } else if (massLeft !== 0) core.ledger.dissipated += massLeft;
   return true;
 }
 
@@ -357,8 +411,14 @@ export function stepChunks(core: WorldCore): void {
     if (!c.alive) continue;
     c.age++;
     if (c.heat > 0) c.heat = c.heat * 0.985 - 0.05 > 0 ? c.heat * 0.985 - 0.05 : 0;
+    // Gravel wears away: small old chunks degrade to dust so big remains stay the record of the fight.
+    if (c.mass < 5 && c.age > 1500) {
+      degradeToDust(core, c);
+      pool.freeAt(s);
+      continue;
+    }
     if (c.asleep && !anyField) {
-      if (core.tick % 8 === 0) collideBodies(core, c, s);
+      if (core.tick % 8 === 0) collideBodies(core, c);
       continue;
     }
     let vx = c.vx;
@@ -403,12 +463,10 @@ export function stepChunks(core: WorldCore): void {
     vy *= kd;
     c.spin *= sd;
     // Soft arena walls: a spring that eases chunks back in (never a hard clamp, so debris can still drift a bit outside).
-    const r = c.radius;
     if (c.x < a.minX + wall) vx += (a.minX + wall - c.x) * 2.2 * dt;
     else if (c.x > a.maxX - wall) vx -= (c.x - (a.maxX - wall)) * 2.2 * dt;
     if (c.y < a.minY + wall) vy += (a.minY + wall - c.y) * 2.2 * dt;
     else if (c.y > a.maxY - wall) vy -= (c.y - (a.maxY - wall)) * 2.2 * dt;
-    void r;
     c.vx = vx;
     c.vy = vy;
     c.x += vx * dt;
@@ -420,7 +478,7 @@ export function stepChunks(core: WorldCore): void {
       c.spin = 0;
       c.asleep = true;
     }
-    if (c.age >= c.noHitUntil) collideBodies(core, c, s);
+    if (c.age >= c.noHitUntil) collideBodies(core, c);
   }
 }
 
@@ -432,7 +490,7 @@ function consumeChunk(core: WorldCore, pool: ChunkPool, c: Chunk, slot: number, 
 }
 
 /** Chunk vs bodies: fast heavy chunks deal a capped KINETIC impact and bounce; slow ones are nudged out. */
-function collideBodies(core: WorldCore, c: Chunk, slot: number): void {
+function collideBodies(core: WorldCore, c: Chunk): void {
   const bl = core.bodyList;
   for (let bi = 0; bi < bl.length; bi++) {
     const b = bl[bi]!;
@@ -501,7 +559,6 @@ function collideBodies(core: WorldCore, c: Chunk, slot: number): void {
       c.vy += ny * 22 * TICK_DT;
       c.asleep = false;
     }
-    void slot;
     return;
   }
 }
@@ -533,7 +590,7 @@ export function rasterChunks(
   for (let k = 0; k < 8; k++) {
     const a = (k * Math.PI) / 4;
     const lit = Math.cos(a) * L.lx + Math.sin(a) * L.ly;
-    LIT[k] = Math.round(256 * (1 + 0.42 * lit));
+    LIT[k] = Math.round(256 * (1 + 0.24 * lit));
   }
   for (let s = 0; s < pool.hi; s++) {
     const c = pool.list[s]!;
@@ -547,6 +604,8 @@ export function rasterChunks(
     const cs = Math.cos(th);
     const sn = Math.sin(th);
     const rotSteps = ((q * 8) / QUANT) | 0; // approx normal rotation in 45° units
+    // Chunks behind the titans are a touch darker: cheap depth.
+    const depthDim = c.front ? 256 : 214;
     const pix = c.front ? frontPix : backPix;
     const emi = c.front ? frontEmi : backEmi;
     const range = c.front ? frontRange : backRange;
@@ -579,10 +638,11 @@ export function rasterChunks(
         const iv = v | 0;
         if (iu >= w || iv >= h) continue;
         const si = iv * w + iu;
-        let p = pixels[si]!;
-        if ((p >>> 24) === 0) continue;
+        let p = pixels[si]! | 0;
+        if (p >>> 24 === 0) continue;
         const nk = nrm[si]!;
         if (nk !== 0) p = scalePx(p, LIT[(nk - 1 + rotSteps) & 7]!);
+        if (depthDim !== 256) p = scalePx(p, depthDim);
         const o = dy * W + dx;
         pix[o] = p;
         let e = hasE ? emis[si]! : 0;

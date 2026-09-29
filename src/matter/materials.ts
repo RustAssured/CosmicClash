@@ -1,4 +1,10 @@
-import { hex, type MaterialDef, type MaterialPhysics, type MaterialSpec, type MaterialVisual } from '@/contracts';
+import {
+  hex,
+  type MaterialDef,
+  type MaterialPhysics,
+  type MaterialSpec,
+  type MaterialVisual,
+} from '@/contracts';
 import { DEFAULT_GLOW_RAMP, DEFAULT_INFECT, DEFAULT_VISUALS, MATERIAL_ARCHETYPES } from './archetypes';
 
 /** The reserved EMPTY material (id 0): void. */
@@ -82,7 +88,10 @@ export function buildMaterialTable(specs: readonly MaterialSpec[]): MaterialDef[
     if (id === undefined) {
       const arch = MATERIAL_ARCHETYPES[def.ashTo];
       const vis = DEFAULT_VISUALS[def.ashTo];
-      if (!arch || !vis) throw new Error(`matter: material "${def.key}" ashTo "${def.ashTo}" is not in the table and has no default look`);
+      if (!arch || !vis)
+        throw new Error(
+          `matter: material "${def.key}" ashTo "${def.ashTo}" is not in the table and has no default look`,
+        );
       id = table.length;
       byKey.set(def.ashTo, id);
       table.push(makeDef(id, def.ashTo, { ...arch, resist: { ...arch.resist } }, vis));

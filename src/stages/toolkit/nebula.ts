@@ -1,3 +1,4 @@
+import type { Rgb } from './color';
 import type { KitLayer, LayerBlend, SceneryKit } from './kit';
 
 /**
@@ -5,8 +6,6 @@ import type { KitLayer, LayerBlend, SceneryKit } from './kit';
  * nebula. Particle clouds add the fine detail on top. Reacts to the fight: impulses swirl the domain (via the shared
  * force field) and tint it, and `uFlow` (which runs faster in a hot fight) drives the drift.
  */
-
-export type Rgb = readonly [number, number, number];
 
 export interface NebulaOpts {
   parallax: number;

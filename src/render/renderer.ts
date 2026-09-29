@@ -2,21 +2,19 @@ import {
   AddEquation,
   ClampToEdgeWrapping,
   CustomBlending,
-  OneFactor,
   Data3DTexture,
   DataTexture,
   FloatType,
   HalfFloatType,
-  LinearFilter,
   LinearSRGBColorSpace,
   NearestFilter,
   NoToneMapping,
+  OneFactor,
   RedFormat,
   RGBAFormat,
   UnsignedByteType,
   Vector2,
   Vector3,
-  Vector4,
   WebGLRenderer,
   type TextureDataType,
   type WebGLRenderTarget,
@@ -36,11 +34,18 @@ import {
   type StageId,
 } from '@/contracts';
 import { STAGES } from '@/stages';
+import { STAGE_RAMPS } from '@/stages/info';
 import { createScenery } from '@/stages/scenery';
-import { MAX_IMPULSES, MAX_SHOCKS, type SceneryForces, type StageScenery } from '@/stages/types';
+import {
+  MAX_IMPULSES,
+  MAX_SHOCKS,
+  type SceneryForces,
+  type SceneryFrame,
+  type StageScenery,
+} from '@/stages/types';
 import { LayerCompositor } from './compositor';
 import { bayerTexels } from './dither';
-import { FullscreenPass, dataTexture, disposeSharedGeometry, makeRT } from './gl';
+import { FullscreenPass, dataTexture, disposeSharedGeometry, makeRT, resetSharedGeometry } from './gl';
 import { LayerTextures } from './layerTextures';
 import { PALETTE_TEX_W, buildDitherLut, paletteTextures, preparePalette } from './palette';
 import {
@@ -61,9 +66,9 @@ interface Tier {
   lutSize: number;
 }
 const TIERS: Record<0 | 1 | 2, Tier> = {
-  0: { supersample: 1, bloomLevels: 3, godSamples: 16, lutSize: 24 },
-  1: { supersample: 1, bloomLevels: 4, godSamples: 28, lutSize: 32 },
-  2: { supersample: 2, bloomLevels: 5, godSamples: 44, lutSize: 32 },
+  0: { supersample: 1, bloomLevels: 3, godSamples: 16, lutSize: 32 },
+  1: { supersample: 1, bloomLevels: 4, godSamples: 28, lutSize: 40 },
+  2: { supersample: 2, bloomLevels: 5, godSamples: 44, lutSize: 48 },
 };
 
 const ROLL_LIMIT = (1.5 * Math.PI) / 180;
@@ -78,11 +83,25 @@ class RollingAverage {
   }
 }
 
-export function createRenderer(): Renderer {
+/** Extra, non-contract hooks used by the GPU verification page (dev/render/verify.ts). Not needed by the app. */
+export interface DebuggableRenderer extends Renderer {
+  /** Read the composited (pre-post) colour or emissive attachment as packed RGBA, top row first. */
+  debugReadFrame(attachment: 0 | 1): Uint32Array;
+  /** Number of layer textures currently cached, and upload counters. */
+  debugLayerStats(): { cached: number; create: number; full: number; rect: number; texels: number };
+  /** Free layer textures not drawn for `frames` frames (default 240). */
+  debugSetStaleFrames(frames: number): void;
+  /** Simulate a context loss / restore through WEBGL_lose_context. */
+  debugLoseContext(lose: boolean): void;
+  /** The current canvas layout (physical px). */
+  debugLayout(): { scale: number; x: number; y: number; w: number; h: number };
+}
+
+export function createRenderer(): DebuggableRenderer {
   return new PixelRenderer();
 }
 
-class PixelRenderer implements Renderer {
+class PixelRenderer implements DebuggableRenderer {
   readonly stats: RenderStats = { frameMs: 0, sceneryMs: 0, postMs: 0, drawCalls: 0 };
 
   private three!: WebGLRenderer;
@@ -138,6 +157,15 @@ class PixelRenderer implements Renderer {
     nImpulse: 0,
   };
   private readonly postShock = new Float32Array(MAX_SHOCKS * 4);
+  /** Reused every frame (no per-frame allocation). */
+  private readonly sceneryFrame: SceneryFrame = {
+    timeSec: 0,
+    dtSec: 0,
+    view: { x0: 0, y0: 0, w: LOGICAL_W, h: LOGICAL_H },
+    camera: { x: 0, y: 0, zoom: 1, roll: 0, shakeX: 0, shakeY: 0 },
+    fx: { shockwaves: [], lenses: [], impulses: [], flash: 0, aberration: 0, intensity: 0, timeScale: 1 },
+    forces: this.forces,
+  };
   private readonly lens = new Float32Array(16);
   private readonly lightPos = { x: 0, y: 0 };
   private lastTimeSec = -1;
@@ -153,13 +181,20 @@ class PixelRenderer implements Renderer {
     this.lost = true;
   };
   private onRestored = (): void => {
+    // Every GL object we created died with the old context, and calling dispose() on them now only makes the browser
+    // print "object does not belong to this context". So drop them (never dispose) and rebuild from scratch.
     this.lost = false;
-    this.layers.reset();
-    this.bayerTex.needsUpdate = true;
-    if (this.lutTex) this.lutTex.needsUpdate = true;
-    if (this.palSrgbTex) this.palSrgbTex.needsUpdate = true;
-    if (this.palLinTex) this.palLinTex.needsUpdate = true;
-    this.scenery?.restore?.();
+    resetSharedGeometry();
+    this.layers = new LayerTextures(this.three);
+    this.compositor = new LayerCompositor(this.layers, this.emisGain);
+    this.captureRT = null;
+    this.lutTex = null;
+    this.palSrgbTex = null;
+    this.palLinTex = null;
+    this.buildTargets();
+    this.buildPasses();
+    this.resize(this.cssW, this.cssH, this.dpr);
+    this.setStage(this.stage, false);
   };
 
   async init(canvas: HTMLCanvasElement, opts: RendererOptions = {}): Promise<void> {
@@ -188,7 +223,8 @@ class PixelRenderer implements Renderer {
     canvas.addEventListener('webglcontextrestored', this.onRestored);
 
     // HDR scenery needs a renderable float target; fall back to 8-bit (less headroom, still correct).
-    const canFloat = r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float');
+    const canFloat =
+      r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float');
     this.hdrType = canFloat ? HalfFloatType : UnsignedByteType;
     r.extensions.get('EXT_color_buffer_float');
     r.extensions.get('EXT_color_buffer_half_float');
@@ -221,7 +257,7 @@ class PixelRenderer implements Renderer {
 
   private buildPasses(): void {
     const res = { value: this.res };
-    this.bayerTex = new DataTexture(bayerTexels(8), 8, 8, RedFormat, UnsignedByteType);
+    this.bayerTex = new DataTexture(bayerTexels(4), 4, 4, RedFormat, UnsignedByteType);
     this.bayerTex.minFilter = NearestFilter;
     this.bayerTex.magFilter = NearestFilter;
     this.bayerTex.unpackAlignment = 1;
@@ -237,6 +273,7 @@ class PixelRenderer implements Renderer {
       uPalSrgb: { value: null },
       uPalLin: { value: null },
       uBayer: { value: this.bayerTex },
+      uLevels: { value: 4 },
       uExposure: { value: 1 },
       uContrast: { value: 1 },
       uDither: { value: 1 },
@@ -304,11 +341,11 @@ class PixelRenderer implements Renderer {
     });
   }
 
-  setStage(id: StageId): void {
+  setStage(id: StageId, disposePrevious = true): void {
     this.stage = id;
     if (!this.ready) return;
     const info = STAGES[id];
-    this.scenery?.dispose();
+    if (disposePrevious) this.scenery?.dispose();
     const s = createScenery(id);
     s.init({
       renderer: this.three,
@@ -318,7 +355,7 @@ class PixelRenderer implements Renderer {
       height: this.sceneRT.height,
     });
     this.scenery = s;
-    this.buildPaletteTextures(info.palette);
+    this.buildPaletteTextures(info.palette, STAGE_RAMPS[id]);
     const c = hex(info.lighting.color);
     this.godColor.set(pr(c) / 255, pg(c) / 255, pb(c) / 255);
     this.lastTimeSec = -1;
@@ -326,8 +363,8 @@ class PixelRenderer implements Renderer {
     this.drawnOnce = false;
   }
 
-  private buildPaletteTextures(palette: readonly string[]): void {
-    const pal = preparePalette(palette);
+  private buildPaletteTextures(palette: readonly string[], ramps: readonly number[]): void {
+    const pal = preparePalette(palette, ramps);
     const lut = buildDitherLut(pal, { size: this.tier.lutSize });
     this.lutTex?.dispose();
     this.palSrgbTex?.dispose();
@@ -375,7 +412,7 @@ class PixelRenderer implements Renderer {
       const s = fx.shockwaves[i]!;
       const life = Math.max(0, 1 - s.age);
       if (life <= 0 || s.radius < 1) continue;
-      const disp = s.strength * 9 * life * life;
+      const disp = s.strength * 15 * life * life;
       f.shock[n * 4] = s.x - vx;
       f.shock[n * 4 + 1] = s.y - vy;
       f.shock[n * 4 + 2] = s.radius;
@@ -417,7 +454,9 @@ class PixelRenderer implements Renderer {
   }
 
   draw(frame: RenderFrame): void {
-    if (!this.ready || this.lost || !this.scenery) return;
+    if (!this.ready || this.lost) return;
+    if (frame.stage !== this.stage || !this.scenery) this.setStage(frame.stage);
+    if (!this.scenery) return;
     const t0 = now();
     const r = this.three;
     r.info.reset();
@@ -439,14 +478,13 @@ class PixelRenderer implements Renderer {
     this.packFx(fx, view.x0, view.y0);
     const sc = this.scenery;
     const look = sc.look;
-    sc.update({
-      timeSec: this.sceneTime,
-      dtSec: dt,
-      view,
-      camera: frame.camera,
-      fx,
-      forces: this.forces,
-    });
+    const sf = this.sceneryFrame;
+    sf.timeSec = this.sceneTime;
+    sf.dtSec = dt;
+    sf.view = view;
+    sf.camera = frame.camera;
+    sf.fx = fx;
+    sc.update(sf);
     sc.render(this.sceneRT);
     const t1 = now();
 
@@ -483,7 +521,7 @@ class PixelRenderer implements Renderer {
     pu.uFlash!.value = Math.min(1, fx.flash) * 0.5;
     pu.uGodGain!.value = look.godRayGain * (0.75 + 0.5 * fx.intensity);
     pu.uVignette!.value = look.vignette;
-    pu.uFrameNo!.value = this.frameNo & 1023;
+    pu.uFrameNo!.value = frame.tick & 1023; // grain follows the sim tick: identical frames render identically
     this.postPass.render(r, this.postRT);
 
     // ---- present ----
@@ -577,6 +615,41 @@ class PixelRenderer implements Renderer {
     return out;
   }
 
+  debugReadFrame(attachment: 0 | 1): Uint32Array {
+    const bytes = new Uint8Array(LOGICAL_W * LOGICAL_H * 4);
+    this.three.readRenderTargetPixels(this.frameRT, 0, 0, LOGICAL_W, LOGICAL_H, bytes, undefined, attachment);
+    const src = new Uint32Array(bytes.buffer);
+    const out = new Uint32Array(LOGICAL_W * LOGICAL_H);
+    for (let y = 0; y < LOGICAL_H; y++) {
+      const s = (LOGICAL_H - 1 - y) * LOGICAL_W;
+      out.set(src.subarray(s, s + LOGICAL_W), y * LOGICAL_W);
+    }
+    return out;
+  }
+
+  debugLayerStats(): { cached: number; create: number; full: number; rect: number; texels: number } {
+    return { cached: this.layers.size, ...this.layers.uploads };
+  }
+
+  debugSetStaleFrames(frames: number): void {
+    this.layers.staleFrames = frames;
+  }
+
+  debugLoseContext(lose: boolean): void {
+    const ext = this.three.extensions.get('WEBGL_lose_context') as {
+      loseContext(): void;
+      restoreContext(): void;
+    } | null;
+    if (!ext) return;
+    if (lose) ext.loseContext();
+    else ext.restoreContext();
+  }
+
+  debugLayout(): { scale: number; x: number; y: number; w: number; h: number } {
+    const { scale, x, y, w, h } = this.layout;
+    return { scale, x, y, w, h };
+  }
+
   dispose(): void {
     if (!this.ready) return;
     this.ready = false;
@@ -586,14 +659,20 @@ class PixelRenderer implements Renderer {
     this.scenery = null;
     this.layers.dispose();
     this.compositor.dispose();
-    for (const p of [this.ditherPass, this.bloomDown, this.bloomUp, this.godPass, this.postPass, this.finalPass]) p.dispose();
-    for (const t of [this.sceneRT, this.frameRT, this.godRT, this.postRT, this.captureRT, ...this.bloomRTs]) t?.dispose();
+    for (const p of [
+      this.ditherPass,
+      this.bloomDown,
+      this.bloomUp,
+      this.godPass,
+      this.postPass,
+      this.finalPass,
+    ])
+      p.dispose();
+    for (const t of [this.sceneRT, this.frameRT, this.godRT, this.postRT, this.captureRT, ...this.bloomRTs])
+      t?.dispose();
     for (const t of [this.bayerTex, this.lutTex, this.palSrgbTex, this.palLinTex]) t?.dispose();
     disposeSharedGeometry();
     this.three.dispose();
     this.three.forceContextLoss();
   }
 }
-
-void LinearFilter;
-void Vector4;

@@ -1,6 +1,5 @@
 import {
   AddEquation,
-  AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
   ClampToEdgeWrapping,
@@ -13,7 +12,7 @@ import {
   InstancedBufferGeometry,
   LinearFilter,
   Mesh,
-  NormalBlending,
+  NearestFilter,
   OneFactor,
   OneMinusSrcAlphaFactor,
   OrthographicCamera,
@@ -72,8 +71,6 @@ function applyBlend(m: RawShaderMaterial, blend: LayerBlend): void {
     m.blendDstAlpha = OneMinusSrcAlphaFactor;
   }
 }
-void AdditiveBlending;
-void NormalBlending;
 
 export interface KitUniforms {
   [k: string]: IUniform;
@@ -106,6 +103,7 @@ uniform float uSnap;
 out vec2 vQ;
 out vec4 vColor;
 out float vSeed;
+out float vHalf;
 void main() {
   float par = uParallax + aPos.z * uSpread;
   vec2 c = aPos.xy - uView * par;
@@ -115,7 +113,7 @@ void main() {
   float ext = max(aShape.x, aShape.y) * 1.5 + 4.0;
   if (c.x < -ext || c.y < -ext || c.x > uRes.x + ext || c.y > uRes.y + ext) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-    vQ = vec2(0.0); vColor = vec4(0.0); vSeed = 0.0;
+    vQ = vec2(0.0); vColor = vec4(0.0); vSeed = 0.0; vHalf = 1.0;
     return;
   }
   float cs = cos(aShape.z);
@@ -128,6 +126,7 @@ void main() {
   float tw = 1.0 + uTwinkle * sin(uTime * (1.2 + aPos.w * 2.6) + aPos.w * 90.0);
   vColor = vec4(aColor.rgb * tw, aColor.a);
   vSeed = aPos.w;
+  vHalf = max(aShape.x, aShape.y);
 }
 `;
 
@@ -135,19 +134,42 @@ const SPRITE_FRAG = /* glsl */ `${SCENERY_HEAD}${NOISE_GLSL}
 uniform float uSoft;
 uniform float uBreakup;
 uniform float uGain;
+uniform float uProfile;   // 0 soft puff, 1 diffraction star, 2 thin ring / shell
 in vec2 vQ;
 in vec4 vColor;
 in float vSeed;
+in float vHalf;
 out vec4 o;
 void main() {
   float r2 = dot(vQ, vQ);
-  if (r2 >= 1.0) discard;
-  float a = exp(-r2 * uSoft) * (1.0 - r2);
-  if (uBreakup > 0.0) {
-    float n = vnoise(vQ * 1.7 + vSeed * 91.0);
-    a *= mix(1.0, smoothstep(0.2, 0.8, n) * 1.6, uBreakup);
+  if (uProfile < 0.5) {
+    if (r2 >= 1.0) discard;
+    float a = exp(-r2 * uSoft) * (1.0 - r2);
+    if (uBreakup > 0.0) {
+      float n = vnoise(vQ * 1.7 + vSeed * 91.0);
+      a *= mix(1.0, smoothstep(0.2, 0.8, n) * 1.6, uBreakup);
+    }
+    o = vec4(vColor.rgb * uGain, vColor.a * a);
+  } else if (uProfile < 1.5) {
+    // A newborn star: a small hot core, layered halo, and a thin 4-point diffraction cross with fainter diagonals.
+    // uSoft is the core radius in PIXELS so a star keeps its look at any sprite size; the spikes are ~1 px thick.
+    vec2 pq = vQ * vHalf;                    // sprite-local position in px
+    float rp = length(pq);
+    float core = exp(-pow(rp / uSoft, 2.0));
+    float halo = exp(-rp / (uSoft * 2.6)) * 0.34 + exp(-rp / (uSoft * 9.0)) * 0.09;
+    float sx = exp(-abs(pq.y) / 0.75) * exp(-abs(vQ.x) * 3.1);
+    float sy = exp(-abs(pq.x) / 0.75) * exp(-abs(vQ.y) * 3.1);
+    vec2 d = vec2(pq.x + pq.y, pq.x - pq.y) * 0.70711;
+    float dx = exp(-abs(d.y) / 0.75) * exp(-abs(d.x) / (vHalf * 0.16)) * 0.32;
+    float dy = exp(-abs(d.x) / 0.75) * exp(-abs(d.y) / (vHalf * 0.16)) * 0.32;
+    float a = (core + halo + (sx + sy) * 0.55 + dx + dy) * smoothstep(1.0, 0.8, max(abs(vQ.x), abs(vQ.y)));
+    o = vec4(vColor.rgb * a * uGain, vColor.a);
+  } else {
+    if (r2 >= 1.0) discard;
+    float r = sqrt(r2);
+    float a = exp(-pow((r - 0.72) / 0.09, 2.0)) * (1.0 - smoothstep(0.85, 1.0, r));
+    o = vec4(vColor.rgb * uGain, vColor.a * a);
   }
-  o = vec4(vColor.rgb * uGain, vColor.a * a);
 }
 `;
 
@@ -169,7 +191,7 @@ uniform vec2 uRes;
 uniform float uPad;       // extra px around the rect so force displacement never reveals the edge
 out vec2 vScreen;
 void main() {
-  vec2 s = uRect.xy - uView * uParallax + (position.xy * 2.0 - 1.0) * uPad + position.xy * uRect.zw;
+  vec2 s = uRect.xy - floor(uView * uParallax + 0.5) + (position.xy * 2.0 - 1.0) * uPad + position.xy * uRect.zw;
   vScreen = s;
   gl_Position = vec4(s.x / uRes.x * 2.0 - 1.0, 1.0 - s.y / uRes.y * 2.0, 0.0, 1.0);
 }
@@ -242,6 +264,8 @@ export interface SpriteSpec {
   twinkle?: number;
   /** Snap sprite centres to pixel centres (crisp stars). */
   snap?: boolean;
+  /** Sprite profile: 'puff' (default), 'star' (core + halo + diffraction spikes) or 'ring' (a thin expanding shell). */
+  profile?: 'puff' | 'star' | 'ring';
   /** How strongly shockwaves / impulses move this layer (near layers react more). */
   forceK?: number;
   gain?: number;
@@ -259,7 +283,10 @@ let spriteQuad: BufferGeometry | null = null;
 function spriteQuadGeometry(): BufferGeometry {
   if (!spriteQuad) {
     const g = new BufferGeometry();
-    g.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0]), 3));
+    g.setAttribute(
+      'position',
+      new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0]), 3),
+    );
     g.setIndex([0, 1, 2, 2, 1, 3]);
     spriteQuad = g;
   }
@@ -334,6 +361,7 @@ export class SceneryKit {
       uSoft: { value: spec.soft ?? 2.5 },
       uBreakup: { value: spec.breakup ?? 0 },
       uGain: { value: spec.gain ?? 1 },
+      uProfile: { value: spec.profile === 'star' ? 1 : spec.profile === 'ring' ? 2 : 0 },
     });
     const mat = new RawShaderMaterial({
       glslVersion: GLSL3,
@@ -428,6 +456,10 @@ ${fragment}`,
     const map = opts.map;
     map.wrapS = ClampToEdgeWrapping;
     map.wrapT = ClampToEdgeWrapping;
+    // Baked art is authored 1 texel = 1 logical pixel and the layer offset is snapped to whole pixels, so NEAREST keeps
+    // silhouettes crisp and stable instead of shimmering as the camera glides.
+    map.magFilter = NearestFilter;
+    map.minFilter = NearestFilter;
     const uniforms = this.shared({
       uRect: { value: [...opts.rect] },
       uParallax: { value: opts.parallax },
@@ -446,7 +478,7 @@ uniform sampler2D uMap;
 // Sample the baked map at a screen position after undoing the fight displacement. Outside the rect → transparent.
 vec4 sampleMap(vec2 sp) {
   vec2 q = warpByForces(sp, -uForceK);
-  vec2 lp = q + uView * uParallax - uRect.xy;
+  vec2 lp = q + floor(uView * uParallax + 0.5) - uRect.xy;
   vec2 uv = lp / uRect.zw;
   if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return vec4(0.0);
   return texture(uMap, vec2(uv.x, 1.0 - uv.y));
@@ -463,7 +495,10 @@ ${opts.fragment}`;
     });
     applyBlend(mat, opts.blend);
     const geo = new BufferGeometry();
-    geo.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]), 3));
+    geo.setAttribute(
+      'position',
+      new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]), 3),
+    );
     geo.setIndex([0, 1, 2, 2, 1, 3]);
     const mesh = new Mesh(geo, mat);
     mesh.frustumCulled = false;
@@ -510,11 +545,6 @@ ${opts.fragment}`;
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, false, false);
     renderer.render(this.scene, this.camera);
-  }
-
-  /** Re-upload CPU-backed textures after a context restore. */
-  restore(): void {
-    this.noiseTex.needsUpdate = true;
   }
 
   dispose(): void {

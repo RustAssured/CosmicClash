@@ -2,7 +2,6 @@ import {
   clamp,
   clamp01,
   hex,
-  mix,
   pb,
   pg,
   pr,
@@ -12,6 +11,7 @@ import {
   type MatterMap,
   type StageLighting,
 } from '@/contracts';
+import { blend } from './color';
 import { boxBlur, edt } from './field';
 import { bayer4, bayer8 } from './noise';
 
@@ -187,14 +187,14 @@ export class ArtCanvas {
             if (nl > 0.15 && P.rim > 0) {
               const k = smoothstep(0.15, 0.8, nl) * P.rim;
               const top = ramp[nr - 1]!;
-              if (di <= 1.5 && k > 0.2) col = mix(top, rimCol, rimMix * (0.6 + 0.4 * k));
+              if (di <= 1.5 && k > 0.2) col = blend(top, rimCol, rimMix * (0.6 + 0.4 * k));
               else if (di <= 2.6 && k > 0.6) col = ramp[Math.max(idx, nr - 2)]!;
             } else if (nl < -0.05 && P.outline > 0 && di <= 1.5) {
               const dark = ramp[0]!;
-              col = mix(dark, ambCol, 0.25 * P.outline);
+              col = blend(dark, ambCol, 0.25 * P.outline);
               col = rgba(pr(col) * 0.82, pg(col) * 0.82, pb(col) * 0.86);
             } else if (di <= 1.5 && P.outline > 0) {
-              col = mix(col, ramp[0]!, 0.45 * P.outline);
+              col = blend(col, ramp[0]!, 0.45 * P.outline);
             }
           }
         }
@@ -241,7 +241,7 @@ export function buildLitRamps(
         const t = nr === 1 ? 0.5 : k / (nr - 1);
         const sh = 0.32 * Math.pow(1 - t, 1.6) * strength;
         const hi = 0.2 * Math.pow(t, 2.2) * strength;
-        return mix(mix(c, amb, sh), key, hi);
+        return blend(blend(c, amb, sh), key, hi);
       }),
     );
   }

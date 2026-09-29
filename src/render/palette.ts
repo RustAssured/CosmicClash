@@ -46,6 +46,10 @@ export interface PaletteData {
   /** Colour pairs allowed to be mixed by the dither: neighbours along a ramp, plus very close cross-ramp pairs. */
   readonly pairA: Uint8Array;
   readonly pairB: Uint8Array;
+  /** OKLab distance between the two colours of each allowed pair (for pruning the search). */
+  readonly pairLen: Float32Array;
+  /** Scratch: squared OKLab distance from the current target to every entry (reused across LUT nodes). */
+  readonly scratch: Float32Array;
 }
 
 /** Cross-ramp pairs closer than this (OKLab distance) may be mixed, so ramps can hand over to each other. */
@@ -99,8 +103,8 @@ export function preparePalette(hexes: readonly string[], rampLengths?: readonly 
     linearToOklab(lr, lg, lb, lab, i * 3);
   }
   const rampOf = inferRamps(lab, n, rampLengths);
-  const pa: number[] = [];
-  const pb: number[] = [];
+  const pairsA: number[] = [];
+  const pairsB: number[] = [];
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const same = rampOf[i] === rampOf[j];
@@ -111,11 +115,31 @@ export function preparePalette(hexes: readonly string[], rampLengths?: readonly 
         const db = lab[i * 3 + 2]! - lab[j * 3 + 2]!;
         if (Math.hypot(dl, da, db) > CROSS_RAMP_MAX) continue;
       }
-      pa.push(i);
-      pb.push(j);
+      pairsA.push(i);
+      pairsB.push(j);
     }
   }
-  return { count: n, srgb, linear, lab, rampOf, pairA: Uint8Array.from(pa), pairB: Uint8Array.from(pb) };
+  const pairLen = new Float32Array(pairsA.length);
+  for (let s = 0; s < pairsA.length; s++) {
+    const a = pairsA[s]!;
+    const b = pairsB[s]!;
+    pairLen[s] = Math.hypot(
+      lab[a * 3]! - lab[b * 3]!,
+      lab[a * 3 + 1]! - lab[b * 3 + 1]!,
+      lab[a * 3 + 2]! - lab[b * 3 + 2]!,
+    );
+  }
+  return {
+    count: n,
+    srgb,
+    linear,
+    lab,
+    rampOf,
+    pairA: Uint8Array.from(pairsA),
+    pairB: Uint8Array.from(pairsB),
+    pairLen,
+    scratch: new Float32Array(n),
+  };
 }
 
 /* ------------------------------------ the LUT ------------------------------------ */
@@ -140,7 +164,14 @@ export interface LutOptions {
  * light and dark steps of ONE hue interleave; unrelated hues never speckle each other. Error is measured in OKLab.
  * Result in `out` = [A, B, ratio 0..1], ordered so that A is the darker colour.
  */
-function bestPair(pal: PaletteData, tr: number, tg: number, tb: number, labTmp: Float32Array, out: Float32Array): void {
+function bestPair(
+  pal: PaletteData,
+  tr: number,
+  tg: number,
+  tb: number,
+  labTmp: Float32Array,
+  out: Float32Array,
+): void {
   linearToOklab(tr, tg, tb, labTmp, 0);
   const tl = labTmp[0]!;
   const ta = labTmp[1]!;
@@ -148,6 +179,7 @@ function bestPair(pal: PaletteData, tr: number, tg: number, tb: number, labTmp: 
   const n = pal.count;
   const lab = pal.lab;
   const lin = pal.linear;
+  const dist2 = pal.scratch;
 
   let bestErr = Infinity;
   let bestA = 0;
@@ -158,6 +190,7 @@ function bestPair(pal: PaletteData, tr: number, tg: number, tb: number, labTmp: 
     const da = lab[i * 3 + 1]! - ta;
     const db = lab[i * 3 + 2]! - tbb;
     const d = dl * dl + da * da + db * db;
+    dist2[i] = d;
     if (d < bestErr) {
       bestErr = d;
       bestA = i;
@@ -169,6 +202,9 @@ function bestPair(pal: PaletteData, tr: number, tg: number, tb: number, labTmp: 
   for (let s = 0; s < pa.length; s++) {
     const ia = pa[s]!;
     const ib = pb[s]!;
+    // A mix lies on the segment, so it is at least (nearest endpoint distance − half the segment) from the target.
+    const nearest = Math.sqrt(Math.min(dist2[ia]!, dist2[ib]!)) - 0.5 * pal.pairLen[s]!;
+    if (nearest > 0 && nearest * nearest > bestErr) continue;
     const ar = lin[ia * 3]!;
     const ag = lin[ia * 3 + 1]!;
     const ab = lin[ia * 3 + 2]!;
@@ -234,8 +270,9 @@ export function lutNode(size: number, sr: number, sg: number, sb: number): numbe
 }
 
 /**
- * CPU reference of the shader's per-pixel decision (see `dither.frag`): LUT pair + exact per-pixel ratio + Bayer
- * threshold ⇒ palette index. `lr,lg,lb` are the tone-mapped LINEAR colour in 0..1; `threshold` ∈ (0,1).
+ * CPU reference of the shader's per-pixel decision (see SCENERY_DITHER_FRAG): LUT pair + exact per-pixel ratio + Bayer
+ * threshold ⇒ palette index. `lr,lg,lb` are the tone-mapped LINEAR colour in 0..1; `threshold` ∈ (0,1). `levels` > 0
+ * quantises the ratio to that many steps (pixel-art patterns: 25 % dots, 50 % checker, 75 %…) before thresholding.
  */
 export function ditherToIndex(
   pal: PaletteData,
@@ -244,6 +281,7 @@ export function ditherToIndex(
   lg: number,
   lb: number,
   threshold: number,
+  levels = 0,
 ): number {
   const c = (v: number): number => linearToSrgb(Math.min(1, Math.max(0, v)));
   const o = lutNode(lut.size, c(lr), c(lg), c(lb));
@@ -255,8 +293,12 @@ export function ditherToIndex(
   const dg = lin[b * 3 + 1]! - lin[a * 3 + 1]!;
   const db = lin[b * 3 + 2]! - lin[a * 3 + 2]!;
   const len2 = dr * dr + dg * dg + db * db;
-  let r = len2 > 1e-9 ? ((lr - lin[a * 3]!) * dr + (lg - lin[a * 3 + 1]!) * dg + (lb - lin[a * 3 + 2]!) * db) / len2 : 0;
+  let r =
+    len2 > 1e-9
+      ? ((lr - lin[a * 3]!) * dr + (lg - lin[a * 3 + 1]!) * dg + (lb - lin[a * 3 + 2]!) * db) / len2
+      : 0;
   r = r < 0 ? 0 : r > 1 ? 1 : r;
+  if (levels > 0) r = Math.round(r * levels) / levels; // a few distinct, deliberate patterns instead of 64 shades of noise
   return threshold < r ? b : a;
 }
 

@@ -53,8 +53,36 @@ export interface ResolvedLighting {
   src: StageLighting;
 }
 
-export type MatterKind = 'detach' | 'ignite' | 'crack' | 'consume' | 'harvest' | 'impact' | 'evaporate' | 'boil';
-const KINDS: MatterKind[] = ['detach', 'ignite', 'crack', 'consume', 'harvest', 'impact', 'evaporate', 'boil'];
+/** An expanding shock ring inside a body (CRUSH tectonic shock, THERMAL blast). Centre in body-local cells. */
+export class Wave {
+  active = false;
+  bodyId = -1;
+  cx = 0;
+  cy = 0;
+  r = 0;
+  speed = 1;
+  maxR = 40;
+  power = 1;
+  /** 0 = CRUSH shock (breaks bonds along the ring), 1 = THERMAL blast (blows burning/loosened matter outward). */
+  type = 0;
+  /** World-space centre (for particle direction) captured at spawn. */
+  wx = 0;
+  wy = 0;
+  sourceMass = 1;
+}
+
+export type MatterKind =
+  'detach' | 'ignite' | 'crack' | 'consume' | 'harvest' | 'impact' | 'evaporate' | 'boil';
+const KINDS: MatterKind[] = [
+  'detach',
+  'ignite',
+  'crack',
+  'consume',
+  'harvest',
+  'impact',
+  'evaporate',
+  'boil',
+];
 /** Aggregation window in ticks per kind (0 = immediate). Noisy kinds are merged so audio/camera are not flooded. */
 const WINDOW: Record<MatterKind, number> = {
   detach: 0,
@@ -110,6 +138,15 @@ export class WorldCore {
   lighting: ResolvedLighting = resolveLighting(DEFAULT_LIGHTING);
   arena: ArenaInfo = { ...DEFAULT_ARENA };
 
+  /**
+   * Optional section profiler (tools/matter/bench.ts): when `clock` is set, world.tick() adds the milliseconds spent in each
+   * section to `prof[section]`. The simulation itself never reads a clock.
+   */
+  clock: (() => number) | null = null;
+  readonly prof = new Float64Array(12);
+
+  readonly waves: Wave[] = Array.from({ length: 16 }, () => new Wave());
+
   /* ---- events ---- */
   readonly events: SimEvent[] = [];
   private readonly agg: Agg[] = KINDS.map(() => ({ mass: 0, sx: 0, sy: 0, n: 0, slot: -1, last: -1000 }));
@@ -132,7 +169,15 @@ export class WorldCore {
   readonly stack2 = new IntStack(4096);
 
   /** Hook: a chunk hit a body (set by the world; applies a capped KINETIC event). */
-  chunkImpact: (body: Body, chunk: Chunk, x: number, y: number, dirX: number, dirY: number, speed: number) => void = () => {};
+  chunkImpact: (
+    body: Body,
+    chunk: Chunk,
+    x: number,
+    y: number,
+    dirX: number,
+    dirY: number,
+    speed: number,
+  ) => void = () => {};
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
@@ -156,7 +201,14 @@ export class WorldCore {
    * Credit mass that arrived at a sink to `bodyId`'s pool (and debit the originator's `massLost`). If the receiving body
    * does not exist the mass dissipates. Caller has already removed the mass from the live chunk/particle tallies.
    */
-  creditMass(bodyId: number, mass: number, x: number, y: number, originBody: number, kind: 'consume' | 'harvest'): void {
+  creditMass(
+    bodyId: number,
+    mass: number,
+    x: number,
+    y: number,
+    originBody: number,
+    kind: 'consume' | 'harvest',
+  ): void {
     const b = bodyId >= 0 ? this.bodyById[bodyId] : undefined;
     if (b === undefined) {
       this.ledger.dissipated += mass;
@@ -180,8 +232,7 @@ export class WorldCore {
   emitMatter(kind: MatterKind, x: number, y: number, mass: number, slot: 0 | 1 | -1): void {
     const k = KINDS.indexOf(kind);
     if (WINDOW[kind] === 0) {
-      if (this.events.length < 96)
-        this.events.push({ t: 'matter', kind, x, y, mass, slot });
+      if (this.events.length < 96) this.events.push({ t: 'matter', kind, x, y, mass, slot });
       return;
     }
     const a = this.agg[k]!;

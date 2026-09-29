@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Render sandbox · ADEUK: TITANS</title>
+    <link rel="icon" href="data:," />
     <style>
       html,
       body {
@@ -11,7 +12,11 @@
         height: 100%;
         background: #05060a;
         overflow: hidden;
-        font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace;
+        font:
+          12px/1.35 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
         color: #cfe;
       }
       #stage {
@@ -51,9 +56,10 @@
     <div id="stage"><canvas id="game" width="640" height="360" tabindex="0"></canvas></div>
     <div id="hud"></div>
     <div id="help">
-1 shockwave · 2 black-hole lens · 3 flash · 4 impulse · 5 aberration
-6 shake · 7 zoom · 8 roll · 9 KO slow-mo · Q quality · F freeze · H hide text
-A/D fighter A · ←/→ fighter B · W/S bob · click = shockwave at pointer</div>
+      1 shockwave · 2 black-hole lens · 3 flash · 4 impulse · 5 aberration 6 shake · 7 zoom · 8 roll · 9 KO
+      slow-mo · Q quality · F freeze · H hide text A/D fighter A · ←/→ fighter B · W/S bob · click = shockwave
+      at pointer
+    </div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

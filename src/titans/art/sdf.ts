@@ -51,14 +51,8 @@ export function sdTaperedCapsule(
   return Math.hypot(pax - bax * h, pay - bay * h) - (ra + (rb - ra) * h);
 }
 
-export const sdSegment = (
-  x: number,
-  y: number,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-): number => sdTaperedCapsule(x, y, ax, ay, 0, bx, by, 0);
+export const sdSegment = (x: number, y: number, ax: number, ay: number, bx: number, by: number): number =>
+  sdTaperedCapsule(x, y, ax, ay, 0, bx, by, 0);
 
 /** Rounded box centred at (cx,cy) with half extents (hx,hy) and corner radius r. */
 export function sdRoundBox(
@@ -76,7 +70,8 @@ export function sdRoundBox(
 }
 
 /** Signed distance to a half-plane: negative on the side opposite to the (nx,ny) normal, offset `d` from origin. */
-export const sdPlane = (x: number, y: number, nx: number, ny: number, d: number): number => x * nx + y * ny - d;
+export const sdPlane = (x: number, y: number, nx: number, ny: number, d: number): number =>
+  x * nx + y * ny - d;
 
 /** Distance to a convex/concave polygon (points flat [x0,y0,x1,y1,…]); sign by even-odd winding. */
 export function sdPolygon(x: number, y: number, pts: readonly number[]): number {

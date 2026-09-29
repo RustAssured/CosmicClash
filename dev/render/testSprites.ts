@@ -23,8 +23,8 @@ export function makeRockBody(id: string, seed: number, size = 128): TestBody {
   layer.anchorX = size >> 1;
   layer.anchorY = size >> 1;
   layer.emissive = new Uint8Array(size * size);
-  const ramp = hueShiftRamp(0.07, 0.35, 8, { lMin: 0.08, lMax: 0.85, shadowHue: 0.98, lightHue: 0.11 });
-  const glow = hueShiftRamp(0.04, 0.95, 6, { lMin: 0.35, lMax: 0.95, shadowHue: 0.99, lightHue: 0.13 });
+  const ramp = hueShiftRamp(0.07, 0.35, 8, { lMin: 0.08, lMax: 0.85, shadowHue: -0.02, lightHue: 0.11 });
+  const glow = hueShiftRamp(0.04, 0.95, 6, { lMin: 0.35, lMax: 0.95, shadowHue: -0.01, lightHue: 0.13 });
   const R = size * 0.4;
   const c = size / 2;
   const height = new Float32Array(size * size);
@@ -57,7 +57,10 @@ export function makeRockBody(id: string, seed: number, size = 128): TestBody {
         const ny = -hy * 5;
         const nl = Math.hypot(nx, ny, 1);
         const lam = Math.max(0, (nx * LIGHT[0] + ny * LIGHT[1] + LIGHT[2]) / nl);
-        const cell = Math.min(ramp.length - 1, Math.floor(lam * lam * (ramp.length - 0.01) + (noise.noise(x / 3, y / 3) > 0.35 ? 1 : 0)));
+        const cell = Math.min(
+          ramp.length - 1,
+          Math.floor(lam * lam * (ramp.length - 0.01) + (noise.noise(x / 3, y / 3) > 0.35 ? 1 : 0)),
+        );
         layer.pixels[i] = ramp[Math.max(0, cell)]!;
         layer.emissive![i] = 0;
       }
@@ -96,7 +99,7 @@ export function makeStarBody(id: string, seed: number, size = 128): TestBody {
   layer.anchorX = size >> 1;
   layer.anchorY = size >> 1;
   layer.emissive = new Uint8Array(size * size);
-  const ramp = hueShiftRamp(0.09, 0.9, 9, { lMin: 0.25, lMax: 0.97, shadowHue: 0.99, lightHue: 0.15 });
+  const ramp = hueShiftRamp(0.09, 0.9, 9, { lMin: 0.25, lMax: 0.97, shadowHue: -0.01, lightHue: 0.15 });
   const c = size / 2;
   const R = size * 0.34;
   const paint = (t: number): void => {

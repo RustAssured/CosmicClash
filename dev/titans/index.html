@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Titans sandbox</title>
+    <style>
+      :root {
+        --bg: #07070d;
+        --panel: #10111c;
+        --ink: #cfe0d6;
+        --dim: #7f8fa0;
+        --accent: #a8bdb2;
+        --gold: #e8dc96;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      #wrap {
+        display: grid;
+        grid-template-columns: minmax(0, 1280px) 260px;
+        gap: 12px;
+        padding: 10px;
+        align-items: start;
+      }
+      canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        width: 100%;
+        background: #000;
+        border: 1px solid #1c1e2d;
+        display: block;
+      }
+      #panel {
+        background: var(--panel);
+        border: 1px solid #1c1e2d;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 13px;
+        color: var(--gold);
+        letter-spacing: 0.08em;
+      }
+      label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+      }
+      select,
+      button {
+        background: #171827;
+        color: var(--ink);
+        border: 1px solid #2a2d44;
+        padding: 3px 6px;
+        font: inherit;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      .row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      pre {
+        margin: 0;
+        color: var(--dim);
+        white-space: pre-wrap;
+      }
+      #hud {
+        color: var(--ink);
+      }
+      kbd {
+        color: var(--gold);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <canvas id="view" width="640" height="360"></canvas>
+      <div id="panel">
+        <h1>TITANS · sandbox</h1>
+        <label>Mode
+          <select id="mode"><option value="fight">Fight</option><option value="viewer">Sprite viewer</option></select></label>
+        <label>Slot A
+          <select id="a"><option>lastone</option><option>asteroid</option></select></label>
+        <label>Slot B
+          <select id="b"><option>asteroid</option><option>lastone</option></select></label>
+        <label>Slot B control
+          <select id="ctl"><option value="ai">AI</option><option value="dummy">Dummy</option><option value="human">Human 2</option></select></label>
+        <label>AI level
+          <select id="ai"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
+        <label>Light
+          <select id="light"><option value="nursery">Nursery</option><option value="cold">Cold</option><option value="noon">Noon</option></select></label>
+        <label>Start state
+          <select id="state"><option value="intact">Intact</option><option value="50">50%</option><option value="10">10%</option></select></label>
+        <label>Speed
+          <select id="speed"><option value="1">1×</option><option value="0.5">½×</option><option value="0.25">¼×</option></select></label>
+        <div class="row">
+          <button id="restart">Restart</button>
+          <button id="pause">Pause</button>
+          <button id="step">Step</button>
+          <button id="dbg">Hitboxes</button>
+        </div>
+        <pre id="hud"></pre>
+        <pre>
+<kbd>WASD</kbd> move/aim  <kbd>J</kbd> strike  <kbd>K</kbd> crush
+<kbd>L</kbd> surge  <kbd>I</kbd> signature (hold)
+<kbd>O</kbd> ultimate  <kbd>U</kbd> guard (hold)  <kbd>Q</kbd> feint
+Human 2: arrows + <kbd>1 2 3 4 5 6 7</kbd> (strike crush surge sig ult guard feint)
+        </pre>
+      </div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

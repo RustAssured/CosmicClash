@@ -1,9 +1,19 @@
 import { CellFlag, type DamageResult } from '@/contracts';
+import { CONN_NOW } from './body';
 import type { Body, WorldPoint } from './body';
-import { plantFront } from './cracks';
+import { plantFrontToward } from './cracks';
 import { RAMP_SHARD, MODE_MECH } from './debris';
 import { cohesionBondScale } from './bodyinit';
-import { defaultCutOptions, edgeBond, edgeCells, breakEdge, setEdgeBond, DX, DY, type CutFinder } from './cuts';
+import {
+  defaultCutOptions,
+  edgeBond,
+  edgeCells,
+  breakEdge,
+  setEdgeBond,
+  DX,
+  DY,
+  type CutFinder,
+} from './cuts';
 import {
   DF,
   T_FRACTURE,
@@ -18,10 +28,11 @@ import {
   type DamageCtx,
 } from './dmg';
 import { PK } from './particles';
+import { findImpact, type Impact } from './impact';
 import { K_LINE } from './shape';
 
 /** Energy (baseline units) to sever one full-strength (255) bond. Seam bonds are cheaper: they are the weak paths. */
-const K_E = 4.5;
+const K_E = 3.6;
 const F_CRACK = CellFlag.CRACKED;
 
 const pt: WorldPoint = { x: 0, y: 0 };
@@ -36,6 +47,8 @@ interface CutStats {
   tipCorner: number;
 }
 const cutStats: CutStats = { broken: 0, spent: 0, complete: true, tipCorner: -1 };
+/** Corners along this event's cuts, remembered as places where SEED_CRACK fronts can start (on the surviving side). */
+const seedCorners: number[] = [];
 
 /**
  * FRACTURE — shear the target apart along its weakest bonds.
@@ -73,6 +86,7 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
   const isLine = q.kind === K_LINE;
   const continuous = ctx.has(DF.CONTINUOUS);
 
+  seedCorners.length = 0;
   if (E >= 0.4) {
     let cutB: number;
     let chanB: number;
@@ -91,18 +105,27 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
     }
     let tipCorner = -1;
     if (!continuous || (core.tick & 1) === 0) {
-      if (isLine) tipCorner = lineCut(ctx, cutB, grindB, pierce);
-      else tipCorner = blowCuts(ctx, E, cutB, grindB, brit);
+      if (isLine) tipCorner = lineCut(ctx, E, cutB, grindB, pierce);
+      else tipCorner = blowCuts(ctx, E, cutB, grindB);
     }
     if (chanB > 0) carveChannel(ctx, chanB, pierce);
     if (seamB > 0) seamPop(ctx, seamB, brit);
     if (ctx.has(DF.SEED_CRACK)) plantSeeds(ctx, E, brit);
     else if (tipCorner >= 0 && !cutStats.complete && E > 20) {
       // A cut that ran out of energy leaves a live crack tip.
-      const dir = 0;
-      plantFront(body, tipCorner % (body.w + 1), Math.floor(tipCorner / (body.w + 1)), dir, 25 + E * 0.05, 0.4 + 0.4 * brit, 1);
+      // (heading: onward along the cut's last direction if it can, else any interior edge)
+      plantFrontToward(
+        body,
+        tipCorner % (body.w + 1),
+        Math.floor(tipCorner / (body.w + 1)),
+        ctx.ldx,
+        ctx.ldy,
+        25 + E * 0.05,
+        0.4 + 0.4 * brit,
+        1,
+      );
     }
-    body.connDirty = 2;
+    body.connDirty = CONN_NOW;
   }
   recordBlow(ctx, isLine ? 0.08 : 0.16);
   finishDamage(ctx, res, coverageOf(ctx), 1);
@@ -112,8 +135,11 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
  *  Cuts
  * --------------------------------------------------------------------------------------------- */
 
+/** Slab area (cells) a blow of effective energy `E` tries to free with `cuts` cuts. */
+const slabArea = (E: number, cuts: number): number => Math.max(50, Math.min(2200, (E * 1.5) / cuts));
+
 /** Cut along a line shape's axis. Returns the tip corner of the (possibly partial) cut, or -1. */
-function lineCut(ctx: DamageCtx, cutB: number, grindB: number, pierce: boolean): number {
+function lineCut(ctx: DamageCtx, E: number, cutB: number, grindB: number, pierce: boolean): number {
   const { core, body } = ctx;
   const q = core.q;
   const w = body.w;
@@ -124,7 +150,8 @@ function lineCut(ctx: DamageCtx, cutB: number, grindB: number, pierce: boolean):
   let first = -1;
   let firstCell = -1;
   let lastCell = -1;
-  const maxDepth = ctx.params.penetration ?? (pierce ? 9999 : 34);
+  let lastInterior = false;
+  const maxDepth = ctx.params.penetration ?? (pierce ? 9999 : 60);
   for (let s = 0; s <= steps; s++) {
     const t = Math.min(q.len, s * stepLen);
     const ci = body.cellAtWorld(q.x + q.ux * t, q.y + q.uy * t);
@@ -135,6 +162,10 @@ function lineCut(ctx: DamageCtx, cutB: number, grindB: number, pierce: boolean):
     }
     if ((s - first) * stepLen > maxDepth) break;
     lastCell = ci;
+    // Is the next sample void? Then this is where the line leaves the body.
+    const t2 = Math.min(q.len, (s + 1) * stepLen);
+    const nc = body.cellAtWorld(q.x + q.ux * t2, q.y + q.uy * t2);
+    lastInterior = s < steps && nc >= 0 && mat[nc] !== 0;
   }
   if (first < 0 || lastCell === firstCell) return -1;
   const ex = firstCell % w;
@@ -144,106 +175,223 @@ function lineCut(ctx: DamageCtx, cutB: number, grindB: number, pierce: boolean):
   const lux = q.ux * body.transform.facing;
   const luy = q.uy;
   const finder = core.cuts;
-  let sC = finder.startCorner(body, ex, ey, lux, luy);
-  if (sC < 0) sC = anyCorner(finder, body, ex, ey);
-  let tC = finder.startCorner(body, xx, xy, -lux, -luy);
-  if (tC < 0) tC = anyCorner(finder, body, xx, xy);
-  if (sC < 0 || tC < 0 || sC === tC) return -1;
   const w1 = w + 1;
-  const dist = Math.hypot((sC % w1) - (tC % w1), Math.floor(sC / w1) - Math.floor(tC / w1));
-  opts.tx = tC % w1;
-  opts.ty = Math.floor(tC / w1);
+  let sC = finder.startCorner(body, ex, ey, lux, luy);
+  if (sC < 0) sC = anyCorner(body, ex, ey);
+  let tC = lastInterior ? anyCorner(body, xx, xy) : finder.startCorner(body, xx, xy, -lux, -luy);
+  if (tC < 0) tC = anyCorner(body, xx, xy);
+  if (sC < 0 || tC < 0 || sC === tC) return -1;
+  const sx = sC % w1;
+  const sy = Math.floor(sC / w1);
+  const tx = tC % w1;
+  const ty = Math.floor(tC / w1);
+  const chord = Math.hypot(tx - sx, ty - sy);
+  const A = slabArea(E, 1);
+  const h = Math.max(4, Math.min(36, Math.sqrt(A) * 0.55));
+  const cTarget = (1.5 * A) / h;
+  cutStats.complete = true;
+  if (!lastInterior && chord < cTarget * 1.3) {
+    // A shallow chord (the lash skims the outline): dive under it so a real slab is isolated.
+    let inx = body.map.coreX + 0.5 - (sx + tx) * 0.5;
+    let iny = body.map.coreY + 0.5 - (sy + ty) * 0.5;
+    const il = Math.hypot(inx, iny) || 1;
+    inx /= il;
+    iny /= il;
+    return uCutVia(ctx, sC, tC, (sx + tx) * 0.5 + inx * h, (sy + ty) * 0.5 + iny * h, cutB, grindB);
+  }
+  opts.tx = tx;
+  opts.ty = ty;
   opts.minSep = 0;
-  opts.maxRange = dist * 1.5 + 14;
+  opts.maxRange = chord * 1.5 + 14;
   opts.guideX = lux;
   opts.guideY = luy;
   opts.guideLat = 2.4;
   opts.bondK = 0.09;
-  if (!finder.find(body, sC % w1, Math.floor(sC / w1), opts)) return -1;
+  if (!finder.find(body, sx, sy, opts)) return -1;
   runCut(ctx, finder, cutB, grindB);
   return cutStats.tipCorner;
 }
 
-function anyCorner(finder: CutFinder, body: Body, x: number, y: number): number {
+function anyCorner(body: Body, x: number, y: number): number {
   const w1 = body.w + 1;
   for (let k = 0; k < 4; k++) {
     const cx = x + (k & 1);
     const cy = y + (k >> 1);
     for (let d = 0; d < 4; d++) if (edgeBond(body, cx, cy, d) >= 0) return cy * w1 + cx;
   }
-  void finder;
   return -1;
 }
 
-/** Cuts across the contact region of a blow. Returns the tip corner of the last cut (or -1). */
-function blowCuts(ctx: DamageCtx, E: number, cutB: number, grindB: number, brit: number): number {
-  const { core, body } = ctx;
-  const q = core.q;
-  const n = ctx.n;
-  const idx = core.covIdx;
-  const w = body.w;
-  const flags = body.map.flags;
-  const rng = body.rng;
-  const finder = core.cuts;
-  const w1 = w + 1;
-  // Candidate start cells: covered SURFACE cells (the blow lands on the outline).
-  let nSurf = 0;
-  for (let k = 0; k < n; k++) if ((flags[idx[k]!]! & CellFlag.SURFACE) !== 0) nSurf++;
-  if (nSurf === 0) return -1;
-  const cuts = Math.max(1, Math.min(5, Math.round(1 + Math.sqrt(E) / 11)));
-  const rShape = Math.sqrt(q.area / Math.PI);
-  const minSep = Math.max(5, Math.min(26, rShape * 0.8));
-  let tip = -1;
-  let lastX = -100;
-  let lastY = -100;
-  let incomplete = false;
-  cutStats.complete = true;
-  for (let c = 0; c < cuts; c++) {
-    // Pick a surface cell, preferring ones not close to a previous start.
-    let cell = -1;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      let pick = rng.int(nSurf);
-      for (let k = 0; k < n; k++) {
-        const i = idx[k]!;
-        if ((flags[i]! & CellFlag.SURFACE) === 0) continue;
-        if (pick-- === 0) {
-          cell = i;
-          break;
-        }
-      }
-      const cx = cell % w;
-      const cy = (cell - cx) / w;
-      if (Math.abs(cx - lastX) + Math.abs(cy - lastY) >= 5 || attempt === 4) {
-        lastX = cx;
-        lastY = cy;
-        break;
+/** Nearest live SURFACE cell to local point (px, py) within `rad`; -1 if none. */
+function nearestSurfaceCell(body: Body, px: number, py: number, rad: number): number {
+  const { w, h } = body;
+  const map = body.map;
+  let best = -1;
+  let bd = Infinity;
+  for (let y = Math.max(0, Math.floor(py - rad)); y <= Math.min(h - 1, Math.ceil(py + rad)); y++) {
+    for (let x = Math.max(0, Math.floor(px - rad)); x <= Math.min(w - 1, Math.ceil(px + rad)); x++) {
+      const i = y * w + x;
+      if (map.material[i] === 0 || (map.flags[i]! & CellFlag.SURFACE) === 0) continue;
+      const d = (x + 0.5 - px) * (x + 0.5 - px) + (y + 0.5 - py) * (y + 0.5 - py);
+      if (d < bd) {
+        bd = d;
+        best = i;
       }
     }
-    if (cell < 0) continue;
-    const x = cell % w;
-    const y = (cell - x) / w;
-    outwardNormal(body, x, y, 3, nrm);
-    const inX = -nrm.x;
-    const inY = -nrm.y;
-    const sC = finder.startCorner(body, x, y, inX, inY);
-    if (sC < 0) continue;
-    // Guide: across the blow (perpendicular to its local direction), rotated a little per cut.
-    const ang = Math.atan2(ctx.ldx, -ctx.ldy) + (rng.next() - 0.5) * 1.3; // perpendicular of (ldx, ldy)
-    opts.tx = -1;
-    opts.ty = -1;
-    opts.minSep = minSep * (0.85 + 0.3 * rng.next());
-    opts.maxRange = opts.minSep * 2.6 + 8;
-    opts.guideX = Math.cos(ang);
-    opts.guideY = Math.sin(ang);
-    opts.guideLat = 0.32;
+  }
+  return best;
+}
+
+/** Nearest live cell to local (px, py) within `rad`; -1 if none. */
+function nearestLiveCell(body: Body, px: number, py: number, rad: number): number {
+  const { w, h } = body;
+  const map = body.map;
+  let best = -1;
+  let bd = Infinity;
+  for (let y = Math.max(0, Math.floor(py - rad)); y <= Math.min(h - 1, Math.ceil(py + rad)); y++) {
+    for (let x = Math.max(0, Math.floor(px - rad)); x <= Math.min(w - 1, Math.ceil(px + rad)); x++) {
+      const i = y * w + x;
+      if (map.material[i] === 0) continue;
+      const d = (x + 0.5 - px) * (x + 0.5 - px) + (y + 0.5 - py) * (y + 0.5 - py);
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * A U-shaped cut: outline corner S -> interior waypoint (wx, wy) -> outline corner T. The two legs follow the weakest bonds
+ * (seams, faults), and together they isolate the slab between the U and the outline. Returns the tip corner.
+ */
+function uCutVia(
+  ctx: DamageCtx,
+  sC: number,
+  tC: number,
+  wx: number,
+  wy: number,
+  cutB: number,
+  grindB: number,
+): number {
+  const { core, body } = ctx;
+  const finder = core.cuts;
+  const w1 = body.w + 1;
+  const wc = nearestLiveCell(body, wx, wy, 4);
+  if (wc < 0) return -1;
+  const wCorner = anyCorner(body, wc % body.w, Math.floor(wc / body.w));
+  if (wCorner < 0) return -1;
+  const sx = sC % w1;
+  const sy = Math.floor(sC / w1);
+  const tx = tC % w1;
+  const ty = Math.floor(tC / w1);
+  const mx = wCorner % w1;
+  const my = Math.floor(wCorner / w1);
+  const l1 = Math.hypot(mx - sx, my - sy);
+  const l2 = Math.hypot(tx - mx, ty - my);
+  const legs: [number, number, number, number, number][] = [
+    [sx, sy, mx, my, l1],
+    [mx, my, tx, ty, l2],
+  ];
+  let tip = -1;
+  let incomplete = false;
+  for (let k = 0; k < 2; k++) {
+    const [ax, ay, bx, by, len] = legs[k]!;
+    if (k === 1 && incomplete) break;
+    opts.tx = bx;
+    opts.ty = by;
+    opts.minSep = 0;
+    opts.maxRange = len * 1.8 + 12;
+    const gl = Math.max(1e-6, len);
+    opts.guideX = (bx - ax) / gl;
+    opts.guideY = (by - ay) / gl;
+    opts.guideLat = 0.22;
     opts.bondK = 0.09;
-    if (!finder.find(body, sC % w1, Math.floor(sC / w1), opts)) continue;
-    runCut(ctx, finder, cutB / cuts, grindB / cuts);
+    if (!finder.find(body, ax, ay, opts)) {
+      incomplete = true;
+      continue;
+    }
+    runCut(ctx, finder, cutB * (len / Math.max(1, l1 + l2)), grindB * (len / Math.max(1, l1 + l2)));
     tip = cutStats.tipCorner;
     if (!cutStats.complete) incomplete = true;
   }
   cutStats.complete = !incomplete;
-  void brit;
+  return tip;
+}
+
+const imp: Impact = { fx: 0, fy: 0, nx: 0, ny: -1, hasNormal: false };
+
+/** Cuts across the contact region of a blow: U-cuts that isolate slabs sized by the energy. Returns the last tip corner. */
+function blowCuts(ctx: DamageCtx, E: number, cutB: number, grindB: number): number {
+  const { core, body } = ctx;
+  const rng = body.rng;
+  if (!findImpact(ctx, imp)) return -1;
+  const w = body.w;
+  const mat = body.map.material;
+  const cuts = Math.max(1, Math.min(3, Math.round(E / 380) + 1));
+  const inX = -imp.nx;
+  const inY = -imp.ny;
+  // Depth available along the inward normal.
+  let avail = 0;
+  for (; avail < 90; avail++) {
+    const x = Math.floor(imp.fx + inX * (avail + 1));
+    const y = Math.floor(imp.fy + inY * (avail + 1));
+    if (x < 0 || y < 0 || x >= w || y >= body.h || mat[y * w + x] === 0) break;
+  }
+  const A = slabArea(E, cuts);
+  let h = Math.max(4, Math.min(36, Math.sqrt(A) * 0.55));
+  h = Math.min(h, avail * 0.72);
+  if (h < 3) return -1;
+  const chord = (1.5 * A) / h;
+  const tX = -inY;
+  const tY = inX;
+  // Tangential swipe direction (which way the slab slides): sign of the blow's tangential component.
+  const swipe = ctx.ldx * tX + ctx.ldy * tY;
+  let tip = -1;
+  let incomplete = false;
+  for (let c = 0; c < cuts; c++) {
+    const half = Math.max(5, Math.min(52, chord * 0.5)) * (c === 0 ? 1 : 0.8);
+    const shift =
+      (c === 0 ? 0 : (c % 2 === 0 ? 1 : -1) * half * 0.9) +
+      swipe * half * 0.35 +
+      (rng.next() - 0.5) * half * 0.3;
+    const depth = h * (c === 0 ? 1 : 0.85);
+    const ps = nearestSurfaceCell(
+      body,
+      imp.fx + tX * (shift - half) - inX * 1.5,
+      imp.fy + tY * (shift - half) - inY * 1.5,
+      14,
+    );
+    const pe = nearestSurfaceCell(
+      body,
+      imp.fx + tX * (shift + half) - inX * 1.5,
+      imp.fy + tY * (shift + half) - inY * 1.5,
+      14,
+    );
+    if (ps < 0 || pe < 0 || ps === pe) continue;
+    const sxc = ps % w;
+    const syc = (ps - sxc) / w;
+    const exc = pe % w;
+    const eyc = (pe - exc) / w;
+    let sC = core.cuts.startCorner(body, sxc, syc, inX, inY);
+    if (sC < 0) sC = anyCorner(body, sxc, syc);
+    let tC = core.cuts.startCorner(body, exc, eyc, inX, inY);
+    if (tC < 0) tC = anyCorner(body, exc, eyc);
+    if (sC < 0 || tC < 0 || sC === tC) continue;
+    const t = uCutVia(
+      ctx,
+      sC,
+      tC,
+      imp.fx + tX * shift + inX * depth,
+      imp.fy + tY * shift + inY * depth,
+      cutB / cuts,
+      grindB / cuts,
+    );
+    if (t >= 0) tip = t;
+    if (!cutStats.complete) incomplete = true;
+  }
+  cutStats.complete = !incomplete;
   return tip;
 }
 
@@ -254,7 +402,6 @@ function runCut(ctx: DamageCtx, finder: CutFinder, budget: number, grindBudget: 
   const path = finder.path;
   const L = finder.pathLen;
   const coh = Math.max(0.2, body.cohesionScale);
-  const mats = body.materials;
   const mat = body.map.material;
   const perEdgeGrind = grindBudget / Math.max(1, L - 1);
   let spent = 0;
@@ -301,7 +448,7 @@ function runCut(ctx: DamageCtx, finder: CutFinder, budget: number, grindBudget: 
       grindCell(ctx, a, perEdgeGrind);
       grindCell(ctx, b, perEdgeGrind);
       if (rng.next() < 0.22) {
-        localToWorldF(body, ux + (DX[d]! * 0.5), uy + (DY[d]! * 0.5), pt);
+        localToWorldF(body, ux + DX[d]! * 0.5, uy + DY[d]! * 0.5, pt);
         const m = mat[mat[a] !== 0 ? a : b]!;
         core.particles.spawn(
           core,
@@ -313,7 +460,7 @@ function runCut(ctx: DamageCtx, finder: CutFinder, budget: number, grindBudget: 
           8 + rng.int(9),
           1,
           255,
-          body.rampIds[m * 4 + RAMP_SHARD]!,
+          body.rampIds[m * 5 + RAMP_SHARD]!,
           0,
           2.5,
           0,
@@ -321,7 +468,10 @@ function runCut(ctx: DamageCtx, finder: CutFinder, budget: number, grindBudget: 
       }
     }
   }
-  void mats;
+  if (L > 2) {
+    seedCorners.push(path[L >> 1]!);
+    seedCorners.push(path[Math.max(0, (L >> 1) - (L >> 2))]!);
+  }
   cutStats.broken = broken;
   cutStats.spent = spent;
   cutStats.complete = complete;
@@ -340,11 +490,15 @@ function grindCell(ctx: DamageCtx, i: number, energy: number): void {
   const it = map.integrity[i]! - loss;
   ctx.note(i, 1);
   if (it <= 0) {
-    const x = i % body.w;
-    void x;
-    destroyCell(ctx, i, (ctx.dirX + (body.rng.next() - 0.5)) * 20, (ctx.dirY + (body.rng.next() - 0.5)) * 20, MODE_MECH);
+    destroyCell(
+      ctx,
+      i,
+      (ctx.dirX + (body.rng.next() - 0.5)) * 20,
+      (ctx.dirY + (body.rng.next() - 0.5)) * 20,
+      MODE_MECH,
+    );
   } else {
-    map.integrity[i] = it;
+    map.integrity[i] = it < 1 ? 1 : it; // Uint8 truncates: never let a live cell round down to 0
     map.flags[i] = map.flags[i]! | F_CRACK;
   }
 }
@@ -399,10 +553,23 @@ function carveChannel(ctx: DamageCtx, budget: number, pierce: boolean): void {
     order[fill[b]!++] = idx[k]!;
   }
   let spent = 0;
+  let bx0 = w;
+  let by0 = body.h;
+  let bx1 = -1;
+  let by1 = -1;
   for (let j = 0; j < m; j++) {
     const i = order[j]!;
     if (map.material[i] === 0) continue;
-    const cost = (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.2, resistOf(body, i, T_FRACTURE));
+    {
+      const x = i % w;
+      const y = (i - x) / w;
+      if (x < bx0) bx0 = x;
+      if (x > bx1) bx1 = x;
+      if (y < by0) by0 = y;
+      if (y > by1) by1 = y;
+    }
+    const cost =
+      (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.2, resistOf(body, i, T_FRACTURE));
     ctx.note(i, 1);
     if (spent + cost > budget) {
       // Partial: bruise the first uncut cell with what is left, then stop.
@@ -412,9 +579,15 @@ function carveChannel(ctx: DamageCtx, budget: number, pierce: boolean): void {
       break;
     }
     spent += cost;
-    destroyCell(ctx, i, ctx.dirX * 46 + (body.rng.next() - 0.5) * 30, ctx.dirY * 46 + (body.rng.next() - 0.5) * 30, MODE_MECH);
+    destroyCell(
+      ctx,
+      i,
+      ctx.dirX * 46 + (body.rng.next() - 0.5) * 30,
+      ctx.dirY * 46 + (body.rng.next() - 0.5) * 30,
+      MODE_MECH,
+    );
   }
-  body.touch(0, 0, body.w - 1, body.h - 1);
+  if (bx1 >= 0) body.touch(bx0 - 1, by0 - 1, bx1 + 1, by1 + 1);
 }
 
 /* --------------------------------------------------------------------------------------------- *
@@ -435,6 +608,10 @@ function seamPop(ctx: DamageCtx, budget: number, brit: number): void {
   const p = Math.min(0.55, (budget / Math.max(1, n)) * 2.2 * (0.25 + brit));
   if (p < 0.005) return;
   let spent = 0;
+  let sx0 = w;
+  let sy0 = body.h;
+  let sx1 = -1;
+  let sy1 = -1;
   for (let k = 0; k < n && spent < budget; k++) {
     const i = idx[k]!;
     const x = i % w;
@@ -455,10 +632,15 @@ function seamPop(ctx: DamageCtx, budget: number, brit: number): void {
         map.flags[i] = map.flags[i]! | F_CRACK;
         map.flags[j] = map.flags[j]! | F_CRACK;
         ctx.note(i, 0.5);
+        const y = (i - x) / w;
+        if (x < sx0) sx0 = x;
+        if (x > sx1) sx1 = x;
+        if (y < sy0) sy0 = y;
+        if (y > sy1) sy1 = y;
       }
     }
   }
-  body.touch(0, 0, body.w - 1, body.h - 1);
+  if (sx1 >= 0) body.touch(sx0 - 1, sy0 - 1, sx1 + 2, sy1 + 2);
 }
 
 /** SEED_CRACK: plant crack fronts around the contact; they propagate over the following seconds. */
@@ -473,26 +655,50 @@ function plantSeeds(ctx: DamageCtx, E: number, brit: number): void {
   const stress0 = ctx.params.crackStress ?? Math.min(230, 70 + E * 0.12);
   const speed = 0.45 + 0.75 * brit;
   const flags = body.map.flags;
+  // Covered outline cells are where cracks start and run inward; with none (deep hit) any covered cell will do.
+  let nSurf = 0;
+  for (let k = 0; k < n; k++) if ((flags[idx[k]!]! & CellFlag.SURFACE) !== 0) nSurf++;
   for (let s = 0; s < seeds; s++) {
-    // Prefer covered surface cells (cracks start at the outline and run inward), else any covered cell.
-    let cell = -1;
-    for (let attempt = 0; attempt < 6 && cell < 0; attempt++) {
-      const c = idx[rng.int(n)]!;
-      if ((flags[c]! & CellFlag.SURFACE) !== 0 || attempt === 5) cell = c;
+    // First choice: points along this event's own cuts, running toward the core through the surviving body.
+    if (seedCorners.length > 0) {
+      const c = seedCorners[rng.int(seedCorners.length)]!;
+      const cx = c % w1;
+      const cy = Math.floor(c / w1);
+      let ix = body.map.coreX + 0.5 - cx;
+      let iy = body.map.coreY + 0.5 - cy;
+      const il = Math.hypot(ix, iy) || 1;
+      ix = ix / il + (rng.next() - 0.5) * 0.8;
+      iy = iy / il + (rng.next() - 0.5) * 0.8;
+      if (plantFrontToward(body, cx, cy, ix, iy, stress0 * (0.75 + 0.5 * rng.next()), speed, 0)) continue;
     }
+    let cell = -1;
+    if (nSurf > 0) {
+      let pick = rng.int(nSurf);
+      for (let k = 0; k < n; k++) {
+        const c = idx[k]!;
+        if ((flags[c]! & CellFlag.SURFACE) === 0) continue;
+        if (pick-- === 0) {
+          cell = c;
+          break;
+        }
+      }
+    } else cell = idx[rng.int(n)]!;
     if (cell < 0) continue;
     const x = cell % w;
     const y = (cell - x) / w;
     outwardNormal(body, x, y, 3, nrm);
-    const sC = core.cuts.startCorner(body, x, y, -nrm.x, -nrm.y);
+    let sC = core.cuts.startCorner(body, x, y, -nrm.x, -nrm.y);
+    if (sC < 0) sC = anyCorner(body, x, y);
     if (sC < 0) continue;
-    // Initial heading: into the body, snapped to an axis.
-    let dir: number;
-    const ix = -nrm.x;
-    const iy = -nrm.y;
-    if (Math.abs(ix) > Math.abs(iy)) dir = ix > 0 ? 0 : 2;
-    else dir = iy > 0 ? 1 : 3;
-    if (rng.next() < 0.35) dir = (dir + (rng.next() < 0.5 ? 1 : 3)) & 3;
-    plantFront(body, sC % w1, Math.floor(sC / w1), dir, stress0 * (0.75 + 0.5 * rng.next()), speed, 0);
+    plantFrontToward(
+      body,
+      sC % w1,
+      Math.floor(sC / w1),
+      -nrm.x,
+      -nrm.y,
+      stress0 * (0.75 + 0.5 * rng.next()),
+      speed,
+      0,
+    );
   }
 }

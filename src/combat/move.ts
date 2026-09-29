@@ -2,6 +2,7 @@ import type { AimDir, FrameData, MoveDef, MovePhase, MoveVariant } from '@/contr
 
 /** Max hitboxes per variant the runtime tracks re-hit state for (validated when a move starts). */
 export const MAX_HITBOXES = 24;
+export const MAX_DISP = 400;
 
 /**
  * Runtime state of the move in progress (one preallocated instance per fighter — moves never allocate).
@@ -48,6 +49,12 @@ export class ActiveMove {
   interrupted = false;
   /** Counts hits this move connected (AI/passives). */
   hits = 0;
+  /**
+   * Predicted forward displacement (px, facing-relative) of the anchor at each choreography tick since the move began, from the
+   * movement keys and the same decay maths as the fighter's movement. Used to place UPCOMING hit shapes where the attack will
+   * actually be when it goes live (a lunge covers ground before its hitbox appears).
+   */
+  readonly disp = new Float32Array(MAX_DISP);
 
   reset(): void {
     this.def = null;
@@ -76,4 +83,29 @@ export function resolveFrame(def: MoveDef, variant: MoveVariant): FrameData {
 /** Stick → aim: up / down beyond 0.45 deflection, otherwise forward (neutral or toward the foe). */
 export function aimFromStick(moveY: number): AimDir {
   return moveY < -0.45 ? 'up' : moveY > 0.45 ? 'down' : 'forward';
+}
+
+/** Fill `out` with forward displacement per tick for a move's movement keys, starting from forward velocity `v0` (px/s). */
+export function fillDisplacement(
+  out: Float32Array,
+  keys: readonly { at: number; ix: number; damp?: number }[],
+  v0: number,
+  dt: number,
+  glideHalfLife: number,
+): void {
+  const half = Math.pow(0.5, dt / glideHalfLife);
+  let v = v0;
+  let x = 0;
+  let damp = 1;
+  let ki = 0;
+  for (let t = 0; t < out.length; t++) {
+    while (ki < keys.length && keys[ki]!.at <= t) {
+      const k = keys[ki++]!;
+      v += k.ix;
+      if (k.damp !== undefined) damp = k.damp;
+    }
+    v *= damp < 1 ? Math.pow(damp, dt) : half;
+    x += v * dt;
+    out[t] = x;
+  }
 }

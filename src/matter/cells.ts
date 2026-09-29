@@ -29,7 +29,6 @@ export function killCell(body: Body, i: number): number {
   const x = i % w;
   const y = (i - x) / w;
   const mat = map.material;
-  const fl = map.flags;
   if (x > 0) {
     map.bondR[i - 1] = 0;
     if (mat[i - 1] !== 0) exposeCell(body, i - 1);
@@ -40,7 +39,8 @@ export function killCell(body: Body, i: number): number {
   }
   if (x < w - 1 && mat[i + 1] !== 0) exposeCell(body, i + 1);
   if (y < body.h - 1 && mat[i + w] !== 0) exposeCell(body, i + w);
-  void fl;
+  // The one removal primitive also invalidates the tile/region caches, so no caller can forget to.
+  body.touchPoint(x, y);
   body.removedTotal += m;
   return m;
 }
@@ -118,7 +118,15 @@ export function refreshSurfaceRect(body: Body, x0: number, y0: number, x1: numbe
         fl[i] = 0;
         continue;
       }
-      const surf = x === 0 || y === 0 || x === w - 1 || y === h - 1 || mat[i - 1] === 0 || mat[i + 1] === 0 || mat[i - w] === 0 || mat[i + w] === 0;
+      const surf =
+        x === 0 ||
+        y === 0 ||
+        x === w - 1 ||
+        y === h - 1 ||
+        mat[i - 1] === 0 ||
+        mat[i + 1] === 0 ||
+        mat[i - w] === 0 ||
+        mat[i + w] === 0;
       fl[i] = surf ? fl[i]! | F_SURF : fl[i]! & ~F_SURF;
     }
   }

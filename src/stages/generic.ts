@@ -3,7 +3,8 @@ import { STAGE_INFO } from './info';
 import type { SceneryFrame, SceneryInit, SceneryLook, StageScenery } from './types';
 import { makeCloud } from './toolkit/clouds';
 import { SceneryKit } from './toolkit/kit';
-import { addNebula, type Rgb } from './toolkit/nebula';
+import type { Rgb } from './toolkit/color';
+import { addNebula } from './toolkit/nebula';
 import { Noise2 } from './toolkit/noise';
 import { layerBounds, makeStarField } from './toolkit/stars';
 import type { WebGLRenderTarget } from 'three';
@@ -15,6 +16,8 @@ import type { WebGLRenderTarget } from 'three';
  */
 
 interface GenericStyle {
+  /** Overall gas brightness (quiet stages stay dark so the fighters read). */
+  amount: number;
   sky: Rgb;
   gasA: Rgb;
   gasB: Rgb;
@@ -29,6 +32,7 @@ interface GenericStyle {
 
 const STYLES: Record<StageId, GenericStyle> = {
   nursery: {
+    amount: 1,
     sky: [0.012, 0.008, 0.03],
     gasA: [0.16, 0.03, 0.14],
     gasB: [0.5, 0.1, 0.32],
@@ -40,6 +44,7 @@ const STYLES: Record<StageId, GenericStyle> = {
     exposure: 1.1,
   },
   rim: {
+    amount: 0.55,
     sky: [0.004, 0.012, 0.024],
     gasA: [0.02, 0.1, 0.13],
     gasB: [0.05, 0.36, 0.4],
@@ -51,6 +56,7 @@ const STYLES: Record<StageId, GenericStyle> = {
     exposure: 1.15,
   },
   redgiant: {
+    amount: 0.6,
     sky: [0.014, 0.004, 0.014],
     gasA: [0.16, 0.02, 0.05],
     gasB: [0.6, 0.12, 0.05],
@@ -62,6 +68,7 @@ const STYLES: Record<StageId, GenericStyle> = {
     exposure: 1.1,
   },
   quasar: {
+    amount: 0.34,
     sky: [0.002, 0.003, 0.01],
     gasA: [0.02, 0.03, 0.14],
     gasB: [0.12, 0.2, 0.7],
@@ -73,6 +80,7 @@ const STYLES: Record<StageId, GenericStyle> = {
     exposure: 1.2,
   },
   tussenruimte: {
+    amount: 0.3,
     sky: [0.002, 0.004, 0.004],
     gasA: [0.018, 0.04, 0.03],
     gasB: [0.09, 0.2, 0.15],
@@ -129,7 +137,7 @@ export class GenericScenery implements StageScenery {
       colB: st.gasA,
       colC: [0, 0, 0],
       colD: [0, 0, 0],
-      gain: 1,
+      gain: st.amount,
       lightDir: st.light,
       litK: 0,
       flowSpeed: 0.03,
@@ -139,7 +147,15 @@ export class GenericScenery implements StageScenery {
     // stars, far
     let bd = layerBounds(arena, 0.04);
     kit.addSprites('stars-far', {
-      buffer: makeStarField({ count: Math.round(900 * q), bounds: bd, size: [0.6, 1.0], base: 0.25, boost: 1.5, seed: seed + 1, tint: st.starTint }),
+      buffer: makeStarField({
+        count: Math.round(900 * q),
+        bounds: bd,
+        size: [0.6, 1.0],
+        base: 0.25,
+        boost: 1.5,
+        seed: seed + 1,
+        tint: st.starTint,
+      }),
       parallax: 0.04,
       blend: 'add',
       soft: 4,
@@ -157,7 +173,7 @@ export class GenericScenery implements StageScenery {
       colB: st.gasB,
       colC: st.gasHot,
       colD: st.rim,
-      gain: 0.9,
+      gain: 0.9 * st.amount,
       lightDir: st.light,
       litK: 5,
       flowSpeed: 0.05,
@@ -182,7 +198,7 @@ export class GenericScenery implements StageScenery {
             (st.gasB[0] * (1 - hot) + st.gasHot[0] * hot) * k,
             (st.gasB[1] * (1 - hot) + st.gasHot[1] * hot) * k,
             (st.gasB[2] * (1 - hot) + st.gasHot[2] * hot) * k,
-            0.07,
+            0.07 * st.amount,
           ];
         },
         seed: seed + 2,
@@ -199,7 +215,15 @@ export class GenericScenery implements StageScenery {
     });
     bd = layerBounds(arena, 0.22);
     kit.addSprites('stars-mid', {
-      buffer: makeStarField({ count: Math.round(260 * q), bounds: bd, size: [0.9, 1.6], base: 0.5, boost: 2.5, seed: seed + 3, tint: st.starTint }),
+      buffer: makeStarField({
+        count: Math.round(260 * q),
+        bounds: bd,
+        size: [0.9, 1.6],
+        base: 0.5,
+        boost: 2.5,
+        seed: seed + 3,
+        tint: st.starTint,
+      }),
       parallax: 0.22,
       blend: 'add',
       soft: 3,
@@ -262,10 +286,6 @@ export class GenericScenery implements StageScenery {
     const l = this.info.lighting.screenPos;
     out.x = l[0] * 640;
     out.y = l[1] * 360;
-  }
-
-  restore(): void {
-    this.kit?.restore();
   }
 
   dispose(): void {

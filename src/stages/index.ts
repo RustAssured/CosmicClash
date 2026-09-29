@@ -5,4 +5,11 @@ import { STAGE_INFO } from './info';
 export const STAGES: Record<StageId, StageInfo> = STAGE_INFO;
 export { STAGE_INFO };
 export { createScenery, isStageImplemented } from './scenery';
-export type { StageScenery, SceneryInit, SceneryFrame, SceneryLook, SceneryForces, QualityTier } from './types';
+export type {
+  StageScenery,
+  SceneryInit,
+  SceneryFrame,
+  SceneryLook,
+  SceneryForces,
+  QualityTier,
+} from './types';

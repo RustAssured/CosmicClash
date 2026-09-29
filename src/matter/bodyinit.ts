@@ -72,6 +72,10 @@ export function initBody(core: WorldCore, body: Body): void {
   const faults = makeFaults(body, liveMinX, liveMinY, liveMaxX, liveMaxY);
   initBonds(body, grain, faults);
 
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++)
+      body.vein[y * w + x] = Math.round((0.3 + 1.5 * valueNoise(x / 5.5, y / 5.5, body.seed ^ 0x51)) * 64);
+
   // 3. Surface flags and the set of materials that occur on the pristine surface.
   refreshSurfaceRect(body, 0, 0, w - 1, h - 1);
   body.surfaceMat.fill(0);
@@ -81,8 +85,16 @@ export function initBody(core: WorldCore, body: Body): void {
   const cr = Math.max(1, map.coreRadius);
   const disc: number[] = [];
   let corePristine = 0;
-  for (let y = Math.max(0, Math.floor(map.coreY - cr)); y <= Math.min(h - 1, Math.ceil(map.coreY + cr)); y++) {
-    for (let x = Math.max(0, Math.floor(map.coreX - cr)); x <= Math.min(w - 1, Math.ceil(map.coreX + cr)); x++) {
+  for (
+    let y = Math.max(0, Math.floor(map.coreY - cr));
+    y <= Math.min(h - 1, Math.ceil(map.coreY + cr));
+    y++
+  ) {
+    for (
+      let x = Math.max(0, Math.floor(map.coreX - cr));
+      x <= Math.min(w - 1, Math.ceil(map.coreX + cr));
+      x++
+    ) {
       const dx = x + 0.5 - (map.coreX + 0.5);
       const dy = y + 0.5 - (map.coreY + 0.5);
       if (dx * dx + dy * dy > cr * cr) continue;
@@ -231,7 +243,15 @@ function initBonds(body: Body, grain: Uint16Array, faults: Fault[]): void {
   const mat = map.material;
   const coh = cohesionBondScale(body.attributes.cohesion);
   const seed = body.seed;
-  const bondFor = (a: number, b: number, ax: number, ay: number, bx: number, by: number, salt: number): number => {
+  const bondFor = (
+    a: number,
+    b: number,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    salt: number,
+  ): number => {
     const ma = mat[a]!;
     const mb = mat[b]!;
     const A = mats[ma]!;

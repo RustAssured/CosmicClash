@@ -4,8 +4,6 @@ import {
   clamp01,
   createMatterMap,
   hex,
-  mix,
-  smoothstep,
   type MatterMap,
   type StageLighting,
   type TitanDef,
@@ -163,7 +161,8 @@ function makeLayout(def: TitanDef, seed: number): Layout {
       y += Math.sin(h) * 2.6;
       const t = s / len;
       path.push(x, y, w0 * (1 - 0.55 * t));
-      if (depth === 0 && s === Math.floor(len * 0.45)) walk(x, y, h + rng.range(0.7, 1.2) * (rng.chance(0.5) ? 1 : -1), Math.floor(len * 0.5), w0 * 0.6, 1);
+      if (depth === 0 && s === Math.floor(len * 0.45))
+        walk(x, y, h + rng.range(0.7, 1.2) * (rng.chance(0.5) ? 1 : -1), Math.floor(len * 0.5), w0 * 0.6, 1);
       if (sd(x, y) > -1 && s > 6) break;
     }
     veins.push(path);
@@ -219,7 +218,8 @@ export function paintAsteroid(
   const w2 = makeWorley();
 
   const mask = new Uint8Array(W * H);
-  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) if (L.sd(x + 0.5, y + 0.5) < 0) mask[y * W + x] = 1;
+  for (let y = 1; y < H - 1; y++)
+    for (let x = 1; x < W - 1; x++) if (L.sd(x + 0.5, y + 0.5) < 0) mask[y * W + x] = 1;
   keepLargestComponent(mask, W, H);
   const dist = edt(mask, W, H, false);
   const coreX = L.cx + p.core.x;
@@ -380,14 +380,12 @@ export function paintAsteroid(
 
   paintIce(cv, colors, def, ids);
   paintCore(cv, colors, def, ids, coreX, coreY, CR);
-  void mix;
-  void smoothstep;
-  void clamp;
-  void bayer4;
-  void hex;
 
+  keepLargestComponent(cv.mat, W, H);
   const map = createMatterMap(W, H);
-  cv.writeTo(map, colors, (m) => (m === ids.dense ? 205 : m === ids.ice ? 92 : m === ids.regolith ? 122 : 130));
+  cv.writeTo(map, colors, (m) =>
+    m === ids.dense ? 205 : m === ids.ice ? 92 : m === ids.regolith ? 122 : 130,
+  );
   map.coreX = Math.round(coreX);
   map.coreY = Math.round(coreY);
   map.coreRadius = CR;
@@ -435,13 +433,14 @@ function paintCore(
       const nz = Math.sqrt(Math.max(0, 1 - r * r));
       const diff = clamp01((-dx / R) * 0.55 + (-dy / R) * 0.55 + nz * 0.62);
       const bounce = clamp01((dx / R + dy / R) * 0.35) * 0.35;
-      let k = 0.5 + diff * 3.2 + bounce + (fbm(x * 0.3, y * 0.3, 555, 2) * 0.35);
+      let k = 0.5 + diff * 3.2 + bounce + fbm(x * 0.3, y * 0.3, 555, 2) * 0.35;
       k *= 1 - 0.4 * clamp01((r - 0.78) / 0.22);
       k = clamp(k, 0, 5);
       const fl = Math.floor(k);
       const fr = k - fl;
       colors[i] = ramp[Math.min(5, fl + (fr > 0.5 + (bayer4(x, y) - 0.5) * 0.5 ? 1 : 0))]!;
-      if (nz > 0.72 && dx < 0 && dy < 0 && Math.hypot(dx + R * 0.32, dy + R * 0.36) < R * 0.17) colors[i] = ramp[5]!;
+      if (nz > 0.72 && dx < 0 && dy < 0 && Math.hypot(dx + R * 0.32, dy + R * 0.36) < R * 0.17)
+        colors[i] = ramp[5]!;
     }
   }
 }

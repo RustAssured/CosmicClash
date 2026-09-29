@@ -91,6 +91,7 @@ export class Match implements MatchApi {
     this.fighterRng = [this.rng.fork('f0'), this.rng.fork('f1')];
     this.world = deps.createWorld(this.rng.fork('world').nextU32());
     this.world.setLighting(deps.lighting);
+    this.world.setArena(deps.arena);
 
     const mk = (slot: 0 | 1): Fighter =>
       deps.createFighter({

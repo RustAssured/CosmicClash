@@ -87,7 +87,8 @@ describe('layer placement + source-cell mapping', () => {
     const c = { x: 0, y: 0 };
     // the sprite's centre column, traced through each row
     const colAtRow = (row: number): number => {
-      for (let px = p.x0; px < p.x1; px++) if (sourceCell(p, px, p.ay + row - 40, c) && c.x === 40) return px - p.ax;
+      for (let px = p.x0; px < p.x1; px++)
+        if (sourceCell(p, px, p.ay + row - 40, c) && c.x === 40) return px - p.ax;
       return NaN;
     };
     expect(colAtRow(40)).toBe(0); // anchor row: no shift
@@ -114,7 +115,12 @@ describe('layer placement + source-cell mapping', () => {
 
   it('screen layers map 1:1', () => {
     const p = makePlacement();
-    placeLayer({ ...layerFor({ x: 0, y: 0, anchorX: 0, anchorY: 0, facing: 1, lean: 0 }, 640, 360), space: 'screen' }, view, 0, p);
+    placeLayer(
+      { ...layerFor({ x: 0, y: 0, anchorX: 0, anchorY: 0, facing: 1, lean: 0 }, 640, 360), space: 'screen' },
+      view,
+      0,
+      p,
+    );
     const c = { x: 0, y: 0 };
     expect(sourceCell(p, 123, 45, c)).toBe(true);
     expect(c).toEqual({ x: 123, y: 45 });

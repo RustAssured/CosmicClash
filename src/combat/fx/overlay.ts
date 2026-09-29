@@ -17,8 +17,24 @@ export class Overlay {
   private lastX = 0;
   private lastY = 0;
   private started = false;
+  /** Bounding box of pixels drawn this frame / last frame (layer-local, half-open) — clears and uploads touch only these. */
+  private bx0 = 0;
+  private by0 = 0;
+  private bx1 = 0;
+  private by1 = 0;
+  private pbx0 = 0;
+  private pby0 = 0;
+  private pbx1 = 0;
+  private pby1 = 0;
 
-  constructor(id: string, z: number, w: number, h: number, blend: 'normal' | 'add' = 'normal', emissive = false) {
+  constructor(
+    id: string,
+    z: number,
+    w: number,
+    h: number,
+    blend: 'normal' | 'add' = 'normal',
+    emissive = false,
+  ) {
     this.layer = makeLayer(id, 'world', z, w, h);
     this.layer.blend = blend;
     this.layer.anchorX = w >> 1;
@@ -36,8 +52,16 @@ export class Overlay {
     const cy = Math.round(ay);
     this.ox = cx - (this.w >> 1);
     this.oy = cy - (this.h >> 1);
-    this.px.fill(0);
-    this.layer.emissive?.fill(0);
+    // clear only what was drawn last frame (layer-local coordinates are stable)
+    this.clearBox(this.bx0, this.by0, this.bx1, this.by1);
+    this.pbx0 = this.bx0;
+    this.pby0 = this.by0;
+    this.pbx1 = this.bx1;
+    this.pby1 = this.by1;
+    this.bx0 = this.w;
+    this.by0 = this.h;
+    this.bx1 = 0;
+    this.by1 = 0;
     this.drawn = false;
     const L = this.layer;
     L.prevX = this.started ? this.lastX : cx;
@@ -49,18 +73,56 @@ export class Overlay {
     this.started = true;
   }
 
-  /** Finish the frame: bump the version if anything was drawn, hide the layer if not. */
+  private clearBox(x0: number, y0: number, x1: number, y1: number): void {
+    if (x1 <= x0 || y1 <= y0) return;
+    const e = this.layer.emissive;
+    for (let y = y0; y < y1; y++) {
+      const a = y * this.w + x0;
+      const b = y * this.w + x1;
+      this.px.fill(0, a, b);
+      if (e) e.fill(0, a, b);
+    }
+  }
+
+  private mark(x: number, y: number): void {
+    if (x < this.bx0) this.bx0 = x;
+    if (y < this.by0) this.by0 = y;
+    if (x + 1 > this.bx1) this.bx1 = x + 1;
+    if (y + 1 > this.by1) this.by1 = y + 1;
+  }
+
+  /** Finish the frame: bump the version if anything was drawn, hide the layer if not. `dirty` covers old ∪ new drawing. */
   end(): void {
     const L = this.layer;
     L.visible = this.drawn;
     L.version++;
-    L.dirty = null;
+    const had = this.pbx1 > this.pbx0;
+    const has = this.bx1 > this.bx0;
+    if (!had && !has) L.dirty = null;
+    else {
+      const d = L.dirty ?? { x0: 0, y0: 0, x1: 0, y1: 0 };
+      d.x0 = Math.min(had ? this.pbx0 : this.w, has ? this.bx0 : this.w);
+      d.y0 = Math.min(had ? this.pby0 : this.h, has ? this.by0 : this.h);
+      d.x1 = Math.max(had ? this.pbx1 : 0, has ? this.bx1 : 0);
+      d.y1 = Math.max(had ? this.pby1 : 0, has ? this.by1 : 0);
+      L.dirty = d;
+    }
   }
 
   hide(): void {
-    if (this.layer.visible) {
+    if (this.layer.visible || this.bx1 > this.bx0) {
+      this.clearBox(this.bx0, this.by0, this.bx1, this.by1);
       this.layer.visible = false;
       this.layer.version++;
+      this.layer.dirty = null;
+      this.bx0 = this.w;
+      this.by0 = this.h;
+      this.bx1 = 0;
+      this.by1 = 0;
+      this.pbx0 = 0;
+      this.pby0 = 0;
+      this.pbx1 = 0;
+      this.pby1 = 0;
     }
     this.started = false;
   }
@@ -74,6 +136,7 @@ export class Overlay {
     this.px[i] = c;
     if (emissive > 0 && this.layer.emissive) this.layer.emissive[i] = emissive;
     this.drawn = true;
+    this.mark(x, y);
   }
 
   get(wx: number, wy: number): number {
@@ -96,6 +159,7 @@ export class Overlay {
     const nb = Math.min(255, (has ? pb(c) : 0) + b);
     this.px[i] = rgba(nr, ng, nb, 255);
     this.drawn = true;
+    this.mark(x, y);
   }
 
   /** Filled disc, opaque. */
@@ -124,38 +188,59 @@ export class Overlay {
   }
 
   /**
-   * Tapered capsule from (ax,ay) radius ra to (bx,by) radius rb. `shade(t, side)` returns the packed colour for the
-   * pixel at parameter t along the segment and `side` ∈ [-1,1] across it (−1 = toward the light).
+   * Tapered capsule from (ax,ay) radius ra to (bx,by) radius rb, shaded with three precomputed colours: `cLit` on the side
+   * facing the up-left light, `cMid`, `cDark` on the far side. Closure-free and sqrt-free per pixel (this runs for every
+   * tendril segment every tick).
    */
-  taper(
+  capsule(
     ax: number,
     ay: number,
     ra: number,
     bx: number,
     by: number,
     rb: number,
-    shade: (t: number, side: number) => number,
+    cLit: number,
+    cMid: number,
+    cDark: number,
     emissive = 0,
   ): void {
     const vx = bx - ax;
     const vy = by - ay;
     const l2 = vx * vx + vy * vy || 1;
-    const rmax = Math.max(ra, rb);
-    for (let y = Math.floor(Math.min(ay, by) - rmax - 1); y <= Math.ceil(Math.max(ay, by) + rmax + 1); y++) {
-      for (let x = Math.floor(Math.min(ax, bx) - rmax - 1); x <= Math.ceil(Math.max(ax, bx) + rmax + 1); x++) {
+    const rmax = ra > rb ? ra : rb;
+    const x0 = Math.floor((ax < bx ? ax : bx) - rmax - 1);
+    const x1 = Math.ceil((ax > bx ? ax : bx) + rmax + 1);
+    const y0 = Math.floor((ay < by ? ay : by) - rmax - 1);
+    const y1 = Math.ceil((ay > by ? ay : by) + rmax + 1);
+    const W = this.w;
+    const H = this.h;
+    const em = this.layer.emissive;
+    for (let y = y0; y <= y1; y++) {
+      const ly = y - this.oy;
+      if (ly < 0 || ly >= H) continue;
+      for (let x = x0; x <= x1; x++) {
+        const lx = x - this.ox;
+        if (lx < 0 || lx >= W) continue;
         const px = x + 0.5 - ax;
         const py = y + 0.5 - ay;
         let t = (px * vx + py * vy) / l2;
         t = t < 0 ? 0 : t > 1 ? 1 : t;
         const dx = px - vx * t;
         const dy = py - vy * t;
-        const d = Math.sqrt(dx * dx + dy * dy);
         const r = ra + (rb - ra) * t;
-        if (d > r) continue;
-        // which side of the axis (perp component sign) relative to the up-left light
-        const side = r > 0.01 ? ((dx * -0.7071 + dy * -0.7071) / r) * -1 : 0;
-        this.set(x, y, shade(t, side), emissive);
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r * r) continue;
+        // light from the upper left: positive means this pixel sits on the lit flank
+        const sd = -(dx + dy) * 0.7071;
+        const i = ly * W + lx;
+        this.px[i] = sd > 0.3 * r ? cLit : sd < -0.4 * r ? cDark : cMid;
+        if (em !== undefined && emissive > 0) em[i] = emissive;
+        if (lx < this.bx0) this.bx0 = lx;
+        if (ly < this.by0) this.by0 = ly;
+        if (lx + 1 > this.bx1) this.bx1 = lx + 1;
+        if (ly + 1 > this.by1) this.by1 = ly + 1;
       }
     }
+    this.drawn = true;
   }
 }

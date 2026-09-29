@@ -33,16 +33,7 @@
       "key": "shell",
       "base": "celadon",
       "visual": {
-        "ramp": [
-          "#16242c",
-          "#254541",
-          "#37665a",
-          "#548672",
-          "#7ca88f",
-          "#a8bdb2",
-          "#c9dfc8",
-          "#edf5d8"
-        ],
+        "ramp": ["#16242c", "#254541", "#37665a", "#548672", "#7ca88f", "#a8bdb2", "#c9dfc8", "#edf5d8"],
         "emissive": 0,
         "char": "#1c2a2a",
         "crack": "#0d1a22",
@@ -57,14 +48,7 @@
         "toughness": 0.15
       },
       "visual": {
-        "ramp": [
-          "#0e1a24",
-          "#1a3340",
-          "#2b5057",
-          "#436e69",
-          "#5f8c83",
-          "#86a99b"
-        ],
+        "ramp": ["#0e1a24", "#1a3340", "#2b5057", "#436e69", "#5f8c83", "#86a99b"],
         "emissive": 0,
         "char": "#141f24",
         "crack": "#070f16",
@@ -75,15 +59,7 @@
       "key": "inner",
       "base": "crystal",
       "visual": {
-        "ramp": [
-          "#25404f",
-          "#3d6470",
-          "#5f8c94",
-          "#8fb8b8",
-          "#bcd9d0",
-          "#e0efe2",
-          "#f6fbea"
-        ],
+        "ramp": ["#25404f", "#3d6470", "#5f8c94", "#8fb8b8", "#bcd9d0", "#e0efe2", "#f6fbea"],
         "emissive": 10,
         "char": "#2a3c40",
         "crack": "#16303a",
@@ -94,14 +70,7 @@
       "key": "core",
       "base": "core",
       "visual": {
-        "ramp": [
-          "#7a2f3d",
-          "#c2523c",
-          "#f08a3a",
-          "#ffc65a",
-          "#ffe9a3",
-          "#fffbe6"
-        ],
+        "ramp": ["#7a2f3d", "#c2523c", "#f08a3a", "#ffc65a", "#ffe9a3", "#fffbe6"],
         "emissive": 200,
         "char": "#5a2a2a",
         "crack": "#3a1018",
@@ -112,14 +81,7 @@
       "key": "eye",
       "base": "eye",
       "visual": {
-        "ramp": [
-          "#2c4448",
-          "#4d6d6c",
-          "#7d9f96",
-          "#a9c5b6",
-          "#d2e3cf",
-          "#f2f6e2"
-        ],
+        "ramp": ["#2c4448", "#4d6d6c", "#7d9f96", "#a9c5b6", "#d2e3cf", "#f2f6e2"],
         "emissive": 26,
         "char": "#243436",
         "crack": "#12262c",
@@ -130,15 +92,7 @@
       "key": "iris",
       "base": "eye",
       "visual": {
-        "ramp": [
-          "#0b1f2a",
-          "#12404a",
-          "#1b6666",
-          "#2f9a86",
-          "#66c9a2",
-          "#b7ecc0",
-          "#f1ffd8"
-        ],
+        "ramp": ["#0b1f2a", "#12404a", "#1b6666", "#2f9a86", "#66c9a2", "#b7ecc0", "#f1ffd8"],
         "emissive": 90,
         "char": "#0c2022",
         "crack": "#061319",
@@ -149,12 +103,7 @@
       "key": "pupil",
       "base": "eye",
       "visual": {
-        "ramp": [
-          "#02070b",
-          "#06131a",
-          "#0b232b",
-          "#123640"
-        ],
+        "ramp": ["#02070b", "#06131a", "#0b232b", "#123640"],
         "emissive": 0,
         "char": "#02070b",
         "crack": "#000000",
@@ -165,14 +114,7 @@
       "key": "gilt",
       "base": "glass",
       "visual": {
-        "ramp": [
-          "#2b2a22",
-          "#5a5232",
-          "#8e8046",
-          "#c7b565",
-          "#e8dc96",
-          "#fff6c8"
-        ],
+        "ramp": ["#2b2a22", "#5a5232", "#8e8046", "#c7b565", "#e8dc96", "#fff6c8"],
         "emissive": 46,
         "char": "#2a2418",
         "crack": "#1a160c",
@@ -187,10 +129,7 @@
     "coreY": 109,
     "coreRadius": 10,
     "params": {
-      "centre": [
-        88,
-        84
-      ],
+      "centre": [88, 84],
       "head": {
         "cx": 0,
         "cy": -9,
@@ -254,5 +193,1471 @@
     "accent2": "#e8dc96",
     "tagline": "Charge, and sidestep."
   },
-  "moves": []
+  "moves": [
+    {
+      "id": "lastone.lash",
+      "slot": "strike",
+      "name": "Tendril Lash",
+      "nameKo": "촉수 채찍",
+      "frame": {
+        "startup": 10,
+        "active": 16,
+        "recovery": 12,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 6
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "whip0",
+              "from": 0,
+              "to": 7,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -4,
+                "ox1": 100,
+                "oy1": -72,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -4,
+                "ox1": 110,
+                "oy1": -44,
+                "width": 9
+              }
+            },
+            {
+              "id": "whip1",
+              "from": 3,
+              "to": 10,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 6,
+                "ox1": 100,
+                "oy1": -2,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 6,
+                "ox1": 110,
+                "oy1": -26,
+                "width": 9
+              }
+            },
+            {
+              "id": "whip2",
+              "from": 6,
+              "to": 13,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -2,
+                "ox1": 100,
+                "oy1": -60,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -2,
+                "ox1": 110,
+                "oy1": -36,
+                "width": 9
+              }
+            },
+            {
+              "id": "whip3",
+              "from": 9,
+              "to": 16,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 4,
+                "ox1": 100,
+                "oy1": -8,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 4,
+                "ox1": 110,
+                "oy1": -28,
+                "width": 9
+              }
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -30,
+              "iy": 0,
+              "damp": 0.35
+            },
+            {
+              "at": 10,
+              "ix": 95,
+              "iy": 0,
+              "damp": 0.25
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "whip0",
+              "from": 0,
+              "to": 7,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -4,
+                "ox1": 100,
+                "oy1": -38,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -4,
+                "ox1": 110,
+                "oy1": -10,
+                "width": 9
+              }
+            },
+            {
+              "id": "whip1",
+              "from": 3,
+              "to": 10,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 6,
+                "ox1": 100,
+                "oy1": 32,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 6,
+                "ox1": 110,
+                "oy1": 8,
+                "width": 9
+              }
+            },
+            {
+              "id": "whip2",
+              "from": 6,
+              "to": 13,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -2,
+                "ox1": 100,
+                "oy1": -26,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -2,
+                "ox1": 110,
+                "oy1": -2,
+                "width": 9
+              }
+            },
+            {
+              "id": "whip3",
+              "from": 9,
+              "to": 16,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 4,
+                "ox1": 100,
+                "oy1": 26,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 4,
+                "ox1": 110,
+                "oy1": 6,
+                "width": 9
+              }
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -30,
+              "iy": 0,
+              "damp": 0.35
+            },
+            {
+              "at": 10,
+              "ix": 95,
+              "iy": 0,
+              "damp": 0.25
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "whip0",
+              "from": 0,
+              "to": 7,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -4,
+                "ox1": 100,
+                "oy1": -4,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -4,
+                "ox1": 110,
+                "oy1": 24,
+                "width": 9
+              }
+            },
+            {
+              "id": "whip1",
+              "from": 3,
+              "to": 10,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 6,
+                "ox1": 100,
+                "oy1": 66,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 6,
+                "ox1": 110,
+                "oy1": 42,
+                "width": 9
+              }
+            },
+            {
+              "id": "whip2",
+              "from": 6,
+              "to": 13,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -2,
+                "ox1": 100,
+                "oy1": 8,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": -2,
+                "ox1": 110,
+                "oy1": 32,
+                "width": 9
+              }
+            },
+            {
+              "id": "whip3",
+              "from": 9,
+              "to": 16,
+              "shape": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 4,
+                "ox1": 100,
+                "oy1": 60,
+                "width": 9
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 85,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 5,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 45,
+                "y": -6
+              },
+              "guardPressure": 0.12,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 8,
+                "oy0": 4,
+                "ox1": 110,
+                "oy1": 40,
+                "width": 9
+              }
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -30,
+              "iy": 0,
+              "damp": 0.35
+            },
+            {
+              "at": 10,
+              "ix": 95,
+              "iy": 0,
+              "damp": 0.25
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["multi"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -4
+          },
+          "active": {
+            "lean": 6
+          }
+        }
+      }
+    },
+    {
+      "id": "lastone.lunge",
+      "slot": "strike",
+      "name": "Charging Thrust",
+      "nameKo": "돌진 찌르기",
+      "frame": {
+        "startup": 6,
+        "active": 12,
+        "recovery": 14,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 8
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "thrust0",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "line",
+                "ox0": 14,
+                "oy0": -2,
+                "ox1": 100,
+                "oy1": -28,
+                "width": 12
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 130,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 8
+                }
+              },
+              "knockback": {
+                "x": 90,
+                "y": -10
+              },
+              "guardPressure": 0.2
+            },
+            {
+              "id": "thrust1",
+              "from": 5,
+              "to": 11,
+              "shape": {
+                "kind": "line",
+                "ox0": 14,
+                "oy0": 0,
+                "ox1": 108,
+                "oy1": -26,
+                "width": 10
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 130,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 10,
+                  "scatter": 1.1
+                }
+              },
+              "knockback": {
+                "x": 110,
+                "y": -12
+              },
+              "guardPressure": 0.2
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 610,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "thrust0",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "line",
+                "ox0": 14,
+                "oy0": -2,
+                "ox1": 100,
+                "oy1": -2,
+                "width": 12
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 130,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 8
+                }
+              },
+              "knockback": {
+                "x": 90,
+                "y": -10
+              },
+              "guardPressure": 0.2
+            },
+            {
+              "id": "thrust1",
+              "from": 5,
+              "to": 11,
+              "shape": {
+                "kind": "line",
+                "ox0": 14,
+                "oy0": 0,
+                "ox1": 108,
+                "oy1": 0,
+                "width": 10
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 130,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 10,
+                  "scatter": 1.1
+                }
+              },
+              "knockback": {
+                "x": 110,
+                "y": -12
+              },
+              "guardPressure": 0.2
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 610,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "thrust0",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "line",
+                "ox0": 14,
+                "oy0": -2,
+                "ox1": 100,
+                "oy1": 24,
+                "width": 12
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 130,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 8
+                }
+              },
+              "knockback": {
+                "x": 90,
+                "y": -10
+              },
+              "guardPressure": 0.2
+            },
+            {
+              "id": "thrust1",
+              "from": 5,
+              "to": 11,
+              "shape": {
+                "kind": "line",
+                "ox0": 14,
+                "oy0": 0,
+                "ox1": 108,
+                "oy1": 26,
+                "width": 10
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 130,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "penetration": 10,
+                  "scatter": 1.1
+                }
+              },
+              "knockback": {
+                "x": 110,
+                "y": -12
+              },
+              "guardPressure": 0.2
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 610,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["lunge"],
+      "extra": {
+        "followUpOnly": true,
+        "pose": {
+          "startup": {
+            "lean": -3
+          },
+          "active": {
+            "lean": 9
+          }
+        }
+      }
+    },
+    {
+      "id": "lastone.shatter",
+      "slot": "crush",
+      "name": "Shatter Blow",
+      "nameKo": "분쇄의 일격",
+      "frame": {
+        "startup": 30,
+        "active": 8,
+        "recovery": 46,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 12
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "shatter",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "cone",
+                "ox": 30,
+                "oy": -20,
+                "angle": -0.5,
+                "range": 92,
+                "halfAngle": 0.55
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 1100,
+                "duration": 1,
+                "flags": 3,
+                "params": {
+                  "crackSeeds": 6,
+                  "crackStress": 220,
+                  "penetration": 14,
+                  "scatter": 1.2
+                }
+              },
+              "knockback": {
+                "x": 720,
+                "y": -140
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -80,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 30,
+              "ix": 560,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "shatter",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "cone",
+                "ox": 30,
+                "oy": -14,
+                "angle": 0,
+                "range": 92,
+                "halfAngle": 0.55
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 1100,
+                "duration": 1,
+                "flags": 3,
+                "params": {
+                  "crackSeeds": 6,
+                  "crackStress": 220,
+                  "penetration": 14,
+                  "scatter": 1.2
+                }
+              },
+              "knockback": {
+                "x": 720,
+                "y": -140
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -80,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 30,
+              "ix": 560,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "shatter",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "cone",
+                "ox": 30,
+                "oy": -8,
+                "angle": 0.5,
+                "range": 92,
+                "halfAngle": 0.55
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 1100,
+                "duration": 1,
+                "flags": 3,
+                "params": {
+                  "crackSeeds": 6,
+                  "crackStress": 220,
+                  "penetration": 14,
+                  "scatter": 1.2
+                }
+              },
+              "knockback": {
+                "x": 720,
+                "y": -140
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -80,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 30,
+              "ix": 560,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["crack", "heavy"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -8
+          },
+          "active": {
+            "lean": 11
+          },
+          "recovery": {
+            "lean": 3
+          }
+        },
+        "eyeFlare": true
+      }
+    },
+    {
+      "id": "lastone.sidestep",
+      "slot": "surge",
+      "name": "Sidestep",
+      "nameKo": "옆걸음",
+      "frame": {
+        "startup": 2,
+        "active": 14,
+        "recovery": 6,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 760,
+              "iy": 0,
+              "damp": 0.02
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 760,
+              "iy": 0,
+              "damp": 0.02
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 760,
+              "iy": 0,
+              "damp": 0.02
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "intangible": [1, 15],
+      "tags": ["dash", "afterimage"],
+      "extra": {
+        "followUp": {
+          "button": "strike",
+          "from": 6,
+          "to": 20,
+          "move": "lastone.lunge"
+        }
+      }
+    },
+    {
+      "id": "lastone.gaze",
+      "slot": "signature",
+      "name": "Gaze",
+      "nameKo": "응시",
+      "frame": {
+        "startup": 12,
+        "active": 20,
+        "recovery": 30,
+        "cancelWindow": 0.4,
+        "chargeMax": 64,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "gaze",
+              "from": 0,
+              "to": 20,
+              "shape": {
+                "kind": "line",
+                "ox0": 21,
+                "oy0": -34,
+                "ox1": 232,
+                "oy1": -126,
+                "width": 8
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 40,
+                "duration": 1,
+                "flags": 17,
+                "params": {
+                  "penetration": 40,
+                  "scatter": 0.5
+                }
+              },
+              "knockback": {
+                "x": 8,
+                "y": 0
+              },
+              "guardPressure": 0.05,
+              "reachScale": 0.4,
+              "rehit": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -20,
+              "iy": 0,
+              "damp": 0.25
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "gaze",
+              "from": 0,
+              "to": 20,
+              "shape": {
+                "kind": "line",
+                "ox0": 21,
+                "oy0": -34,
+                "ox1": 232,
+                "oy1": -34,
+                "width": 8
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 40,
+                "duration": 1,
+                "flags": 17,
+                "params": {
+                  "penetration": 40,
+                  "scatter": 0.5
+                }
+              },
+              "knockback": {
+                "x": 8,
+                "y": 0
+              },
+              "guardPressure": 0.05,
+              "reachScale": 0.4,
+              "rehit": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -20,
+              "iy": 0,
+              "damp": 0.25
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "gaze",
+              "from": 0,
+              "to": 20,
+              "shape": {
+                "kind": "line",
+                "ox0": 21,
+                "oy0": -34,
+                "ox1": 232,
+                "oy1": 58,
+                "width": 8
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 40,
+                "duration": 1,
+                "flags": 17,
+                "params": {
+                  "penetration": 40,
+                  "scatter": 0.5
+                }
+              },
+              "knockback": {
+                "x": 8,
+                "y": 0
+              },
+              "guardPressure": 0.05,
+              "reachScale": 0.4,
+              "rehit": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -20,
+              "iy": 0,
+              "damp": 0.25
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["beam", "charge", "pierce"],
+      "extra": {
+        "chargePower": 1,
+        "chargeReach": [0.8, 1.2],
+        "pose": {
+          "startup": {
+            "lean": -3
+          },
+          "charge": {
+            "lean": -5
+          },
+          "active": {
+            "lean": 2
+          }
+        }
+      }
+    },
+    {
+      "id": "lastone.lastlight",
+      "slot": "ultimate",
+      "name": "The Last Light",
+      "nameKo": "마지막 빛",
+      "frame": {
+        "startup": 96,
+        "active": 84,
+        "recovery": 60,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "sweep",
+              "from": 8,
+              "to": 70,
+              "shape": {
+                "kind": "line",
+                "ox0": 21,
+                "oy0": -34,
+                "ox1": 280,
+                "oy1": -224,
+                "width": 18
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 80,
+                "duration": 1,
+                "flags": 17,
+                "params": {
+                  "penetration": 30,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 8,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 21,
+                "oy0": -34,
+                "ox1": 280,
+                "oy1": 156,
+                "width": 18
+              },
+              "reachScale": 0.4,
+              "rehit": 2
+            },
+            {
+              "id": "shear",
+              "from": 70,
+              "to": 78,
+              "shape": {
+                "kind": "cone",
+                "ox": 30,
+                "oy": -10,
+                "angle": 0,
+                "range": 165,
+                "halfAngle": 0.8
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 2200,
+                "duration": 1,
+                "flags": 35,
+                "params": {
+                  "crackSeeds": 12,
+                  "crackStress": 320,
+                  "penetration": 26,
+                  "scatter": 1.6
+                }
+              },
+              "knockback": {
+                "x": 520,
+                "y": -80
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "sweep",
+              "from": 8,
+              "to": 70,
+              "shape": {
+                "kind": "line",
+                "ox0": 21,
+                "oy0": -34,
+                "ox1": 280,
+                "oy1": -224,
+                "width": 18
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 80,
+                "duration": 1,
+                "flags": 17,
+                "params": {
+                  "penetration": 30,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 8,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 21,
+                "oy0": -34,
+                "ox1": 280,
+                "oy1": 156,
+                "width": 18
+              },
+              "reachScale": 0.4,
+              "rehit": 2
+            },
+            {
+              "id": "shear",
+              "from": 70,
+              "to": 78,
+              "shape": {
+                "kind": "cone",
+                "ox": 30,
+                "oy": -10,
+                "angle": 0,
+                "range": 165,
+                "halfAngle": 0.8
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 2200,
+                "duration": 1,
+                "flags": 35,
+                "params": {
+                  "crackSeeds": 12,
+                  "crackStress": 320,
+                  "penetration": 26,
+                  "scatter": 1.6
+                }
+              },
+              "knockback": {
+                "x": 520,
+                "y": -80
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "sweep",
+              "from": 8,
+              "to": 70,
+              "shape": {
+                "kind": "line",
+                "ox0": 21,
+                "oy0": -34,
+                "ox1": 280,
+                "oy1": 156,
+                "width": 18
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 80,
+                "duration": 1,
+                "flags": 17,
+                "params": {
+                  "penetration": 30,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 8,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 21,
+                "oy0": -34,
+                "ox1": 280,
+                "oy1": -224,
+                "width": 18
+              },
+              "reachScale": 0.4,
+              "rehit": 2
+            },
+            {
+              "id": "shear",
+              "from": 70,
+              "to": 78,
+              "shape": {
+                "kind": "cone",
+                "ox": 30,
+                "oy": -10,
+                "angle": 0,
+                "range": 165,
+                "halfAngle": 0.8
+              },
+              "damage": {
+                "type": "FRACTURE",
+                "energy": 2200,
+                "duration": 1,
+                "flags": 35,
+                "params": {
+                  "crackSeeds": 12,
+                  "crackStress": 320,
+                  "penetration": 26,
+                  "scatter": 1.6
+                }
+              },
+              "knockback": {
+                "x": 520,
+                "y": -80
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 1,
+      "tags": ["ultimate", "beam", "armor", "pierce"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -6
+          },
+          "active": {
+            "lean": 4
+          },
+          "recovery": {
+            "lean": 0
+          }
+        },
+        "halo": true,
+        "ctl": {
+          "startup": 0.1,
+          "active": 0.06,
+          "recovery": 0.3
+        }
+      }
+    },
+    {
+      "id": "lastone.guard",
+      "slot": "guard",
+      "name": "Tendril Shell",
+      "nameKo": "촉수 껍질",
+      "frame": {
+        "startup": 3,
+        "active": 0,
+        "recovery": 5,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": []
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["guard"],
+      "extra": {
+        "shell": {
+          "absorb": {
+            "FRACTURE": 0.5,
+            "KINETIC": 0.5,
+            "CRUSH": 0.3,
+            "THERMAL": 0.2,
+            "TIDAL": 0.1,
+            "ASSIMILATION": 0.2
+          }
+        }
+      }
+    }
+  ]
 }

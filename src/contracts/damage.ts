@@ -41,7 +41,11 @@ export interface DamageParams {
   crackSeeds?: number;
   /** FRACTURE: stress carried by each crack front (higher spreads further/faster). */
   crackStress?: number;
-  /** THERMAL: heat units deposited per cell inside the shape (per event, or per tick if CONTINUOUS). */
+  /**
+   * THERMAL: temperature units added per cell at full shape weight (before the material's resist, heatAbsorb and heat tolerance),
+   * per event or per tick if CONTINUOUS. 1900 units vaporise a baseline rock cell; lattice ignites at 320. If absent, heat derives
+   * from `energy` (1 energy ≈ 1900 units on a heatCapacity-1 cell).
+   */
   heat?: number;
   /** THERMAL/CRUSH: radial shock impulse imparted to loosened material (px/s scale). */
   shock?: number;
@@ -53,7 +57,7 @@ export interface DamageParams {
   latch?: number;
   /** ASSIMILATION: 0..1 how aggressively converted lattice is harvested (torn out and credited to attacker). */
   harvest?: number;
-  /** TIDAL: force scale of the pull toward (originX, originY). */
+  /** TIDAL: 1 = the reference field strength (multiplies tear scores and stream homing acceleration) toward (originX, originY). */
   pull?: number;
   /** CRUSH: compression depth in cells; also sets crater size. */
   compress?: number;
@@ -103,7 +107,10 @@ export interface DamageResult {
   /** World-space centroid of the affected cells (contact point for FX/audio); NaN if nothing touched. */
   contactX: number;
   contactY: number;
-  /** Momentum imparted to the body (mass·px/s, world space) — combat converts to knockback via its own mass. */
+  /**
+   * Momentum imparted to the body (mass·px/s, world space): 30·√(energy·sourceMass)·√coverage along the blow. Divide by the
+   * target's effective mass for knockback.
+   */
   impulseX: number;
   impulseY: number;
   /** 0..1 how much of the effect landed on already-weakened matter (drives "punish damaged regions" feedback). */

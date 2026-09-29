@@ -85,6 +85,10 @@ export abstract class Behaviour {
   /** Append overlay layers for this frame. */
   renderLayers(_view: ViewRect, _alpha: number, _out: RenderLayer[]): void {}
   debugShapes(_out: DebugShape[]): void {}
+  /** Extra cosmetic lean (px, facing-relative) added to the fighter's velocity/pose lean (asteroid tumble, idle sway). */
+  leanBias(): number {
+    return 0;
+  }
   /** Hit-stop began (visual freeze). */
   onFreeze(_ticks: number): void {}
   setVictory(): void {}

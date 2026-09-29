@@ -29,7 +29,8 @@ const num = (k: string, d: number): number => {
   return v === null || v === '' || Number.isNaN(Number(v)) ? d : Number(v);
 };
 const stageParam = q.get('stage') as StageId | null;
-let stage: StageId = stageParam && (STAGE_IDS as readonly string[]).includes(stageParam) ? stageParam : 'nursery';
+let stage: StageId =
+  stageParam && (STAGE_IDS as readonly string[]).includes(stageParam) ? stageParam : 'nursery';
 let quality = num('quality', 2) as 0 | 1 | 2;
 const frozen = q.get('freeze') === '1';
 
@@ -183,7 +184,13 @@ function currentFx(): FrameFx {
       shocks.splice(i, 1);
       continue;
     }
-    fx.shockwaves.push({ x: s.x, y: s.y, age, radius: 20 + s.radius * (1 - Math.pow(1 - age, 2)), strength: s.strength });
+    fx.shockwaves.push({
+      x: s.x,
+      y: s.y,
+      age,
+      radius: 20 + s.radius * (1 - Math.pow(1 - age, 2)),
+      strength: s.strength,
+    });
   }
   fx.impulses.length = 0;
   for (let i = impulses.length - 1; i >= 0; i--) {
@@ -291,7 +298,8 @@ async function boot(): Promise<void> {
 
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
-  if (k >= '1' && k <= '9') fire(['shock', 'lens', 'flash', 'impulse', 'aberration', 'shake', 'zoom', 'roll', 'ko'][+k - 1]!);
+  if (k >= '1' && k <= '9')
+    fire(['shock', 'lens', 'flash', 'impulse', 'aberration', 'shake', 'zoom', 'roll', 'ko'][+k - 1]!);
   else if (k === 'q') {
     quality = ((quality + 1) % 3) as 0 | 1 | 2;
     location.search = `?stage=${stage}&quality=${quality}`;
@@ -323,7 +331,17 @@ const api = {
   renderer,
   loop,
   /** Set scenario state for a deterministic capture. */
-  set(s: Partial<{ stage: StageId; fa: number; fb: number; time: number; intensity: number; lens: boolean; timeScale: number }>): void {
+  set(
+    s: Partial<{
+      stage: StageId;
+      fa: number;
+      fb: number;
+      time: number;
+      intensity: number;
+      lens: boolean;
+      timeScale: number;
+    }>,
+  ): void {
     if (s.stage && s.stage !== stage) {
       stage = s.stage;
       renderer.setStage(stage);

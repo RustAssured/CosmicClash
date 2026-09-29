@@ -49,7 +49,19 @@ export function makeCloud(o: CloudOpts): SpriteBuffer {
     const st = stretch[0] + (stretch[1] - stretch[0]) * rng.next();
     const rot = o.rotation ? o.rotation(x, y, rng) : rng.next() * Math.PI * 2;
     const c = o.color(x, y, d, rng.next());
-    b.push(x, y, (rng.next() * 2 - 1) * (o.jitter ?? 1), rng.next(), s * st, s / st, rot, c[0], c[1], c[2], c[3]);
+    b.push(
+      x,
+      y,
+      (rng.next() * 2 - 1) * (o.jitter ?? 1),
+      rng.next(),
+      s * st,
+      s / st,
+      rot,
+      c[0],
+      c[1],
+      c[2],
+      c[3],
+    );
   }
   return b.build();
 }

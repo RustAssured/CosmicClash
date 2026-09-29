@@ -13,6 +13,17 @@ export function hash2(x: number, y: number, s: number): number {
   return h >>> 0;
 }
 
+/** Same hash as a signed int32 (no boxing): use for bit-mask tests in hot loops. */
+export function hashI(x: number, y: number, s: number): number {
+  let h = (Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1) ^ Math.imul(s | 0, 0x9e3779b1)) | 0;
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h;
+}
+
 /** Uniform [0,1) noise from a lattice point. */
 export const noise2 = (x: number, y: number, s: number): number => hash2(x, y, s) / 4294967296;
 
@@ -36,13 +47,17 @@ export const clampI = (v: number, lo: number, hi: number): number => (v < lo ? l
 /** Clamp to a byte and round. */
 export const toByte = (v: number): number => (v <= 0 ? 0 : v >= 255 ? 255 : (v + 0.5) | 0);
 
-/** Packed-RGBA integer lerp with t in 0..256 (no float, no allocation). Alpha taken from `a`. */
+/**
+ * Packed-RGBA integer lerp with t in 0..256 (no float, no allocation). Alpha taken from `a`. Colours are passed and returned as
+ * SIGNED int32 (`x | 0`): unsigned values above 2^31 are heap-allocated doubles in V8, signed int32 stay small integers. Storing the
+ * result into a Uint32Array yields the usual unsigned packed colour.
+ */
 export function lerpPx(a: number, b: number, t256: number): number {
   const u = 256 - t256;
   const r = ((a & 255) * u + (b & 255) * t256) >> 8;
   const g = (((a >>> 8) & 255) * u + ((b >>> 8) & 255) * t256) >> 8;
   const bl = (((a >>> 16) & 255) * u + ((b >>> 16) & 255) * t256) >> 8;
-  return ((a & 0xff000000) | (bl << 16) | (g << 8) | r) >>> 0;
+  return (a & 0xff000000) | (bl << 16) | (g << 8) | r;
 }
 
 /** Multiply RGB by k256/256 (k256 may exceed 256 to brighten). Alpha preserved. */
@@ -53,7 +68,7 @@ export function scalePx(c: number, k256: number): number {
   if (r > 255) r = 255;
   if (g > 255) g = 255;
   if (b > 255) b = 255;
-  return ((c & 0xff000000) | (b << 16) | (g << 8) | r) >>> 0;
+  return (c & 0xff000000) | (b << 16) | (g << 8) | r;
 }
 
 /** Luma 0..255 of a packed colour. */
@@ -94,7 +109,10 @@ export function mix32(h: number, w: number): number {
 }
 
 /** Fold a typed array's bytes into a running hash (word-at-a-time where aligned). */
-export function hashBytes(h: number, a: Uint8Array | Uint32Array | Float32Array | Uint16Array | Int32Array): number {
+export function hashBytes(
+  h: number,
+  a: Uint8Array | Uint32Array | Float32Array | Uint16Array | Int32Array,
+): number {
   const buf = a.buffer;
   const off = a.byteOffset;
   const len = a.byteLength;

@@ -35,7 +35,12 @@ export function computeViewport(physW: number, physH: number, integer = true): V
 }
 
 /** Map a point in physical canvas pixels (origin top-left) to logical frame coordinates. */
-export function physicalToLogical(v: ViewportLayout, px: number, py: number, out: { x: number; y: number }): void {
+export function physicalToLogical(
+  v: ViewportLayout,
+  px: number,
+  py: number,
+  out: { x: number; y: number },
+): void {
   out.x = (px - v.x) / v.scale;
   out.y = (py - v.y) / v.scale;
 }

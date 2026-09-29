@@ -17,6 +17,11 @@ import { K_CONE, K_LINE, type ShapeQ } from './shape';
 export const TILE = 16;
 export const TILE_SHIFT = 4;
 
+/** Connectivity-check urgency (Body.connDirty): soft = burn erosion, steady = a process is still cutting, now = a direct hit. */
+export const CONN_SOFT = 1;
+export const CONN_STEADY = 2;
+export const CONN_NOW = 3;
+
 /** Tile activity bits (Body.tileAct). A tile is only simulated while it has one of these. */
 export const ACT_HEAT = 1;
 export const ACT_INFECT = 2;
@@ -82,16 +87,28 @@ export class Body implements MatterBody {
   readonly matDensity: Float32Array;
   /** Resistance multipliers flattened: index m*6 + damage-type index (DAMAGE_TYPES order). */
   readonly resistTab: Float32Array;
+  /** Per-material half-conductivity (k = 0.25 * conductivity, so 4k <= 1: the explicit heat scheme is unconditionally stable). */
+  readonly condTab: Float32Array;
+  /** Scratch for tile lists. */
+  readonly tileList: Int32Array;
+  readonly tileNext: Uint8Array;
+  /** 1 for materials with a low bond (<= 60): gas/plasma/liquid-like matter that a tidal field can strip from the inside. */
+  readonly looseMat: Uint8Array;
+  /** TIDAL cadence carry: energy from ticks skipped between applications, and the last tick one was applied. */
+  tidalCarry = 0;
+  lastTidalTick = -100;
   /** 1 for fluid materials (gas/plasma/liquid clouds: never anchor other cells). */
   readonly matFluid: Uint8Array;
   /** Materials that occur on the pristine outer surface (others count as "interior" when exposed). */
   readonly surfaceMat: Uint8Array;
-  /** Interned particle ramp ids per material: index m*4 + {0 dust, 1 shard, 2 ember, 3 gas}. Filled at creation. */
+  /** Interned particle ramp ids per material: index m*5 + {0 dust, 1 shard, 2 ember, 3 gas, 4 infect}. Filled at creation. */
   readonly rampIds: Int32Array;
   /** Count of interior-only materials exposed since the last read (drives DamageResult.revealedInterior). */
   revealCount = 0;
 
   /* ---- extra per-cell state ---- */
+  /** Static low-frequency "vein" noise 19..115 (x/64 = 0.3..1.8): makes infection spread in branching veins rather than a disc. */
+  readonly vein: Uint8Array;
   /** Scratch generation stamps for flood fills / searches. */
   readonly stamp: Uint32Array;
   stampGen = 1;
@@ -133,8 +150,8 @@ export class Body implements MatterBody {
   liveY1 = 0;
 
   /* ---- connectivity ---- */
-  /** 0 = clean, 1 = soft (burn erosion), 2 = hard (bonds broken / cells removed by force). */
-  connDirty = 2;
+  /** 0 = clean, else CONN_SOFT / CONN_STEADY / CONN_NOW: how soon the next connectivity pass should run. */
+  connDirty = CONN_NOW;
   lastConnTick = -100;
   anchoredFrac = 1;
 
@@ -175,7 +192,16 @@ export class Body implements MatterBody {
   infectActive = 0;
 
   /* ---- misc ---- */
-  readonly blow: BlowInfo = { tick: -1000, dirX: 0, dirY: 0, energy: 0, x: 0, y: 0, sourceMass: 1, radial: 0.5 };
+  readonly blow: BlowInfo = {
+    tick: -1000,
+    dirX: 0,
+    dirY: 0,
+    energy: 0,
+    x: 0,
+    y: 0,
+    sourceMass: 1,
+    radial: 0.5,
+  };
   private readonly rr = { a: 0, b: 0 };
   private readonly cr = { a: 0, b: 0 };
   /** World AABB of the full map rectangle and estimated velocity (px/s) from transform deltas; refreshed each tick. */
@@ -219,11 +245,17 @@ export class Body implements MatterBody {
       this.resistTab[i * 6 + 4] = r.CRUSH;
       this.resistTab[i * 6 + 5] = r.KINETIC;
     }
+    this.condTab = new Float32Array(256);
+    for (let i = 0; i < spec.materials.length; i++)
+      this.condTab[i] = 0.25 * Math.max(0, Math.min(1, spec.materials[i]!.conductivity));
+    this.looseMat = new Uint8Array(256);
+    for (let i = 1; i < spec.materials.length; i++) this.looseMat[i] = spec.materials[i]!.bond <= 60 ? 1 : 0;
     this.matFluid = new Uint8Array(256);
     for (let i = 0; i < spec.materials.length; i++) this.matFluid[i] = spec.materials[i]!.fluid ? 1 : 0;
     this.surfaceMat = new Uint8Array(256);
-    this.rampIds = new Int32Array(256 * 4).fill(0);
+    this.rampIds = new Int32Array(256 * 5).fill(0);
 
+    this.vein = new Uint8Array(this.n);
     this.stamp = new Uint32Array(this.n);
     this.aux = new Float32Array(this.n);
 
@@ -231,11 +263,15 @@ export class Body implements MatterBody {
     this.tilesY = (this.h + TILE - 1) >> TILE_SHIFT;
     this.tileVis = new Uint8Array(this.tilesX * this.tilesY);
     this.tileAct = new Uint8Array(this.tilesX * this.tilesY);
+    this.tileList = new Int32Array(this.tilesX * this.tilesY);
+    this.tileNext = new Uint8Array(this.tilesX * this.tilesY);
 
     this.regionOfX = new Uint8Array(this.w);
     this.regionOfY = new Uint8Array(this.h);
-    for (let x = 0; x < this.w; x++) this.regionOfX[x] = Math.min(REGION_GRID - 1, Math.floor((x * REGION_GRID) / this.w));
-    for (let y = 0; y < this.h; y++) this.regionOfY[y] = Math.min(REGION_GRID - 1, Math.floor((y * REGION_GRID) / this.h));
+    for (let x = 0; x < this.w; x++)
+      this.regionOfX[x] = Math.min(REGION_GRID - 1, Math.floor((x * REGION_GRID) / this.w));
+    for (let y = 0; y < this.h; y++)
+      this.regionOfY[y] = Math.min(REGION_GRID - 1, Math.floor((y * REGION_GRID) / this.h));
     this.regionDirty = new Uint8Array(R2).fill(1);
     this.regionMass = new Float64Array(R2);
     this.regionCells = new Int32Array(R2);
@@ -340,7 +376,7 @@ export class Body implements MatterBody {
    * Collect live cells covered by `q` into (idx, wgt). Returns the count. Rows scanned in order, so the list order is
    * deterministic. `idx`/`wgt` must have capacity >= w*h.
    */
-  collect(q: ShapeQ, idx: Int32Array, wgt: Float32Array): number {
+  collect(q: ShapeQ, idx: Int32Array, wgt: Float32Array, looseOnly = false): number {
     const map = this.map;
     const mat = map.material;
     const integ = map.integrity;
@@ -350,15 +386,19 @@ export class Body implements MatterBody {
     const cr = this.cr;
     if (!this.rowRange(q.by0, q.by1, rr)) return 0;
     let n = 0;
+    const flags = map.flags;
+    const loose = this.looseMat;
     for (let j = rr.a; j <= rr.b; j++) {
-      if (!this.rowXRange(j, q.bx0, q.bx1, cr)) continue;
-      const sh = this.rowShift(j);
       const wy = t.y + (j + 0.5 - t.anchorY);
+      if (!q.rowSpan(wy)) continue;
+      if (!this.rowXRange(j, q.sx0, q.sx1, cr)) continue;
+      const sh = this.rowShift(j);
       const rowBase = j * w;
       const f = t.facing;
       for (let i = cr.a; i <= cr.b; i++) {
         const c = rowBase + i;
         if (mat[c] === 0 || integ[c] === 0) continue;
+        if (looseOnly && (flags[c]! & 32) === 0 && loose[mat[c]!] === 0) continue;
         const wx = t.x + (i + 0.5 - t.anchorX) * f + sh;
         const wt = q.weight(wx, wy);
         if (wt > 0) {
@@ -407,6 +447,27 @@ export class Body implements MatterBody {
     const ry1 = this.regionOfY[y1]!;
     for (let ry = ry0; ry <= ry1; ry++)
       for (let rx = rx0; rx <= rx1; rx++) this.regionDirty[ry * REGION_GRID + rx] = 1;
+    this.statsDirty = true;
+  }
+
+  /**
+   * Mark ONE cell as changed: refreshes only its own tile (and a neighbouring tile if the cell lies on a tile border, since
+   * edge lighting reads neighbours) and its stats region. Much cheaper than `touch` for scattered single-cell changes.
+   */
+  touchPoint(x: number, y: number): void {
+    const tx = x >> TILE_SHIFT;
+    const ty = y >> TILE_SHIFT;
+    const tv = this.tileVis;
+    const tw = this.tilesX;
+    tv[ty * tw + tx] = 1;
+    const lx = x & (TILE - 1);
+    const ly = y & (TILE - 1);
+    if (lx === 0 && tx > 0) tv[ty * tw + tx - 1] = 1;
+    else if (lx === TILE - 1 && tx < tw - 1) tv[ty * tw + tx + 1] = 1;
+    if (ly === 0 && ty > 0) tv[(ty - 1) * tw + tx] = 1;
+    else if (ly === TILE - 1 && ty < this.tilesY - 1) tv[(ty + 1) * tw + tx] = 1;
+    this.visDirty = true;
+    this.regionDirty[this.regionOfY[y]! * REGION_GRID + this.regionOfX[x]!] = 1;
     this.statsDirty = true;
   }
 

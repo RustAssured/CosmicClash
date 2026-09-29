@@ -75,7 +75,5 @@ export interface StageScenery {
   render(target: WebGLRenderTarget): void;
   /** Where the stage light currently sits on screen (logical px, may lie outside the frame). */
   lightScreenPos(out: { x: number; y: number }): void;
-  /** The GL context was restored: re-upload any CPU-side textures. */
-  restore?(): void;
   dispose(): void;
 }

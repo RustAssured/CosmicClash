@@ -49,7 +49,8 @@ uniform sampler3D uLut;        // (idxA, idxB, ratio) per sRGB node, NEAREST
 uniform float uLutSize;
 uniform sampler2D uPalSrgb;    // 64x1 RGBA8
 uniform sampler2D uPalLin;     // 64x1 RGBA32F
-uniform sampler2D uBayer;      // 8x8 R8 thresholds
+uniform sampler2D uBayer;      // 4x4 R8 thresholds
+uniform float uLevels;         // dither ratio steps (patterns): 4 = 25% / 50% / 75% classics
 uniform float uExposure;
 uniform float uContrast;
 uniform float uDither;         // 1 = ordered dither, 0 = nearest colour
@@ -87,8 +88,13 @@ void main() {
   vec2 p = fragPx();
   vec4 hdr = sampleScene(lensPx(p));
   vec3 x = max(hdr.rgb, 0.0) * uExposure;
-  // Soft-shoulder tone map (per channel, keeps hue) then a gentle contrast curve about mid-grey.
-  vec3 t = 1.0 - exp(-x);
+  // Hue-preserving tone map: identity below the knee (so colours authored on a palette ramp stay on it), a soft
+  // shoulder above it, and very bright light bleeds toward white the way an overexposed sensor does.
+  float m = max(x.r, max(x.g, x.b));
+  const float knee = 0.72;
+  float tm = m <= knee ? m : knee + (1.0 - knee) * (1.0 - exp(-(m - knee) / (1.0 - knee)));
+  vec3 t = m > 1e-5 ? x * (tm / m) : vec3(0.0);
+  t = mix(t, vec3(tm), smoothstep(1.4, 4.0, m) * 0.75);
   t = clamp((t - 0.5) * uContrast + 0.5, 0.0, 1.0);
   t = mix(t, vec3(1.0), uFlash);
 
@@ -101,7 +107,8 @@ void main() {
   vec3 d = B - A;
   float len2 = dot(d, d);
   float r = len2 > 1e-9 ? clamp(dot(t - A, d) / len2, 0.0, 1.0) : 0.0;
-  float th = texelFetch(uBayer, ivec2(gl_FragCoord.xy) & 7, 0).r;
+  float th = texelFetch(uBayer, ivec2(gl_FragCoord.xy) & 3, 0).r;
+  r = floor(r * uLevels + 0.5) / uLevels;
   bool useB = uDither > 0.5 ? (th < r) : (r > 0.5);
   vec3 col = texelFetch(uPalSrgb, ivec2(useB ? ib : ia, 0), 0).rgb;
 
@@ -296,7 +303,7 @@ void main() {
   col.g = fetchFrame(sp).g;
   col.b = fetchFrame(sp - dir * ca).b;
 
-  float th = texelFetch(uBayer, ivec2(gl_FragCoord.xy) & 7, 0).r;
+  float th = texelFetch(uBayer, ivec2(gl_FragCoord.xy) & 3, 0).r;
   vec2 uv = pxToUv(sp);
   vec3 bloom = texture(uBloom, uv).rgb * uBloomGain;
   bloom = vec3(ditherQ(bloom.r, uBloomLevels, th), ditherQ(bloom.g, uBloomLevels, th), ditherQ(bloom.b, uBloomLevels, th));

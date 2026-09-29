@@ -1,5 +1,6 @@
 import {
   DamageFlag,
+  MAX_BODY_DIM,
   MAX_PARTICLES,
   TICK_DT,
   type ArenaInfo,
@@ -21,7 +22,7 @@ import {
   type StageLighting,
   type ViewRect,
 } from '@/contracts';
-import { Body, type WorldPoint } from './body';
+import { Body, type WorldPoint, CONN_NOW, CONN_STEADY } from './body';
 import { initBody } from './bodyinit';
 import { stepChunks } from './chunks';
 import { runConnectivity } from './connectivity';
@@ -32,12 +33,13 @@ import { applyFracture } from './fracture';
 import { hashWorld } from './hash';
 import { applyKinetic, stepFuses } from './kinetic';
 import { KIND_ID } from './particles';
+import { endSpray } from './debris';
 import { MatterRender } from './render';
 import { refreshVisuals } from './visual';
 import * as life from './lifecycle';
 import { applyCrush, stepWaves } from './crush';
 import { applyThermal, stepThermal } from './thermal';
-import { applyTidal, stepTidal } from './tidal';
+import { applyTidal } from './tidal';
 import { applyAssimilation, stepInfection } from './assimilation';
 import { debugOverlay } from './debug';
 
@@ -179,6 +181,8 @@ class MatterWorldImpl implements MatterWorldEx {
 
   createBody(spec: BodySpec): MatterBody {
     const core = this.core;
+    if (spec.map.w > MAX_BODY_DIM || spec.map.h > MAX_BODY_DIM)
+      throw new Error(`matter: body map ${spec.map.w}x${spec.map.h} exceeds MAX_BODY_DIM ${MAX_BODY_DIM}`);
     const id = core.nextBodyId++;
     const body = new Body(id, spec);
     initBody(core, body);
@@ -208,7 +212,7 @@ class MatterWorldImpl implements MatterWorldEx {
   applyDamage(bodyId: number, ev: DamageEvent): DamageResult {
     const res = newResult();
     const body = this.core.bodyById[bodyId];
-    if (!body) return res;
+    if (!body || !(ev.energy > 0) || !Number.isFinite(ev.energy)) return res;
     const dur = ev.duration > 1 ? Math.floor(ev.duration) : 1;
     const continuous = (ev.flags & DamageFlag.CONTINUOUS) !== 0;
     const e0 = continuous || dur === 1 ? ev.energy : ev.energy / dur;
@@ -231,6 +235,16 @@ class MatterWorldImpl implements MatterWorldEx {
   /** Apply one tick's worth of an event to `body`. */
   private applySlice(body: Body, ev: DamageEvent, energy: number, first: boolean, res: DamageResult): void {
     const core = this.core;
+    if (ev.type === 'TIDAL') {
+      // Tidal fields cover whole bodies: apply every 3rd tick with the skipped energy carried (same total, a third of the cost).
+      if (core.tick - body.lastTidalTick < 3 && !((ev.flags & DamageFlag.CONTINUOUS) === 0 && first)) {
+        body.tidalCarry += energy;
+        return;
+      }
+      energy += body.tidalCarry;
+      body.tidalCarry = 0;
+      body.lastTidalTick = core.tick;
+    }
     const ctx = beginDamage(core, this.ctx, body, ev, energy, first);
     if (ctx === null) {
       // Type-specific effects that do not need covered cells (e.g. harvesting already-torn matter) live in the models.
@@ -257,6 +271,7 @@ class MatterWorldImpl implements MatterWorldEx {
         applyAssimilation(ctx, res);
         break;
     }
+    endSpray(core); // never leave mass parked in the spray accumulator across API calls
   }
 
   private applyEmpty(_t: string): void {
@@ -344,9 +359,19 @@ class MatterWorldImpl implements MatterWorldEx {
     b.aabbY1 = t.y - t.anchorY + b.h;
   }
 
+  private lapT0 = 0;
+  private lap(section: number): void {
+    const clock = this.core.clock;
+    if (!clock) return;
+    const t1 = clock();
+    this.core.prof[section] = this.core.prof[section]! + (t1 - this.lapT0);
+    this.lapT0 = t1;
+  }
+
   tick(): void {
     const core = this.core;
     core.tick++;
+    this.lapT0 = core.clock ? core.clock() : 0;
     const bodies = core.bodyList;
     for (let i = 0; i < bodies.length; i++) this.updateBodyMotion(bodies[i]!, false);
 
@@ -362,25 +387,39 @@ class MatterWorldImpl implements MatterWorldEx {
       this.applySlice(body, j.ev, j.energy, false, newResult());
       if (--j.remaining <= 0) j.active = false;
     }
+    this.lap(0);
 
     for (let i = 0; i < bodies.length; i++) {
       const b = bodies[i]!;
       stepFronts(core, b);
       stepFuses(core, b);
-      stepThermal(core, b);
-      stepInfection(core, b);
-      stepTidal(core, b);
-      if (b.connDirty !== 0 && core.tick - b.lastConnTick >= (b.connDirty === 2 ? 1 : 6)) runConnectivity(core, b);
     }
-    stepWaves(core);
-    stepChunks(core);
-    core.particles.step(core);
+    this.lap(1);
+    for (let i = 0; i < bodies.length; i++) stepThermal(core, bodies[i]!);
+    this.lap(2);
+    for (let i = 0; i < bodies.length; i++) stepInfection(core, bodies[i]!);
+    this.lap(3);
     for (let i = 0; i < bodies.length; i++) {
       const b = bodies[i]!;
-      refreshVisuals(core, b);
-      b.refreshStats();
+      if (
+        b.connDirty !== 0 &&
+        core.tick - b.lastConnTick >= (b.connDirty === CONN_NOW ? 1 : b.connDirty === CONN_STEADY ? 3 : 6)
+      )
+        runConnectivity(core, b);
     }
+    this.lap(4);
+    stepWaves(core);
+    this.lap(5);
+    stepChunks(core);
+    this.lap(6);
+    core.particles.step(core);
+    this.lap(7);
+    for (let i = 0; i < bodies.length; i++) refreshVisuals(core, bodies[i]!);
+    this.lap(8);
+    for (let i = 0; i < bodies.length; i++) bodies[i]!.refreshStats();
+    endSpray(core);
     core.flushEvents();
+    this.lap(9);
   }
 
   drainEvents(into: SimEvent[]): void {
@@ -406,11 +445,26 @@ class MatterWorldImpl implements MatterWorldEx {
   }
   heal(bodyId: number, fraction: number, seed: number): void {
     const b = this.core.bodyById[bodyId];
-    if (b) life.heal(this.core, b, fraction, seed);
+    if (!b) return;
+    this.cancelProcesses(bodyId);
+    life.heal(this.core, b, fraction, seed);
   }
   restore(bodyId: number): void {
     const b = this.core.bodyById[bodyId];
-    if (b) life.restore(this.core, b);
+    if (!b) return;
+    this.cancelProcesses(bodyId);
+    life.restore(this.core, b);
+  }
+
+  /** Between rounds: multi-tick damage jobs and shock rings aimed at this body must not leak into the next round. */
+  private cancelProcesses(bodyId: number): void {
+    for (const j of this.jobs) if (j.active && j.bodyId === bodyId) j.active = false;
+    for (const w of this.core.waves) if (w.active && w.bodyId === bodyId) w.active = false;
+    const b = this.core.bodyById[bodyId];
+    if (b) {
+      b.tidalCarry = 0;
+      b.lastTidalTick = -100;
+    }
   }
   carve(bodyId: number, massFrac: number, seed: number): void {
     const b = this.core.bodyById[bodyId];
@@ -544,8 +598,9 @@ class MatterWorldImpl implements MatterWorldEx {
     }
     const l = core.ledger;
     const chunkMass = core.chunks.massLive;
-    const particleMass = core.particles.massLive;
-    const error = l.created + l.injected - (cell + pool + chunkMass + particleMass + l.dissipated + l.deleted);
+    const particleMass = core.particles.massLive + core.sprayMass;
+    const error =
+      l.created + l.injected - (cell + pool + chunkMass + particleMass + l.dissipated + l.deleted);
     return { ...l, cellMass: cell, poolMass: pool, chunkMass, particleMass, error };
   }
 

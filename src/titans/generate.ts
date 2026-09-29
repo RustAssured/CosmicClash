@@ -1,7 +1,14 @@
-import type { MaterialDef, MatterMap, StageLighting, TitanDef, TitanId } from '@/contracts';
+import {
+  createMatterMap,
+  type MaterialDef,
+  type MatterMap,
+  type StageLighting,
+  type TitanDef,
+  type TitanId,
+} from '@/contracts';
 import { paintAsteroid, type AsteroidRig } from './art/asteroid';
 import { paintLastOne, type LastOneRig } from './art/lastone';
-import { resolveMaterialsLocal } from './materialTable';
+import { resolveMaterials } from './materialTable';
 
 /** Per-titan geometric rig produced alongside the pixels (anchor points the fighter needs: tendril roots, eye, core…). */
 export type TitanRig = LastOneRig | AsteroidRig;
@@ -32,14 +39,38 @@ export interface GeneratedTitan extends PaintedTitan {
   materials: MaterialDef[];
 }
 
+const PAINT_CACHE = new Map<string, PaintedTitan>();
+const PAINT_CACHE_MAX = 12;
+
+/** Fresh copy of a painted map (typed-array memcpy: ~1 ms vs ~300 ms to paint). Only the generator's fields are copied. */
+function cloneMap(src: MatterMap): MatterMap {
+  const m = createMatterMap(src.w, src.h);
+  m.material.set(src.material);
+  m.density.set(src.density);
+  m.baseColor.set(src.baseColor);
+  m.height.set(src.height);
+  m.coreX = src.coreX;
+  m.coreY = src.coreY;
+  m.coreRadius = src.coreRadius;
+  return m;
+}
+
 /**
  * Generate a titan body ready for `world.createBody`: the painted matter map, the resolved material table
- * (`specs[i]` ⇒ id `i + 1`, 0 = void) and the rig (tendril roots, eye, core…). Deterministic.
+ * (`specs[i]` ⇒ id `i + 1`, 0 = void) and the rig (tendril roots, eye, core…). Deterministic. Painting is memoised per
+ * (titan, seed, lighting) and every call returns a private copy of the map, so tournaments and rematches are cheap.
  */
 export function generateTitanBody(def: TitanDef, seed: number, lighting: StageLighting): GeneratedTitan {
-  const painted = paintTitanMap(def, seed, lighting);
-  rememberRig(painted.map, painted.rig);
-  return { ...painted, materials: resolveMaterialsLocal(def.materials) };
+  const key = `${def.id}|${seed >>> 0}|${lighting.dir.join(',')}|${lighting.color}|${lighting.ambient}|${lighting.rim}`;
+  let painted = PAINT_CACHE.get(key);
+  if (!painted) {
+    painted = paintTitanMap(def, seed, lighting);
+    if (PAINT_CACHE.size >= PAINT_CACHE_MAX) PAINT_CACHE.delete(PAINT_CACHE.keys().next().value as string);
+    PAINT_CACHE.set(key, painted);
+  }
+  const map = cloneMap(painted.map);
+  rememberRig(map, painted.rig);
+  return { map, rig: painted.rig, materials: resolveMaterials(def.materials) };
 }
 
 const RIGS = new WeakMap<MatterMap, TitanRig>();

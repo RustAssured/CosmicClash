@@ -8,7 +8,13 @@ const INF = 1e20;
  * `mask` is any Uint8Array; nonzero = solid. `targetSolid=false` measures the distance inside solids to the nearest void.
  * Cells with no target anywhere get 1e6.
  */
-export function edt(mask: Uint8Array, w: number, h: number, targetSolid: boolean, out?: Float32Array): Float32Array {
+export function edt(
+  mask: Uint8Array,
+  w: number,
+  h: number,
+  targetSolid: boolean,
+  out?: Float32Array,
+): Float32Array {
   const n = w * h;
   const res = out ?? new Float32Array(n);
   const g = new Float64Array(n);
@@ -55,7 +61,13 @@ export function edt(mask: Uint8Array, w: number, h: number, targetSolid: boolean
 }
 
 /** Separable box blur with edge clamping; radius in px. Returns a new array unless `out` is given. */
-export function boxBlur(src: Float32Array, w: number, h: number, r: number, out?: Float32Array): Float32Array {
+export function boxBlur(
+  src: Float32Array,
+  w: number,
+  h: number,
+  r: number,
+  out?: Float32Array,
+): Float32Array {
   const tmp = new Float32Array(w * h);
   const res = out ?? new Float32Array(w * h);
   const win = 2 * r + 1;
@@ -80,7 +92,14 @@ export function boxBlur(src: Float32Array, w: number, h: number, r: number, out?
 }
 
 /** Central-difference gradient at (x,y) with edge clamping. */
-export function gradAt(f: Float32Array, w: number, h: number, x: number, y: number, out: { x: number; y: number }): void {
+export function gradAt(
+  f: Float32Array,
+  w: number,
+  h: number,
+  x: number,
+  y: number,
+  out: { x: number; y: number },
+): void {
   const x0 = x > 0 ? x - 1 : 0;
   const x1 = x < w - 1 ? x + 1 : w - 1;
   const y0 = y > 0 ? y - 1 : 0;

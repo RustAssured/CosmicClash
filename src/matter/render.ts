@@ -51,7 +51,17 @@ export class MatterRender {
     };
     clear(back, backEmi, this.backRange);
     clear(front, frontEmi, this.frontRange);
-    rasterChunks(core, view, alpha, back.pixels, backEmi, front.pixels, frontEmi, this.backRange, this.frontRange);
+    rasterChunks(
+      core,
+      view,
+      alpha,
+      back.pixels,
+      backEmi,
+      front.pixels,
+      frontEmi,
+      this.backRange,
+      this.frontRange,
+    );
     rasterParticles(core.particles, view, alpha, front.pixels, frontEmi, this.frontRange);
     this.version++;
     back.version = this.version;

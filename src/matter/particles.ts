@@ -3,7 +3,17 @@ import type { WorldCore } from './core';
 import { BAYER4 } from './util';
 
 /** Particle kinds (Uint8). Order matches contracts ParticleKind. */
-export const PK = { spark: 0, ember: 1, dust: 2, gas: 3, ash: 4, glint: 5, plasma: 6, shard: 7, mote: 8 } as const;
+export const PK = {
+  spark: 0,
+  ember: 1,
+  dust: 2,
+  gas: 3,
+  ash: 4,
+  glint: 5,
+  plasma: 6,
+  shard: 7,
+  mote: 8,
+} as const;
 export const KIND_ID: Record<ParticleKind, number> = {
   spark: 0,
   ember: 1,
@@ -92,7 +102,7 @@ export class ParticlePool {
       if (this.rampLen[r] !== len) continue;
       let same = true;
       for (let k = 0; k < len; k++)
-        if (this.rampColors[r * RAMP_STRIDE + k] !== (colors[k]! >>> 0)) {
+        if (this.rampColors[r * RAMP_STRIDE + k] !== colors[k]! >>> 0) {
           same = false;
           break;
         }
@@ -245,29 +255,38 @@ export class ParticlePool {
       }
       const hm = this.homing[s]!;
       if (hm > 0) {
-        let tx = this.sinkX[s]!;
-        let ty = this.sinkY[s]!;
+        let sinkX = this.sinkX[s]!;
+        let sinkY = this.sinkY[s]!;
         const cb = this.credit[s]!;
         if (cb >= 0) {
           const slot = core.bodySlot(cb);
           if (slot >= 0 && core.gravity[slot]!.active) {
-            tx = core.gravity[slot]!.x;
-            ty = core.gravity[slot]!.y;
+            sinkX = core.gravity[slot]!.x;
+            sinkY = core.gravity[slot]!.y;
           }
         }
-        const dx = tx - px;
-        const dy = ty - py;
+        const dx = sinkX - px;
+        const dy = sinkY - py;
         const d = Math.sqrt(dx * dx + dy * dy) + 1e-6;
-        if (d < 7) {
+        if (d < 10) {
           this.consume(core, s, cb, px, py);
           continue;
         }
-        // Central pull + a tangential (swirl) component: conserves angular momentum, so streams SPIRAL in.
+        // Central pull, a modest tangential (swirl) push, and damping of the tangential velocity: angular momentum is kept at
+        // launch, then bleeds off, so streams SPIRAL in instead of orbiting forever.
         const ax = dx / d;
         const ay = dy / d;
+        // Older streams are pulled harder and lose their swirl faster: arrival is guaranteed, the spiral stays graceful.
+        const age = 1 - l / this.lifeMax[s]!;
+        const hmE = hm * (1 + 4 * age * age);
         const ramp = 0.45 + Math.min(1.6, 90 / d);
-        pvx += (ax * hm + -ay * hm * 0.42) * ramp * dt;
-        pvy += (ay * hm + ax * hm * 0.42) * ramp * dt;
+        const tx = -ay;
+        const ty = ax;
+        const vt = pvx * tx + pvy * ty;
+        const swirl = 0.16 * Math.min(1, d / 80);
+        const damp = 3.5 + 12 * age;
+        pvx += (ax * hmE * ramp + tx * hmE * swirl * ramp - tx * vt * damp) * dt;
+        pvy += (ay * hmE * ramp + ty * hmE * swirl * ramp - ty * vt * damp) * dt;
         const sp2 = pvx * pvx + pvy * pvy;
         const cap = 620;
         if (sp2 > cap * cap) {
@@ -296,6 +315,11 @@ export class ParticlePool {
     this.life[s] = 0;
     this.freeList[this.freeTop++] = s;
     this.count--;
+  }
+
+  /** Kill every live particle (carried mass dissipates). Used by carve() so a harness state starts without a dust storm. */
+  purge(core: WorldCore): void {
+    for (let s = 0; s < this.hi; s++) if (this.life[s]! > 0) this.kill(core, s, false);
   }
 
   /** Reset (tests / world reset). */
@@ -348,7 +372,7 @@ export function rasterParticles(
     const rid = rampId[s]!;
     const len = rl[rid]!;
     const ci = len <= 1 ? 0 : Math.min(len - 1, Math.floor((1 - frac) * len));
-    const col = rc[rid * RAMP_STRIDE + ci]!;
+    const col = rc[rid * RAMP_STRIDE + ci]! | 0;
     let sz = size[s]!;
     let em = emis[s]!;
     // Soft kinds fade with ordered dither in the last third of life.

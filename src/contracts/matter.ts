@@ -1,5 +1,5 @@
 import type { DamageEvent, DamageResult, DamageShape, DamageType, OverlapResult } from './damage';
-import type { RenderLayer, StageLighting, ViewRect } from './render';
+import type { ArenaInfo, RenderLayer, StageLighting, ViewRect } from './render';
 import type { SimEvent } from './sim';
 import type { TitanAttributes } from './titan';
 
@@ -349,6 +349,21 @@ export interface GravitySource {
   creditBodyId?: number;
 }
 
+/** Mass-conservation ledger: everything created or injected must be accounted for in cells, pools, chunks, particles, or dissipated. */
+export interface MatterLedger {
+  created: number;
+  injected: number;
+  deleted: number;
+  dissipated: number;
+  credited: number;
+  cellMass: number;
+  poolMass: number;
+  chunkMass: number;
+  particleMass: number;
+  /** (created + injected) − (cells + pools + chunks + particles + dissipated + deleted); ≈ 0. */
+  error: number;
+}
+
 export interface GrowSpec {
   /** Number of cells to add, seeded from the outside in by adjacency to existing matter. */
   cells: number;
@@ -389,7 +404,16 @@ export interface MatterWorld {
   drainEvents(into: SimEvent[]): void;
 
   /* ---- queries ---- */
+  /**
+   * Live statistics of a body. Returns the body's OWN `BodyStats` object, updated in place (cheap to call every tick) — copy what
+   * you keep. `BodyStats.mass` includes the accretion *pool* (mass received from sinks but not yet built into cells), so accretors
+   * exceed `massFrac = 1`; `grow()` converts pool → cells.
+   */
   stats(bodyId: number): BodyStats;
+  /** World AABB of a body's live cells (FighterView.bounds*). Returns false if the body is gone or empty. */
+  liveBounds(bodyId: number, out: { x0: number; y0: number; x1: number; y1: number }): boolean;
+  /** Mass-conservation report (tests/debug): `error` must be ≈ 0. */
+  ledger(): MatterLedger;
 
   /* ---- mass economy ---- */
   /** Add matter to a body (Black Hole disk regrowth, Nexus lattice growth). Returns cells actually added. */
@@ -412,6 +436,8 @@ export interface MatterWorld {
   /* ---- rendering ---- */
   /** Stage lighting used to re-light freshly exposed surfaces and debris (call at match start; safe to call again). */
   setLighting(l: StageLighting): void;
+  /** Arena used for the soft walls that keep debris in the play area (default DEFAULT_ARENA). Call with the stage arena at match start. */
+  setArena(a: ArenaInfo): void;
   /** Debris + particle layers rasterised at logical resolution for this view (screen-space layers, z ordered back→front).
    *  `alpha` ∈ [0,1) extrapolates by velocity for smooth >60 Hz display. */
   renderLayers(view: ViewRect, alpha: number): RenderLayer[];

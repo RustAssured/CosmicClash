@@ -263,6 +263,8 @@ export interface LiveDevice {
   rotation: number;
   /** Which action -> raw refs overrides are active. */
   bindings: Partial<Record<Action, RawRef[]>>;
+  /** Actions whose binding the player changed (pads and keyboards alike). */
+  custom: Action[];
 }
 
 export interface CaptureState {
@@ -314,6 +316,8 @@ export interface InputManager {
   drainActivity(out: DeviceInfo[]): void;
 
   rumble(slot: 0 | 1, strong: number, weak: number, ms: number): void;
+  /** Rumble a specific device (the Controller Check's rumble test works on unassigned pads too). */
+  rumbleDevice(deviceId: string, strong: number, weak: number, ms: number): void;
 
   readonly settings: Readonly<InputSettings>;
   updateSettings(patch: Partial<InputSettings>): void;

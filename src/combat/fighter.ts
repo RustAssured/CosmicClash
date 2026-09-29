@@ -34,6 +34,7 @@ import {
   type MoveDef,
   type MoveSlot,
   type OverlapResult,
+  type ParticleSpawn,
   type RenderLayer,
   type SimEvent,
   type StageLighting,
@@ -43,16 +44,18 @@ import {
 } from '@/contracts';
 import { generateTitanBody, rememberRig, rigOfMap, type TitanRig } from '@/titans';
 import { buildRigFor } from '@/titans/rigs';
-import { Behaviour, type HitInfo, type InterceptResult } from './behaviour';
+import type { Behaviour, HitInfo, InterceptResult } from './behaviour';
 import { createBehaviour } from './behaviours';
 import { InputBuffer } from './inputBuffer';
-import { ActiveMove, MAX_HITBOXES, aimFromStick, resolveFrame } from './move';
+import { ActiveMove, MAX_HITBOXES, aimFromStick, fillDisplacement, resolveFrame } from './move';
 import {
   asShape,
   copyShape,
   instantiateTemplate,
   makeFatShape,
   shapeIntersectsDisc,
+  translateShape,
+  type Bounds,
   type FatShape,
 } from './shapes';
 import { computeStats, topSpeed } from './stats';
@@ -181,20 +184,49 @@ export class FighterImpl implements Fighter {
   private readonly evShape: FatShape = makeFatShape();
   private readonly ev: DamageEvent;
   private readonly evIn: DamageEvent;
-  private readonly ovTmp: OverlapResult = { cells: 0, x: NaN, y: NaN, nearestX: NaN, nearestY: NaN, coverage: 0 };
-  private readonly probeOut: OverlapResult = { cells: 0, x: NaN, y: NaN, nearestX: NaN, nearestY: NaN, coverage: 0 };
-  private readonly hitRes: HitResult = { blocked: 0, cellsRemoved: 0, massRemoved: 0, x: 0, y: 0, connected: false, hitstop: 0 };
-  private readonly icpt: InterceptResult = { absorbed: 0, partsHit: 0, extraCells: 0, extraMass: 0, touched: false };
+  private readonly ovTmp: OverlapResult = {
+    cells: 0,
+    x: NaN,
+    y: NaN,
+    nearestX: NaN,
+    nearestY: NaN,
+    coverage: 0,
+  };
+  private readonly probeOut: OverlapResult = {
+    cells: 0,
+    x: NaN,
+    y: NaN,
+    nearestX: NaN,
+    nearestY: NaN,
+    coverage: 0,
+  };
+  private readonly hitRes: HitResult = {
+    blocked: 0,
+    cellsRemoved: 0,
+    massRemoved: 0,
+    x: 0,
+    y: 0,
+    connected: false,
+    hitstop: 0,
+  };
+  private readonly icpt: InterceptResult = {
+    absorbed: 0,
+    partsHit: 0,
+    extraCells: 0,
+    extraMass: 0,
+    touched: false,
+  };
   private readonly threatPool: ThreatShape[] = [];
   private readonly threatShapes: FatShape[] = [];
   private threatCount = 0;
   private readonly layerOut: RenderLayer[] = [];
   private readonly bodyLayer: RenderLayer;
   private readonly sparkRamp: number[];
-  private readonly spark: import('@/contracts').ParticleSpawn;
+  /** Reusable particle request (behaviours mutate it and hand it to `world.spawnParticles`). */
+  readonly particleSpawn: ParticleSpawn;
   private bbox = { x0: 0, y0: 0, x1: 0, y1: 0, stamp: -1e9 };
   private lastEventTick = -1e9;
-  private readonly rowTmp = { a: 0, b: 0 };
+  private readonly bnd: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private bbDirty = true;
   private moveActiveNow = false;
 
@@ -234,7 +266,14 @@ export class FighterImpl implements Fighter {
         materials: g.materials,
         attributes: opts.def.attributes,
         seed: opts.seed,
-        transform: { x: opts.x, y: opts.y, anchorX: g.map.coreX, anchorY: g.map.coreY, facing: opts.facing, lean: 0 },
+        transform: {
+          x: opts.x,
+          y: opts.y,
+          anchorX: g.map.coreX,
+          anchorY: g.map.coreY,
+          facing: opts.facing,
+          lean: 0,
+        },
       });
       rememberRig(g.map, g.rig);
     }
@@ -270,7 +309,7 @@ export class FighterImpl implements Fighter {
     const acc = hex(opts.def.ui.accent);
     const acc2 = hex(opts.def.ui.accent2);
     this.sparkRamp = [0xffffffff, acc2, acc, (acc & 0x00ffffff) | 0x99000000];
-    this.spark = {
+    this.particleSpawn = {
       kind: 'spark',
       x: 0,
       y: 0,
@@ -399,11 +438,13 @@ export class FighterImpl implements Fighter {
     }
 
     // guard shell recovers while it is down
-    if (!this.guardUp && this.guardHealth < 1) this.guardHealth = Math.min(1, this.guardHealth + T.guardRegenPerSec * TICK_DT);
+    if (!this.guardUp && this.guardHealth < 1)
+      this.guardHealth = Math.min(1, this.guardHealth + T.guardRegenPerSec * TICK_DT);
 
     this.integrate();
     this.applyTransform();
     if (this.moveActiveNow) this.resolveMoveHits();
+    this.threatCount = 0;
     this.behaviour.resolveVolumes(ctx);
     this.behaviour.update(ctx);
     this.updateThreats();
@@ -422,7 +463,8 @@ export class FighterImpl implements Fighter {
     const coreMargin = (bs.coreIntegrity - KO_CORE_INTEGRITY) / (1 - KO_CORE_INTEGRITY);
     const massMargin = (bs.massFrac - KO_MASS_FRAC) / (1 - KO_MASS_FRAC);
     this.view.integrityPct = clamp(Math.min(coreMargin, massMargin) * 100, 0, 100);
-    if (this.live && !this.ko && (bs.coreIntegrity < KO_CORE_INTEGRITY || bs.massFrac < KO_MASS_FRAC)) this.enterKo();
+    if (this.live && !this.ko && (bs.coreIntegrity < KO_CORE_INTEGRITY || bs.massFrac < KO_MASS_FRAC))
+      this.enterKo();
   }
 
   private enterKo(): void {
@@ -437,6 +479,8 @@ export class FighterImpl implements Fighter {
     // final tumble away from the blow
     this.vx += this.lastHitDirX * 150;
     this.vy += this.lastHitDirY * 90 - 30;
+    this.view.ko = true;
+    this.view.state = 'ko';
     this.events.push({ t: 'ko', slot: this.slot, x: this.px, y: this.py });
     this.behaviour.onKo();
   }
@@ -460,7 +504,8 @@ export class FighterImpl implements Fighter {
   private updateFreeLabel(): void {
     if (this.state === 'intro') return;
     const sp = Math.hypot(this.vx, this.vy);
-    this.state = sp > 24 || Math.hypot(this.input.moveX, this.input.moveY) > T.stickDeadzone ? 'move' : 'idle';
+    this.state =
+      sp > 24 || Math.hypot(this.input.moveX, this.input.moveY) > T.stickDeadzone ? 'move' : 'idle';
   }
 
   /** Start a buffered attack/surge or raise the guard. Called whenever the fighter is free to act. */
@@ -470,11 +515,12 @@ export class FighterImpl implements Fighter {
       const slot = BIT_SLOT[bit]!;
       if (this.tryStart(slot, bit)) return;
     }
-    if (this.input.held & Btn.GUARD && this.tickNo >= this.guardLockUntil && this.guardHealth > 0.05) this.beginGuard();
+    if (this.input.held & Btn.GUARD && this.tickNo >= this.guardLockUntil && this.guardHealth > 0.05)
+      this.beginGuard();
   }
 
   /** Try to begin the primary move of `slot`. Returns whether a move started. */
-  tryStart(slot: MoveSlot, bit: number, fromStun = false): boolean {
+  tryStart(slot: MoveSlot, bit: number): boolean {
     const def = this.slotMoves[slot];
     if (!def) {
       this.buf.take(bit, this.tickNo);
@@ -488,7 +534,7 @@ export class FighterImpl implements Fighter {
       this.buf.take(bit, this.tickNo);
       return false;
     }
-    if (slot === 'surge' && !fromStun && this.tickNo < this.surgeReadyAt) return false;
+    if (slot === 'surge' && this.tickNo < this.surgeReadyAt) return false;
     this.buf.take(bit, this.tickNo);
     this.startMove(def, bit);
     return true;
@@ -516,7 +562,8 @@ export class FighterImpl implements Fighter {
     m.tick = 1;
     m.phase = 'startup';
     m.phaseTick = 1;
-    if (variant.hitboxes.length > MAX_HITBOXES) throw new Error(`${def.id}: more than ${MAX_HITBOXES} hitboxes`);
+    if (variant.hitboxes.length > MAX_HITBOXES)
+      throw new Error(`${def.id}: more than ${MAX_HITBOXES} hitboxes`);
 
     if (def.slot === 'surge') {
       let sx = this.input.moveX;
@@ -535,7 +582,14 @@ export class FighterImpl implements Fighter {
     }
     if (def.slot === 'ultimate') {
       this.meter = Math.max(0, this.meter - def.meterCost);
-      this.events.push({ t: 'ultimate', slot: this.slot, titan: this.def.id, phase: 'start', x: this.px, y: this.py });
+      this.events.push({
+        t: 'ultimate',
+        slot: this.slot,
+        titan: this.def.id,
+        phase: 'start',
+        x: this.px,
+        y: this.py,
+      });
     }
     if (def.resourceCost > 0) {
       this.resource -= def.resourceCost;
@@ -556,7 +610,16 @@ export class FighterImpl implements Fighter {
       y: this.py,
     });
     if (def.slot === 'surge')
-      this.events.push({ t: 'surge', slot: this.slot, titan: this.def.id, x: this.px, y: this.py, dirX: m.dirX, dirY: m.dirY });
+      this.events.push({
+        t: 'surge',
+        slot: this.slot,
+        titan: this.def.id,
+        x: this.px,
+        y: this.py,
+        dirX: m.dirX,
+        dirY: m.dirY,
+      });
+    fillDisplacement(m.disp, variant.movement, def.slot === 'surge' ? 0 : this.vx * this.facing, TICK_DT, T.glideHalfLife);
     this.behaviour.onMoveStart(m);
     this.fireKeys();
     this.updateIntangible();
@@ -568,9 +631,23 @@ export class FighterImpl implements Fighter {
     if (!m.def) return;
     m.interrupted = interrupted;
     if (m.def.slot === 'ultimate')
-      this.events.push({ t: 'ultimate', slot: this.slot, titan: this.def.id, phase: 'end', x: this.px, y: this.py });
+      this.events.push({
+        t: 'ultimate',
+        slot: this.slot,
+        titan: this.def.id,
+        phase: 'end',
+        x: this.px,
+        y: this.py,
+      });
     if (m.phase === 'charge' && interrupted)
-      this.events.push({ t: 'charge', slot: this.slot, titan: this.def.id, moveId: m.def.id, frac: 0, phase: 'release' });
+      this.events.push({
+        t: 'charge',
+        slot: this.slot,
+        titan: this.def.id,
+        moveId: m.def.id,
+        frac: 0,
+        phase: 'release',
+      });
     this.behaviour.onMoveEnd(m, interrupted);
     m.def = null;
     m.variant = null;
@@ -593,30 +670,33 @@ export class FighterImpl implements Fighter {
     this.stateTicks++;
     const isSurge = def.slot === 'surge';
 
-    // --- cancels in the first 40% of a windup (and any time while charging) ---
-    const windup =
-      !isSurge &&
-      !m.feint &&
-      ((m.phase === 'startup' && m.phaseTick <= Math.floor(m.cancelWindow * m.startup)) || m.phase === 'charge');
-    if (windup && this.live) {
+    // --- cancels: FEINT drops any windup (startup or charge); Guard/Surge only in the first 40% of startup (or while charging) ---
+    const winding = !isSurge && !m.feint && (m.phase === 'startup' || m.phase === 'charge');
+    const early =
+      (m.phase === 'startup' && m.phaseTick <= Math.floor(m.cancelWindow * m.startup)) ||
+      m.phase === 'charge';
+    if (winding && this.live) {
       if (this.input.pressed & Btn.FEINT) {
         this.feint();
         return this.finishStepMove();
       }
-      if (this.input.held & Btn.GUARD && this.guardHealth > 0.05 && this.tickNo >= this.guardLockUntil) {
-        this.endMove(true);
-        this.beginGuard();
-        return;
-      }
-      const surge = this.slotMoves.surge;
-      if (surge && this.buf.has(Btn.SURGE, this.tickNo) && this.tickNo >= this.surgeReadyAt) {
-        this.buf.take(Btn.SURGE, this.tickNo);
-        this.startMove(surge, Btn.SURGE);
-        return;
+      if (early) {
+        if (this.input.held & Btn.GUARD && this.guardHealth > 0.05 && this.tickNo >= this.guardLockUntil) {
+          this.endMove(true);
+          this.beginGuard();
+          return;
+        }
+        const surge = this.slotMoves.surge;
+        if (surge && this.buf.has(Btn.SURGE, this.tickNo) && this.tickNo >= this.surgeReadyAt) {
+          this.buf.take(Btn.SURGE, this.tickNo);
+          this.startMove(surge, Btn.SURGE);
+          return;
+        }
       }
     }
     // --- follow-up (Sidestep tail → lunging strike) ---
-    const fu = def.extra?.['followUp'] as { button: string; from: number; to: number; move: string } | undefined;
+    const fu = def.extra?.['followUp'] as
+      { button: string; from: number; to: number; move: string } | undefined;
     if (fu && this.live && m.tick - 1 >= fu.from && m.tick - 1 < fu.to) {
       const bit = fu.button === 'crush' ? Btn.CRUSH : Btn.STRIKE;
       const target = this.movesById.get(fu.move);
@@ -684,7 +764,14 @@ export class FighterImpl implements Fighter {
             return;
           }
           const frac = m.chargeTicks / m.chargeMax;
-          this.events.push({ t: 'charge', slot: this.slot, titan: this.def.id, moveId: m.def.id, frac, phase: 'release' });
+          this.events.push({
+            t: 'charge',
+            slot: this.slot,
+            titan: this.def.id,
+            moveId: m.def.id,
+            frac,
+            phase: 'release',
+          });
           this.enterActive();
           break;
         }
@@ -740,7 +827,14 @@ export class FighterImpl implements Fighter {
   private feint(): void {
     const m = this.mv;
     if (m.phase === 'charge')
-      this.events.push({ t: 'charge', slot: this.slot, titan: this.def!.id, moveId: m.def!.id, frac: 0, phase: 'release' });
+      this.events.push({
+        t: 'charge',
+        slot: this.slot,
+        titan: this.def!.id,
+        moveId: m.def!.id,
+        frac: 0,
+        phase: 'release',
+      });
     m.feint = true;
     m.active = 0;
     m.recovery = T.feintRecovery;
@@ -749,10 +843,14 @@ export class FighterImpl implements Fighter {
     this.moveActiveNow = false;
   }
 
-  /** Effective move time for keys/intangibility: charge ticks do not advance the choreography. */
-  private effTick(): number {
+  /**
+   * Choreography clock for movement keys and intangibility: 0-based move ticks with the time spent charging removed, so a
+   * charged move plays its release choreography at the same relative timing however long it was held.
+   */
+  effTick(): number {
     const m = this.mv;
-    return m.tick - 1 - (m.phase === 'charge' || m.chargeTicks > 0 ? Math.max(0, m.chargeTicks - (m.phase === 'charge' ? 0 : 0)) : 0);
+    const skipped = m.chargeTicks > 0 ? (m.phase === 'charge' ? m.chargeTicks - 1 : m.chargeTicks) : 0;
+    return m.tick - 1 - skipped;
   }
 
   private fireKeys(): void {
@@ -873,6 +971,13 @@ export class FighterImpl implements Fighter {
    * ---------------------------------------------------------------------------------------------- */
 
   private controlMul(): number {
+    // a move may override how much steering it leaves the pilot (the Swarm hands the stick to the fragments)
+    const o = this.mv.def?.extra?.['ctl'] as
+      Partial<Record<'startup' | 'charge' | 'active' | 'recovery', number>> | undefined;
+    if (o && this.mv.def && this.state !== 'surge') {
+      const v = o[this.mv.phase];
+      if (v !== undefined) return v;
+    }
     switch (this.state) {
       case 'intro':
       case 'idle':
@@ -974,7 +1079,11 @@ export class FighterImpl implements Fighter {
 
   private faceFoe(): void {
     if (this.ko || this.victory) return;
-    const locked = this.state === 'startup' || this.state === 'charge' || this.state === 'active' || this.state === 'surge';
+    const locked =
+      this.state === 'startup' ||
+      this.state === 'charge' ||
+      this.state === 'active' ||
+      this.state === 'surge';
     if (locked) return;
     const dx = this.foe.view.x - this.px;
     if (dx > T.turnHysteresis) this.facing = 1;
@@ -1038,24 +1147,34 @@ export class FighterImpl implements Fighter {
     return pen;
   }
 
-  /** World x of the outermost live cell of `body` on world row `wy` toward `dir` (+1 right / −1 left), or null. */
+  /** World x of the outermost live cell edge of `body` on world row `wy` toward `dir` (+1 right / −1 left), or null. */
   private rowEdge(body: MatterBody, wy: number, dir: 1 | -1): number | null {
     const t = body.transform;
     const map = body.map;
     const ly = Math.floor(wy - t.y + t.anchorY);
     if (ly < 0 || ly >= map.h) return null;
-    // world x grows with lx when facing=+1; with −lx when facing=−1
-    const scanUp = (dir === 1) === (t.facing === 1);
     const row = ly * map.w;
     const shift = Math.round((t.lean * (t.anchorY - ly)) / Math.max(1, t.anchorY));
-    if (scanUp) {
+    // world x grows with lx when facing = +1 and shrinks when facing = −1; find the extreme solid cell toward `dir`
+    const highLx = (dir === 1) === (t.facing === 1);
+    if (highLx) {
       for (let lx = map.w - 1; lx >= 0; lx--)
-        if (map.material[row + lx] !== 0) return t.x + (lx - t.anchorX) * t.facing + shift + (t.facing === 1 ? 1 : 0);
+        if (map.material[row + lx] !== 0) return this.cellEdge(t, lx, shift, dir);
     } else {
       for (let lx = 0; lx < map.w; lx++)
-        if (map.material[row + lx] !== 0) return t.x + (lx - t.anchorX) * t.facing + shift + (t.facing === 1 ? 0 : 1);
+        if (map.material[row + lx] !== 0) return this.cellEdge(t, lx, shift, dir);
     }
     return null;
+  }
+
+  /** World x of the +x (dir=1) or −x (dir=−1) side of local cell `lx`. */
+  private cellEdge(t: MatterBody['transform'], lx: number, shift: number, dir: 1 | -1): number {
+    if (t.facing === 1) {
+      const lower = t.x + (lx - t.anchorX) + shift;
+      return dir === 1 ? lower + 1 : lower;
+    }
+    const upper = t.x - (lx - t.anchorX) + shift;
+    return dir === 1 ? upper : upper - 1;
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -1089,15 +1208,20 @@ export class FighterImpl implements Fighter {
     // lean spring toward (velocity-driven + pose) target — overshoots slightly on direction changes
     const top = topSpeed(this.def, this.stats);
     const vf = this.vx * this.facing;
-    let target = clamp((vf / top) * T.leanPerSpeed, -T.leanPerSpeed, T.leanPerSpeed) + this.poseLean();
-    if (this.state === 'ko') target = 11;
-    else if (this.state === 'hitstun') target = -clamp(this.lastHitDirX * this.facing, -1, 1) * 6 * -1;
+    let target =
+      clamp((vf / top) * T.leanPerSpeed, -T.leanPerSpeed, T.leanPerSpeed) +
+      this.poseLean() +
+      this.behaviour.leanBias();
+    // shoved bodies arch with the blow (world lean → facing-relative)
+    if (this.state === 'ko') target = clamp(this.lastHitDirX, -1, 1) * 12 * this.facing;
+    else if (this.state === 'hitstun') target = clamp(this.lastHitDirX, -1, 1) * 8 * this.facing;
     const w = T.leanOmega;
     const acc = w * w * (target - this.leanF) - 2 * T.leanZeta * w * this.leanV;
     this.leanV += acc * dt;
     this.leanF += this.leanV * dt;
     // idle breathing bob (deterministic in the tick counter)
-    const calm = this.state === 'idle' || this.state === 'move' || this.state === 'intro' || this.state === 'guard';
+    const calm =
+      this.state === 'idle' || this.state === 'move' || this.state === 'intro' || this.state === 'guard';
     const bob = calm ? Math.sin(this.tickNo * 0.052 + this.slot * 1.7) * T.idleBob : 0;
     // whole pixels: what you see is what is hit (space.ts maps integer transforms 1:1 onto cells)
     t.x = Math.round(this.px);
@@ -1107,19 +1231,20 @@ export class FighterImpl implements Fighter {
     this.bbDirty = this.bbDirty || this.tickNo - this.bbox.stamp > 10;
   }
 
-  /** World AABB of live matter, refreshed every ~10 ticks and after damage. */
-  liveBounds(): { x0: number; y0: number; x1: number; y1: number } {
+  /** World AABB of live matter (returns a reused object). The scan is cached in map-local terms and refreshed every ~10 ticks / after damage. */
+  liveBounds(): Bounds {
     if (this.bbDirty) this.recomputeBounds();
     const t = this.body.transform;
     const b = this.bbox;
-    // cached in map-local terms → project through the current transform so it tracks movement between refreshes
-    const map = this.body.map;
-    void map;
     const wx0 = t.x + (b.x0 - t.anchorX) * t.facing;
     const wx1 = t.x + (b.x1 - t.anchorX) * t.facing;
-    this.rowTmp.a = Math.min(wx0, wx1) - Math.abs(t.lean);
-    this.rowTmp.b = Math.max(wx0, wx1) + Math.abs(t.lean);
-    return { x0: this.rowTmp.a, y0: t.y + (b.y0 - t.anchorY), x1: this.rowTmp.b, y1: t.y + (b.y1 - t.anchorY) };
+    const pad = Math.abs(t.lean);
+    const o = this.bnd;
+    o.x0 = Math.min(wx0, wx1) - pad;
+    o.x1 = Math.max(wx0, wx1) + pad;
+    o.y0 = t.y + (b.y0 - t.anchorY);
+    o.y1 = t.y + (b.y1 - t.anchorY);
+    return o;
   }
 
   private recomputeBounds(): void {
@@ -1197,11 +1322,44 @@ export class FighterImpl implements Fighter {
         hb.sweepTo,
         u,
       );
-      if (this.strike(this.liveShape, hb.damage, hb.knockback.x, hb.knockback.y, hb.guardPressure, m.hitstop, def.slot, def.id)) {
+      if (
+        this.strike(
+          this.liveShape,
+          hb.damage,
+          hb.knockback.x,
+          hb.knockback.y,
+          hb.guardPressure,
+          m.hitstop,
+          def.slot,
+          def.id,
+        )
+      ) {
         m.hitAt[k] = this.tickNo;
         m.hits++;
       }
     }
+  }
+
+  /**
+   * World shape of hitbox `k` of the current move at tick `at` of the active phase (0 = first active tick), for behaviours'
+   * visuals (whips, beams). Returns false when there is no such hitbox. `at` is clamped into the hitbox's window.
+   */
+  liveHitShape(k: number, at: number, out: FatShape): boolean {
+    const m = this.mv;
+    const hb = m.variant?.hitboxes[k];
+    if (!hb) return false;
+    const span = hb.to - hb.from;
+    const a = clamp(at, hb.from, hb.to - 1);
+    const u = span > 1 ? (a - hb.from) / (span - 1) : 0;
+    const t = this.body.transform;
+    instantiateTemplate(
+      hb.shape,
+      { x: t.x, y: t.y, facing: this.facing, scale: this.lengthScale(hb.reachScale) },
+      out,
+      hb.sweepTo,
+      u,
+    );
+    return true;
   }
 
   /**
@@ -1290,11 +1448,14 @@ export class FighterImpl implements Fighter {
         massRemoved: res.massRemoved,
         blocked: res.blocked,
         heavy: info.heavy,
-        onDamaged: this.lastOnDamaged,
+        onDamaged: (foe as unknown as { lastOnDamaged?: number }).lastOnDamaged ?? 0,
       });
       if (res.hitstop > 0 && !info.continuous) ev.push({ t: 'hitstop', ticks: res.hitstop });
       const massK = Math.pow(this.stats.mass / 5, 0.3);
-      const amp = clamp(0.09 * Math.pow(e.energy * (info.continuous ? 6 : 1), 0.62), 0.6, 14) * massK * (1 - res.blocked * 0.6);
+      const amp =
+        clamp(0.09 * Math.pow(e.energy * (info.continuous ? 6 : 1), 0.62), 0.6, 14) *
+        massK *
+        (1 - res.blocked * 0.6);
       ev.push({ t: 'shake', dirX: e.dirX, dirY: e.dirY, amp });
       if (info.heavy) {
         ev.push({ t: 'zoom', amount: clamp(e.energy / 40000, 0.008, 0.045) });
@@ -1309,8 +1470,20 @@ export class FighterImpl implements Fighter {
           radius: 50 + e.energy * 0.09,
           hue: this.def.destruction === 'THERMAL' ? 0.06 : this.def.destruction === 'FRACTURE' ? 0.42 : 0.1,
         });
-      ev.push({ t: 'rumble', slot: this.slot, strong: clamp(e.energy / 2400, 0.05, 0.6), weak: 0.2, ms: info.heavy ? 160 : 70 });
-      ev.push({ t: 'rumble', slot: foe.slot, strong: clamp(e.energy / 1300, 0.1, 1), weak: 0.5, ms: info.heavy ? 260 : 110 });
+      ev.push({
+        t: 'rumble',
+        slot: this.slot,
+        strong: clamp(e.energy / 2400, 0.05, 0.6),
+        weak: 0.2,
+        ms: info.heavy ? 160 : 70,
+      });
+      ev.push({
+        t: 'rumble',
+        slot: foe.slot,
+        strong: clamp(e.energy / 1300, 0.1, 1),
+        weak: 0.5,
+        ms: info.heavy ? 260 : 110,
+      });
     }
     // finishing blow: slow motion, flash, a huge shake
     if (fv.ko && !this.foeKoAnnounced) {
@@ -1330,7 +1503,15 @@ export class FighterImpl implements Fighter {
   lastOnDamaged = 0;
 
   private spawnHitSparks(res: HitResult, e: DamageEvent): void {
-    const s = this.spark;
+    const s = this.particleSpawn;
+    s.kind = 'spark';
+    s.ramp = this.sparkRamp;
+    s.life[0] = 12;
+    s.life[1] = 30;
+    s.spread = 120;
+    s.emissive = 200;
+    s.fieldScale = 0.2;
+    s.drag = 1.5;
     s.x = res.x;
     s.y = res.y;
     s.vx = e.dirX * 140;
@@ -1360,6 +1541,7 @@ export class FighterImpl implements Fighter {
   }
 
   receive(evIn: DamageEvent, attacker: Fighter, events: SimEvent[]): HitResult {
+    this.events = events;
     const res = this.hitRes;
     const info: HitInfo = (attacker as unknown as { hitInfo?: HitInfo }).hitInfo ?? {
       knockX: evIn.dirX * 300,
@@ -1402,7 +1584,10 @@ export class FighterImpl implements Fighter {
       const absorb = this.shell.absorb[e.type] ?? 0.4;
       blocked = clamp01(absorb * this.guardStrength());
       e.energy *= 1 - blocked;
-      const drain = info.guardPressure * (T.guardDrainBase + rawEnergy / T.guardDrainEnergy) * (e.type === 'CRUSH' ? 1.4 : 1);
+      const drain =
+        info.guardPressure *
+        (T.guardDrainBase + rawEnergy / T.guardDrainEnergy) *
+        (e.type === 'CRUSH' ? 1.4 : 1);
       this.guardHealth -= drain;
       const broke = this.guardHealth <= 0;
       const cx = shapeCentreX(evIn.shape, this.px);
@@ -1457,7 +1642,7 @@ export class FighterImpl implements Fighter {
     const mass = Math.max(1, this.stats.mass);
     const massRatio = T.massNeutral / mass;
     const guarded = this.guardUp && blocked > 0.25;
-    const kbMul = guarded ? T.guardKnockbackMul : 1;
+    const kbMul = (guarded ? T.guardKnockbackMul : 1) * (info.continuous ? 0.5 : 1);
     if (!this.ko) {
       this.vx += (info.knockX * massRatio + dr.impulseX * T.worldImpulseGain * massRatio) * kbMul;
       this.vy += (info.knockY * massRatio + dr.impulseY * T.worldImpulseGain * massRatio) * kbMul;
@@ -1466,24 +1651,26 @@ export class FighterImpl implements Fighter {
       this.meter = Math.min(1, this.meter + rawEnergy * T.meterTaken * (1 - blocked * 0.6));
       const armor = this.mv.def?.tags.includes('armor') && this.mv.phase !== 'recovery';
       if (!guarded && !armor && this.state !== 'guardbreak') {
-        let stun = T.stunBase * Math.sqrt(Math.max(0.05, e.energy) / 300) * Math.sqrt(T.massNeutral / mass) * info.stunMul;
+        let stun =
+          T.stunBase *
+          Math.sqrt(Math.max(0.05, e.energy) / 300) *
+          Math.sqrt(T.massNeutral / mass) *
+          info.stunMul;
         if (this.tickNo - this.stunEndTick < T.stunGraceTicks) stun *= T.stunComboScale;
         const ticks = Math.round(clamp(stun, info.continuous ? 0 : T.stunMin, T.stunMax));
         if (ticks > 0) this.enterHitstun(ticks);
       }
       this.behaviour.onDamaged(e.energy, evIn.dirX, evIn.dirY);
-      if (this.behaviourWantsKoCheck()) this.refreshStats();
+      this.refreshStats();
     }
 
     // 5. hit-stop suggestion
     const massScale = Math.sqrt((attacker.view.stats.mass + mass) / 10);
-    const base = info.hitstopBase * (0.7 + rawEnergy / T.hitstopEnergyRef) * massScale * (1 - res.blocked * 0.4);
+    const base =
+      info.hitstopBase * (0.7 + rawEnergy / T.hitstopEnergyRef) * massScale * (1 - res.blocked * 0.4);
     res.hitstop = info.continuous ? 0 : Math.round(clamp(base, HITSTOP_MIN_TICKS, HITSTOP_MAX_TICKS));
+    this.syncView(); // the attacker (and the AI) read this fighter's view before its own tick comes round
     return res;
-  }
-
-  private behaviourWantsKoCheck(): boolean {
-    return true;
   }
 
   private enterHitstun(ticks: number): void {
@@ -1520,8 +1707,8 @@ export class FighterImpl implements Fighter {
     th.detached = detached;
   }
 
+  /** Append the current move's hitbox telegraphs after any detached threats the behaviour added this tick, then publish. */
   private updateThreats(): void {
-    this.threatCount = 0;
     const m = this.mv;
     if (m.def && m.variant && !m.feint) {
       const t = this.body.transform;
@@ -1552,11 +1739,35 @@ export class FighterImpl implements Fighter {
           const i = this.threatCount++;
           instantiateTemplate(
             hb.shape,
-            { x: t.x, y: t.y, facing: this.facing, scale: this.lengthScale(hb.reachScale) * (m.phase === 'charge' ? 1 : 1) },
+            { x: t.x, y: t.y, facing: this.facing, scale: this.lengthScale(hb.reachScale) },
             this.threatShapes[i]!,
             hb.sweepTo,
             uu,
           );
+          if (!live && m.phase === 'startup') {
+            // the attacker keeps moving until the hitbox goes live: show where it WILL be (a lunge covers ground first)
+            const last = m.disp.length - 1;
+            const hitEff = Math.min(last, m.startup + hb.from);
+            const nowEff = Math.min(last, this.effTick());
+            translateShape(this.threatShapes[i]!, (m.disp[hitEff]! - m.disp[nowEff]!) * this.facing, 0);
+          }
+          if (hb.shape.kind === 'point' && (m.phase === 'startup' || m.phase === 'active')) {
+            // a ramming hitbox rides the moving body: publish the swept capsule it will cover while live
+            const last = m.disp.length - 1;
+            const startEff = live ? Math.min(last, this.effTick()) : Math.min(last, m.startup + hb.from);
+            const endEff = Math.min(last, m.startup + hb.to);
+            const d = (m.disp[endEff]! - m.disp[startEff]!) * this.facing;
+            if (Math.abs(d) > 6) {
+              const sh = this.threatShapes[i]!;
+              const r = sh.r;
+              sh.kind = 'line';
+              sh.x0 = sh.x;
+              sh.y0 = sh.y;
+              sh.x1 = sh.x + d;
+              sh.y1 = sh.y;
+              sh.width = 2 * r;
+            }
+          }
           const th = this.threatPool[i]!;
           th.type = hb.damage.type;
           th.energy = hb.damage.energy * this.stats.damageMul * m.power;
@@ -1566,15 +1777,9 @@ export class FighterImpl implements Fighter {
         }
       }
     }
-    // behaviour-owned threats are appended by behaviour.update() through addThreat — it runs before this in tick(); keep them:
     const vt = this.view.threats;
     vt.length = this.threatCount;
     for (let i = 0; i < this.threatCount; i++) vt[i] = this.threatPool[i]!;
-  }
-
-  /** Called by behaviours before `updateThreats` rebuilt the list: keep detached threats added this tick. */
-  keepThreats(): number {
-    return this.threatCount;
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -1583,7 +1788,6 @@ export class FighterImpl implements Fighter {
 
   private syncView(): void {
     const v = this.view;
-    const t = this.body.transform;
     v.x = this.px;
     v.y = this.py;
     v.vx = this.vx;
@@ -1608,7 +1812,8 @@ export class FighterImpl implements Fighter {
       v.cancellable =
         !m.feint &&
         m.def.slot !== 'surge' &&
-        ((m.phase === 'startup' && m.phaseTick <= Math.floor(m.cancelWindow * m.startup)) || m.phase === 'charge');
+        ((m.phase === 'startup' && m.phaseTick <= Math.floor(m.cancelWindow * m.startup)) ||
+          m.phase === 'charge');
     } else {
       v.moveId = null;
       v.moveSlot = null;
@@ -1629,7 +1834,6 @@ export class FighterImpl implements Fighter {
     v.meter = this.meter;
     v.ko = this.ko;
     v.freezeTicks = this.freezeTicks;
-    void t;
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -1745,6 +1949,7 @@ export class FighterImpl implements Fighter {
     this.bbDirty = true;
     this.behaviour.reset(healFraction);
     this.refreshStats();
+    this.threatCount = 0;
     this.updateThreats();
     this.syncView();
   }

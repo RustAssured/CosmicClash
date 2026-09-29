@@ -1,7 +1,7 @@
 /**
  * CPU preview of the palette dither on synthetic gradients and a noise nebula, using the same LUT + per-pixel ratio
  * maths as the shader (src/render/palette.ts). Used to tune LUT parameters by eye without a GPU:
- *   npx tsx tools/render/dither-preview.ts [stage]  →  .scratch/render/dither-<stage>.png
+ *   npx tsx tools/render/dither-preview.ts [stage] [bayerSize=4] [levels=4]  →  .scratch/render/dither-<stage>.png
  */
 import { STAGE_IDS, hex, linearToRgbaBytes, type StageId } from './helpers';
 import { STAGE_INFO as STAGES, STAGE_RAMPS } from '../../src/stages/info';
@@ -14,7 +14,9 @@ const stage = (process.argv[2] ?? 'nursery') as StageId;
 if (!STAGE_IDS.includes(stage)) throw new Error('unknown stage');
 const pal = preparePalette(STAGES[stage].palette, STAGE_RAMPS[stage]);
 const lut = buildDitherLut(pal, { size: 32 });
-const bayer = bayerRanks(8);
+const bn = Number(process.argv[3] ?? 4);
+const levels = Number(process.argv[4] ?? 4);
+const bayer = bayerRanks(bn);
 
 const W = 640;
 const H = 360;
@@ -49,10 +51,18 @@ for (let y = 0; y < H; y++) {
       g = tone((0.02 + 0.2 * dens + 0.5 * lit * dens) * 1.0);
       b = tone((0.08 + 0.4 * dens + 0.1 * lit) * 1.0);
     }
-    const idx = ditherToIndex(pal, lut, Math.min(1, r), Math.min(1, g), Math.min(1, b), bayerThreshold(bayer, 8, x, y));
+    const idx = ditherToIndex(
+      pal,
+      lut,
+      Math.min(1, r),
+      Math.min(1, g),
+      Math.min(1, b),
+      bayerThreshold(bayer, bn, x, y),
+      levels,
+    );
     img[y * W + x] = linearToRgbaBytes(pal.srgb[idx * 3]!, pal.srgb[idx * 3 + 1]!, pal.srgb[idx * 3 + 2]!);
   }
 }
-writePng(`.scratch/render/dither-${stage}.png`, img, W, H, 2, 0xff000000);
+writePng(`.scratch/render/dither-${stage}-b${bn}-l${levels}.png`, img, W, H, 2, 0xff000000);
 void hex;
 console.log('wrote', stage);

@@ -1,10 +1,21 @@
 import { CellFlag, type DamageResult } from '@/contracts';
+import { CONN_NOW } from './body';
 import type { Body, WorldPoint } from './body';
 import { breakAllBonds, killCell } from './cells';
 import type { WorldCore } from './core';
 import { carveCrater, type CraterOpts, type CraterOut } from './crater';
 import { MODE_MECH, RAMP_SHARD, endSpray, sprayCell } from './debris';
-import { DF, T_KINETIC, coverageOf, finishDamage, hardness, localToWorldF, recordBlow, resistOf, type DamageCtx } from './dmg';
+import {
+  DF,
+  T_KINETIC,
+  coverageOf,
+  finishDamage,
+  hardness,
+  localToWorldF,
+  recordBlow,
+  resistOf,
+  type DamageCtx,
+} from './dmg';
 import { PK } from './particles';
 
 const F_SHRAP = CellFlag.SHRAPNEL;
@@ -20,7 +31,19 @@ const opts: CraterOpts = {
   craterR: 0,
   type: T_KINETIC,
 };
-const out: CraterOut = { ok: false, fx: 0, fy: 0, nx: 0, ny: -1, rl: 0, rd: 0, removed: 0, chunks: 0, removedMass: 0, thr: 0 };
+const out: CraterOut = {
+  ok: false,
+  fx: 0,
+  fy: 0,
+  nx: 0,
+  ny: -1,
+  rl: 0,
+  rd: 0,
+  removed: 0,
+  chunks: 0,
+  removedMass: 0,
+  thr: 0,
+};
 
 /** Weighted mean resistance of the covered cells to damage type `type`. */
 export function meanResist(ctx: DamageCtx, type: number): number {
@@ -37,27 +60,32 @@ export function meanResist(ctx: DamageCtx, type: number): number {
  * outward after `embedDelay` ticks (secondary chunks a moment after the hit).
  */
 export function applyKinetic(ctx: DamageCtx, res: DamageResult): void {
-  const { core, body } = ctx;
+  const { body } = ctx;
   const rEff = meanResist(ctx, T_KINETIC);
   const cov = coverageOf(ctx);
   opts.budget = ctx.energy * rEff;
   opts.craterR = ctx.params.crater ?? 0;
-  opts.chunkProb = 0.55;
+  opts.chunkProb = 0.72;
   if (opts.budget >= 0.5 && carveCrater(ctx, opts, out)) {
     const nEmbed = ctx.params.embed ?? (ctx.has(DF.EMBED) ? 3 : 0);
     if (nEmbed > 0) embedShrapnel(ctx, out, nEmbed, ctx.params.embedDelay ?? 48, opts.budget);
     recordBlow(ctx, 0.85);
     // Cells just beyond the crater floor got a shock: connectivity must re-check.
-    body.connDirty = 2;
+    body.connDirty = CONN_NOW;
   } else {
     recordBlow(ctx, 0.5);
   }
-  void core;
   finishDamage(ctx, res, cov, 1);
 }
 
 /** Plant `count` shrapnel fragments in the material past the crater floor along the direction of travel. */
-export function embedShrapnel(ctx: DamageCtx, cr: CraterOut, count: number, delay: number, budget: number): void {
+export function embedShrapnel(
+  ctx: DamageCtx,
+  cr: CraterOut,
+  count: number,
+  delay: number,
+  budget: number,
+): void {
   const { body } = ctx;
   const map = body.map;
   const w = body.w;
@@ -190,7 +218,7 @@ function burst(core: WorldCore, body: Body, c: number, energy: number, dirX: num
         sprayCell(core, body, m, pt.x, pt.y, dx * 30, dy * 30, mass, MODE_MECH);
         continue;
       }
-      map.integrity[i] = it;
+      map.integrity[i] = it < 1 ? 1 : it;
       if (rng.next() < 0.95 * t) breakAllBonds(body, i);
     }
   }
@@ -201,10 +229,24 @@ function burst(core: WorldCore, body: Body, c: number, energy: number, dirX: num
   for (let k = 0; k < nspark; k++) {
     const a = rng.next() * Math.PI * 2;
     const sp = 40 + rng.next() * 140;
-    core.particles.spawn(core, PK.spark, bx, by, Math.cos(a) * sp, Math.sin(a) * sp, 10 + rng.int(14), 1, 255, body.rampIds[mid * 4 + RAMP_SHARD]!, 0.5, 1, 0);
+    core.particles.spawn(
+      core,
+      PK.spark,
+      bx,
+      by,
+      Math.cos(a) * sp,
+      Math.sin(a) * sp,
+      10 + rng.int(14),
+      1,
+      255,
+      body.rampIds[mid * 5 + RAMP_SHARD]!,
+      0.5,
+      1,
+      0,
+    );
   }
   body.touch(xMin, yMin, xMax, yMax);
-  body.connDirty = 2;
+  body.connDirty = CONN_NOW;
   localToWorldF(body, x0 + 0.5, y0 + 0.5, pt);
   core.emitMatter('crack', pt.x, pt.y, 0.5, body.ownerSlot);
 }

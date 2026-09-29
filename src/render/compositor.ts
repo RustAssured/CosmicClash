@@ -142,7 +142,12 @@ export class LayerCompositor {
       slot.mesh.renderOrder = used;
       const u = slot.material.uniforms;
       // Clip the quad to the frame (the shader still maps by absolute pixel, so clipping is invisible).
-      slot.rect.set(Math.max(0, p.x0), Math.max(0, p.y0), Math.min(LOGICAL_W, p.x1), Math.min(LOGICAL_H, p.y1));
+      slot.rect.set(
+        Math.max(0, p.x0),
+        Math.max(0, p.y0),
+        Math.min(LOGICAL_W, p.x1),
+        Math.min(LOGICAL_H, p.y1),
+      );
       slot.size.set(layer.w, layer.h);
       slot.place.set(p.ax, p.ay, p.anchorX, p.anchorY);
       slot.fl.set(p.facing, p.lean);

@@ -58,6 +58,8 @@ export interface StageInfo {
   lighting: StageLighting;
   /** Curated palette (40–64 hex colours, hue-shifted ramps) used by the scenery dither. */
   palette: string[];
+  /** Optional: number of colours in each ramp of `palette`, in order (dark → light). Inferred from lightness drops when omitted. */
+  ramps?: number[];
 }
 
 /* ------------------------------------------------------------------------------------------------ *
@@ -138,7 +140,11 @@ export interface RenderLayer {
   anchorY: number;
   facing: 1 | -1;
   lean: number;
-  /** Changed-cell rect since last upload (map-local / layer-local); null = whole layer if version changed. */
+  /**
+   * Changed-cell rect since last upload (map-local / layer-local); null = whole layer if version changed. The renderer uploads
+   * only that rect (whole layer when it covers ≥60%) and SETS IT TO NULL once uploaded. Producers mirroring `map.dirty` must copy it
+   * in and clear their own rect each `renderLayers()` call, and bump `version` whenever pixels or emissive change.
+   */
   dirty: { x0: number; y0: number; x1: number; y1: number } | null;
   /** Bumped when pixels change; the renderer re-uploads when it differs from its cached version. */
   version: number;
@@ -182,6 +188,7 @@ export function makeLayer(
  *  FRAME FX (per-frame non-pixel inputs to the renderer / stage)
  * ------------------------------------------------------------------------------------------------ */
 
+/** All FrameFx positions (x, y) are WORLD coordinates (logical px, +y down); the renderer subtracts the frame's view origin. */
 export interface ShockwaveFx {
   x: number;
   y: number;

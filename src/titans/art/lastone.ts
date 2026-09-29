@@ -5,15 +5,15 @@ import {
   createMatterMap,
   hex,
   lerp,
-  mix,
   rgba,
   smoothstep,
   type MatterMap,
   type StageLighting,
   type TitanDef,
 } from '@/contracts';
+import { blend } from './color';
 import { ArtCanvas, buildLitRamps, type ShadeParams } from './canvas';
-import { edt } from './field';
+import { edt, keepLargestComponent } from './field';
 import { bayer8, fbm, hash01, makeWorley, ridged, worley } from './noise';
 import { sdCircle, sdEllipse, sdEllipseRot, sdSegment, smax, smin, ssub } from './sdf';
 
@@ -371,7 +371,8 @@ export function paintLastOne(
       // ---- radial "petal" seams around the socket + concentric plate arcs ----
       if (m === ids.shell && rho > sockR + 1.5) {
         const step = (Math.PI * 2) / p.seams;
-        const warpA = 0.28 * Math.sin(rho / 15 + (L.seed & 255) * 0.05) + 0.16 * fbm(fx * 0.04, fy * 0.04, sA + 9, 2);
+        const warpA =
+          0.28 * Math.sin(rho / 15 + (L.seed & 255) * 0.05) + 0.16 * fbm(fx * 0.04, fy * 0.04, sA + 9, 2);
         const k = Math.round((th - warpA) / step);
         const perp = Math.abs(angDiff(th - warpA, k * step)) * rho;
         if (perp < 0.62 && hash01(k + 40, Math.floor(rho / 9), sA) > 0.12) {
@@ -420,20 +421,25 @@ export function paintLastOne(
       if (rho < sockR + 4) {
         const lip = smoothstep(sockR + 4, sockR - 1, rho);
         rel += 5.5 * lip * (rho > eyeR - 1 ? 1 : 0.4);
-        if (rho > eyeR + 0.5 && rho < sockR + 0.5 && rho >= sockR - 1.1 && hash01(Math.floor(th * 14), 3, sA) > 0.22)
+        if (
+          rho > eyeR + 0.5 &&
+          rho < sockR + 0.5 &&
+          rho >= sockR - 1.1 &&
+          hash01(Math.floor(th * 14), 3, sA) > 0.22
+        )
           m = ids.gilt;
         if (rho <= eyeR + 0.5) {
           const q = rho / eyeR;
-          const upper = sdCircle(fx, fy, ex0, ey0 + 9.5, eyeR * 0.98);
-          const lower = sdCircle(fx, fy, ex0, ey0 - 11.5, eyeR * 0.98);
+          const upper = sdCircle(fx, fy, ex0, ey0 + 9.5, eyeR * 1.075);
+          const lower = sdCircle(fx, fy, ex0, ey0 - 10.5, eyeR * 1.075);
           if (upper > 0 || lower > 0) {
             m = ids.shell;
             rel = 12 + 3 * (1 - q) + (upper > 0 ? 2.2 : 0);
             tone += 0.2;
           } else {
             rel = 9 + 7.5 * (1 - q * q);
-            m = q > 0.78 ? ids.eye : q > 0.29 ? ids.iris : ids.pupil;
-            if (m === ids.eye) tone = 0.6 - (q - 0.78) * 4;
+            m = q > 0.66 ? ids.eye : q > 0.29 ? ids.iris : ids.pupil;
+            if (m === ids.eye) tone = 0.6 - (q - 0.66) * 3;
           }
         }
       }
@@ -497,6 +503,8 @@ export function paintLastOne(
   paintCore(cv, colors, L, def, ids);
   paintHaloDetail(cv, colors, L, def, ids, seed);
 
+  // studs, gems and spokes must never leave a stray island: keep the single connected body
+  keepLargestComponent(cv.mat, W, H);
   const map = createMatterMap(W, H);
   cv.writeTo(map, colors, (m) => (m === ids.core ? 170 : m === ids.inner ? 118 : m === ids.gilt ? 150 : 128));
   map.coreX = Math.round(L.coreX);
@@ -506,7 +514,13 @@ export function paintLastOne(
 }
 
 /** Warm light leaking from the core through the glaze: quantised to three tints so the palette stays clean. */
-function bleedCoreLight(cv: ArtCanvas, colors: Uint32Array, L: Layout, def: TitanDef, ids: LastOneRig['ids']): void {
+function bleedCoreLight(
+  cv: ArtCanvas,
+  colors: Uint32Array,
+  L: Layout,
+  def: TitanDef,
+  ids: LastOneRig['ids'],
+): void {
   const W = cv.w;
   const warm = hex('#ffd98a');
   const R = L.p.core.r;
@@ -523,7 +537,7 @@ function bleedCoreLight(cv: ArtCanvas, colors: Uint32Array, L: Layout, def: Tita
       const fl = Math.floor(lv);
       const level = fl + (lv - fl > bayer8(x, y) ? 1 : 0);
       const q = level >= 3 ? 0.5 : level === 2 ? 0.32 : level === 1 ? 0.16 : 0;
-      if (q > 0) colors[i] = mix(colors[i]!, warm, q);
+      if (q > 0) colors[i] = blend(colors[i]!, warm, q);
     }
   }
 }
@@ -559,24 +573,24 @@ function paintEye(
       let c: number;
       if (m === ids.eye) {
         // sclera: pale bone-jade, shaded toward the lids
-        const shade = clamp01(0.6 - (q - 0.78) * 1.2 - (dy < 0 ? (-dy / R) * 0.35 : 0));
-        const k = clamp(Math.round(1 + shade * 4.4), 1, 5);
+        const shade = clamp01(0.7 - (q - 0.66) * 1.1 - (dy < 0 ? (-dy / R) * 0.3 : 0));
+        const k = clamp(Math.round(2.2 + shade * 3.4), 2, 5);
         c = eyeRamp[hash01(Math.floor(x / 2), Math.floor(y / 2), 77) > 0.9 ? Math.max(0, k - 1) : k]!;
       } else if (m === ids.pupil) {
         c = pupilRamp[q < 0.16 ? 0 : q < 0.24 ? 1 : 2]!;
-      } else if (q > 0.7) {
+      } else if (q > 0.6) {
         c = iris[1]!; // limbal ring, deep teal
       } else {
         // iris: radial fibres, teal → jade → gold near the pupil, lit from within on the lower half
-        const t = (q - 0.29) / (0.7 - 0.29);
+        const t = (q - 0.29) / (0.6 - 0.29);
         const fibre = ridged(th * 4.2 + 3, q * 6, 991, 2);
         const fleck = hash01(Math.floor(th * 9), Math.floor(q * 12), 313) > 0.86;
         const k = clamp(5 - t * 3.6 + (fibre - 0.5) * 1.6 + (dy > 0 ? 0.6 : -0.5), 1, 6);
         c = iris[Math.round(k)]!;
-        if (t < 0.28) c = mix(c, gold, 0.75 - t * 1.5);
-        if (fleck && t < 0.75 && t > 0.15) c = mix(c, goldHi, 0.65);
+        if (t < 0.28) c = blend(c, gold, 0.75 - t * 1.5);
+        if (fleck && t < 0.75 && t > 0.15) c = blend(c, goldHi, 0.65);
       }
-      if (dx + dy < -R * 0.5 && q < 0.9) c = mix(c, key, 0.1);
+      if (dx + dy < -R * 0.5 && q < 0.9) c = blend(c, key, 0.1);
       colors[i] = c;
     }
   }
@@ -591,19 +605,25 @@ function paintEye(
   hl(-8, -8, 3, 2, white);
   hl(-9, -6, 1, 1, white);
   hl(-6, -9, 2, 1, white);
-  hl(6, 6, 2, 1, mix(white, iris[5]!, 0.45));
-  hl(5, 7, 1, 1, mix(white, iris[5]!, 0.45));
+  hl(6, 6, 2, 1, blend(white, iris[5]!, 0.45));
+  hl(5, 7, 1, 1, blend(white, iris[5]!, 0.45));
   // the upper lid throws a shadow line onto the eyeball
   for (let x = Math.floor(ex - R); x <= Math.ceil(ex + R); x++) {
     for (let y = Math.floor(ey - R); y <= ey; y++) {
       const i = y * W + x;
       if (cv.mat[i] !== ids.eye && cv.mat[i] !== ids.iris) continue;
-      if (cv.mat[(y - 1) * W + x] === ids.shell) colors[i] = mix(colors[i]!, iris[0]!, 0.7);
+      if (cv.mat[(y - 1) * W + x] === ids.shell) colors[i] = blend(colors[i]!, iris[0]!, 0.7);
     }
   }
 }
 
-function paintCore(cv: ArtCanvas, colors: Uint32Array, L: Layout, def: TitanDef, ids: LastOneRig['ids']): void {
+function paintCore(
+  cv: ArtCanvas,
+  colors: Uint32Array,
+  L: Layout,
+  def: TitanDef,
+  ids: LastOneRig['ids'],
+): void {
   const { p } = L;
   const W = cv.w;
   const ramp = def.materials[ids.core - 1]!.visual.ramp.map(hex);
@@ -657,7 +677,7 @@ function paintHaloDetail(
         const i = py * W + px;
         if (cv.mat[i] === ids.gilt) {
           const edge = Math.abs(o);
-          colors[i] = big && edge <= 1 ? mix(gilt[4]!, gilt[5]!, 0.5) : edge >= 2 ? gilt[1]! : gilt[3]!;
+          colors[i] = big && edge <= 1 ? blend(gilt[4]!, gilt[5]!, 0.5) : edge >= 2 ? gilt[1]! : gilt[3]!;
         } else if (cv.mat[i] === 0 && big && Math.abs(o) === 3 && s === 0) {
           cv.mat[i] = ids.gilt;
           cv.relief[i] = 1.2;
@@ -669,7 +689,9 @@ function paintHaloDetail(
   // jade gems set in the ring
   const rng = new Rng(seed);
   for (let g = 0; g < 4; g++) {
-    const idx = (Math.floor(((g + 0.5) / 4) * L.haloPts.length + rng.range(-2, 2)) + L.haloPts.length) % L.haloPts.length;
+    const idx =
+      (Math.floor(((g + 0.5) / 4) * L.haloPts.length + rng.range(-2, 2)) + L.haloPts.length) %
+      L.haloPts.length;
     const c = L.haloPts[idx]!;
     for (let dy = -2; dy <= 2; dy++) {
       for (let dx = -2; dx <= 2; dx++) {

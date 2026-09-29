@@ -71,7 +71,6 @@ export function runConnectivity(core: WorldCore, body: Body): void {
   // --- islands ---
   const comp = core.stack2;
   const work = core.stack;
-  let islands = 0;
   for (let c0 = 0; c0 < n; c0++) {
     if (mat[c0] === 0 || stamp[c0]! >= gen) continue;
     // Flood one component (bonds only), collecting cells into `comp`.
@@ -100,14 +99,16 @@ export function runConnectivity(core: WorldCore, body: Body): void {
         work.push(c - w);
       }
     }
-    islands++;
     releaseIsland(core, body, comp.data, comp.size, fluid);
   }
-  void islands;
   body.anchoredFrac = 1;
 }
 
-function floodAnchored(body: Body, st: { size: number; push(v: number): void; pop(): number }, gen: number): void {
+function floodAnchored(
+  body: Body,
+  st: { size: number; push(v: number): void; pop(): number },
+  gen: number,
+): void {
   const map = body.map;
   const w = body.w;
   const mat = map.material;
@@ -152,7 +153,13 @@ function floodAnchored(body: Body, st: { size: number; push(v: number): void; po
 }
 
 /** Turn one unanchored component into a chunk (solids) and/or particles (fluids, tiny remnants). */
-function releaseIsland(core: WorldCore, body: Body, cells: Int32Array, count: number, fluid: Uint8Array): void {
+function releaseIsland(
+  core: WorldCore,
+  body: Body,
+  cells: Int32Array,
+  count: number,
+  fluid: Uint8Array,
+): void {
   const map = body.map;
   const mat = map.material;
   // Partition: solids to the front (stable enough; deterministic).
@@ -190,8 +197,6 @@ function releaseIsland(core: WorldCore, body: Body, cells: Int32Array, count: nu
     // Fluid cells first (before solids are extracted their indices are still valid).
     for (let k = solid; k < count; k++) disperseCell(core, body, cells[k]!, launch.vx, launch.vy);
     endSpray(core);
-    const solidMass = mass;
-    void solidMass;
     extractChunk(core, body, cells, solid, launch.vx, launch.vy, launch.spin);
   } else {
     for (let k = 0; k < count; k++) disperseCell(core, body, cells[k]!, launch.vx, launch.vy);

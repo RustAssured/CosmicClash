@@ -108,7 +108,8 @@ export function measureText(s: string, style: Pick<TextStyle, 'font' | 'tracking
 }
 
 /** Height of the line box at a scale (body 12, micro 5). */
-export const lineHeight = (font: FontId = 'body', scale = 1): number => (font === 'micro' ? 5 : BODY_LINE) * scale;
+export const lineHeight = (font: FontId = 'body', scale = 1): number =>
+  (font === 'micro' ? 5 : BODY_LINE) * scale;
 
 function stamp(cv: PixelCanvas, m: Mask, x: number, y: number, sc: number, c: number): void {
   for (let j = 0; j < m.h; j++) {
@@ -144,7 +145,7 @@ export function drawText(cv: PixelCanvas, s: string, x: number, y: number, style
       [0, 1],
       [1, 1],
     ] as const)
-      passes.push([style.outline, dx, dy]);
+      passes.push([style.outline, dx * sc, dy * sc]);
   }
   if (style.shadow !== undefined) passes.push([style.shadow, sc, sc]);
   passes.push([style.color, 0, 0]);
@@ -161,7 +162,11 @@ export function drawText(cv: PixelCanvas, s: string, x: number, y: number, style
 }
 
 /** Wrap `s` on spaces to at most `maxW` px per line. Hangeul strings without spaces break between syllables. */
-export function wrapText(s: string, maxW: number, style: Pick<TextStyle, 'font' | 'tracking' | 'scale'> = {}): string[] {
+export function wrapText(
+  s: string,
+  maxW: number,
+  style: Pick<TextStyle, 'font' | 'tracking' | 'scale'> = {},
+): string[] {
   const lines: string[] = [];
   for (const para of s.split('\n')) {
     let line = '';
@@ -189,4 +194,20 @@ export function wrapText(s: string, maxW: number, style: Pick<TextStyle, 'font' 
     lines.push(line);
   }
   return lines;
+}
+
+/** Wrap to `maxW` and keep at most `maxLines`, ending the last kept line with an ellipsis when text was cut. */
+export function wrapClamp(
+  s: string,
+  maxW: number,
+  maxLines: number,
+  style: Pick<TextStyle, 'font' | 'tracking' | 'scale'> = {},
+): string[] {
+  const lines = wrapText(s, maxW, style);
+  if (lines.length <= maxLines) return lines;
+  const out = lines.slice(0, maxLines);
+  let last = out[maxLines - 1]!;
+  while (last.length > 1 && measureText(`${last}\u2026`, style) > maxW) last = last.slice(0, -1);
+  out[maxLines - 1] = `${last.trimEnd()}\u2026`;
+  return out;
 }

@@ -1,4 +1,5 @@
 import { CellFlag, Rng, type DamageEvent, type DamageType, type GrowSpec } from '@/contracts';
+import { CONN_NOW } from './body';
 import type { Body, WorldPoint } from './body';
 import { refreshSurfaceRect } from './cells';
 import type { WorldCore } from './core';
@@ -45,7 +46,7 @@ function finishRebuild(body: Body): void {
   body.visDirty = true;
   body.visAll = true;
   body.statsDirty = true;
-  body.connDirty = 2;
+  body.connDirty = CONN_NOW;
   body.lastConnTick = -100;
 }
 
@@ -90,47 +91,50 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
   const f = Math.max(0, Math.min(1, fraction));
   const before = cellMassOf(body);
 
-  // 1. Missing pristine cells and their BFS distance from live matter through missing cells.
+  // 1. Missing pristine cells, each labelled with its nearest surviving cell (8-neighbour BFS carrying source coordinates):
+  //    Euclidean distance to it gives an isotropic, natural regrowth front (Manhattan BFS would grow diamonds).
   const mat = map.material;
-  const dist = new Int16Array(n).fill(-1);
+  const srcX = new Int16Array(n);
+  const srcY = new Int16Array(n);
+  const seen = new Uint8Array(n);
   const queue = new Int32Array(n);
   let qh = 0;
   let qt = 0;
   let missing = 0;
-  for (let i = 0; i < n; i++) {
-    if (s.material[i] !== 0 && mat[i] === 0) missing++;
-  }
+  for (let i = 0; i < n; i++) if (s.material[i] !== 0 && mat[i] === 0) missing++;
+  const visit = (j: number, sx: number, sy: number): void => {
+    if (s.material[j] !== 0 && mat[j] === 0 && seen[j] === 0) {
+      seen[j] = 1;
+      srcX[j] = sx;
+      srcY[j] = sy;
+      queue[qt++] = j;
+    }
+  };
   for (let i = 0; i < n; i++) {
     if (mat[i] === 0) continue;
-    // live cell: seed neighbours
     const x = i % w;
     const y = (i - x) / w;
-    const tryN = (j: number): void => {
-      if (s.material[j] !== 0 && mat[j] === 0 && dist[j] === -1) {
-        dist[j] = 1;
-        queue[qt++] = j;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const xx = x + dx;
+        const yy = y + dy;
+        if (xx >= 0 && yy >= 0 && xx < w && yy < h) visit(yy * w + xx, x, y);
       }
-    };
-    if (x > 0) tryN(i - 1);
-    if (x < w - 1) tryN(i + 1);
-    if (y > 0) tryN(i - w);
-    if (y < h - 1) tryN(i + w);
   }
   while (qh < qt) {
     const c = queue[qh++]!;
     const x = c % w;
     const y = (c - x) / w;
-    const d = dist[c]! + 1;
-    const tryN = (j: number): void => {
-      if (s.material[j] !== 0 && mat[j] === 0 && dist[j] === -1) {
-        dist[j] = d;
-        queue[qt++] = j;
+    const sx = srcX[c]!;
+    const sy = srcY[c]!;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const xx = x + dx;
+        const yy = y + dy;
+        if (xx >= 0 && yy >= 0 && xx < w && yy < h) visit(yy * w + xx, sx, sy);
       }
-    };
-    if (x > 0) tryN(c - 1);
-    if (x < w - 1) tryN(c + 1);
-    if (y > 0) tryN(c - w);
-    if (y < h - 1) tryN(c + w);
   }
   const target = Math.round(f * missing);
   if (target > 0) {
@@ -138,7 +142,10 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
     const keys = new Float64Array(qt);
     for (let k = 0; k < qt; k++) {
       const c = queue[k]!;
-      const pr = dist[c]! + rng.next() * 3.2 + noise2(c % w, (c / w) | 0, seed) * 2.5;
+      const cx0 = c % w;
+      const cy0 = (c - cx0) / w;
+      const de = Math.hypot(cx0 - srcX[c]!, cy0 - srcY[c]!);
+      const pr = de + rng.next() * 3.2 + noise2(cx0, cy0, seed) * 2.5;
       keys[k] = Math.floor(pr * 32) * 65536 + c;
     }
     keys.sort();
@@ -162,10 +169,14 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
       map.flags[c] = fl;
       // Bonds to live neighbours: the snapshot bond scaled down, some left severed (visible scar cracks).
       const scar = 0.5 + 0.15 * rng.next();
-      if (x < w - 1 && mat[c + 1] !== 0) map.bondR[c] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondR[c]! * scar));
-      if (x > 0 && mat[c - 1] !== 0) map.bondR[c - 1] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondR[c - 1]! * scar));
-      if (y < h - 1 && mat[c + w] !== 0) map.bondD[c] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondD[c]! * scar));
-      if (y > 0 && mat[c - w] !== 0) map.bondD[c - w] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondD[c - w]! * scar));
+      if (x < w - 1 && mat[c + 1] !== 0)
+        map.bondR[c] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondR[c]! * scar));
+      if (x > 0 && mat[c - 1] !== 0)
+        map.bondR[c - 1] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondR[c - 1]! * scar));
+      if (y < h - 1 && mat[c + w] !== 0)
+        map.bondD[c] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondD[c]! * scar));
+      if (y > 0 && mat[c - w] !== 0)
+        map.bondD[c - w] = rng.next() < 0.14 ? 0 : Math.max(1, Math.round(s.bondD[c - w]! * scar));
     }
   }
   // 3. Existing damage recovers partially; transient processes end.
@@ -179,11 +190,14 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
     const d = map.density[i]!;
     const sd = s.density[i]!;
     if (sd !== 0 && d !== sd) map.density[i] = Math.round(d + (sd - d) * f);
-    map.flags[i] = map.flags[i]! & ~(CellFlag.BURNING | CellFlag.ASSIMILATED | CellFlag.SHRAPNEL | CellFlag.GLOWING);
+    map.flags[i] =
+      map.flags[i]! & ~(CellFlag.BURNING | CellFlag.ASSIMILATED | CellFlag.SHRAPNEL | CellFlag.GLOWING);
     // Severed bonds between live cells recover with probability ~ fraction (as scars).
     const x = i % w;
-    if (x < w - 1 && mat[i + 1] !== 0 && map.bondR[i] === 0 && s.bondR[i] !== 0 && rng.next() < f * 0.6) map.bondR[i] = Math.max(1, Math.round(s.bondR[i]! * 0.6));
-    if (i + w < n && mat[i + w] !== 0 && map.bondD[i] === 0 && s.bondD[i] !== 0 && rng.next() < f * 0.6) map.bondD[i] = Math.max(1, Math.round(s.bondD[i]! * 0.6));
+    if (x < w - 1 && mat[i + 1] !== 0 && map.bondR[i] === 0 && s.bondR[i] !== 0 && rng.next() < f * 0.6)
+      map.bondR[i] = Math.max(1, Math.round(s.bondR[i]! * 0.6));
+    if (i + w < n && mat[i + w] !== 0 && map.bondD[i] === 0 && s.bondD[i] !== 0 && rng.next() < f * 0.6)
+      map.bondD[i] = Math.max(1, Math.round(s.bondD[i]! * 0.6));
   }
   const after = cellMassOf(body);
   if (after > before) core.ledger.injected += after - before;
@@ -224,7 +238,11 @@ export function grow(core: WorldCore, body: Body, spec: GrowSpec): number {
       if (mat[i] !== 0) continue;
       const x = i % w;
       const y = (i - x) / w;
-      const adj = (x > 0 && mat[i - 1] !== 0) || (x < w - 1 && mat[i + 1] !== 0) || (y > 0 && mat[i - w] !== 0) || (y < h - 1 && mat[i + w] !== 0);
+      const adj =
+        (x > 0 && mat[i - 1] !== 0) ||
+        (x < w - 1 && mat[i + 1] !== 0) ||
+        (y > 0 && mat[i - w] !== 0) ||
+        (y < h - 1 && mat[i + w] !== 0);
       if (!adj) continue;
       const dx = x + 0.5 - tx;
       const dy = y + 0.5 - ty;
@@ -272,10 +290,22 @@ export function grow(core: WorldCore, body: Body, spec: GrowSpec): number {
       const ri = Math.min(r.length - 1, Math.floor(u * r.length));
       map.baseColor[c] = lerpPx(r[ri]!, r[Math.min(r.length - 1, ri + 1)]!, (hash2(x, y, seed) & 1) * 96);
       const bondBase = md.bond * coh;
-      if (x > 0 && mat[c - 1] !== 0) map.bondR[c - 1] = clampB(Math.min(bondBase, mats[mat[c - 1]!]!.bond * coh) * (0.85 + 0.3 * noise2(c, 1, seed)));
-      if (x < w - 1 && mat[c + 1] !== 0) map.bondR[c] = clampB(Math.min(bondBase, mats[mat[c + 1]!]!.bond * coh) * (0.85 + 0.3 * noise2(c, 2, seed)));
-      if (y > 0 && mat[c - w] !== 0) map.bondD[c - w] = clampB(Math.min(bondBase, mats[mat[c - w]!]!.bond * coh) * (0.85 + 0.3 * noise2(c, 3, seed)));
-      if (y < h - 1 && mat[c + w] !== 0) map.bondD[c] = clampB(Math.min(bondBase, mats[mat[c + w]!]!.bond * coh) * (0.85 + 0.3 * noise2(c, 4, seed)));
+      if (x > 0 && mat[c - 1] !== 0)
+        map.bondR[c - 1] = clampB(
+          Math.min(bondBase, mats[mat[c - 1]!]!.bond * coh) * (0.85 + 0.3 * noise2(c, 1, seed)),
+        );
+      if (x < w - 1 && mat[c + 1] !== 0)
+        map.bondR[c] = clampB(
+          Math.min(bondBase, mats[mat[c + 1]!]!.bond * coh) * (0.85 + 0.3 * noise2(c, 2, seed)),
+        );
+      if (y > 0 && mat[c - w] !== 0)
+        map.bondD[c - w] = clampB(
+          Math.min(bondBase, mats[mat[c - w]!]!.bond * coh) * (0.85 + 0.3 * noise2(c, 3, seed)),
+        );
+      if (y < h - 1 && mat[c + w] !== 0)
+        map.bondD[c] = clampB(
+          Math.min(bondBase, mats[mat[c + w]!]!.bond * coh) * (0.85 + 0.3 * noise2(c, 4, seed)),
+        );
       added++;
       addedMass += body.cellMass(c);
     }
@@ -296,9 +326,14 @@ const clampB = (v: number): number => Math.max(1, Math.min(255, Math.round(v)));
  * Debit `mass` from the body without producing matter: surface cells (core last) are burnt, blown or evaporated away as
  * pure VFX (the mass leaves the ledger as dissipated). Returns the number of cells removed.
  */
-export function shed(core: WorldCore, body: Body, mass: number, style: 'burn' | 'blow' | 'evaporate'): number {
+export function shed(
+  core: WorldCore,
+  body: Body,
+  mass: number,
+  style: 'burn' | 'blow' | 'evaporate',
+): number {
   const map = body.map;
-  const { w, h } = body;
+  const { w } = body;
   const mat = map.material;
   const rng = body.rng;
   let removedMass = 0;
@@ -343,12 +378,11 @@ export function shed(core: WorldCore, body: Body, mass: number, style: 'burn' | 
       cells++;
       sprayCell(core, body, m, pt.x, pt.y, ox * sp, oy * sp, 0, mode);
     }
-    void h;
   }
   endSpray(core);
   if (cells > 0) {
     body.touch(0, 0, body.w - 1, body.h - 1);
-    body.connDirty = 2;
+    body.connDirty = CONN_NOW;
   }
   return cells;
 }
@@ -363,78 +397,93 @@ export function carve(world: MatterWorldEx, body: Body, massFrac: number, seed: 
   const rng = new Rng(seed ^ body.seed ^ 0x6a09e667);
   const map = body.map;
   const w = body.w;
-  const target = massFrac * map.initialMass;
   const mats = body.materials;
-  const t = body.transform;
+  const core = world.core;
   const coreW: WorldPoint = { x: 0, y: 0 };
   body.cellWorld(map.coreX, map.coreY, coreW);
-  let stall = 0;
-  let lastMass = cellMassOf(body);
+  const target = massFrac * map.initialMass;
   const guardCoreR = map.coreRadius * (massFrac > 0.15 ? 2.2 : 1.2);
-  for (let iter = 0; iter < 90 && lastMass > target * 1.03 && stall < 8; iter++) {
-    // Choose a site: sample surface cells, prefer those far from the core.
-    let best = -1;
-    let bestScore = -Infinity;
-    for (let s = 0; s < 40; s++) {
-      const i = rng.int(body.n);
-      if (map.material[i] === 0 || (map.flags[i]! & F_SURF) === 0) continue;
-      const x = i % w;
-      const y = (i - x) / w;
-      const dx = x - map.coreX;
-      const dy = y - map.coreY;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (d < guardCoreR) continue;
-      const score = d * (0.75 + 0.5 * rng.next());
-      if (score > bestScore) {
-        bestScore = score;
-        best = i;
+  let lastMass = cellMassOf(body);
+  // Cut down to a bit ABOVE the target, let fissures finish and pieces fall away (they also cost mass), then trim to the target.
+  const phases = massFrac < 0.3 ? [target * 1.7, target * 1.25, target] : [target * 1.14, target];
+  for (let ph = 0; ph < phases.length; ph++) {
+    const goal = phases[ph]!;
+    let stall = 0;
+    for (let iter = 0; iter < 90 && lastMass > goal * 1.02 && stall < 8; iter++) {
+      let best = -1;
+      let bestScore = -Infinity;
+      for (let s = 0; s < 40; s++) {
+        const i = rng.int(body.n);
+        if (map.material[i] === 0 || (map.flags[i]! & F_SURF) === 0) continue;
+        const x = i % w;
+        const y = (i - x) / w;
+        const dx = x - map.coreX;
+        const dy = y - map.coreY;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < guardCoreR) continue;
+        const score = d * (0.75 + 0.5 * rng.next());
+        if (score > bestScore) {
+          bestScore = score;
+          best = i;
+        }
       }
+      if (best < 0) {
+        stall++;
+        continue;
+      }
+      const x = best % w;
+      const y = (best - x) / w;
+      body.cellWorld(x, y, pt);
+      const md = mats[map.material[best]!]!;
+      let dx = coreW.x - pt.x;
+      let dy = coreW.y - pt.y;
+      const dl = Math.sqrt(dx * dx + dy * dy) || 1;
+      dx /= dl;
+      dy /= dl;
+      let type: DamageType;
+      const r = rng.next();
+      if (md.brittleness > 0.7) type = r < 0.5 ? 'FRACTURE' : r < 0.8 ? 'KINETIC' : 'CRUSH';
+      else if (md.ignition > 0) type = r < 0.35 ? 'THERMAL' : r < 0.65 ? 'FRACTURE' : 'KINETIC';
+      else type = r < 0.4 ? 'KINETIC' : r < 0.7 ? 'FRACTURE' : 'CRUSH';
+      const remaining = lastMass - goal;
+      const energy = Math.max(60, Math.min(900, remaining * 0.32)) * (0.7 + 0.5 * rng.next());
+      const rad = Math.max(4, Math.min(16, Math.sqrt(energy) * 0.55));
+      const ev: DamageEvent = {
+        type,
+        shape: { kind: 'point', x: pt.x - dx * rad * 0.35, y: pt.y - dy * rad * 0.35, r: rad },
+        energy: type === 'THERMAL' ? energy * 0.12 : energy,
+        dirX: dx,
+        dirY: dy,
+        duration: 1,
+        sourceMass: 5,
+        sourceBodyId: -1,
+        originX: pt.x - dx * 30,
+        originY: pt.y - dy * 30,
+        flags: type === 'FRACTURE' && rng.next() < 0.35 ? 2 : 0,
+        params: type === 'THERMAL' ? { shock: 0 } : {},
+      };
+      world.applyDamage(body.id, ev);
+      world.settleBody(body.id);
+      const m = cellMassOf(body);
+      stall = m >= lastMass - 1e-6 ? stall + 1 : 0;
+      lastMass = m;
+      for (let k = 0; k < 4; k++) world.tick();
     }
-    if (best < 0) {
-      stall++;
-      continue;
-    }
-    const x = best % w;
-    const y = (best - x) / w;
-    body.cellWorld(x, y, pt);
-    const md = mats[map.material[best]!]!;
-    // Direction: from outside toward the core.
-    let dx = coreW.x - pt.x;
-    let dy = coreW.y - pt.y;
-    const dl = Math.sqrt(dx * dx + dy * dy) || 1;
-    dx /= dl;
-    dy /= dl;
-    let type: DamageType;
-    const r = rng.next();
-    if (md.brittleness > 0.7) type = r < 0.5 ? 'FRACTURE' : r < 0.8 ? 'KINETIC' : 'CRUSH';
-    else if (md.ignition > 0) type = r < 0.35 ? 'THERMAL' : r < 0.65 ? 'FRACTURE' : 'KINETIC';
-    else type = r < 0.4 ? 'KINETIC' : r < 0.7 ? 'FRACTURE' : 'CRUSH';
-    const remaining = lastMass - target;
-    const energy = Math.max(60, Math.min(900, remaining * 0.32)) * (0.7 + 0.5 * rng.next());
-    const rad = Math.max(4, Math.min(16, Math.sqrt(energy) * 0.55));
-    const ev: DamageEvent = {
-      type,
-      shape: { kind: 'point', x: pt.x - dx * rad * 0.35, y: pt.y - dy * rad * 0.35, r: rad },
-      energy,
-      dirX: dx,
-      dirY: dy,
-      duration: 1,
-      sourceMass: 5,
-      sourceBodyId: -1,
-      originX: pt.x - dx * 30,
-      originY: pt.y - dy * 30,
-      flags: type === 'FRACTURE' && rng.next() < 0.35 ? 2 : 0,
-      params: type === 'THERMAL' ? { heat: undefined, shock: 0 } : {},
-    };
-    world.applyDamage(body.id, ev);
+    // Settle: fissures finish, fires burn down, chunks drift apart.
+    for (let k = 0; k < (massFrac < 0.3 ? 25 : 45); k++) world.tick();
     world.settleBody(body.id);
-    const m = cellMassOf(body);
-    stall = m >= lastMass - 1e-6 ? stall + 1 : 0;
-    lastMass = m;
-    // Let cracks creep / detach a little between blows.
-    for (let k = 0; k < 6; k++) world.tick();
+    lastMass = cellMassOf(body);
   }
-  // Settle: fissures finish, chunks drift apart.
-  for (let k = 0; k < 40; k++) world.tick();
-  void t;
+  // A harness state starts calm: no dust storm, debris that has already drifted (slowly) rather than mid-flight.
+  core.particles.purge(core);
+  const pool = core.chunks;
+  for (let i = 0; i < pool.hi; i++) {
+    const c = pool.list[i]!;
+    if (!c.alive || c.origin !== body.id) continue;
+    c.vx *= 0.25;
+    c.vy *= 0.25;
+    c.spin *= 0.4;
+  }
+  body.tileAct.fill(0);
+  body.refreshStats();
 }

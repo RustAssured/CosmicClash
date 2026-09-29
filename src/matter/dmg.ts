@@ -1,4 +1,11 @@
-import { CellFlag, DamageFlag, type DamageEvent, type DamageParams, type DamageResult, type DamageType } from '@/contracts';
+import {
+  CellFlag,
+  DamageFlag,
+  type DamageEvent,
+  type DamageParams,
+  type DamageResult,
+  type DamageType,
+} from '@/contracts';
 import type { Body, WorldPoint } from './body';
 import { killCell } from './cells';
 import type { WorldCore } from './core';
@@ -136,7 +143,7 @@ export function beginDamage(
   body.revealCount = 0;
 
   core.q.set(ev.shape);
-  const n = body.collect(core.q, core.covIdx, core.covW);
+  const n = body.collect(core.q, core.covIdx, core.covW, ev.type === 'TIDAL');
   ctx.n = n;
   if (n === 0) return null;
   const idx = core.covIdx;
@@ -186,7 +193,12 @@ export function recordBlow(ctx: DamageCtx, radial: number): void {
 }
 
 /** Fill a DamageResult from the ctx after a model ran. */
-export function finishDamage(ctx: DamageCtx, res: DamageResult, coverage: number, momentumScale: number): void {
+export function finishDamage(
+  ctx: DamageCtx,
+  res: DamageResult,
+  coverage: number,
+  momentumScale: number,
+): void {
   const body = ctx.body;
   res.cellsTouched = ctx.n;
   res.cellsRemoved += ctx.removed;
@@ -196,7 +208,11 @@ export function finishDamage(ctx: DamageCtx, res: DamageResult, coverage: number
   else localToWorldF(body, ctx.covCx, ctx.covCy, tmpPt);
   res.contactX = tmpPt.x;
   res.contactY = tmpPt.y;
-  const p = MOMENTUM_K * Math.sqrt(ctx.energy * Math.max(0.3, ctx.sourceMass)) * Math.sqrt(Math.min(1, Math.max(0, coverage * 1.6))) * momentumScale;
+  const p =
+    MOMENTUM_K *
+    Math.sqrt(ctx.energy * Math.max(0.3, ctx.sourceMass)) *
+    Math.sqrt(Math.min(1, Math.max(0, coverage * 1.6))) *
+    momentumScale;
   res.impulseX += ctx.dirX * p;
   res.impulseY += ctx.dirY * p;
   res.onDamagedFraction = ctx.sumW > 0 ? ctx.damagedW / ctx.sumW : 0;

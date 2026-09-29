@@ -20,6 +20,7 @@ import { planUpload, StaleRegistry, type CachedLayerState } from './layerCache';
 
 /** Frames without use before a layer's texture is freed. */
 export const STALE_FRAMES = 240;
+const SWEEP_EVERY = 8;
 
 interface Entry {
   tex: DataTexture;
@@ -37,6 +38,8 @@ export interface LayerGpu {
 export class LayerTextures {
   private readonly entries = new StaleRegistry<Entry>();
   private frame = 0;
+  /** Frames without use before a layer's texture is freed (tests lower it). */
+  staleFrames = STALE_FRAMES;
   private readonly freed: Entry[] = [];
   /** Counters for tests / stats. */
   uploads = { create: 0, full: 0, rect: 0, texels: 0 };
@@ -60,6 +63,7 @@ export class LayerTextures {
       this.entries.set(layer.id, e, this.frame);
       this.uploads.create++;
       this.uploads.texels += layer.w * layer.h;
+      layer.dirty = null;
     } else if (e) {
       if (plan.kind === 'full') {
         e.tex.needsUpdate = true;
@@ -82,8 +86,9 @@ export class LayerTextures {
 
   /** Free textures of layers that were not drawn recently. Call once per frame after drawing. */
   sweep(): void {
+    if (this.frame % SWEEP_EVERY !== 0) return; // walking the registry every frame is wasted work
     this.freed.length = 0;
-    this.entries.sweep(this.frame, STALE_FRAMES, this.freed);
+    this.entries.sweep(this.frame, this.staleFrames, this.freed);
     for (const e of this.freed) this.destroy(e);
     this.freed.length = 0;
   }

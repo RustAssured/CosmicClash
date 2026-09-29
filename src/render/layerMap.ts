@@ -57,7 +57,10 @@ export function snapInterp(prev: number, cur: number, alpha: number): number {
 }
 
 export function placeLayer(
-  layer: Pick<RenderLayer, 'space' | 'x' | 'y' | 'prevX' | 'prevY' | 'anchorX' | 'anchorY' | 'facing' | 'lean' | 'w' | 'h'>,
+  layer: Pick<
+    RenderLayer,
+    'space' | 'x' | 'y' | 'prevX' | 'prevY' | 'anchorX' | 'anchorY' | 'facing' | 'lean' | 'w' | 'h'
+  >,
   view: ViewRect,
   alpha: number,
   out: LayerPlacement,
@@ -102,7 +105,12 @@ export function placeLayer(
  * Source cell for the screen pixel (px, py) (integer, view-relative). Returns false when the pixel falls outside the
  * sprite. Uses float32 arithmetic (Math.fround) for the lean division so it matches the GPU bit for bit.
  */
-export function sourceCell(p: LayerPlacement, px: number, py: number, out: { x: number; y: number }): boolean {
+export function sourceCell(
+  p: LayerPlacement,
+  px: number,
+  py: number,
+  out: { x: number; y: number },
+): boolean {
   if (p.screen) {
     if (px < 0 || py < 0 || px >= p.w || py >= p.h) return false;
     out.x = px;
@@ -111,7 +119,9 @@ export function sourceCell(p: LayerPlacement, px: number, py: number, out: { x: 
   }
   const ly = py - p.ay + p.anchorY;
   if (ly < 0 || ly >= p.h) return false;
-  const shift = Math.floor(Math.fround(Math.fround(p.lean * (p.anchorY - ly)) / Math.max(1, p.anchorY)) + 0.5);
+  const shift = Math.floor(
+    Math.fround(Math.fround(p.lean * (p.anchorY - ly)) / Math.max(1, p.anchorY)) + 0.5,
+  );
   const d = px - p.ax - shift;
   const lx = p.facing > 0 ? d + p.anchorX : p.anchorX - 1 - d;
   if (lx < 0 || lx >= p.w) return false;

@@ -24,6 +24,7 @@ const ICONS: Record<string, readonly string[]> = {
   bolt: ['..##', '.##.', '####', '.##.', '##..'],
   plus: ['..#..', '..#..', '#####', '..#..', '..#..'],
   minus: ['#####'],
+  infinity: ['.##..##.', '#..##..#', '.##..##.'],
 };
 
 export type IconName = keyof typeof ICONS | (string & {});
@@ -33,7 +34,14 @@ export function iconSize(name: IconName): { w: number; h: number } {
   return { w: rows[0]!.length, h: rows.length };
 }
 
-export function drawIcon(cv: PixelCanvas, name: IconName, x: number, y: number, color: number, scale = 1): void {
+export function drawIcon(
+  cv: PixelCanvas,
+  name: IconName,
+  x: number,
+  y: number,
+  color: number,
+  scale = 1,
+): void {
   const rows = ICONS[name] ?? ICONS.dot!;
   for (let j = 0; j < rows.length; j++) {
     for (let i = 0; i < rows[j]!.length; i++) {
@@ -61,7 +69,14 @@ export interface PanelOptions {
  * A quiet panel: translucent ink fill, a 1px hairline, four corner brackets in the accent colour and a short bright notch
  * on the top edge. The corners are cut (one pixel) so it never reads as a default rectangle.
  */
-export function panel(cv: PixelCanvas, x: number, y: number, w: number, h: number, o: PanelOptions = {}): void {
+export function panel(
+  cv: PixelCanvas,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  o: PanelOptions = {},
+): void {
   const fill = o.fill ?? alpha(C.ink1, 0.84);
   const border = o.border ?? C.line1;
   cv.rect(x + 1, y, w - 2, h, fill);
@@ -240,8 +255,9 @@ export function chip(
   cv.px(x + 1, y + h - 2, col);
   cv.px(x + w - 2, y + h - 2, col);
   // PlayStation symbols and other non-micro glyphs come from the body font (5×7): centre them.
-  const useBody = /[-↑-↓←→]/.test(label);
-  if (useBody) drawText(cv, label, x + Math.floor(w / 2), y - 1, { color: tx, align: 'center', valign: 'cap' });
+  const useBody = /[\ue000-\ue003↑-↓←→]/.test(label);
+  if (useBody)
+    drawText(cv, label, x + Math.floor(w / 2), y - 1, { color: tx, align: 'center', valign: 'cap' });
   else drawText(cv, label, x + Math.floor(w / 2), y + 2, { color: tx, font: 'micro', align: 'center' });
   return w;
 }

@@ -60,6 +60,8 @@ export function createFakeWorld(seed = 1): FakeWorld {
   const sources: (GravitySource | null)[] = [null, null];
   const shedLog: FakeWorld['shedLog'] = [];
   const bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  const scratchCur = new Float32Array(REGION_GRID * REGION_GRID);
+  const scratchIni = new Float32Array(REGION_GRID * REGION_GRID);
 
   const cellMass = (b: FakeBody, i: number): number => {
     const m = b.map.material[i]!;
@@ -128,9 +130,9 @@ export function createFakeWorld(seed = 1): FakeWorld {
     s.burningCells = 0;
     s.infectedCells = 0;
     s.crackedCells = 0;
-    const cur = new Float32Array(REGION_GRID * REGION_GRID);
+    const cur = scratchCur;
     regionCounts(b, cur, true);
-    const ini = new Float32Array(REGION_GRID * REGION_GRID);
+    const ini = scratchIni;
     regionCounts(b, ini, false);
     for (let i = 0; i < cur.length; i++) s.regionGrid[i] = ini[i]! > 0 ? Math.min(1, cur[i]! / ini[i]!) : 0;
     return s;
@@ -395,7 +397,8 @@ export function createFakeWorld(seed = 1): FakeWorld {
             if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > cr * cr) continue;
             const i = y * map.w + x;
             if (map.material[i] === 0) continue;
-            if ((x - map.coreX) ** 2 + (y - map.coreY) ** 2 < (map.coreRadius * 1.3) ** 2 && massFrac > 0.3) continue;
+            if ((x - map.coreX) ** 2 + (y - map.coreY) ** 2 < (map.coreRadius * 1.3) ** 2 && massFrac > 0.3)
+              continue;
             map.mass -= cellMass(b, i);
             map.liveCells--;
             map.material[i] = 0;

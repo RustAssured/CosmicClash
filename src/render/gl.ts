@@ -66,7 +66,10 @@ let sharedQuad: BufferGeometry | null = null;
 export function unitQuad(): BufferGeometry {
   if (!sharedQuad) {
     const g = new BufferGeometry();
-    g.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]), 3));
+    g.setAttribute(
+      'position',
+      new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]), 3),
+    );
     g.setIndex([0, 1, 2, 2, 1, 3]);
     sharedQuad = g;
   }
@@ -78,6 +81,12 @@ export function disposeSharedGeometry(): void {
   sharedTriangle?.dispose();
   sharedTriangle = null;
   sharedQuad?.dispose();
+  sharedQuad = null;
+}
+
+/** Forget the shared geometries WITHOUT disposing them (their GL buffers died with a lost context). */
+export function resetSharedGeometry(): void {
+  sharedTriangle = null;
   sharedQuad = null;
 }
 
