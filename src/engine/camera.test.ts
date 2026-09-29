@@ -299,3 +299,52 @@ describe('camera determinism & interpolation', () => {
     expect(cam.sample(0).state.x).toBeCloseTo(800, 3);
   });
 });
+
+describe('camera edge safety: a launched fighter never leaves the frame', () => {
+  const scenario = (name: string, speed: number, dirX: number, dirY: number, ticks: number): void =>
+    it(name, () => {
+      const cam = createCamera();
+      cam.reset(800, 290);
+      const hw = 90;
+      const hh = 75;
+      let bx = 900;
+      let by = 290;
+      const ax = 740;
+      run(cam, targets(ax, bx), 240); // calm, settled
+      let worstX = Infinity;
+      let worstY = Infinity;
+      for (let i = 0; i < ticks + 90; i++) {
+        if (i < ticks) {
+          bx += speed * dirX;
+          by += speed * dirY;
+        }
+        cam.tick({ a: target(ax), b: { x: bx, y: by, hw, hh }, arena: DEFAULT_ARENA }, []);
+        const v = cam.sample(1).view;
+        worstX = Math.min(worstX, bx - hw - v.x0, v.x0 + LOGICAL_W - (bx + hw));
+        worstY = Math.min(worstY, by - hh - v.y0, v.y0 + LOGICAL_H - (by + hh));
+      }
+      // fully in view at every tick, in both axes
+      expect(worstX).toBeGreaterThanOrEqual(0);
+      expect(worstY).toBeGreaterThanOrEqual(0);
+    });
+  scenario('crush launch: 20 px/tick for 15 ticks, to the right', 20, 1, 0, 15);
+  scenario('crush launch: 20 px/tick for 15 ticks, up and right', 18, 0.8, -0.6, 15);
+  scenario('launched toward the other side', 20, -1, 0, 12);
+
+  it('calm play keeps the heavy dolly (safety does not engage) and the view never jitters', () => {
+    const cam = createCamera();
+    cam.reset(400, 290);
+    run(cam, targets(700, 800), 12);
+    const travelled = (cam.sample(0).state.x - 400) / (750 - 400);
+    expect(travelled).toBeLessThan(0.45);
+    let last = cam.sample(0).view.x0;
+    let maxStep = 0;
+    for (let i = 0; i < 200; i++) {
+      cam.tick(targets(700 + i * 0.5, 800 + i * 0.5), []);
+      const x0 = cam.sample(1).view.x0;
+      maxStep = Math.max(maxStep, Math.abs(x0 - last));
+      last = x0;
+    }
+    expect(maxStep).toBeLessThan(6);
+  });
+});

@@ -46,6 +46,12 @@ export interface CameraTuning {
   /** Roll half-life (s) and cap in radians. */
   rollHalfLife: number;
   maxRoll: number;
+  /** Edge safety: soft inner margin (a stronger spring engages inside it), the hard margin that is never violated when both fighters fit, and the seconds of velocity used to predict where a fighter is heading. */
+  safeMarginX: number;
+  safeMarginY: number;
+  hardMarginX: number;
+  hardMarginY: number;
+  safeLeadSec: number;
 }
 
 export const DEFAULT_CAMERA_TUNING: Readonly<CameraTuning> = {
@@ -62,6 +68,11 @@ export const DEFAULT_CAMERA_TUNING: Readonly<CameraTuning> = {
   maxZoom: 1.06,
   rollHalfLife: 0.28,
   maxRoll: 1.5 * DEG,
+  safeMarginX: 70,
+  safeMarginY: 44,
+  hardMarginX: 10,
+  hardMarginY: 8,
+  safeLeadSec: 0.12,
 };
 
 const DT = 1 / 60;
@@ -246,6 +257,51 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
   }
   const centreTmp = { x: 0, y: 0 };
 
+  /**
+   * Edge safety: the heavy springs are for calm play. A fighter launched at 20 px/tick must never leave the frame, so after the
+   * springs step, the camera centre is pushed into the range that keeps every fighter (now AND where its velocity is taking it)
+   * inside a soft inner margin — with a catch-up spring that grows as the fighter nears the edge — and, absolutely, inside a hard margin.
+   * Ranges that cannot be met (fighters too far apart to fit) are skipped, never fought over; the union is then centred by the framing.
+   */
+  function edgeSafety(
+    a: CameraTargets['a'],
+    b: CameraTargets['b'],
+    vax: number,
+    vay: number,
+    vbx: number,
+    vby: number,
+  ): void {
+    const L = T.safeLeadSec;
+    const ax2 = a.x + vax * L;
+    const bx2 = b.x + vbx * L;
+    const ay2 = a.y + vay * L;
+    const by2 = b.y + vby * L;
+    const left = Math.min(a.x - a.hw, b.x - b.hw, ax2 - a.hw, bx2 - b.hw);
+    const right = Math.max(a.x + a.hw, b.x + b.hw, ax2 + a.hw, bx2 + b.hw);
+    const top = Math.min(a.y - a.hh, b.y - b.hh, ay2 - a.hh, by2 - b.hh);
+    const bottom = Math.max(a.y + a.hh, b.y + b.hh, ay2 + a.hh, by2 + b.hh);
+    pull(sx, left, right, W, T.safeMarginX, T.hardMarginX);
+    pull(sy, top, bottom, H, T.safeMarginY, T.hardMarginY);
+  }
+
+  function pull(sp: Spring, lo: number, hi: number, size: number, soft: number, hard: number): void {
+    for (const m of [soft, hard]) {
+      const minC = hi + m - size / 2; // camera centre must be at least this (right edge of the union inside the view)
+      const maxC = lo - m + size / 2; // and at most this
+      if (minC > maxC) continue;
+      let over = 0;
+      if (sp.x < minC) over = minC - sp.x;
+      else if (sp.x > maxC) over = maxC - sp.x;
+      if (over === 0) continue;
+      const hardPass = m === hard;
+      // stronger catch-up the deeper inside the margin: 30 % of the shortfall per tick at the margin line, all of it at the hard one
+      const gain = hardPass ? 1 : clamp(0.3 + Math.abs(over) / soft, 0.3, 0.9);
+      sp.x += over * gain;
+      if (sp.v * over < 0) sp.v = 0;
+      else sp.v += over * gain * 30;
+    }
+  }
+
   const api: CameraApi = {
     reset(x, y) {
       clampCentre(x, y, arena, centreTmp);
@@ -337,6 +393,7 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
       clampCentre(tx, ty, arena, centreTmp);
       springStep(sx, centreTmp.x, omegaX, DT);
       springStep(sy, centreTmp.y, omegaY, DT);
+      edgeSafety(a, b, vax, vay, vbx, vby);
 
       // ---- impulses ----
       consumeEvents(events);
