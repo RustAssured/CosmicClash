@@ -1,0 +1,233 @@
+{
+  "id": "asteroid",
+  "name": "The Asteroid",
+  "nameKo": "소행성",
+  "epithet": "De Zwerver",
+  "attributes": {
+    "mass": 3,
+    "cohesion": 6,
+    "heat": 5,
+    "gravity": 1,
+    "reach": 4,
+    "tempo": 9
+  },
+  "resource": {
+    "id": "fragments",
+    "name": "Fragments",
+    "nameKo": "파편",
+    "max": 12,
+    "start": 12,
+    "display": "pips"
+  },
+  "destruction": "KINETIC",
+  "passive": {
+    "name": "Momentum",
+    "text": "Consecutive hits build momentum: each landed blow speeds it up until it goes quiet."
+  },
+  "failureMode": {
+    "name": "Rubble Pile",
+    "text": "Below about a third of its mass the rock loses cohesion and becomes a loose rubble pile: quick, but its blows hit softer."
+  },
+  "materials": [
+    {
+      "key": "regolith",
+      "base": "regolith",
+      "visual": {
+        "ramp": [
+          "#17131d",
+          "#2b222b",
+          "#443837",
+          "#655247",
+          "#8a7459",
+          "#ad9878",
+          "#cdbb98",
+          "#e8dcbc"
+        ],
+        "emissive": 0,
+        "char": "#231c1a",
+        "crack": "#0f0b12",
+        "debris": "#8a7459"
+      }
+    },
+    {
+      "key": "kamacite",
+      "base": "ironNickel",
+      "visual": {
+        "ramp": [
+          "#121826",
+          "#202a3e",
+          "#33405a",
+          "#4c5c78",
+          "#6b7f9b",
+          "#90a4bb",
+          "#bccad8",
+          "#e4ecf1"
+        ],
+        "emissive": 0,
+        "char": "#1a1d26",
+        "crack": "#0a0e18",
+        "debris": "#6b7f9b"
+      }
+    },
+    {
+      "key": "taenite",
+      "base": "ironNickel",
+      "physics": {
+        "toughness": 0.85
+      },
+      "visual": {
+        "ramp": [
+          "#1c1720",
+          "#332a33",
+          "#54444a",
+          "#7a665f",
+          "#a38d79",
+          "#c9b399",
+          "#e8d9bd"
+        ],
+        "emissive": 0,
+        "char": "#221c1c",
+        "crack": "#100b10",
+        "debris": "#a38d79"
+      }
+    },
+    {
+      "key": "ice",
+      "base": "ice",
+      "visual": {
+        "ramp": [
+          "#0f3358",
+          "#1a628a",
+          "#2c98bd",
+          "#5ccbdc",
+          "#a2ecef",
+          "#defafb"
+        ],
+        "emissive": 54,
+        "char": "#123a52",
+        "crack": "#0a2a44",
+        "debris": "#a2ecef"
+      }
+    },
+    {
+      "key": "olivine",
+      "base": "crystal",
+      "visual": {
+        "ramp": [
+          "#2a3610",
+          "#4b6712",
+          "#809d1f",
+          "#bccb38",
+          "#eedf62",
+          "#fff5a6"
+        ],
+        "emissive": 34,
+        "char": "#2a2c12",
+        "crack": "#171d08",
+        "debris": "#bccb38"
+      }
+    },
+    {
+      "key": "dense",
+      "base": "ironNickel",
+      "physics": {
+        "density": 3.2,
+        "toughness": 0.9
+      },
+      "visual": {
+        "ramp": [
+          "#2a1416",
+          "#552620",
+          "#8a432b",
+          "#bf7239",
+          "#e8ad5a",
+          "#fbe0a0"
+        ],
+        "emissive": 36,
+        "char": "#2a1a16",
+        "crack": "#180c0c",
+        "debris": "#bf7239"
+      }
+    }
+  ],
+  "art": {
+    "w": 144,
+    "h": 128,
+    "coreX": 65,
+    "coreY": 65,
+    "coreRadius": 9,
+    "params": {
+      "centre": [
+        68,
+        62
+      ],
+      "body": {
+        "rx": 45,
+        "ry": 41
+      },
+      "facets": 8,
+      "crags": [
+        {
+          "ax": 20,
+          "ay": -2,
+          "ra": 22,
+          "bx": 47,
+          "by": -9,
+          "rb": 12
+        },
+        {
+          "ax": -26,
+          "ay": 14,
+          "ra": 18,
+          "bx": -47,
+          "by": 30,
+          "rb": 9
+        },
+        {
+          "ax": -4,
+          "ay": -28,
+          "ra": 15,
+          "bx": -13,
+          "by": -46,
+          "rb": 8
+        },
+        {
+          "ax": 22,
+          "ay": 24,
+          "ra": 12,
+          "bx": 33,
+          "by": 40,
+          "rb": 7
+        }
+      ],
+      "craters": 6,
+      "bites": 5,
+      "veins": 3,
+      "olivine": 8,
+      "core": {
+        "x": -3,
+        "y": 3,
+        "r": 9
+      },
+      "pebbles": 5
+    }
+  },
+  "ai": {
+    "style": "Hit-and-run: dash in, strike, tumble out. Keeps moving, rams after a whiff, splits into a swarm to pin its foe.",
+    "weights": {
+      "aggression": 0.7,
+      "patience": 0.25,
+      "zoning": 0.3,
+      "retreat": 0.65,
+      "trap": 0.1,
+      "punish": 0.6,
+      "gaze": 0
+    }
+  },
+  "ui": {
+    "accent": "#c9b399",
+    "accent2": "#5ccbdc",
+    "tagline": "Hit, run, hit again."
+  },
+  "moves": []
+}

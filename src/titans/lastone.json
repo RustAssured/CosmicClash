@@ -1,0 +1,258 @@
+{
+  "id": "lastone",
+  "name": "The Last One",
+  "nameKo": "마지막 하나",
+  "epithet": "De Laatste",
+  "attributes": {
+    "mass": 5,
+    "cohesion": 8,
+    "heat": 5,
+    "gravity": 3,
+    "reach": 7,
+    "tempo": 7
+  },
+  "resource": {
+    "id": "tendrils",
+    "name": "Tendrils",
+    "nameKo": "촉수",
+    "max": 24,
+    "start": 24,
+    "display": "pips"
+  },
+  "destruction": "FRACTURE",
+  "passive": {
+    "name": "Patient Regrowth",
+    "text": "A severed tendril regrows after a few quiet seconds without taking damage."
+  },
+  "failureMode": {
+    "name": "Bared Eye",
+    "text": "Tendrils sever one by one. As they fall the eye is left exposed and takes heavy damage."
+  },
+  "materials": [
+    {
+      "key": "shell",
+      "base": "celadon",
+      "visual": {
+        "ramp": [
+          "#16242c",
+          "#254541",
+          "#37665a",
+          "#548672",
+          "#7ca88f",
+          "#a8bdb2",
+          "#c9dfc8",
+          "#edf5d8"
+        ],
+        "emissive": 0,
+        "char": "#1c2a2a",
+        "crack": "#0d1a22",
+        "debris": "#8fae9f"
+      }
+    },
+    {
+      "key": "seam",
+      "base": "celadon",
+      "physics": {
+        "bond": 46,
+        "toughness": 0.15
+      },
+      "visual": {
+        "ramp": [
+          "#0e1a24",
+          "#1a3340",
+          "#2b5057",
+          "#436e69",
+          "#5f8c83",
+          "#86a99b"
+        ],
+        "emissive": 0,
+        "char": "#141f24",
+        "crack": "#070f16",
+        "debris": "#5f8c83"
+      }
+    },
+    {
+      "key": "inner",
+      "base": "crystal",
+      "visual": {
+        "ramp": [
+          "#25404f",
+          "#3d6470",
+          "#5f8c94",
+          "#8fb8b8",
+          "#bcd9d0",
+          "#e0efe2",
+          "#f6fbea"
+        ],
+        "emissive": 10,
+        "char": "#2a3c40",
+        "crack": "#16303a",
+        "debris": "#a9cfc6"
+      }
+    },
+    {
+      "key": "core",
+      "base": "core",
+      "visual": {
+        "ramp": [
+          "#7a2f3d",
+          "#c2523c",
+          "#f08a3a",
+          "#ffc65a",
+          "#ffe9a3",
+          "#fffbe6"
+        ],
+        "emissive": 200,
+        "char": "#5a2a2a",
+        "crack": "#3a1018",
+        "debris": "#ffc65a"
+      }
+    },
+    {
+      "key": "eye",
+      "base": "eye",
+      "visual": {
+        "ramp": [
+          "#2c4448",
+          "#4d6d6c",
+          "#7d9f96",
+          "#a9c5b6",
+          "#d2e3cf",
+          "#f2f6e2"
+        ],
+        "emissive": 26,
+        "char": "#243436",
+        "crack": "#12262c",
+        "debris": "#c5dcc9"
+      }
+    },
+    {
+      "key": "iris",
+      "base": "eye",
+      "visual": {
+        "ramp": [
+          "#0b1f2a",
+          "#12404a",
+          "#1b6666",
+          "#2f9a86",
+          "#66c9a2",
+          "#b7ecc0",
+          "#f1ffd8"
+        ],
+        "emissive": 90,
+        "char": "#0c2022",
+        "crack": "#061319",
+        "debris": "#66c9a2"
+      }
+    },
+    {
+      "key": "pupil",
+      "base": "eye",
+      "visual": {
+        "ramp": [
+          "#02070b",
+          "#06131a",
+          "#0b232b",
+          "#123640"
+        ],
+        "emissive": 0,
+        "char": "#02070b",
+        "crack": "#000000",
+        "debris": "#0b232b"
+      }
+    },
+    {
+      "key": "gilt",
+      "base": "glass",
+      "visual": {
+        "ramp": [
+          "#2b2a22",
+          "#5a5232",
+          "#8e8046",
+          "#c7b565",
+          "#e8dc96",
+          "#fff6c8"
+        ],
+        "emissive": 46,
+        "char": "#2a2418",
+        "crack": "#1a160c",
+        "debris": "#c7b565"
+      }
+    }
+  ],
+  "art": {
+    "w": 176,
+    "h": 176,
+    "coreX": 81,
+    "coreY": 109,
+    "coreRadius": 10,
+    "params": {
+      "centre": [
+        88,
+        84
+      ],
+      "head": {
+        "cx": 0,
+        "cy": -9,
+        "rx": 46,
+        "ry": 48,
+        "bulgeX": 12,
+        "bulgeRx": 34,
+        "bulgeRy": 41
+      },
+      "mantle": {
+        "top": 14,
+        "bottom": 68,
+        "topR": 24,
+        "bottomR": 40,
+        "belly": -4,
+        "hemScallops": 6
+      },
+      "eye": {
+        "x": 17,
+        "y": -14,
+        "r": 20,
+        "socketR": 27
+      },
+      "core": {
+        "x": -7,
+        "y": 25,
+        "r": 10
+      },
+      "halo": {
+        "cx": -9,
+        "cy": -14,
+        "a": 52,
+        "b": 66,
+        "tilt": -0.2,
+        "thickness": 5,
+        "spokes": 5,
+        "ticks": 22
+      },
+      "seams": 9,
+      "tendrils": {
+        "count": 24,
+        "minLen": 20,
+        "maxLen": 40
+      }
+    }
+  },
+  "ai": {
+    "style": "Patient sidestep-punisher: waits at range, sidesteps a committed attack, then answers the recovery.",
+    "weights": {
+      "aggression": 0.35,
+      "patience": 0.85,
+      "zoning": 0.45,
+      "retreat": 0.4,
+      "trap": 0.1,
+      "punish": 0.9,
+      "gaze": 0.6
+    }
+  },
+  "ui": {
+    "accent": "#a8bdb2",
+    "accent2": "#e8dc96",
+    "tagline": "Charge, and sidestep."
+  },
+  "moves": []
+}

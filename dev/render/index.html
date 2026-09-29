@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Render sandbox · ADEUK: TITANS</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #05060a;
+        overflow: hidden;
+        font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace;
+        color: #cfe;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+      }
+      canvas#game {
+        display: block;
+        image-rendering: pixelated;
+        outline: none;
+      }
+      #hud {
+        position: fixed;
+        left: 8px;
+        top: 8px;
+        padding: 6px 8px;
+        background: rgba(0, 0, 0, 0.55);
+        border-radius: 4px;
+        white-space: pre;
+        pointer-events: none;
+      }
+      #help {
+        position: fixed;
+        right: 8px;
+        bottom: 8px;
+        padding: 6px 8px;
+        background: rgba(0, 0, 0, 0.55);
+        border-radius: 4px;
+        white-space: pre;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><canvas id="game" width="640" height="360" tabindex="0"></canvas></div>
+    <div id="hud"></div>
+    <div id="help">
+1 shockwave · 2 black-hole lens · 3 flash · 4 impulse · 5 aberration
+6 shake · 7 zoom · 8 roll · 9 KO slow-mo · Q quality · F freeze · H hide text
+A/D fighter A · ←/→ fighter B · W/S bob · click = shockwave at pointer</div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
