@@ -6,7 +6,7 @@
  */
 import { writeFileSync } from 'node:fs';
 import { DamageFlag, type MoveDef, type TitanDef } from '@/contracts';
-import { AIM_ANGLE, AIM_SIGN, aims, frame, hb, key } from './kit';
+import { AIM_SIGN, aims, frame, hb, key } from './kit';
 
 /** One continuous star gradient (deep violet shadow → crimson → orange → gold → white → cool blue-white); every star material's ramp is a slice of it. */
 const GRADIENT = [
@@ -70,6 +70,12 @@ const MATERIALS: TitanDef['materials'] = [
   {
     key: 'corona',
     base: 'corona',
+    // heavy, so that burning fuel (which sheds the outermost matter first) eats the corona over the whole fuel bar instead of in two
+    // moves; its resistances are raised by the same factor as its hardness so it is still as easy to strip as before
+    physics: {
+      density: 0.45,
+      resist: { FRACTURE: 0.65, KINETIC: 0.75, CRUSH: 0.75, THERMAL: 0.4, ASSIMILATION: 1, TIDAL: 3.6 },
+    },
     visual: {
       ramp: ['#1b0d3a', '#3b1a68', '#6d34a0', '#a45ccc', '#e39ae6', '#fff0fb'],
       emissive: 78,
@@ -82,7 +88,10 @@ const MATERIALS: TitanDef['materials'] = [
   {
     key: 'prominence',
     base: 'plasma',
-    physics: { density: 0.1 },
+    physics: {
+      density: 0.35,
+      resist: { FRACTURE: 0.65, KINETIC: 0.75, CRUSH: 0.75, THERMAL: 0.38, ASSIMILATION: 1.1, TIDAL: 3.8 },
+    },
     visual: {
       ramp: ['#5a1030', '#a01e34', '#e23f2c', '#ff7a30', '#ffb040', '#ffe080', '#fff6c8'],
       emissive: 175,
@@ -97,7 +106,10 @@ const MATERIALS: TitanDef['materials'] = [
 const T = 'THERMAL' as const;
 const UNBLOCK = DamageFlag.UNBLOCKABLE;
 
-/** Strike — Flare: an expanding cone of heat, cheap in fuel. */
+/**
+ * Strike — Flare: a burst of heat that swells outward from the star's face. A soft radial `field` (not a cone): the thermal model
+ * melts the cells nearest the shape's centre first, so a compact burst is worth three times a wide wedge of the same energy.
+ */
 const flare: MoveDef = {
   id: 'supernova.flare',
   slot: 'strike',
@@ -105,23 +117,21 @@ const flare: MoveDef = {
   nameKo: '플레어',
   frame: frame(10, 6, 18, { hitstop: 5 }),
   variants: aims((aim) => {
-    const a = AIM_ANGLE[aim];
-    const kx = 210;
-    const ky = AIM_SIGN[aim] * 70 - 10;
+    const s = AIM_SIGN[aim];
     return {
       hitboxes: [
         hb(
           'flare',
           0,
           6,
-          { kind: 'cone', ox: 30, oy: -2, angle: a, range: 112, halfAngle: 0.6 },
+          { kind: 'field', ox: 66, oy: s * 26, r: 46, falloff: 1.5 },
           T,
-          340,
+          380,
           { shock: 0.6, scatter: 1 },
           0,
-          { x: kx, y: ky },
+          { x: 210, y: s * 70 - 10 },
           0.3,
-          { sweepTo: { kind: 'cone', ox: 30, oy: -2, angle: a, range: 150, halfAngle: 0.8 } },
+          { sweepTo: { kind: 'field', ox: 104, oy: s * 40, r: 62, falloff: 1.5 } },
         ),
       ],
       movement: [key(10, -70, 0, 0.3)],
@@ -218,12 +228,12 @@ const prominence: MoveDef = {
     chargePower: 0.8,
     chargeReach: [0.72, 1.45],
     /** The fire wall the arc leaves: a world-fixed vertical line of half-height `half`, hit every `every` ticks for `life` ticks. */
-    wall: { half: 50, width: 16, life: 54, every: 4, energy: 30 },
+    wall: { half: 52, width: 26, life: 54, every: 4, energy: 30 },
     pose: { startup: { lean: -4 }, charge: { lean: -6 }, active: { lean: 3 } },
   },
 };
 
-/** Ultimate — Nova: the star collapses inward, then detonates: a thermal ring that no shell stops. */
+/** Ultimate — Nova: the star collapses inward, then detonates: two thermal rings that no shell stops. */
 const nova: MoveDef = {
   id: 'supernova.nova',
   slot: 'ultimate',
@@ -235,15 +245,28 @@ const nova: MoveDef = {
       hb(
         'blast',
         4,
-        66,
+        40,
         { kind: 'ring', ox: 0, oy: 0, r0: 24, r1: 76 },
         T,
-        2800,
+        3000,
         { shock: 2.4, scatter: 1.6 },
         UNBLOCK,
-        { x: 620, y: -150 },
+        { x: 300, y: -120 },
         1,
-        { sweepTo: { kind: 'ring', ox: 0, oy: 0, r0: 250, r1: 310 } },
+        { sweepTo: { kind: 'ring', ox: 0, oy: 0, r0: 170, r1: 230 } },
+      ),
+      hb(
+        'wave',
+        30,
+        66,
+        { kind: 'ring', ox: 0, oy: 0, r0: 120, r1: 170 },
+        T,
+        2200,
+        { shock: 1.8, scatter: 1.4 },
+        UNBLOCK,
+        { x: 520, y: -140 },
+        1,
+        { sweepTo: { kind: 'ring', ox: 0, oy: 0, r0: 300, r1: 370 } },
       ),
     ],
     movement: [key(0, 0, 0, 0.05)],
@@ -252,7 +275,7 @@ const nova: MoveDef = {
   meterCost: 1,
   tags: ['ultimate', 'armor', 'blast', 'collapse'],
   extra: {
-    fuel: 65,
+    fuel: 60,
     ctl: { startup: 0.1, active: 0.05, recovery: 0.3 },
     pose: { startup: { lean: -2 }, active: { lean: 0 }, recovery: { lean: 0 } },
   },

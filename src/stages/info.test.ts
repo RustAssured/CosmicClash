@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STAGE_IDS, STAGE_PALETTE_MAX, STAGE_PALETTE_MIN, validateStageInfo, hex } from '@/contracts';
 import { STAGES } from './index';
+import { STAGE_RAMPS } from './info';
 
 describe('stage info', () => {
   it('defines all five stages, indexed in STAGE_IDS order', () => {
@@ -59,5 +60,35 @@ describe('stage info', () => {
   it('every stage keeps the default arena (each stage owns its own copy)', () => {
     expect(STAGES.nursery.arena).toEqual(STAGES.rim.arena);
     expect(STAGES.nursery.arena).not.toBe(STAGES.rim.arena);
+  });
+
+  it.each(STAGE_IDS)('%s bridges its chromatic ramps: no hue gap wider than 0.55 of the circle', (id) => {
+    const info = STAGES[id];
+    const hues: number[] = [];
+    let i = 0;
+    for (const n of info.ramps!) {
+      // hue of the middle step; ramps that are nearly neutral (near-black voids, pale stars) do not count
+      const p = hex(info.palette[i + (n >> 1)]!);
+      const r = (p & 255) / 255;
+      const g = ((p >>> 8) & 255) / 255;
+      const b = ((p >>> 16) & 255) / 255;
+      const mx = Math.max(r, g, b);
+      const mn = Math.min(r, g, b);
+      const c = mx - mn;
+      if (mx > 0.05 && c / mx > 0.16) {
+        const h = mx === r ? ((g - b) / c + 6) % 6 : mx === g ? (b - r) / c + 2 : (r - g) / c + 4;
+        hues.push(h / 6);
+      }
+      i += n;
+    }
+    hues.sort((a, b) => a - b);
+    expect(hues.length).toBeGreaterThanOrEqual(3);
+    let gap = 1 - hues[hues.length - 1]! + hues[0]!;
+    for (let k = 1; k < hues.length; k++) gap = Math.max(gap, hues[k]! - hues[k - 1]!);
+    expect(gap).toBeLessThan(0.55); // one deliberate accent ramp may sit across the wheel (quasar ember, redgiant teal)
+  });
+
+  it('STAGE_RAMPS mirrors the ramps published in StageInfo', () => {
+    for (const id of STAGE_IDS) expect([...STAGE_RAMPS[id]]).toEqual(STAGES[id].ramps);
   });
 });

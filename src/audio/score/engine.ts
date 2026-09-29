@@ -1,6 +1,6 @@
 import { Rng, type AudioScene, type StageId } from '@/contracts';
 import { clamp, clamp01, midiToHz } from '../dsp/math';
-import { STAGE_MUSIC, degreeToHz, degreeToMidi, MODES, type StageMusic } from '../dsp/scales';
+import { STAGE_FEEL, STAGE_MUSIC, degreeToHz, fifthOf, type StageFeel, type StageMusic } from '../dsp/scales';
 import { GLASS, makeOut, noiseHit, partials, thump, tone } from '../voices/synth';
 import type { VoiceCtx } from '../voices/types';
 import { CHORD_BARS, STEPS_PER_BAR, nextChord, planStep, stepSeconds } from './plan';
@@ -35,6 +35,8 @@ export class ScoreEngine {
   private padFilter: BiquadFilterNode | null = null;
   private stage: StageId = 'nursery';
   private music: StageMusic = STAGE_MUSIC.nursery;
+  private feel: StageFeel = STAGE_FEEL.nursery;
+  private padWet: GainNode | null = null;
   private rng: Rng;
   private readonly seed: number;
   private step = 0;
@@ -118,9 +120,10 @@ export class ScoreEngine {
     padFilter.connect(padGain);
     padGain.connect(this.out);
     const wet = ac.createGain();
-    wet.gain.value = 0.6;
+    wet.gain.value = 0.6 * this.feel.space;
     padGain.connect(wet);
     wet.connect(this.c.wet);
+    this.padWet = wet;
     for (let v = 0; v < 3; v++) {
       const oscs = [0, 1].map((k) => {
         const o = ac.createOscillator();
@@ -146,27 +149,34 @@ export class ScoreEngine {
     if (!d) return;
     const m = this.music;
     const rootHz = midiToHz(m.root);
-    const fifthHz = midiToHz(degreeToMidi(m.root, m.mode, MODES[m.mode].length > 4 ? 4 : 2));
-    const tc = immediate ? 0.001 : 1.2;
+    const fifthHz = midiToHz(fifthOf(m));
+    const notes: [OscillatorNode, number][] = [
+      [d.root, rootHz],
+      [d.fifth[0], fifthHz],
+      [d.fifth[1], fifthHz],
+      [d.sub, rootHz / 2],
+      [d.shimmer, rootHz * 8],
+      [d.cluster, rootHz * 1.0595 * 2],
+    ];
+    if (immediate) {
+      // at creation: the pitch IS the value, from the first sample (a glide from the default 440 Hz would be audible)
+      for (const [o, hz] of notes) o.frequency.value = hz;
+      return;
+    }
     const t = Math.max(when, this.ac.currentTime);
-    d.root.frequency.setTargetAtTime(rootHz, t, tc);
-    d.fifth[0].frequency.setTargetAtTime(fifthHz, t, tc);
-    d.fifth[1].frequency.setTargetAtTime(fifthHz, t, tc);
-    d.sub.frequency.setTargetAtTime(rootHz / 2, t, tc);
-    d.shimmer.frequency.setTargetAtTime(rootHz * 8, t, tc);
-    d.cluster.frequency.setTargetAtTime(rootHz * 1.0595 * 2, t, tc);
+    for (const [o, hz] of notes) o.frequency.setTargetAtTime(hz, t, 1.2);
   }
 
-  private setChord(index: number, immediate = false): void {
+  private setChord(index: number, immediate = false, when = this.ac.currentTime): void {
     if (!this.padGain) return;
     const m = this.music;
     const chord = m.chords[index % m.chords.length]!;
-    const t = this.ac.currentTime;
-    const tc = immediate ? 0.001 : 1.8; // slow glide between chords
     this.padVoices.forEach((v, i) => {
-      const hz = degreeToHz(m.root + 24, m.mode, chord[i % chord.length]!);
-      v.oscs[0].frequency.setTargetAtTime(hz, t, tc);
-      v.oscs[1].frequency.setTargetAtTime(hz, t, tc);
+      const hz = degreeToHz(m.root + this.feel.padOct, m.mode, chord[i % chord.length]!);
+      for (const o of v.oscs) {
+        if (immediate) o.frequency.value = hz;
+        else o.frequency.setTargetAtTime(hz, Math.max(when, this.ac.currentTime), 1.8); // a slow glide between chords
+      }
     });
     this.chord = index;
   }
@@ -176,19 +186,39 @@ export class ScoreEngine {
     if (s === this.stage && this.started) return;
     this.stage = s;
     this.music = STAGE_MUSIC[s];
+    this.feel = STAGE_FEEL[s];
     this.rng = new Rng(this.seed * 31 + s.length * 7 + s.charCodeAt(0));
     this.chord = 0;
-    this.ensureStarted();
-    this.setStageNotes(this.ac.currentTime, false);
-    this.setChord(0);
+    // not started yet: the drone and pad are created ON this stage's notes and level, and nothing may be scheduled on top of
+    // them at the same instant (a second setTargetAtTime at the instant of the first restarts from the oscillator's default
+    // 440 Hz in Chromium and the whole score glides down into key over several seconds: measured)
+    if (!this.started) {
+      this.ensureStarted();
+      return;
+    }
+    const now = this.ac.currentTime;
+    this.padWet?.gain.setTargetAtTime(0.6 * this.feel.space, now, 0.8);
+    this.cancelPitch(now);
+    this.setStageNotes(now, false);
+    this.setChord(0, false, now);
+  }
+
+  /** Forget every pitch change queued from `t` on (the old stage's chords, planned a little ahead) before a new stage's are set. */
+  private cancelPitch(t: number): void {
+    const d = this.drone;
+    if (!d) return;
+    for (const o of [d.root, d.fifth[0], d.fifth[1], d.sub, d.shimmer, d.cluster])
+      o.frequency.cancelScheduledValues(t);
+    for (const v of this.padVoices) for (const o of v.oscs) o.frequency.cancelScheduledValues(t);
   }
 
   /* ------------------------------------------------------------------------------------------------ *
    *  per-frame
    * ------------------------------------------------------------------------------------------------ */
   update(scene: AudioScene, dt: number): void {
-    this.ensureStarted();
+    // the stage first: the drone must start in the stage's own key, not glide there from the default's
     if (scene.stage && scene.stage !== this.stage) this.setStage(scene.stage);
+    this.ensureStarted();
     const ac = this.ac;
     const now = ac.currentTime;
     this.phase = scene.phase;
@@ -214,18 +244,19 @@ export class ScoreEngine {
     const menu = this.phase === 'menu' || this.phase === 'results';
     const paused = this.phase === 'pause';
     const swell = now < this.swellUntil ? 1 : 0;
-    const droneG = (menu ? 0.085 : 0.1 - 0.025 * I) * (paused ? 0.5 : 1);
-    const padG = (menu ? 0.035 : 0.04 + 0.03 * I + 0.03 * swell) * (paused ? 0.5 : 1);
+    const f = this.feel;
+    const droneG = (menu ? 0.085 : 0.1 - 0.025 * I) * (paused ? 0.5 : 1) * f.body;
+    const padG = (menu ? 0.035 : 0.04 + 0.03 * I + 0.03 * swell) * (paused ? 0.5 : 1) * f.pad;
     d.gain.gain.setTargetAtTime(droneG, now, 0.5);
     this.padGain.gain.setTargetAtTime(padG, now, 0.6);
     // tension: the whole score darkens/thins and the cluster note creeps in as integrity falls
-    const tense = this.lowIntegrity;
+    const tense = Math.max(this.lowIntegrity, f.tension);
     const ts = 0.35 + 0.65 * this.timeScale; // slow-motion pulls pitch down like a tape slowing
-    d.filter.frequency.setTargetAtTime((300 + 900 * I) * (1 - 0.35 * tense) * ts, now, 0.4);
+    d.filter.frequency.setTargetAtTime((300 + 900 * I) * (1 - 0.35 * tense) * ts * f.dark, now, 0.4);
     d.clusterGain.gain.setTargetAtTime(0.25 * tense, now, 0.8);
     for (const o of [d.root, d.fifth[0], d.fifth[1], d.sub, d.shimmer, d.cluster])
       o.detune.setTargetAtTime(1200 * Math.log2(ts) - 25 * tense, now, 0.15);
-    this.padFilter.frequency.setTargetAtTime((700 + 1800 * I) * ts, now, 0.5);
+    this.padFilter.frequency.setTargetAtTime((700 + 1800 * I) * ts * f.dark, now, 0.5);
     for (const v of this.padVoices) {
       v.oscs[0].detune.setTargetAtTime(-6 + 1200 * Math.log2(ts) - 40 * tense, now, 0.3);
       v.oscs[1].detune.setTargetAtTime(6 + 1200 * Math.log2(ts) - 40 * tense, now, 0.3);
@@ -246,10 +277,16 @@ export class ScoreEngine {
 
   private scheduleStep(step: number, t: number): void {
     if (step > 0 && step % (STEPS_PER_BAR * CHORD_BARS) === 0)
-      this.setChord(nextChord(this.chord, this.music.chords.length, this.rng));
+      this.setChord(nextChord(this.chord, this.music.chords.length, this.rng), false, t);
     const plan = planStep(
       step,
-      { intensity: this.intensity, lowIntegrity: this.lowIntegrity, phase: this.phase },
+      {
+        intensity: this.intensity,
+        lowIntegrity: this.lowIntegrity,
+        phase: this.phase,
+        density: this.feel.density,
+        motes: this.feel.motes,
+      },
       this.rng,
     );
     const pan = (this.rng.next() - 0.5) * 0.3;
@@ -273,12 +310,14 @@ export class ScoreEngine {
   }
 
   private taiko(t: number, v: number, tune: 0 | 1 | 2, pan: number): void {
-    const f = [78, 104, 139][tune]!;
+    // tuned to the stage's key: root, fifth, octave (D2 A2 D3 on the Nursery), never a note the drone is not playing
+    const m = this.music;
+    const f = midiToHz([m.root, fifthOf(m), m.root + 12][tune]!); // the fifth is the one the drone plays
     const o = makeOut(this.c, pan, 0.5);
     tone(this.c, o, t, { f0: f * 1.9, f1: f, dur: 0.55, gain: 0.3 * v, attack: 0.002, glide: 0.09 });
     tone(this.c, o, t, {
-      f0: f * 1.5,
-      f1: f * 0.75,
+      f0: f,
+      f1: f * 0.5, // an octave drop: the body of the drum stays on the same note
       dur: 0.3,
       gain: 0.12 * v,
       type: 'triangle',
@@ -304,12 +343,13 @@ export class ScoreEngine {
 
   private heartbeat(t: number, v: number): void {
     const o = makeOut(this.c, 0, 0.1);
-    thump(this.c, o, t, 64, 34, 0.24, 0.45 * v);
+    thump(this.c, o, t, midiToHz(this.music.root + 12), midiToHz(this.music.root), 0.24, 0.45 * v);
   }
 
   private bell(t: number, degree: number): void {
-    const hz = degreeToHz(this.music.root + 36, 'pentatonic', degree);
-    const o = makeOut(this.c, (this.rng.next() - 0.5) * 1.2, 0.7);
+    // a note of the stage's own scale (not a fixed pentatonic: it would leave the key on the whole-tone and Phrygian stages)
+    const hz = degreeToHz(this.music.root + 36, this.music.mode, degree);
+    const o = makeOut(this.c, (this.rng.next() - 0.5) * 1.2, Math.min(0.95, 0.7 * this.feel.space));
     partials(this.c, o, t, hz, GLASS, { decay: 2.2, gain: 0.05, shimmer: 0.3 });
   }
 
@@ -327,7 +367,7 @@ export class ScoreEngine {
       this.swellUntil = 0;
     } else if (phase === 'end' || phase === 'match') {
       this.swellUntil = t + (phase === 'match' ? 6 : 3.5);
-      this.setChord(0);
+      this.setChord(0, false, t);
       // resolve: an open fifth + octave + the third bloom over the pad, and the tension drains away
       const o = makeOut(this.c, 0, 0.9);
       for (const [i, deg] of [0, 2, 4, 7].entries())

@@ -1,4 +1,4 @@
-import { clamp, clamp01 } from '@/contracts';
+import { clamp01 } from '@/contracts';
 import { hash01 } from '@/titans/art/noise';
 import type { Overlay } from './overlay';
 
@@ -101,8 +101,9 @@ export function plasmaBall(
 }
 
 /**
- * A column of flame standing on (`x`, `yBottom`) and licking up to `yTop`, `halfW` px either side: each pixel column has its own
- * flicker height; brightness rises toward the base, the tips break into dithered sparks. Additive-friendly (opaque writes).
+ * A column of flame standing on (`x`, `yBottom`) and licking up to `yTop`, about `halfW` px either side at the base and narrowing
+ * toward the tips. Every pixel is a density from a rising noise field (the pattern climbs with time), thresholded into tongues
+ * that break into sparks at the top; brightness falls from the base. Opaque writes (for additive layers).
  */
 export function flameColumn(
   ov: Overlay,
@@ -114,28 +115,32 @@ export function flameColumn(
   ramp: readonly number[],
   gain = 1,
 ): void {
-  const H = yBottom - yTop;
-  for (let dx = -Math.ceil(halfW); dx <= Math.ceil(halfW); dx++) {
-    const edge = 1 - Math.abs(dx) / (halfW + 1);
-    if (edge <= 0) continue;
-    const n = tn(dx * 3.1 + 17, tick * 0.55);
-    const n2 = tn(dx * 1.7 - 9, tick * 0.9 + 30);
-    // height of this flame tongue: tall in the middle of the wall, ragged at its sides
-    const h = H * clamp(0.35 + 0.75 * edge * (0.55 + 0.9 * n), 0, 1);
-    for (let k = 0; k < h; k++) {
-      const y = yBottom - k;
-      const u = k / Math.max(1, h); // 0 base → 1 tip
-      const v = (1 - u * 0.9) * (0.55 + 0.6 * n2) * edge * gain + 0.12;
-      if (u > 0.82 && ((x + dx + y + tick) & 3) !== 0) continue; // tips break up
-      ov.set(x + dx, y, rampDither(ramp, v, x + dx, y), Math.round(200 * clamp01(1 - u)));
+  const H = Math.max(1, yBottom - yTop);
+  const xr = Math.round(x);
+  const yb = Math.round(yBottom);
+  const W = Math.ceil(halfW * 1.5);
+  for (let k = 0; k < H; k++) {
+    const u = k / H; // 0 base → 1 tip
+    const w = halfW * (1 - 0.5 * u) + 0.6;
+    const y = yb - k;
+    const fall = 1 - Math.pow(u, 1.25);
+    for (let dx = -W; dx <= W; dx++) {
+      const xx = xr + dx;
+      const n = tn(xx * 0.42 + 11, y * 0.16 + tick * 0.95);
+      const lat = 1 - Math.abs(dx) / w;
+      const d = lat * fall * gain + (n - 0.5) * 0.95 - 0.06;
+      if (d < 0.16) continue;
+      if (u > 0.8 && ((xx + y + tick) & 1) !== 0 && d < 0.4) continue; // tips break into sparks
+      ov.set(xx, y, rampDither(ramp, 0.18 + d * 0.9, xx, y), Math.round(210 * clamp01(d * 1.4)));
     }
   }
 }
 
 /**
  * An expanding shock ring: an annulus [r0, r1] around (cx, cy), drawn by a polar sweep (cost ∝ its area, not the bounding
- * box), white-hot on its leading edge and cooling to the trailing edge, with a noise-torn rim. Only the part inside the
- * overlay is written.
+ * box). The leading edge (outer ~9 px) is a solid white-hot band with a noise-torn rim; behind it the wake thins out as an
+ * ordered-dither spray of cooling embers, so a thick hitbox annulus still reads as a crisp wave of fire and not a filled disc.
+ * `squash` < 1 flattens the ring into an ellipse (a ring lying on the ground plane). Only the part inside the overlay is written.
  */
 export function ringBand(
   ov: Overlay,
@@ -147,23 +152,34 @@ export function ringBand(
   ramp: readonly number[],
   gain = 1,
   arc: [number, number] = [0, Math.PI * 2],
+  squash = 1,
 ): void {
   const steps = Math.max(24, Math.ceil(Math.abs(arc[1] - arc[0]) * r1 * 1.15));
   const width = r1 - r0;
+  const lead = Math.min(width, 9);
   for (let s = 0; s < steps; s++) {
     const a = arc[0] + ((arc[1] - arc[0]) * s) / steps;
     const ca = Math.cos(a);
     const sa = Math.sin(a);
     const n = tn(a * 26 + tick * 0.35, tick * 0.6);
-    const ragged = 0.12 * width * (n - 0.5) * 2;
+    const ragged = 0.14 * lead * (n - 0.5) * 2;
     for (let k = 0; k <= width; k++) {
       const rr = r0 + k + ragged;
       const x = Math.round(cx + ca * rr);
-      const y = Math.round(cy + sa * rr);
+      const y = Math.round(cy + sa * rr * squash);
       if (x < ov.ox || y < ov.oy || x >= ov.ox + ov.w || y >= ov.oy + ov.h) continue;
-      const u = width > 0 ? k / width : 1; // 0 trailing → 1 leading
-      const v = (0.15 + 0.85 * Math.pow(u, 1.6)) * gain * (0.75 + 0.5 * n);
-      ov.set(x, y, rampDither(ramp, v, x, y), Math.round(230 * clamp01(u * 1.2)));
+      const fromEdge = width - k; // 0 at the leading edge
+      if (fromEdge > lead) {
+        // wake: sparse, cooling
+        const w = 1 - (fromEdge - lead) / Math.max(1, width - lead); // 1 just behind the edge → 0 at the trailing edge
+        const dens = Math.pow(w, 2.2) * 0.8 * gain;
+        if (dens <= (BAYER[((y & 3) << 2) | (x & 3)]! + 0.5) / 16) continue;
+        ov.set(x, y, rampDither(ramp, 0.12 + 0.5 * w + 0.2 * (n - 0.5), x, y), Math.round(150 * w));
+      } else {
+        const e = 1 - fromEdge / lead; // 0 → 1 toward the very edge
+        const v = (0.55 + 0.45 * e) * gain * (0.85 + 0.3 * n);
+        ov.set(x, y, rampDither(ramp, v, x, y), Math.round(240 * clamp01(0.6 + e)));
+      }
     }
   }
 }
@@ -186,5 +202,66 @@ export function streak(
     const u = i / n; // 0 head → 1 tail
     const k = (1 - u) * (1 - u) * gain;
     ov.add(Math.round(x0 + (x1 - x0) * u), Math.round(y0 + (y1 - y0) * u), r * k, g * k, b * k);
+  }
+}
+
+/**
+ * A soft additive glow in pixel-art clothes: the quadratic falloff is quantised to six levels and ordered-dithered, so it reads
+ * as banded, dotted light instead of a smooth blur. Same signature as `Overlay.glow` (colour components 0..255, `strength` scales).
+ */
+export function glowD(
+  ov: Overlay,
+  cx: number,
+  cy: number,
+  r: number,
+  cr: number,
+  cg: number,
+  cb: number,
+  strength = 1,
+): void {
+  const r2 = r * r;
+  const L = 6;
+  for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++)
+    for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const t = (1 - d2 / r2) ** 2 * strength * L;
+      const fl = Math.floor(t);
+      const lvl = fl + (t - fl > (BAYER[((y & 3) << 2) | (x & 3)]! + 0.5) / 16 ? 1 : 0);
+      if (lvl <= 0) continue;
+      const k = Math.min(1, lvl / L);
+      ov.add(x, y, cr * k, cg * k, cb * k);
+    }
+}
+
+/**
+ * A tapered comet stroke along `pos(u)` for u from `u0` (the tail) to `u1` (the head): thick and white-hot at the head, thin and
+ * red at the tail, sampled every ~1.2 px so it is a continuous ribbon rather than beads. `pos` writes world coordinates into `out`.
+ */
+export function ribbon(
+  ov: Overlay,
+  pos: (u: number, out: { x: number; y: number }) => void,
+  u0: number,
+  u1: number,
+  totalLen: number,
+  rTail: number,
+  rHead: number,
+  tick: number,
+  ramp: readonly number[],
+): void {
+  const n = Math.max(4, Math.ceil((Math.abs(u1 - u0) * totalLen) / 1.2));
+  const p = { x: 0, y: 0 };
+  for (let i = 0; i <= n; i++) {
+    const q = i / n; // 0 tail → 1 head
+    pos(u0 + (u1 - u0) * q, p);
+    const r = rTail + (rHead - rTail) * q * q;
+    const flick = tn(i * 2.3 + tick * 0.8, 5);
+    const v = 0.2 + 0.7 * q + 0.15 * (flick - 0.5);
+    const x = Math.round(p.x);
+    const y = Math.round(p.y);
+    ov.disc(p.x, p.y, r, rampDither(ramp, v, x, y), Math.round(120 + 130 * q));
+    if (r > 2.5) ov.disc(p.x, p.y, r * 0.5, rampAt(ramp, 0.8 + 0.2 * q), 255);
   }
 }

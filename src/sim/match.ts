@@ -1,6 +1,7 @@
 import {
   HITSTOP_MAX_TICKS,
   HITSTOP_MIN_TICKS,
+  KO_MASS_FRAC,
   KO_TIME_SCALE,
   ROUNDS_TO_WIN,
   ROUND_INTRO_TICKS,
@@ -108,7 +109,9 @@ export class Match implements MatchApi {
     this.fighters = [mk(0), mk(1)];
 
     if (config.startState && config.startState !== 'intact') {
-      const frac = config.startState === '50' ? 0.5 : 0.1;
+      // '50' / '10' mean HUD integrity 50% / 10% (0% = KO), so map through the KO mass threshold
+      const integrity = config.startState === '50' ? 0.5 : 0.1;
+      const frac = KO_MASS_FRAC + integrity * (1 - KO_MASS_FRAC);
       for (const f of this.fighters)
         this.world.carve(f.body.id, frac, this.rng.fork(`carve${f.slot}`).nextU32());
     }

@@ -151,6 +151,12 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
     drainEventLog(): unknown[] {
       return app.drainEventLog();
     },
+    uiScreen(): string {
+      return app.ui.screen;
+    },
+    matchPhase(): string {
+      return app.session ? app.session.match.phase : 'none';
+    },
   };
   let ready = false;
   window.__ADEUK__ = api;

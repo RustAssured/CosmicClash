@@ -55,6 +55,25 @@ class Job {
   energy = 0;
   /** Ticks to wait before the job first acts. */
   delay = 0;
+  /** Body transform when a deferred chisel was queued: the chisel follows the body the blow struck (see `shiftEvent`). */
+  bx = 0;
+  by = 0;
+}
+
+/** Slide a deferred blow's world-space shape and origin by (dx, dy) so it keeps biting the same matter. */
+function shiftEvent(ev: DamageEvent, dx: number, dy: number): void {
+  const s = ev.shape;
+  if (s.kind === 'line') {
+    s.x0 += dx;
+    s.y0 += dy;
+    s.x1 += dx;
+    s.y1 += dy;
+  } else {
+    s.x += dx;
+    s.y += dy;
+  }
+  ev.originX += dx;
+  ev.originY += dy;
 }
 
 const MAX_JOBS = 48;
@@ -298,6 +317,8 @@ class MatterWorldImpl implements MatterWorldEx {
       j.remaining = 1;
       j.energy = energy;
       j.delay = CHISEL_DELAY;
+      j.bx = body.transform.x;
+      j.by = body.transform.y;
       return;
     }
     // Queue full: chisel at once rather than lose the energy.
@@ -421,6 +442,8 @@ class MatterWorldImpl implements MatterWorldEx {
         continue;
       }
       if (j.kind === 1) {
+        // The blow that queued this chisel usually knocks the body away within the delay: chase it, or the pit lands on empty air.
+        shiftEvent(j.ev, body.transform.x - j.bx, body.transform.y - j.by);
         const ctx = beginDamage(core, this.ctx, body, j.ev, j.energy, false);
         if (ctx !== null) chisel(ctx, j.energy);
         endSpray(core);

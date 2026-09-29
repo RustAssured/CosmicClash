@@ -23,7 +23,7 @@ const finite = (v: number, what: string): void => {
 
 export class FakeParam {
   value: number;
-  readonly events: { type: string; v: number; t: number }[] = [];
+  readonly events: { type: string; v: number; t: number; tc?: number }[] = [];
   constructor(
     private readonly ctx: FakeContext,
     readonly name: string,
@@ -42,7 +42,7 @@ export class FakeParam {
    * middle silently re-bases the ramp; with many overlapping exponential ramps the value diverges (measured: gain 1e8+, then
    * NaN in every filter downstream). The spec calls it undefined; the fake makes it a test failure.
    */
-  private insert(type: string, v: number, t: number, what: string): void {
+  private insert(type: string, v: number, t: number, what: string, tc?: number): void {
     const ev = this.events;
     let i = ev.length;
     while (i > 0 && ev[i - 1]!.t > t) i--;
@@ -55,7 +55,7 @@ export class FakeParam {
           `${this.name}.${what} at ${t.toFixed(4)} lands inside a ${r.type} ramp (${start.toFixed(4)} → ${r.t.toFixed(4)}): overlapping automation`,
         );
     }
-    ev.splice(i, 0, { type, v, t });
+    ev.splice(i, 0, tc === undefined ? { type, v, t } : { type, v, t, tc });
   }
   setValueAtTime(v: number, t: number): this {
     this.chk(v, t, 'setValueAtTime');
@@ -76,7 +76,15 @@ export class FakeParam {
   setTargetAtTime(v: number, t: number, tc: number): this {
     this.chk(v, t, 'setTarget');
     if (!(tc > 0) && tc !== 0) fail(`${this.name}.setTargetAtTime timeConstant invalid ${tc}`);
-    this.insert('target', v, t, 'setTarget');
+    // Chromium: a second setTargetAtTime at the very instant of another, with a different time constant, restarts from the
+    // parameter's intrinsic value (measured: an oscillator retargeted to 55 Hz twice at t = 0 glided down from its default
+    // 440 Hz over several seconds). Same target and time constant twice is harmless (a per-frame call in one audio quantum).
+    for (const e of this.events)
+      if (e.type === 'target' && e.t === t && e.tc !== tc)
+        fail(
+          `${this.name}.setTargetAtTime at ${t.toFixed(4)} repeats an instant with a different time constant: it re-bases from the default value`,
+        );
+    this.insert('target', v, t, 'setTarget', tc);
     return this;
   }
   setValueCurveAtTime(curve: ArrayLike<number>, t: number, dur: number): this {
@@ -89,7 +97,7 @@ export class FakeParam {
   }
   cancelScheduledValues(t: number): this {
     finite(t, 'cancelScheduledValues time');
-    this.events.length = 0;
+    for (let i = this.events.length - 1; i >= 0; i--) if (this.events[i]!.t >= t) this.events.splice(i, 1);
     return this;
   }
   get context(): FakeContext {

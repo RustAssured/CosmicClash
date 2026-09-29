@@ -220,7 +220,7 @@ export function createNexusVoice(): TitanVoice {
       // the body is metal and chain: it CLANKS, the harder the lower and longer; a blocked blow is a dull thunk
       const pan = c.panOf(ev.x);
       const open = 1 - clamp01(ev.blocked) * 0.75;
-      clank(c, t, pan, pick(c, NODES) * 3.2 * (1.5 - 0.6 * mag), mag, open, 0.4);
+      clank(c, t, pan, pick(c, NODES) * 2.6 * (1.5 - 0.6 * mag), mag, open, 0.4);
       if (ev.onDamaged > 0.3) snap(c, t + 0.02, pan, 0.6 * open);
     },
 

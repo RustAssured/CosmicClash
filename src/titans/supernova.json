@@ -87,6 +87,17 @@
     {
       "key": "corona",
       "base": "corona",
+      "physics": {
+        "density": 0.45,
+        "resist": {
+          "FRACTURE": 0.65,
+          "KINETIC": 0.75,
+          "CRUSH": 0.75,
+          "THERMAL": 0.4,
+          "ASSIMILATION": 1,
+          "TIDAL": 3.6
+        }
+      },
       "visual": {
         "ramp": ["#1b0d3a", "#3b1a68", "#6d34a0", "#a45ccc", "#e39ae6", "#fff0fb"],
         "emissive": 78,
@@ -100,7 +111,15 @@
       "key": "prominence",
       "base": "plasma",
       "physics": {
-        "density": 0.1
+        "density": 0.35,
+        "resist": {
+          "FRACTURE": 0.65,
+          "KINETIC": 0.75,
+          "CRUSH": 0.75,
+          "THERMAL": 0.38,
+          "ASSIMILATION": 1.1,
+          "TIDAL": 3.8
+        }
       },
       "visual": {
         "ramp": ["#5a1030", "#a01e34", "#e23f2c", "#ff7a30", "#ffb040", "#ffe080", "#fff6c8"],
@@ -202,16 +221,15 @@
               "from": 0,
               "to": 6,
               "shape": {
-                "kind": "cone",
-                "ox": 30,
-                "oy": -2,
-                "angle": -0.72,
-                "range": 112,
-                "halfAngle": 0.6
+                "kind": "field",
+                "ox": 66,
+                "oy": -26,
+                "r": 46,
+                "falloff": 1.5
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 340,
+                "energy": 380,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -225,12 +243,11 @@
               },
               "guardPressure": 0.3,
               "sweepTo": {
-                "kind": "cone",
-                "ox": 30,
-                "oy": -2,
-                "angle": -0.72,
-                "range": 150,
-                "halfAngle": 0.8
+                "kind": "field",
+                "ox": 104,
+                "oy": -40,
+                "r": 62,
+                "falloff": 1.5
               }
             }
           ],
@@ -250,16 +267,15 @@
               "from": 0,
               "to": 6,
               "shape": {
-                "kind": "cone",
-                "ox": 30,
-                "oy": -2,
-                "angle": 0,
-                "range": 112,
-                "halfAngle": 0.6
+                "kind": "field",
+                "ox": 66,
+                "oy": 0,
+                "r": 46,
+                "falloff": 1.5
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 340,
+                "energy": 380,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -273,12 +289,11 @@
               },
               "guardPressure": 0.3,
               "sweepTo": {
-                "kind": "cone",
-                "ox": 30,
-                "oy": -2,
-                "angle": 0,
-                "range": 150,
-                "halfAngle": 0.8
+                "kind": "field",
+                "ox": 104,
+                "oy": 0,
+                "r": 62,
+                "falloff": 1.5
               }
             }
           ],
@@ -298,16 +313,15 @@
               "from": 0,
               "to": 6,
               "shape": {
-                "kind": "cone",
-                "ox": 30,
-                "oy": -2,
-                "angle": 0.72,
-                "range": 112,
-                "halfAngle": 0.6
+                "kind": "field",
+                "ox": 66,
+                "oy": 26,
+                "r": 46,
+                "falloff": 1.5
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 340,
+                "energy": 380,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -321,12 +335,11 @@
               },
               "guardPressure": 0.3,
               "sweepTo": {
-                "kind": "cone",
-                "ox": 30,
-                "oy": -2,
-                "angle": 0.72,
-                "range": 150,
-                "halfAngle": 0.8
+                "kind": "field",
+                "ox": 104,
+                "oy": 40,
+                "r": 62,
+                "falloff": 1.5
               }
             }
           ],
@@ -749,8 +762,8 @@
         "chargePower": 0.8,
         "chargeReach": [0.72, 1.45],
         "wall": {
-          "half": 50,
-          "width": 16,
+          "half": 52,
+          "width": 26,
           "life": 54,
           "every": 4,
           "energy": 30
@@ -787,7 +800,7 @@
             {
               "id": "blast",
               "from": 4,
-              "to": 66,
+              "to": 40,
               "shape": {
                 "kind": "ring",
                 "ox": 0,
@@ -797,7 +810,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 2800,
+                "energy": 3000,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -806,16 +819,50 @@
                 }
               },
               "knockback": {
-                "x": 620,
-                "y": -150
+                "x": 300,
+                "y": -120
               },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 250,
-                "r1": 310
+                "r0": 170,
+                "r1": 230
+              }
+            },
+            {
+              "id": "wave",
+              "from": 30,
+              "to": 66,
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 120,
+                "r1": 170
+              },
+              "damage": {
+                "type": "THERMAL",
+                "energy": 2200,
+                "duration": 1,
+                "flags": 32,
+                "params": {
+                  "shock": 1.8,
+                  "scatter": 1.4
+                }
+              },
+              "knockback": {
+                "x": 520,
+                "y": -140
+              },
+              "guardPressure": 1,
+              "sweepTo": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 300,
+                "r1": 370
               }
             }
           ],
@@ -833,7 +880,7 @@
             {
               "id": "blast",
               "from": 4,
-              "to": 66,
+              "to": 40,
               "shape": {
                 "kind": "ring",
                 "ox": 0,
@@ -843,7 +890,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 2800,
+                "energy": 3000,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -852,16 +899,50 @@
                 }
               },
               "knockback": {
-                "x": 620,
-                "y": -150
+                "x": 300,
+                "y": -120
               },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 250,
-                "r1": 310
+                "r0": 170,
+                "r1": 230
+              }
+            },
+            {
+              "id": "wave",
+              "from": 30,
+              "to": 66,
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 120,
+                "r1": 170
+              },
+              "damage": {
+                "type": "THERMAL",
+                "energy": 2200,
+                "duration": 1,
+                "flags": 32,
+                "params": {
+                  "shock": 1.8,
+                  "scatter": 1.4
+                }
+              },
+              "knockback": {
+                "x": 520,
+                "y": -140
+              },
+              "guardPressure": 1,
+              "sweepTo": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 300,
+                "r1": 370
               }
             }
           ],
@@ -879,7 +960,7 @@
             {
               "id": "blast",
               "from": 4,
-              "to": 66,
+              "to": 40,
               "shape": {
                 "kind": "ring",
                 "ox": 0,
@@ -889,7 +970,7 @@
               },
               "damage": {
                 "type": "THERMAL",
-                "energy": 2800,
+                "energy": 3000,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -898,16 +979,50 @@
                 }
               },
               "knockback": {
-                "x": 620,
-                "y": -150
+                "x": 300,
+                "y": -120
               },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 250,
-                "r1": 310
+                "r0": 170,
+                "r1": 230
+              }
+            },
+            {
+              "id": "wave",
+              "from": 30,
+              "to": 66,
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 120,
+                "r1": 170
+              },
+              "damage": {
+                "type": "THERMAL",
+                "energy": 2200,
+                "duration": 1,
+                "flags": 32,
+                "params": {
+                  "shock": 1.8,
+                  "scatter": 1.4
+                }
+              },
+              "knockback": {
+                "x": 520,
+                "y": -140
+              },
+              "guardPressure": 1,
+              "sweepTo": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 300,
+                "r1": 370
               }
             }
           ],
@@ -925,7 +1040,7 @@
       "meterCost": 1,
       "tags": ["ultimate", "armor", "blast", "collapse"],
       "extra": {
-        "fuel": 65,
+        "fuel": 60,
         "ctl": {
           "startup": 0.1,
           "active": 0.05,

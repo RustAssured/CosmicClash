@@ -47,6 +47,20 @@ describe('automation hygiene (Chromium diverges on overlapping ramps: gain 1e8, 
     expect(() => g.gain.setValueAtTime(0, 0.02)).not.toThrow();
     expect(() => g.gain.setValueAtTime(0, 0.5)).not.toThrow();
   });
+  it('the strict fake rejects a retarget at the same instant with a different time constant (Chromium restarts it from 440 Hz)', () => {
+    const ctx = new FakeContext();
+    const o = ctx.createOscillator();
+    o.frequency.setTargetAtTime(55, 0, 0.001);
+    expect(() => o.frequency.setTargetAtTime(55, 0, 1.2)).toThrow(WebAudioViolation);
+    expect(takeViolations()).toHaveLength(1);
+    // the same target and time constant twice (a per-frame call landing in one audio quantum) is harmless; so is a later instant
+    expect(() => o.frequency.setTargetAtTime(55, 0, 0.001)).not.toThrow();
+    expect(() => o.frequency.setTargetAtTime(110, 0.05, 1.2)).not.toThrow();
+    // cancelling from a time removes only the events from then on
+    o.frequency.cancelScheduledValues(0.05);
+    expect(o.frequency.events.every((e) => e.t < 0.05)).toBe(true);
+    expect(o.frequency.events.length).toBeGreaterThan(0);
+  });
   it('gravel lays its grains out in order without overlap, for any density and seed', () => {
     for (const grains of [1, 8, 30, 90, 300])
       for (let seed = 1; seed <= 25; seed++) {

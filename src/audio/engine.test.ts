@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AudioEvent, AudioScene, SimEvent, StageId, TitanId } from '@/contracts';
 import { STAGE_IDS, TITAN_IDS } from '@/contracts';
+import { MODES, STAGE_MUSIC } from './dsp/scales';
 import { createAudioEngine } from './engine';
 import {
   FakeContext,
@@ -367,6 +368,40 @@ describe('event handling', () => {
       }
       expect(takeViolations(), `${a} vs ${b}`).toEqual([]);
     }
+  });
+  it("every resting pitch the score plays or glides to is in the stage's key (drone, pad, taiko, sub pulse, heartbeat)", async () => {
+    for (const stage of STAGE_IDS) {
+      const { eng, ctx } = await ready(4);
+      const s = scene({ stage, phase: 'fight', intensity: 1, lowestIntegrity: 0.1, fighters: null });
+      for (let i = 0; i < 120; i++) eng.updateAt(s, 1 / 60, 0);
+      eng.updateAt(s, 1 / 60, 24); // 24 s of score, planned at the settled intensity
+      const m = STAGE_MUSIC[stage];
+      const rootHz = 440 * Math.pow(2, (m.root - 69) / 12);
+      const allowed = new Set<number>([...MODES[m.mode].map((x) => x % 12), 1]); // 1: the drone's deliberate minor-second cluster
+      let checked = 0;
+      for (const n of ctx.nodes) {
+        if (!(n instanceof FakeOsc)) continue;
+        const rest = n.frequency.events
+          .filter((e) => e.type === 'exp' || e.type === 'target')
+          .map((e) => e.v);
+        // an oscillator never scheduled at all (the drone and the pad are created ON their pitch) rests at its intrinsic value
+        if (n.frequency.events.length === 0) rest.push(n.frequency.value);
+        for (const hz of rest) {
+          if (hz < 25) continue; // LFOs
+          checked++;
+          const semis = 12 * Math.log2(hz / rootHz);
+          const pc = ((semis % 12) + 12) % 12;
+          const off =
+            Math.min(...[...allowed].map((a) => Math.min(Math.abs(pc - a), 12 - Math.abs(pc - a)))) * 100;
+          expect(
+            off,
+            `${stage}: ${hz.toFixed(2)} Hz is ${semis.toFixed(2)} semitones from the root`,
+          ).toBeLessThan(6);
+        }
+      }
+      expect(checked, `${stage} scheduled nothing to check`).toBeGreaterThan(12); // drone 6 + pad 6, at the very least
+    }
+    expect(takeViolations()).toEqual([]);
   });
   it('leaving the fight stops every continuous voice (only the score keeps running)', async () => {
     const { eng, ctx } = await ready(6);

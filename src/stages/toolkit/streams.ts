@@ -92,7 +92,11 @@ float a = exp(-r2 * 2.6) * (1.0 - r2);
 o = vec4(vCol.rgb, vCol.a * a * uAlphaScale);
 `;
 
-export function addStreams(kit: SceneryKit, name: string, o: StreamOpts): KitLayer {
+/** The per-particle attributes of a stream (pure and seeded: same options → same buffers). e0 = angle, lateral phase, life offset; e1 = size, brightness, wobble rate, speed factor. */
+export function makeStreamAttributes(o: Pick<StreamOpts, 'count' | 'angle' | 'axisBias' | 'size' | 'seed'>): {
+  e0: Float32Array;
+  e1: Float32Array;
+} {
   const rng = new Rng(o.seed);
   const n = o.count;
   const e0 = new Float32Array(n * 4);
@@ -107,6 +111,12 @@ export function addStreams(kit: SceneryKit, name: string, o: StreamOpts): KitLay
     const size = o.size[0] + (o.size[1] - o.size[0]) * Math.pow(rng.next(), 2);
     e1.set([size, 0.35 + 0.65 * Math.pow(rng.next(), 2), rng.range(0.6, 1.8), rng.range(0.75, 1.25)], i * 4);
   }
+  return { e0, e1 };
+}
+
+export function addStreams(kit: SceneryKit, name: string, o: StreamOpts): KitLayer {
+  const n = o.count;
+  const { e0, e1 } = makeStreamAttributes(o);
   return kit.addInstanced(name, {
     count: n,
     attributes: { aE0: e0, aE1: e1 },

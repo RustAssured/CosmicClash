@@ -14,6 +14,9 @@ export interface ScoreParams {
   /** 0..1, 1 = the worst-off titan is about to fall. */
   lowIntegrity: number;
   phase: 'menu' | 'fight' | 'pause' | 'results' | 'attract';
+  /** Stage feel: multiplies intensity for the rhythm gates (default 1); and how often glass motes fall in a fight (default 0). */
+  density?: number;
+  motes?: number;
 }
 
 export interface StepPlan {
@@ -44,14 +47,16 @@ export function stepSeconds(bpm: number, intensity: number, timeScale = 1): numb
 export function planStep(step: number, p: ScoreParams, rng: Rng): StepPlan {
   const s = ((step % STEPS_PER_BAR) + STEPS_PER_BAR) % STEPS_PER_BAR;
   const out: StepPlan = { ...EMPTY };
-  const I = clamp01(p.intensity);
+  const I = clamp01(p.intensity * (p.density ?? 1));
 
   if (p.phase === 'menu' || p.phase === 'results') {
-    // calm: a sparse bell on the pentatonic, roughly one every two bars
-    if (s % 4 === 0 && rng.next() < 0.11) out.bell = Math.floor(rng.next() * 5);
+    // calm: a sparse bell on the scale, roughly one every two bars (more often on a stage that is all stillness and motes)
+    if (s % 4 === 0 && rng.next() < 0.11 * Math.max(1, p.motes ?? 1)) out.bell = Math.floor(rng.next() * 5);
     return out;
   }
   if (p.phase === 'pause') return out;
+  // glass motes in a fight: single bell notes falling now and then, on stages whose feel asks for them
+  if (p.motes && s % 4 === 0 && rng.next() < 0.07 * p.motes) out.bell = Math.floor(rng.next() * 5);
 
   if (I > 0.12) {
     if (s === 0) out.sub = 0.5 + 0.5 * I;

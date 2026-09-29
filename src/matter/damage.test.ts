@@ -162,6 +162,34 @@ describe('FRACTURE', () => {
     expect(celadon).toBeGreaterThan(iron * 1.8);
   });
 
+  it('the deferred chisel follows a body that the same blow knocks away (a launched titan is still pitted)', () => {
+    const hit = (knock: number): number => {
+      const tb = uniformDisc('ironNickel', { size: 46, seed: 3, x: 400, y: 290 });
+      const { world, ids } = make(2, [tb]);
+      const body = world.getBody(ids[0]!)!;
+      const c0 = world.stats(ids[0]!).cells;
+      world.applyDamage(
+        ids[0]!,
+        ev({
+          type: 'FRACTURE',
+          shape: { kind: 'point', x: 350, y: 285, r: 10 },
+          energy: 400,
+          dirX: 1,
+          dirY: 0.1,
+        }),
+      );
+      for (let i = 0; i < 40; i++) {
+        body.transform.x += knock;
+        world.tick();
+      }
+      return c0 - world.stats(ids[0]!).cells;
+    };
+    const still = hit(0);
+    const launched = hit(20);
+    expect(still).toBeGreaterThan(20);
+    expect(launched).toBeGreaterThan(still * 0.8);
+  });
+
   it('shear cuts follow weak seams: severed bonds are much weaker-than-average bonds', () => {
     const tb = celadonBody({ size: 46, seed: 6, x: 400, y: 290 });
     const { world, ids } = make(2, [tb]);

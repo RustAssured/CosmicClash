@@ -1208,7 +1208,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 40,
+                "energy": 24.0,
                 "duration": 1,
                 "flags": 17,
                 "params": {
@@ -1250,7 +1250,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 40,
+                "energy": 24.0,
                 "duration": 1,
                 "flags": 17,
                 "params": {
@@ -1292,7 +1292,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 40,
+                "energy": 24.0,
                 "duration": 1,
                 "flags": 17,
                 "params": {
@@ -1368,7 +1368,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 80,
+                "energy": 92.0,
                 "duration": 1,
                 "flags": 17,
                 "params": {
@@ -1406,7 +1406,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 2200,
+                "energy": 2530.0,
                 "duration": 1,
                 "flags": 35,
                 "params": {
@@ -1448,7 +1448,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 80,
+                "energy": 92.0,
                 "duration": 1,
                 "flags": 17,
                 "params": {
@@ -1486,7 +1486,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 2200,
+                "energy": 2530.0,
                 "duration": 1,
                 "flags": 35,
                 "params": {
@@ -1528,7 +1528,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 80,
+                "energy": 92.0,
                 "duration": 1,
                 "flags": 17,
                 "params": {
@@ -1566,7 +1566,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 2200,
+                "energy": 2530.0,
                 "duration": 1,
                 "flags": 35,
                 "params": {

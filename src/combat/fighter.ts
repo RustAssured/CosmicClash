@@ -27,6 +27,7 @@ import {
   type FighterState,
   type FighterTickCtx,
   type FighterView,
+  type HitboxDef,
   type HitResult,
   type InputFrame,
   type MatterBody,
@@ -154,6 +155,8 @@ export class FighterImpl implements Fighter {
   /** Time-limited speed multiplier put on this fighter by the foe (chains, tar, …): 1 = none. See `applyStatus`. */
   statusMul = 1;
   statusTicks = 0;
+  /** Set by `receive`: did the last blow reach this fighter's body (false = it only skimmed parts such as tendrils or moons)? */
+  lastBodyTouched = true;
   lastHitTick = -1e9;
   lastHitDirX = 1;
   lastHitDirY = 0;
@@ -184,6 +187,8 @@ export class FighterImpl implements Fighter {
     moveId: '',
   };
   private readonly liveShape: FatShape = makeFatShape();
+  private readonly deepShape: FatShape = makeFatShape();
+  private readonly candShape: FatShape = makeFatShape();
   private readonly evShape: FatShape = makeFatShape();
   private readonly ev: DamageEvent;
   private readonly evIn: DamageEvent;
@@ -1317,9 +1322,15 @@ export class FighterImpl implements Fighter {
         hb.sweepTo,
         u,
       );
+      // a once-per-move blow bites as deep as its own window allows (a lunge carries it further in a few ticks): see deepestBite
+      let shape = this.liveShape;
+      if (!(hb.rehit && hb.rehit > 0) && hb.to - at > 1) {
+        const deep = this.deepestBite(hb, at, span);
+        if (deep) shape = deep;
+      }
       if (
         this.strike(
-          this.liveShape,
+          shape,
           hb.damage,
           hb.knockback.x,
           hb.knockback.y,
@@ -1329,10 +1340,56 @@ export class FighterImpl implements Fighter {
           def.id,
         )
       ) {
-        m.hitAt[k] = this.tickNo;
-        m.hits++;
+        // a blow that only skimmed the foe's parts (tendrils, moons) stays armed until it reaches the body
+        if ((this.foe as unknown as { lastBodyTouched?: boolean }).lastBodyTouched !== false) {
+          m.hitAt[k] = this.tickNo;
+          m.hits++;
+        }
       }
     }
+  }
+
+  /**
+   * Called on the tick a once-per-move hitbox is about to be tried. If it already touches the foe, look ahead through the rest of
+   * its window (the lunge's predicted displacement and the hitbox sweep, at most 8 ticks) for the tick at which it overlaps the
+   * foe most, and return the shape there: the first tick of contact is usually a graze of a horn or a crag, and spending the
+   * whole blow on it wastes it. Returns null when the current tick is already the best (or nothing is touched yet).
+   */
+  private deepestBite(hb: HitboxDef, at: number, span: number): FatShape | null {
+    const m = this.mv;
+    const foe = this.foe;
+    if (foe.view.intangible) return null;
+    const now = foe.probe(asShape(this.liveShape), this.probeOut).cells;
+    if (now <= 0) return null;
+    const K = Math.min(hb.to - 1 - at, 8);
+    const last = m.disp.length - 1;
+    const nowEff = Math.min(last, this.effTick());
+    const t = this.body.transform;
+    const scale = this.lengthScale(hb.reachScale);
+    let best = now;
+    let found = false;
+    for (let k = 1; k <= K; k++) {
+      const u = span > 1 ? (at + k - hb.from) / (span - 1) : 0;
+      instantiateTemplate(
+        hb.shape,
+        { x: t.x, y: t.y, facing: this.facing, scale },
+        this.candShape,
+        hb.sweepTo,
+        u,
+      );
+      translateShape(
+        this.candShape,
+        (m.disp[Math.min(last, nowEff + k)]! - m.disp[nowEff]!) * this.facing,
+        0,
+      );
+      const c = foe.probe(asShape(this.candShape), this.probeOut).cells;
+      if (c > best * 1.12) {
+        best = c;
+        copyShape(this.deepShape, asShape(this.candShape));
+        found = true;
+      }
+    }
+    return found ? this.deepShape : null;
   }
 
   /**
@@ -1423,7 +1480,10 @@ export class FighterImpl implements Fighter {
     const fv = foe.view;
     const ev = this.events;
     this.lastDealtTick = this.tickNo;
-    if (this.live) this.meter = Math.min(1, this.meter + e.energy * T.meterDealt * (1 - res.blocked * 0.7));
+    // a graze (only the foe's parts were touched) earns no meter and none of the big-hit presentation
+    const graze = (foe as unknown as { lastBodyTouched?: boolean }).lastBodyTouched === false;
+    if (this.live && !graze)
+      this.meter = Math.min(1, this.meter + e.energy * T.meterDealt * (1 - res.blocked * 0.7));
 
     const rate = !info.continuous || this.tickNo - this.lastEventTick >= T.continuousEventEvery;
     if (rate) {
@@ -1451,12 +1511,12 @@ export class FighterImpl implements Fighter {
         clamp(0.09 * Math.pow(e.energy * (info.continuous ? 6 : 1), 0.62), 0.6, 14) *
         massK *
         (1 - res.blocked * 0.6);
-      ev.push({ t: 'shake', dirX: e.dirX, dirY: e.dirY, amp });
-      if (info.heavy) {
+      ev.push({ t: 'shake', dirX: e.dirX, dirY: e.dirY, amp: graze ? amp * 0.4 : amp });
+      if (info.heavy && !graze) {
         ev.push({ t: 'zoom', amount: clamp(e.energy / 40000, 0.008, 0.045) });
         ev.push({ t: 'roll', radians: clamp(e.energy / 90000, 0.003, 0.02) * (e.dirX >= 0 ? 1 : -1) });
       }
-      if (e.energy >= 600 && res.blocked < 0.8 && !info.continuous)
+      if (e.energy >= 600 && res.blocked < 0.8 && !info.continuous && !graze)
         ev.push({
           t: 'shockwave',
           x: res.x,
@@ -1465,20 +1525,22 @@ export class FighterImpl implements Fighter {
           radius: 50 + e.energy * 0.09,
           hue: this.def.destruction === 'THERMAL' ? 0.06 : this.def.destruction === 'FRACTURE' ? 0.42 : 0.1,
         });
-      ev.push({
-        t: 'rumble',
-        slot: this.slot,
-        strong: clamp(e.energy / 2400, 0.05, 0.6),
-        weak: 0.2,
-        ms: info.heavy ? 160 : 70,
-      });
-      ev.push({
-        t: 'rumble',
-        slot: foe.slot,
-        strong: clamp(e.energy / 1300, 0.1, 1),
-        weak: 0.5,
-        ms: info.heavy ? 260 : 110,
-      });
+      if (!graze)
+        ev.push({
+          t: 'rumble',
+          slot: this.slot,
+          strong: clamp(e.energy / 2400, 0.05, 0.6),
+          weak: 0.2,
+          ms: info.heavy ? 160 : 70,
+        });
+      if (!graze)
+        ev.push({
+          t: 'rumble',
+          slot: foe.slot,
+          strong: clamp(e.energy / 1300, 0.1, 1),
+          weak: 0.5,
+          ms: info.heavy ? 260 : 110,
+        });
     }
     // finishing blow: slow motion, flash, a huge shake
     if (fv.ko && !this.foeKoAnnounced) {
@@ -1548,6 +1610,7 @@ export class FighterImpl implements Fighter {
       stunMul: 1,
       moveId: '',
     };
+    this.lastBodyTouched = true;
     res.blocked = 0;
     res.cellsRemoved = 0;
     res.massRemoved = 0;
@@ -1628,6 +1691,15 @@ export class FighterImpl implements Fighter {
     res.blocked = clamp01(blocked + (1 - blocked) * partsAbsorb);
     this.lastOnDamaged = dr.onDamagedFraction;
     if (!res.connected) return res;
+    // A blow that only skimmed parts (tendrils, moons) — no body cell touched, nothing guarded — is a graze: the parts took it, the
+    // body is not shoved, stunned or hit-stopped, and the attacker's hitbox stays armed for the body behind them.
+    this.lastBodyTouched = dr.cellsTouched > 0 || blocked > 0;
+    if (!this.lastBodyTouched) {
+      res.hitstop = 0;
+      if (!this.ko && this.live) this.behaviour.onDamaged(e.energy, evIn.dirX, evIn.dirY);
+      this.syncView();
+      return res;
+    }
 
     // 4. knockback, stun, meter, KO
     this.lastHitTick = this.tickNo;

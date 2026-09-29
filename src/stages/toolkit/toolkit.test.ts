@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { STAGE_INFO as STAGES } from '../info';
 import { AmbientLife } from './ambient';
 import { makeCloud } from './clouds';
+import { REF_X0, REF_Y0, atCol, atRef, screenOf } from './compose';
+import { makeGalaxyStars } from './galaxy';
+import { makeStreamAttributes } from './streams';
 import { hexLinear, mixRgb, paletteRamps, rampAt } from './color';
 import { SceneryKit, SpriteBuilder } from './kit';
 import { Noise2, noiseTextureData } from './noise';
@@ -252,5 +255,112 @@ describe('AmbientLife (comets and supernova flares)', () => {
     }
     expect(parked).toBeGreaterThan(0);
     kit.dispose();
+  });
+});
+
+describe('composition helpers', () => {
+  it('atRef and screenOf are inverses at the reference camera, and a layer with parallax p moves at p × the view', () => {
+    for (const p of [0.03, 0.2, 0.9, 1.5]) {
+      const [lx, ly] = atRef(123, -45, p);
+      const out = { x: 0, y: 0 };
+      screenOf(lx, ly, p, { x0: REF_X0, y0: REF_Y0 }, out);
+      expect(Math.abs(out.x - 123)).toBeLessThanOrEqual(1);
+      expect(Math.abs(out.y - -45)).toBeLessThanOrEqual(1);
+      screenOf(lx, ly, p, { x0: REF_X0 + 100, y0: REF_Y0 }, out);
+      expect(Math.abs(out.x - (123 - 100 * p))).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('atCol places a pillar by its screen position', () => {
+    const c = atCol(150, 56, 0.58);
+    expect(c.x).toBeCloseTo(150 + REF_X0 * 0.58, 9);
+    expect(c.top).toBeCloseTo(56 + REF_Y0 * 0.58, 9);
+  });
+});
+
+describe('galaxy particle generator', () => {
+  const base = {
+    seed: 42,
+    centre: [0, 0] as [number, number],
+    radius: 300,
+    inclination: 1,
+    positionAngle: 0,
+    arms: 2,
+    pitch: 0.4,
+    stars: 4000,
+    dust: 300,
+    knots: 80,
+    bulge: 600,
+    thickness: 0.03,
+    core: [1, 1, 1] as [number, number, number],
+    inner: [1, 0.8, 0.5] as [number, number, number],
+    arm: [0.4, 0.8, 0.7] as [number, number, number],
+    outer: [0.2, 0.6, 0.6] as [number, number, number],
+    knot: [1, 0.9, 0.5] as [number, number, number],
+    dustColor: [0, 0, 0] as [number, number, number],
+    brightness: 1,
+    spin: 0.01,
+  };
+
+  it('is deterministic per seed, sized as asked, and finite everywhere', () => {
+    const a = makeGalaxyStars(base);
+    const b = makeGalaxyStars(base);
+    const c = makeGalaxyStars({ ...base, seed: 43 });
+    expect(a.stars.count).toBe(base.stars + base.knots + base.bulge);
+    expect(a.dust.count).toBe(base.dust);
+    expect(Array.from(a.stars.s0.subarray(0, 400))).toEqual(Array.from(b.stars.s0.subarray(0, 400)));
+    expect(Array.from(a.stars.s0.subarray(0, 400))).not.toEqual(Array.from(c.stars.s0.subarray(0, 400)));
+    for (const arr of [a.stars.s0, a.stars.s1, a.stars.s2, a.dust.s0, a.dust.s1, a.dust.s2])
+      for (let i = 0; i < arr.length; i++) expect(Number.isFinite(arr[i]!)).toBe(true);
+  });
+
+  it('disk stars lie inside 1.5 R and trace the logarithmic spiral arms the analytic discs use', () => {
+    const g = makeGalaxyStars({ ...base, armFraction: 1, scatter: 0.2, stars: 3000, knots: 0, bulge: 0 });
+    let onArm = 0;
+    let counted = 0;
+    for (let i = 0; i < g.stars.count; i++) {
+      const r = g.stars.s0[i * 4]!;
+      const th = g.stars.s0[i * 4 + 1]!;
+      expect(r).toBeLessThanOrEqual(1.5);
+      if (r < 0.25) continue;
+      counted++;
+      // distance in angle to the nearest of the two arms r-dependent phase (arms = 2 → period π)
+      const phase = base.arms * (th - Math.log(r + 0.06) / base.pitch);
+      const c = Math.cos(phase); // 1 on an arm centre
+      if (c > 0.5) onArm++;
+    }
+    expect(onArm / counted).toBeGreaterThan(0.75);
+  });
+
+  it('the bulge is compact and the dust hugs the arms', () => {
+    const g = makeGalaxyStars({ ...base, stars: 0, knots: 0, bulge: 800 });
+    let far = 0;
+    for (let i = 0; i < g.stars.count; i++) if (g.stars.s0[i * 4]! > 0.601) far++;
+    expect(far).toBe(0);
+  });
+});
+
+describe('stream generator', () => {
+  it('keeps every particle inside its fan, concentrates on the axis when biased, and is seeded', () => {
+    const o = { count: 2000, angle: [1, 2] as [number, number], size: [1, 3] as [number, number], seed: 9 };
+    const flat = makeStreamAttributes({ ...o, axisBias: 1 });
+    const tight = makeStreamAttributes({ ...o, axisBias: 3 });
+    const spread = (e0: Float32Array): number => {
+      let s = 0;
+      for (let i = 0; i < o.count; i++) s += Math.abs(e0[i * 4]! - 1.5);
+      return s / o.count;
+    };
+    for (let i = 0; i < o.count; i++) {
+      expect(flat.e0[i * 4]!).toBeGreaterThanOrEqual(1 - 1e-6);
+      expect(flat.e0[i * 4]!).toBeLessThanOrEqual(2 + 1e-6);
+      expect(flat.e0[i * 4 + 2]!).toBeGreaterThanOrEqual(0);
+      expect(flat.e0[i * 4 + 2]!).toBeLessThan(1);
+      expect(flat.e1[i * 4]!).toBeGreaterThanOrEqual(1 - 1e-6);
+      expect(flat.e1[i * 4]!).toBeLessThanOrEqual(3 + 1e-6);
+    }
+    expect(spread(tight.e0)).toBeLessThan(spread(flat.e0) * 0.75);
+    expect(Array.from(makeStreamAttributes({ ...o, axisBias: 1 }).e0.subarray(0, 64))).toEqual(
+      Array.from(flat.e0.subarray(0, 64)),
+    );
   });
 });

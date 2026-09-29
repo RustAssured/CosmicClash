@@ -25,7 +25,7 @@ import {
   midiToHz,
   volumeCurve,
 } from './math';
-import { MODES, STAGE_MUSIC, degreeToHz, degreeToMidi } from './scales';
+import { MODES, STAGE_FEEL, STAGE_MUSIC, degreeToHz, degreeToMidi } from './scales';
 import { evalSeries, fourierCoefficients, heartbeatWave } from './waves';
 
 const SR = 48000;
@@ -107,6 +107,42 @@ describe('scales and stage music', () => {
       expect(s.chords.length).toBeGreaterThan(2);
       for (const ch of s.chords) for (const d of ch) expect(d).toBeLessThan(MODES[s.mode].length + 1);
     }
+  });
+  it('every stage has a feel in range, and the five feels are genuinely different from one another', () => {
+    const keys = ['density', 'body', 'dark', 'pad', 'padOct', 'space', 'tension', 'motes'] as const;
+    for (const id of STAGE_IDS) {
+      const f = STAGE_FEEL[id];
+      expect(f.density).toBeGreaterThan(0);
+      expect(f.density).toBeLessThanOrEqual(1.2);
+      expect(f.body).toBeGreaterThan(0);
+      expect(f.dark).toBeGreaterThan(0.4);
+      expect(f.dark).toBeLessThan(1.6);
+      expect([12, 24, 36]).toContain(f.padOct);
+      expect(f.tension).toBeGreaterThanOrEqual(0);
+      expect(f.tension).toBeLessThanOrEqual(1);
+    }
+    // no two stages share more than a few of their numbers
+    for (const a of STAGE_IDS)
+      for (const b of STAGE_IDS) {
+        if (a >= b) continue;
+        const same = keys.filter((k) => STAGE_FEEL[a][k] === STAGE_FEEL[b][k]).length;
+        expect(same, `${a} vs ${b}`).toBeLessThanOrEqual(3);
+      }
+    // the intended characters, in numbers: stillness is the quietest, red giant the heaviest and darkest, quasar the tensest and sparsest
+    expect(STAGE_FEEL.tussenruimte.body).toBeLessThan(
+      Math.min(...STAGE_IDS.filter((i) => i !== 'tussenruimte').map((i) => STAGE_FEEL[i].body)),
+    );
+    expect(STAGE_FEEL.redgiant.body).toBe(Math.max(...STAGE_IDS.map((i) => STAGE_FEEL[i].body)));
+    expect(STAGE_FEEL.redgiant.dark).toBe(Math.min(...STAGE_IDS.map((i) => STAGE_FEEL[i].dark)));
+    expect(STAGE_FEEL.quasar.tension).toBe(Math.max(...STAGE_IDS.map((i) => STAGE_FEEL[i].tension)));
+    expect(STAGE_FEEL.rim.space).toBeGreaterThan(STAGE_FEEL.nursery.space);
+    expect(STAGE_FEEL.nursery.dark).toBe(
+      Math.max(...STAGE_IDS.map((i) => STAGE_FEEL[i].dark).filter((d) => d < 1.3)),
+    );
+    // and the tempos: rim and stillness are the slowest, quasar the fastest
+    expect(STAGE_MUSIC.tussenruimte.bpm).toBeLessThan(STAGE_MUSIC.rim.bpm);
+    expect(STAGE_MUSIC.rim.bpm).toBeLessThan(STAGE_MUSIC.redgiant.bpm);
+    expect(STAGE_MUSIC.quasar.bpm).toBe(Math.max(...STAGE_IDS.map((i) => STAGE_MUSIC[i].bpm)));
   });
 });
 

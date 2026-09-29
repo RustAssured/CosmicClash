@@ -63,7 +63,6 @@ try {
           hitCentroidHz: Math.round(c.hitCentroidHz),
           hitSubShare: +c.hitSubShare.toFixed(3),
           bodyCentroidHz: Math.round(c.bodyCentroidHz),
-          bodyBrightDb: +c.bodyBrightDb.toFixed(1),
           bedPeakDb: +c.bedPeakDb.toFixed(1),
           bedRmsDb: +c.bedRmsDb.toFixed(1),
           bedSubShare: +c.bedSubShare.toFixed(3),

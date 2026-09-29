@@ -355,7 +355,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 1350,
+                "energy": 1147.5,
                 "duration": 1,
                 "flags": 8,
                 "params": {
@@ -402,7 +402,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 1350,
+                "energy": 1147.5,
                 "duration": 1,
                 "flags": 8,
                 "params": {
@@ -449,7 +449,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 1350,
+                "energy": 1147.5,
                 "duration": 1,
                 "flags": 8,
                 "params": {
@@ -747,7 +747,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 100,
+                "energy": 70.0,
                 "duration": 1,
                 "flags": 1,
                 "params": {
@@ -775,7 +775,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 2200,
+                "energy": 1650.0,
                 "duration": 1,
                 "flags": 40,
                 "params": {
@@ -824,7 +824,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 100,
+                "energy": 70.0,
                 "duration": 1,
                 "flags": 1,
                 "params": {
@@ -852,7 +852,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 2200,
+                "energy": 1650.0,
                 "duration": 1,
                 "flags": 40,
                 "params": {
@@ -901,7 +901,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 100,
+                "energy": 70.0,
                 "duration": 1,
                 "flags": 1,
                 "params": {
@@ -929,7 +929,7 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 2200,
+                "energy": 1650.0,
                 "duration": 1,
                 "flags": 40,
                 "params": {

@@ -7,7 +7,7 @@ async function main(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const params = parseHarnessParams(location.search);
   const app = new App();
-  await app.start(canvas, { preserveDrawingBuffer: params.active });
+  await app.start(canvas, { preserveDrawingBuffer: params.active, quality: params.q });
   await installHarness(app, params);
 }
 

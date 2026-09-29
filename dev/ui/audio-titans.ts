@@ -41,11 +41,6 @@ export interface TitanCharacter {
    * (the shared layers are the same for everyone and blur the comparison). Spectral centroid above 300 Hz.
    */
   bodyCentroidHz: number;
-  /**
-   * Brightness of that same sound: level of the 2-12 kHz band minus level of the 300-2000 Hz band, dB. The ordering the design
-   * asks for is glass > chain > plasma > rock > planet.
-   */
-  bodyBrightDb: number;
   /** The titan's continuous voice alone, raw: peak and RMS in dBFS, share of power below 120 Hz. */
   bedPeakDb: number;
   bedRmsDb: number;
@@ -134,10 +129,6 @@ function beatsPerSec(x: Float32Array, fromSec: number): number {
   return countPeaks(env, thr, 5) / (seg.length / SR); // ≥ 100 ms apart
 }
 
-/** 2-12 kHz level minus 300-2000 Hz level over 1.5 s from `from`. */
-const brightDb = (x: Float32Array, from: number): number =>
-  bandLevelDb(x, SR, 2000, 12000, from, 65536) - bandLevelDb(x, SR, 300, 2000, from, 65536);
-
 /**
  * The titan's body voice alone: build a bare `VoiceCtx` over an OfflineAudioContext (dry only, no reverb, no shared layers) and call
  * the voice's own `onHitTaken` for a mid-sized KINETIC blow. Deterministic, and the only honest way to compare materials.
@@ -180,17 +171,28 @@ async function voiceBody(t: TitanId): Promise<Float32Array> {
 }
 
 /** Just the voice-only body character of every titan (a couple of seconds): the tuning loop for materials. */
-export async function runBodyCharacter(): Promise<
-  { titan: TitanId; centroidHz: number; brightDb: number }[]
-> {
-  const out: { titan: TitanId; centroidHz: number; brightDb: number }[] = [];
+export interface BodyCharacter {
+  titan: TitanId;
+  centroidHz: number;
+  peakDb: number;
+  /** Level (dB) in 100-300, 300-1k, 1-2k, 2-4k, 4-8k and 8-12k Hz. */
+  bandsDb: string;
+}
+
+export async function runBodyCharacter(): Promise<BodyCharacter[]> {
+  const out: BodyCharacter[] = [];
   const from = Math.floor(SR * 0.05);
+  const edges = [100, 300, 1000, 2000, 4000, 8000, 12000];
   for (const t of ALL_TITANS) {
     const body = await voiceBody(t);
     out.push({
       titan: t,
       centroidHz: Math.round(spectralCentroid(body, SR, from, 16384, 300)),
-      brightDb: +brightDb(body, from).toFixed(1),
+      peakDb: +toDb(peak(body)).toFixed(1),
+      bandsDb: edges
+        .slice(0, -1)
+        .map((lo, i) => Math.round(bandLevelDb(body, SR, lo, edges[i + 1]!, from, 16384)))
+        .join(' '),
     });
   }
   return out;
@@ -343,7 +345,6 @@ export async function runTitanVerification(): Promise<TitanReport> {
     const body = await voiceBody(T);
     character.push({
       bodyCentroidHz: spectralCentroid(body, SR, from, 16384, 300),
-      bodyBrightDb: brightDb(body, from),
       titan: T,
       hitCentroidHz: spectralCentroid(d, SR, from, 8192, 300),
       hitSubShare: bandShare(d, SR, 20, 120, from, 16384),

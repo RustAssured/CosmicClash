@@ -8,12 +8,13 @@ import { Btn, type ScriptEvent } from './input';
  *   &a=lastone&b=asteroid            (titan ids for slot 0 / slot 1)
  *   &seed=1234
  *   &t=180                           (skip the intro, then advance N fight ticks, then freeze)
- *   &state=intact|50|10              (start both bodies pre-damaged)
+ *   &state=intact|50|10              (start both bodies pre-damaged to HUD integrity 50% / 10%; 0% would be KO)
  *   &mode=fight|aivai|title|controller|select|training
  *   &ai=3                            (difficulty for AI-controlled slots; 1..6)
  *   &p1=human|ai|dummy&p2=...        (controllers; default dummy for p1/p2 unless mode says otherwise)
  *   &script0=20:crush,80:sig*30      (scripted input for slot 0; see parseScript)
  *   &script1=...
+ *   &q=0|1|2|auto                    (renderer quality tier; default auto)
  *   &gap=380                         (px between the fighters at round start; 40..700)
  *   &hud=0|1  &debug=0|1  &freeze=1  &scale=2
 
@@ -35,6 +36,8 @@ export interface HarnessParams {
   script1: ScriptEvent[];
   /** Distance in px between the fighters at round start (default 380). */
   gap: number;
+  /** Renderer quality tier: 0 | 1 | 2, or 'auto' (default). Tests force 0 in software GL. */
+  q: 0 | 1 | 2 | 'auto';
   hud: boolean;
   debug: boolean;
   freeze: boolean;
@@ -137,6 +140,10 @@ export function parseHarnessParams(search: string): HarnessParams {
     p2: ctl(q.get('p2'), mode === 'aivai' ? 'ai' : 'dummy'),
     script0: parseScript(q.get('script0')),
     script1: parseScript(q.get('script1')),
+    q: ((): 0 | 1 | 2 | 'auto' => {
+      const v = q.get('q');
+      return v === '0' ? 0 : v === '1' ? 1 : v === '2' ? 2 : 'auto';
+    })(),
     gap: Math.min(700, Math.max(40, parseInt(q.get('gap') ?? '380', 10) || 380)),
     hud: q.get('hud') !== '0',
     debug: q.get('debug') === '1',
@@ -203,6 +210,10 @@ export interface AdeukHarnessApi {
   captureLogical(): Uint32Array;
   /** Ordered list of sim events seen since the last call (for evidence/logging). */
   drainEventLog(): unknown[];
+  /** Current UI screen id ('boot' | 'title' | … | 'hud' | 'pause' | 'results'). */
+  uiScreen(): string;
+  /** Whether a match is running, and its phase ('none' otherwise). */
+  matchPhase(): string;
 }
 
 declare global {

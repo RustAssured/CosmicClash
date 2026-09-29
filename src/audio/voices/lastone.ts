@@ -249,16 +249,31 @@ export function createLastOneVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const ring = 1 - clamp01(ev.blocked) * 0.85;
       const o = makeOut(c, pan, 0.55);
-      const f = pick(c, BELLS.slice(0, 4)) * (1.4 - 0.5 * mag);
+      const f = pick(c, BELLS.slice(0, 4)) * (2.7 - 0.7 * mag);
       partials(c, o, t, f, GLASS, {
         decay: 0.35 + 1.1 * mag,
         gain: (0.07 + 0.1 * mag) * ring,
         shimmer: 0.4,
         attack: 0.001,
       });
-      // glass rings AND chips: a bright ceramic tink and a shard click ride every blow (more of it on damaged glass)
-      partials(c, o, t + 0.004, f * 2.76, TINK, { decay: 0.1, gain: 0.5 * ring });
-      noiseHit(c, o, t, { dur: 0.012, gain: 0.1 * ring, filter: { type: 'highpass', f0: 6000 }, attack: 0.0004 });
+      // glass rings AND chips: a second, brighter ring an octave up (slightly stretched, so the two beat), a ceramic tink and a
+      // shard click ride every blow (more of the chipping on damaged glass)
+      partials(c, o, t + 0.002, f * 2.03, GLASS, {
+        decay: 0.2 + 0.5 * mag,
+        gain: (0.05 + 0.07 * mag) * ring,
+        attack: 0.001,
+        maxHz: 12000,
+      });
+      partials(c, o, t + 0.004, f * 2.76, TINK, {
+        decay: 0.1,
+        gain: (0.03 + (ev.onDamaged > 0.3 ? 0.06 : 0)) * ring,
+      });
+      noiseHit(c, o, t, {
+        dur: 0.012,
+        gain: 0.1 * ring,
+        filter: { type: 'highpass', f0: 6000 },
+        attack: 0.0004,
+      });
     },
 
     onGuard(c, t, ev) {

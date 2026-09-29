@@ -22,6 +22,40 @@ const fight = (intensity: number, lowIntegrity = 0): ScoreParams => ({
   phase: 'fight',
 });
 
+const withFeel = (p: ScoreParams, density: number, motes = 0): ScoreParams => ({ ...p, density, motes });
+
+describe('stage feel in the planner', () => {
+  const total = (plans: StepPlan[]): number =>
+    count(plans, 'sub') + count(plans, 'taiko') + count(plans, 'perc');
+  it('a low density thins the rhythm out at the same intensity: sparse stages stay sparse even in a full fight', () => {
+    const ref = total(bars(fight(1), 32, 5));
+    const sparse = total(bars(withFeel(fight(1), 0.4), 32, 5));
+    const still = total(bars(withFeel(fight(1), 0.08), 32, 5));
+    expect(sparse).toBeLessThan(ref * 0.6);
+    expect(sparse).toBeGreaterThan(0);
+    expect(still).toBe(0); // the stage of near-silent stillness never grows a beat
+  });
+  it('glass motes fall in a fight only where the feel asks for them, and more of them where it asks for more', () => {
+    const bells = (m: number): number =>
+      bars(withFeel(fight(0.6), 1, m), 64, 8).filter((p) => p.bell >= 0).length;
+    expect(bells(0)).toBe(0);
+    expect(bells(0.5)).toBeGreaterThan(0);
+    expect(bells(3)).toBeGreaterThan(bells(0.5));
+  });
+  it('the menu bell rate rises with motes, and bell degrees stay inside the five the stage scales always have', () => {
+    const menu: ScoreParams = { intensity: 0, lowIntegrity: 0, phase: 'menu' };
+    const n = (m: number): StepPlan[] => bars(withFeel(menu, 1, m), 200, 2).filter((p) => p.bell >= 0);
+    expect(n(3).length).toBeGreaterThan(n(1).length * 1.8);
+    for (const p of n(3)) {
+      expect(p.bell).toBeGreaterThanOrEqual(0);
+      expect(p.bell).toBeLessThan(5);
+    }
+  });
+  it('the defaults leave the planner exactly as it was (density 1, no fight motes)', () => {
+    expect(bars(withFeel(fight(0.8), 1, 0), 16, 3)).toEqual(bars(fight(0.8), 16, 3));
+  });
+});
+
 describe('score plan', () => {
   it('is deterministic per seed and differs across seeds at high intensity', () => {
     expect(bars(fight(0.9), 8, 3)).toEqual(bars(fight(0.9), 8, 3));

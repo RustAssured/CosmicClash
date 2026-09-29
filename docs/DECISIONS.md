@@ -40,3 +40,17 @@ vs. a real GPU and are reported alongside sim ms/tick (which is representative).
 
 **D15 — Working method** — Four builder agents share one working tree with strict directory ownership; the Lead commits at integration points. Vertical slice first
 (Last One vs Asteroid, Stage 1: FRACTURE + KINETIC), then the roster.
+
+**D16 — Harness semantics** — `t` counts fight ticks *after* the silently fast-forwarded intro; script tick 0 = the tick the fight goes live; `gap=` sets the starting distance (`MatchConfig.startGap`, default 380 px); `state=50|10` means **HUD integrity 50% / 10%** (mapped through `KO_MASS_FRAC`, since 10% *mass* is already a KO); `q=0|1|2|auto` forces the renderer tier; `hud=0` hides the UI layer entirely. `window.__ADEUK__` (contracts/harness.ts) is always installed.
+
+**D17 — Fighter order alternates per tick** — Match steps fighter `tick & 1` first so neither slot has a systematic same-tick advantage (matters for the balance tournament).
+
+**D18 — Hit-stop keeps inputs** — during a frozen tick the Match still polls sources and merges edges (`accumulateInput`), delivering them on the first unfrozen tick; fighters additionally keep their own 9-tick buffer.
+
+**D19 — AI edges are derived, never supplied** — `createAiSource` computes `pressed/released` from the AI's `held` mask, so an AI cannot fabricate an edge or press Pause/Training.
+
+**D20 — Parallel titan builders** — Two builder instances work on disjoint titan pairs (Nexus+Black Hole, Supernova+Planet) with additive-only edits to shared registries. Framework changes are minimal and reported.
+
+**D21 — Software-GL testing caveat** — The only GL in the sandbox is SwiftShader (~1–2 fps for the full pipeline). Sim ms/tick numbers are representative; frame times are not. E2E tests must *poll for state*, never sleep for fixed durations; UI timers that accumulate real `dt` advance slowly there. The Lead app uses the renderer's `'auto'` tier by default.
+
+**D22 — Menu scenery** — In menus the app drives a slow hand-made dolly over the stage (no sim); matches use the engine camera. UI is always the last screen-space layer.
