@@ -4,6 +4,7 @@ import {
   LOGICAL_W,
   STAGE_IDS,
   type GameUI,
+  type StageId,
   type HudState,
   type UIAction,
   type UiSoundId,
@@ -41,6 +42,7 @@ function rig(
   o: {
     attractAfterSec?: number;
     implementedTitans?: string[];
+    implementedStages?: StageId[];
     store?: ReturnType<typeof createMemoryStore>;
   } = {},
 ): Rig {
@@ -66,7 +68,7 @@ function rig(
     portrait: fixturePortraitProvider,
     stages: STAGE_IDS.map((id) => STAGE_INFO[id]),
     implementedTitans: (o.implementedTitans ?? ['lastone', 'asteroid']) as never,
-    implementedStages: ['nursery'],
+    implementedStages: o.implementedStages ?? ['nursery'],
     storage: store,
     sound: (id) => sounds.push(id),
     newSeed: () => 1234,
@@ -293,6 +295,28 @@ describe('match setup flow', () => {
     r.tap(pad, Pad.EAST);
     expect(startMatch(r.drain())).toBeUndefined();
     expect(r.sounds).toContain('error');
+  });
+
+  it('stage select is driven by implementedStages: with all five ready, every card starts its own stage', () => {
+    for (const [i, id] of STAGE_IDS.entries()) {
+      const r = rig({ implementedStages: [...STAGE_IDS] });
+      const pad = r.pads.plug(proStandard());
+      toTitle(r, pad);
+      r.tap(pad, Pad.DOWN);
+      r.tap(pad, Pad.EAST);
+      r.tap(pad, Pad.EAST);
+      r.tap(pad, Pad.SOUTH);
+      r.step(3);
+      r.tap(pad, Pad.EAST);
+      r.tap(pad, Pad.EAST);
+      r.tap(pad, Pad.EAST);
+      r.step(50);
+      expect(r.ui.screen).toBe('stage');
+      for (let k = 0; k < i; k++) r.tap(pad, Pad.RIGHT);
+      r.drain();
+      r.tap(pad, Pad.EAST);
+      expect(startMatch(r.drain())?.config.stage, id).toBe(id);
+    }
   });
 
   it('Back walks the stack in reverse and never leaves the player stuck', () => {

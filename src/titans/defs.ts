@@ -1,6 +1,7 @@
 import type { TitanDef, TitanId } from '@/contracts';
 import asteroidJson from './asteroid.json';
 import lastoneJson from './lastone.json';
+import nexusJson from './nexus.json';
 import supernovaJson from './supernova.json';
 
 /** Titans whose art, moves and behaviour exist. The other four are Phase 2 content. */
@@ -9,6 +10,7 @@ export const IMPLEMENTED_TITANS: TitanId[] = ['lastone', 'asteroid'];
 export const TITAN_DEFS: Partial<Record<TitanId, TitanDef>> = {
   lastone: lastoneJson as unknown as TitanDef,
   asteroid: asteroidJson as unknown as TitanDef,
+  nexus: nexusJson as unknown as TitanDef,
   supernova: supernovaJson as unknown as TitanDef,
 };
 
