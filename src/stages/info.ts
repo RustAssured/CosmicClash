@@ -77,7 +77,7 @@ const nurseryLighting: StageLighting = {
   color: '#ffb36b',
   ambient: '#3b1d4a',
   rim: '#ff5fb0',
-  screenPos: [0.12, -0.08],
+  screenPos: [0.1219, -0.0722], // the brightest newborn star
 };
 const nurseryRamps: readonly RampSpec[] = [
   ramp(0.7, 0.55, 7, 0.02, 0.25, 0.74, 0.79), // void: indigo → violet-black sky
@@ -98,7 +98,7 @@ const rimLighting: StageLighting = {
   color: '#ffe2a8',
   ambient: '#0f2a3a',
   rim: '#5fd6c4',
-  screenPos: [0.9, 0.3],
+  screenPos: [0.6875, 0.2056], // the galactic core, as composed at the reference camera
 };
 const rimRamps: readonly RampSpec[] = [
   ramp(0.57, 0.6, 7, 0.018, 0.26, 0.62, 0.6), // void: deep blue-black
@@ -108,6 +108,7 @@ const rimRamps: readonly RampSpec[] = [
   ramp(0.96, 0.4, 5, 0.06, 0.34, 0.88, 1.02), // rose-brown dust
   ramp(0.61, 0.8, 6, 0.32, 0.95, 0.66, 0.52), // ice stars
   ramp(0.78, 0.45, 4, 0.12, 0.4, 0.72, 0.85), // violet haze
+  ramp(0.3, 0.4, 5, 0.4, 0.9, 0.42, 0.17), // pale jade: the bridge from teal to gold, so mixed light never turns to mud
 ];
 
 /* ---------------------------------------------------------------------------------------------- *
@@ -118,7 +119,7 @@ const redgiantLighting: StageLighting = {
   color: '#ff7a3c',
   ambient: '#2a0f18',
   rim: '#ffb35f',
-  screenPos: [0.55, -0.12],
+  screenPos: [0.6719, -0.4778], // the dying sun, just beyond the top edge
 };
 const redgiantRamps: readonly RampSpec[] = [
   ramp(0.79, 0.5, 7, 0.018, 0.24, 0.83, 0.86), // void: violet-black
@@ -128,6 +129,7 @@ const redgiantRamps: readonly RampSpec[] = [
   ramp(0.03, 0.4, 5, 0.045, 0.3, -0.06, 0.07), // charred umber dust
   ramp(0.76, 0.5, 6, 0.12, 0.5, 0.7, 0.88), // violet shells
   ramp(0.49, 0.6, 5, 0.12, 0.6, 0.58, 0.42), // teal halo
+  ramp(0.93, 0.6, 5, 0.12, 0.6, 0.86, 0.98), // rose-magenta: the bridge from ember red to violet
 ];
 
 /* ---------------------------------------------------------------------------------------------- *
@@ -138,7 +140,7 @@ const quasarLighting: StageLighting = {
   color: '#bfd8ff',
   ambient: '#050814',
   rim: '#7aa8ff',
-  screenPos: [0.92, -0.15],
+  screenPos: [0.9313, -0.1611], // the quasar core, beyond the top-right corner
 };
 const quasarRamps: readonly RampSpec[] = [
   ramp(0.64, 0.6, 8, 0.008, 0.2, 0.68, 0.66), // void: blue-black
@@ -148,6 +150,7 @@ const quasarRamps: readonly RampSpec[] = [
   ramp(0.7, 0.35, 5, 0.03, 0.26, 0.72, 0.76), // indigo dust
   ramp(0.09, 0.85, 5, 0.18, 0.7, 0.02, 0.12), // ember accretion
   ramp(0.9, 0.6, 4, 0.14, 0.5, 0.82, 0.96), // magenta fringe
+  ramp(0.68, 0.7, 6, 0.1, 0.72, 0.7, 0.62), // electric indigo: the bridge from ice-blue to violet
 ];
 
 /* ---------------------------------------------------------------------------------------------- *
@@ -158,7 +161,7 @@ const tussenLighting: StageLighting = {
   color: '#a8bdb2',
   ambient: '#070b0a',
   rim: '#d8efe4',
-  screenPos: [-0.1, 0.6],
+  screenPos: [0.0094, 0.5944], // the left galaxy's core, at the left edge
 };
 const tussenRamps: readonly RampSpec[] = [
   ramp(0.42, 0.3, 8, 0.008, 0.16, 0.5, 0.4), // void: green-black
@@ -168,6 +171,7 @@ const tussenRamps: readonly RampSpec[] = [
   ramp(0.72, 0.22, 5, 0.06, 0.4, 0.66, 0.78), // faint lavender dust
   ramp(0.33, 0.25, 4, 0.04, 0.3, 0.4, 0.28), // moss shadow
   ramp(0.98, 0.3, 3, 0.2, 0.58, 0.92, 1.04), // one warm rose accent
+  ramp(0.22, 0.3, 4, 0.5, 0.92, 0.32, 0.16), // pale sage: the bridge from celadon to the warm stars
 ];
 
 /**

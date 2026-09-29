@@ -1,6 +1,8 @@
 import type { TitanDef } from '@/contracts';
 import { buildAsteroidRig } from './art/asteroid';
 import { buildLastOneRig } from './art/lastone';
+import { buildNexusRig } from './art/nexus';
+import { buildSupernovaRig } from './art/supernova';
 import type { TitanRig } from './generate';
 
 /** Recompute a titan's rig from its recipe alone (no pixels). Used when a body is reused (`existingBody`). */
@@ -10,6 +12,10 @@ export function buildRigFor(def: TitanDef, seed: number): TitanRig {
       return buildLastOneRig(def, seed);
     case 'asteroid':
       return buildAsteroidRig(def, seed);
+    case 'nexus':
+      return buildNexusRig(def, seed);
+    case 'supernova':
+      return buildSupernovaRig(def, seed);
     default:
       throw new Error(`no rig for titan '${def.id}'`);
   }

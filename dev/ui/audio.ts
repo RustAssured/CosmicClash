@@ -10,6 +10,8 @@ import {
 } from '@/contracts';
 import { createAudioEngine } from '@/audio/engine';
 import { runVerification, type VerifyReport } from './audio-verify';
+import { runStageVerification, type StageReport } from './audio-stages';
+import { runBodyCharacter, runTitanVerification, type TitanReport } from './audio-titans';
 
 /**
  * Audition page for the procedural audio engine: every sound the game can make, on a button, with the score's controls and
@@ -20,6 +22,9 @@ declare global {
   interface Window {
     __verify?: (opts?: { quick?: boolean }) => Promise<VerifyReport>;
     __report?: VerifyReport;
+    __titans?: TitanReport;
+    __stages?: StageReport;
+    __body?: Awaited<ReturnType<typeof runBodyCharacter>>;
     __audio?: ReturnType<typeof createAudioEngine>;
     /** Largest level seen by the meter since the page loaded, before and after the limiter. */
     __meter?: { maxPre: number; maxPost: number };
@@ -369,14 +374,21 @@ requestAnimationFrame(frame);
 const runBtn = $<HTMLButtonElement>('verify');
 const reportEl = $<HTMLPreElement>('report');
 const stateEl = $('verifyState');
-async function verify(quick = false): Promise<void> {
+async function verify(mode: 'full' | 'quick' | 'titans' | 'stages' | 'body' = 'full'): Promise<void> {
   stateEl.textContent = 'rendering…';
   runBtn.disabled = true;
   try {
-    const r = await runVerification({ quick });
-    window.__report = r;
+    let out: unknown;
+    if (mode === 'body') out = window.__body = await runBodyCharacter();
+    else if (mode === 'titans') out = window.__titans = await runTitanVerification();
+    else if (mode === 'stages') out = window.__stages = await runStageVerification();
+    else {
+      const r = await runVerification({ quick: mode === 'quick' });
+      window.__report = r;
+      out = r;
+    }
     reportEl.hidden = false;
-    reportEl.textContent = JSON.stringify(r, null, 2);
+    reportEl.textContent = JSON.stringify(out, null, 2);
     stateEl.textContent = 'done';
   } catch (e) {
     stateEl.textContent = `failed: ${(e as Error).message}`;
@@ -386,4 +398,6 @@ async function verify(quick = false): Promise<void> {
 }
 runBtn.addEventListener('click', () => void verify());
 const q = new URLSearchParams(location.search);
-if (q.has('verify')) void verify(q.get('verify') === 'quick');
+const mode = q.get('verify');
+if (q.has('verify'))
+  void verify(mode === 'quick' || mode === 'titans' || mode === 'stages' || mode === 'body' ? mode : 'full');

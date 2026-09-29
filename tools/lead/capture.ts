@@ -83,10 +83,11 @@ async function strip(url: string, file: string, stepEvery: number, n = 12, div =
 const foe = (t: string): string => (t === 'asteroid' ? 'lastone' : 'asteroid');
 /** Close the gap, then perform the move. Script tick 0 = the moment the fight goes live. */
 const SCRIPTS: Record<string, string> = {
-  crush: '0:right*40,44:crush',
-  signature: '0:right*30,34:sig*45',
-  ultimate: '0:right*30,34:ult',
+  crush: '4:crush',
+  signature: '4:sig*45',
+  ultimate: '4:ult',
 };
+const GAP = 190;
 
 if (suite === 'titans' || suite === 'all') {
   for (const stage of stages)
@@ -102,7 +103,7 @@ if (suite === 'strips' || suite === 'all') {
   for (const t of titans)
     for (const [move, script] of Object.entries(SCRIPTS))
       await strip(
-        `${base}/?stage=nursery&a=${t}&b=${foe(t)}&seed=5&hud=0&freeze=1&script0=${encodeURIComponent(script)}`,
+        `${base}/?stage=nursery&a=${t}&b=${foe(t)}&seed=5&hud=0&freeze=1&gap=${GAP}&script0=${encodeURIComponent(script)}`,
         `strip-${t}-${move}.png`,
         move === 'ultimate' ? 18 : 9,
       );

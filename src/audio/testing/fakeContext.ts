@@ -296,7 +296,8 @@ export class FakeContext {
     return new FakeBuffer(ch, len, sr);
   }
   createPeriodicWave(real: Float32Array, imag: Float32Array): FakePeriodicWave {
-    if (real.length !== imag.length || real.length < 2) fail('createPeriodicWave: real/imag must match and have length >= 2');
+    if (real.length !== imag.length || real.length < 2)
+      fail('createPeriodicWave: real/imag must match and have length >= 2');
     for (let i = 0; i < real.length; i++) {
       finite(real[i]!, `periodicWave.real[${i}]`);
       finite(imag[i]!, `periodicWave.imag[${i}]`);

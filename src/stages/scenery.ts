@@ -1,15 +1,24 @@
 import type { StageId } from '@/contracts';
-import { GenericScenery } from './generic';
 import { NurseryScenery } from './nursery/nursery';
+import { QuasarScenery } from './quasar/quasar';
+import { RedGiantScenery } from './redgiant/redgiant';
+import { RimScenery } from './rim/rim';
+import { TussenruimteScenery } from './tussenruimte/tussenruimte';
 import type { StageScenery } from './types';
 
-/** Stages with bespoke, showpiece scenery. The rest render through `GenericScenery` until their content lands. */
-const IMPLEMENTED: ReadonlySet<StageId> = new Set<StageId>(['nursery']);
+/** Every stage now has bespoke, showpiece scenery. */
+const FACTORIES: Readonly<Record<StageId, () => StageScenery>> = {
+  nursery: () => new NurseryScenery(),
+  rim: () => new RimScenery(),
+  redgiant: () => new RedGiantScenery(),
+  quasar: () => new QuasarScenery(),
+  tussenruimte: () => new TussenruimteScenery(),
+};
 
-export const isStageImplemented = (id: StageId): boolean => IMPLEMENTED.has(id);
+/** True when the stage has its own scenery (all five do; kept so callers written against the earlier partial roster keep working). */
+export const isStageImplemented = (id: StageId): boolean => id in FACTORIES;
 
-/** Create the scenery for a stage (GL resources are built in `init`). */
+/** Create the scenery for a stage (GL resources are built in `init` / `prepare`). */
 export function createScenery(id: StageId): StageScenery {
-  if (id === 'nursery') return new NurseryScenery();
-  return new GenericScenery(id);
+  return FACTORIES[id]();
 }

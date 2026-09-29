@@ -2,19 +2,12 @@ import { Rng, type StageInfo } from '@/contracts';
 import { STAGE_INFO } from '../info';
 import { AmbientLife } from '../toolkit/ambient';
 import { addDustBank } from '../toolkit/bank';
-import { makeCloudSteps } from '../toolkit/clouds';
 import { REF_X0, REF_Y0, addHeroStars, atRef, screenOf, type HeroStar } from '../toolkit/compose';
 import { mixRgb, paletteRamps, rampAt, scale, type Rgb } from '../toolkit/color';
 import { SceneryBase } from '../toolkit/base';
-import {
-  addGalaxyDiscs,
-  addGalaxyStars,
-  setDiscSpin,
-  type GalaxyDisc,
-} from '../toolkit/galaxy';
+import { addGalaxyDiscs, addGalaxyStars, setDiscSpin, type GalaxyDisc } from '../toolkit/galaxy';
 import { SpriteBuilder, type KitLayer, type SceneryKit } from '../toolkit/kit';
 import { addNebula } from '../toolkit/nebula';
-import { Noise2 } from '../toolkit/noise';
 import { layerBounds, makeStarField } from '../toolkit/stars';
 import type { PrepareStep, SceneryFrame, SceneryInit, SceneryLook } from '../types';
 
@@ -29,9 +22,9 @@ const LOOK: SceneryLook = {
   contrast: 1.1,
   bloomThreshold: 1.2,
   bloomGain: 0.4,
-  godRayGain: 1.1,
+  godRayGain: 0.16,
   godRayGas: 0.1,
-  godRayHalo: 260,
+  godRayHalo: 200,
   godRayDecay: 0.976,
   vignette: 0.6,
 };
@@ -39,6 +32,9 @@ const LOOK: SceneryLook = {
 /** Angular speed of the galaxy at unit ω, radians per scenery second. */
 const SPIN = 0.011;
 const GALAXY_PARALLAX = 0.06;
+/** Design position of the galactic core at the reference camera (screen px). */
+const CORE_X = 440;
+const CORE_Y = 74;
 
 export class RimScenery extends SceneryBase {
   readonly id = 'rim' as const;
@@ -49,15 +45,15 @@ export class RimScenery extends SceneryBase {
   private disc: KitLayer | null = null;
   private bgDiscs: KitLayer | null = null;
   private spinStars: ((t: number) => void) | null = null;
-  private core: [number, number] = [0, 0];
+  private core: [number, number] = atRef(CORE_X, CORE_Y, GALAXY_PARALLAX);
   private view = { x0: REF_X0, y0: REF_Y0 };
 
   protected *build(kit: SceneryKit, _ctx: SceneryInit): Generator<PrepareStep, void, void> {
     const info = this.info;
     const arena = info.arena;
     const R = paletteRamps(info);
-    const [VOID, TEAL, GOLD, CORE, ROSE, ICE, VIOLET] = [R[0]!, R[1]!, R[2]!, R[3]!, R[4]!, R[5]!, R[6]!];
-    const noise = new Noise2(0x7a11);
+    // ramp order of STAGE_INFO.rim: void, teal, gold, warm white, rose dust, ice, violet, jade
+    const [VOID, TEAL, GOLD, CORE, ICE, VIOLET, JADE] = [R[0]!, R[1]!, R[2]!, R[3]!, R[5]!, R[6]!, R[7]!];
     const rng = new Rng(0x91);
 
     /* ---- 1. sky: deep blue-black with a violet haze gathering behind the galaxy ---- */
@@ -67,8 +63,8 @@ export class RimScenery extends SceneryBase {
       warp: 1.2,
       octaves: 4,
       thresh: [0.2, 0.95],
-      colA: scale(VOID[1]!, 0.55),
-      colB: mixRgb(VOID[3]!, VIOLET[1]!, 0.4),
+      colA: scale(VOID[2]!, 0.6),
+      colB: mixRgb(VOID[4]!, VIOLET[1]!, 0.3),
       colC: [0, 0, 0],
       colD: [0, 0, 0],
       gain: 1,
@@ -85,7 +81,7 @@ export class RimScenery extends SceneryBase {
     let bd = layerBounds(arena, 0.03);
     kit.addSprites('stars-far', {
       buffer: makeStarField({
-        count: 1500,
+        count: 3200,
         bounds: bd,
         size: [0.55, 0.95],
         base: 0.3,
@@ -132,15 +128,16 @@ export class RimScenery extends SceneryBase {
       far.push({
         x: rng.range(bd.x0, bd.x1),
         y: rng.range(bd.y0, bd.y1),
-        radius: rng.range(5, 17),
+        radius: i < 6 ? rng.range(20, 34) : rng.range(5, 17),
         inclination: rng.range(0.2, 1.4),
         positionAngle: rng.range(0, Math.PI),
         arms: spiral ? 2 : 0,
         pitch: rng.range(0.28, 0.5),
         core: gold ? mixRgb(rampAt(CORE, 0.45), rampAt(GOLD, 0.7), 0.4) : rampAt(ICE, 0.6),
+        mid: gold ? rampAt(JADE, 0.5) : rampAt(TEAL, 0.7),
         arm: gold ? rampAt(GOLD, 0.55) : rampAt(TEAL, 0.72),
         knot: rampAt(ICE, 0.8),
-        brightness: rng.range(0.05, 0.16),
+        brightness: i < 6 ? rng.range(0.14, 0.24) : rng.range(0.06, 0.18),
         dust: 0.5,
         knots: 0.4,
         spin: rng.range(0.6, 1.4),
@@ -151,35 +148,14 @@ export class RimScenery extends SceneryBase {
     yield 0.13;
 
     /* ---- 5. the great galaxy ---- */
-    const [gx, gy] = atRef(486, 40, GALAXY_PARALLAX);
-    this.core = [gx, gy];
+    const [gx, gy] = this.core;
     const GAL_R = 500;
-    const INC = 1.0;
-    const PA = -0.4;
-    const coreCol: Rgb = mixRgb(rampAt(CORE, 0.5), rampAt(GOLD, 0.8), 0.25);
+    const INC = 1.12;
+    const PA = -0.32;
+    const coreCol: Rgb = scale(mixRgb(rampAt(GOLD, 0.66), rampAt(GOLD, 0.86), 0.5), 1.0);
+    const midCol: Rgb = mixRgb(rampAt(JADE, 0.6), rampAt(GOLD, 0.8), 0.3);
     const armCol: Rgb = mixRgb(rampAt(TEAL, 0.62), rampAt(ICE, 0.4), 0.25);
-    const knotCol: Rgb = mixRgb(rampAt(GOLD, 0.85), rampAt(CORE, 0.6), 0.35);
-    // a soft halo of unresolved light around the whole galaxy
-    addNebula(kit, 'galaxy-halo', {
-      parallax: GALAXY_PARALLAX,
-      scale: 260,
-      warp: 1.0,
-      octaves: 3,
-      thresh: [0.0, 1.0],
-      colA: scale(TEAL[2]!, 0.35),
-      colB: scale(GOLD[2]!, 0.45),
-      colC: [0, 0, 0],
-      colD: [0, 0, 0],
-      gain: 0.55,
-      lightDir: [0.7, -0.4],
-      litK: 0,
-      flowSpeed: 0.01,
-      seed: [8.1, 1.4],
-      mode: 'emit',
-      mask: [gx, gy, 560, 340],
-      maskMix: 1,
-      forceK: 0.3,
-    });
+    const knotCol: Rgb = rampAt(GOLD, 0.92);
     const main: GalaxyDisc = {
       x: gx,
       y: gy,
@@ -187,13 +163,14 @@ export class RimScenery extends SceneryBase {
       inclination: INC,
       positionAngle: PA,
       arms: 2,
-      pitch: 0.34,
+      pitch: 0.42,
       core: coreCol,
+      mid: midCol,
       arm: armCol,
       knot: knotCol,
-      brightness: 0.7,
+      brightness: 0.62,
       dust: 0.9,
-      knots: 0.8,
+      knots: 1.5,
       spin: 1,
       seed: 3.7,
     };
@@ -210,105 +187,95 @@ export class RimScenery extends SceneryBase {
         inclination: INC,
         positionAngle: PA,
         arms: 2,
-        pitch: 0.34,
-        stars: 42000,
-        dust: 1500,
+        pitch: 0.42,
+        stars: 30000,
+        dust: 700,
         knots: 260,
         bulge: 5200,
         thickness: 0.035,
-        core: mixRgb(rampAt(CORE, 0.6), rampAt(GOLD, 0.9), 0.3),
-        inner: rampAt(GOLD, 0.85),
+        core: mixRgb(rampAt(GOLD, 0.7), rampAt(GOLD, 0.9), 0.5),
+        inner: mixRgb(rampAt(JADE, 0.7), rampAt(GOLD, 0.9), 0.5),
         arm: rampAt(ICE, 0.6),
         outer: rampAt(TEAL, 0.62),
         knot: rampAt(GOLD, 0.95),
-        dustColor: scale(ROSE[1]!, 1.0),
-        brightness: 0.85,
+        dustColor: scale(VOID[0]!, 0.7),
+        dustAlpha: 1.5,
+        armFraction: 0.88,
+        scatter: 0.55,
+        brightness: 0.7,
         spin: SPIN,
       },
       0.06,
     );
-    this.spinStars = g.setSpin;
+    this.spinStars = (t: number): void => g.setSpin(t);
     yield 0.5;
 
-    /* ---- 6. a band of dust across the disk, lit from the galactic core ---- */
-    addNebula(kit, 'dust-band', {
+    /* ---- 6. dust in front of the disk: dark rose-brown lanes, their edges lit gold by the galactic core ---- */
+    const dustAt = atRef(230, 210, 0.3);
+    addNebula(kit, 'dust-lane', {
       parallax: 0.3,
       scale: 150,
       warp: 2.6,
       octaves: 5,
-      thresh: [0.52, 0.78],
-      colA: scale(ROSE[0]!, 1.0),
-      colB: scale(ROSE[1]!, 0.9),
+      thresh: [0.5, 0.78],
+      colA: scale(VOID[1]!, 1.0),
+      colB: scale(VOID[2]!, 1.0),
       colC: [0, 0, 0],
-      colD: scale(GOLD[4]!, 0.8),
+      colD: scale(JADE[2]!, 1.0),
       gain: 1,
       lightDir: [0.75, -0.5],
-      litK: 6,
+      litK: 7,
       flowSpeed: 0.02,
       seed: [21.4, 3.3],
       mode: 'dust',
-      alpha: 0.55,
+      alpha: 0.85,
+      mask: [dustAt[0], dustAt[1], 300, 170],
+      maskMix: 1,
       forceK: 0.6,
     });
-    yield 0.55;
 
-    /* ---- 7. foreground gas lit by the nearby hot stars: teal and gold wisps ---- */
-    bd = layerBounds(arena, 0.42);
-    kit.addSprites('gas', {
-      buffer: yield* makeCloudSteps({
-        count: 2600,
-        bounds: bd,
-        noise,
-        freq: 1 / 190,
-        lo: 0.5,
-        hi: 0.8,
-        size: [8, 24],
-        stretch: [1, 1.6],
-        rotation: (x, y, r) => noise.noise(x / 240, y / 240) * 1.6 + (r.next() - 0.5) * 0.5,
-        color: (x, y, d, u) => {
-          const gold = 0.5 + 0.5 * Math.sin(x / 260 + y / 210);
-          const c = mixRgb(rampAt(TEAL, 0.35 + 0.5 * d), rampAt(GOLD, 0.3 + 0.5 * d), gold * (u > 0.4 ? 0.9 : 0.25));
-          const k = 0.3 + 0.7 * d;
-          return [c[0] * k, c[1] * k, c[2] * k, 0.06 + 0.05 * d];
-        },
-        seed: 61,
-      }),
-      parallax: 0.42,
-      spread: 0.05,
-      blend: 'add',
-      soft: 2.2,
-      breakup: 0.65,
-      drift: 5,
-      driftFreq: 1 / 110,
-      driftSpeed: 0.08,
-      forceK: 0.75,
-    });
-    yield 0.75;
+    yield 0.7;
 
     /* ---- 8. hero stars ---- */
-    const warm: Rgb = [1.0, 0.86, 0.6];
+    const warm: Rgb = [1.0, 0.82, 0.5];
     const ice: Rgb = [0.78, 0.9, 1.0];
     const heroes: HeroStar[] = [
-      { sx: 96, sy: 60, size: 120, core: 4.5, bright: 3.4, tint: ice, parallax: 0.16, rot: 0.2 },
-      { sx: 380, sy: 24, size: 48, core: 2.4, bright: 1.8, tint: warm, parallax: 0.12, rot: 0.7 },
-      { sx: 246, sy: 150, size: 56, core: 2.6, bright: 1.9, tint: ice, parallax: 0.22, rot: 0.4 },
-      { sx: 596, sy: 200, size: 42, core: 2.0, bright: 1.4, tint: warm, parallax: 0.26, rot: 0.1 },
+      { sx: 92, sy: 52, size: 60, core: 3.0, bright: 2.0, tint: warm, parallax: 0.16, rot: 0.2 },
+      { sx: 262, sy: 30, size: 44, core: 2.2, bright: 1.7, tint: ice, parallax: 0.12, rot: 0.7 },
+      { sx: 214, sy: 168, size: 50, core: 2.4, bright: 1.8, tint: ice, parallax: 0.22, rot: 0.4 },
+      { sx: 604, sy: 214, size: 40, core: 2.0, bright: 1.4, tint: warm, parallax: 0.26, rot: 0.1 },
     ];
     addHeroStars(kit, 'hero', heroes);
-    yield 0.82;
+    yield 0.78;
 
-    /* ---- 9. the rim itself: a torn bank of dust with a gold lip, foreground motes ---- */
-    addDustBank(kit, 'rim-bank', {
-      parallax: 0.9,
-      col: scale(ROSE[0]!, 1.1),
-      rim: scale(GOLD[4]!, 0.7),
-      top: 0.74,
-      slope: -0.22,
+    /* ---- 9. the rim itself: two torn banks of dust, gold along their upper lips ---- */
+    addDustBank(kit, 'bank-far', {
+      parallax: 0.55,
+      col: scale(VOID[2]!, 1.0),
+      rim: scale(TEAL[5]!, 0.75),
+      lip: 0.1,
+      top: 0.86,
+      slope: -0.24,
       roughness: 0.3,
-      soft: 0.26,
+      soft: 0.2,
+      scale: [230, 70],
+      speed: 0.012,
+      alpha: 0.96,
+      forceK: 0.9,
+      rimK: 1,
+    });
+    addDustBank(kit, 'bank-near', {
+      parallax: 0.9,
+      col: scale(VOID[1]!, 1.0),
+      rim: scale(JADE[3]!, 0.9),
+      lip: 0.09,
+      top: 0.94,
+      slope: 0.16,
+      roughness: 0.26,
+      soft: 0.2,
       scale: [170, 50],
       speed: 0.018,
-      alpha: 0.94,
+      alpha: 0.97,
       forceK: 1.1,
       rimK: 1,
     });

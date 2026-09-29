@@ -6,7 +6,10 @@
  */
 
 /** Cosine and sine coefficients (harmonics 1..`harmonics`; index 0 is the ignored DC term) of one period sampled on `x`. */
-export function fourierCoefficients(x: ArrayLike<number>, harmonics: number): { real: Float32Array; imag: Float32Array } {
+export function fourierCoefficients(
+  x: ArrayLike<number>,
+  harmonics: number,
+): { real: Float32Array; imag: Float32Array } {
   const n = x.length;
   const real = new Float32Array(harmonics + 1);
   const imag = new Float32Array(harmonics + 1);
@@ -35,7 +38,13 @@ function bump(out: Float32Array, pos: number, width: number, level: number): voi
 }
 
 /** Heartbeat: a "lub" at phase 0 and a softer "dub" at phase `gap`, each a smooth bump. Values are ≥ 0 before DC removal. */
-export function heartbeatWave(n = 512, gap = 0.3, dubLevel = 0.6, lubWidth = 0.1, dubWidth = 0.08): Float32Array {
+export function heartbeatWave(
+  n = 512,
+  gap = 0.3,
+  dubLevel = 0.6,
+  lubWidth = 0.1,
+  dubWidth = 0.08,
+): Float32Array {
   const w = new Float32Array(n);
   bump(w, 0, lubWidth, 1);
   bump(w, gap, dubWidth, dubLevel);
@@ -45,6 +54,7 @@ export function heartbeatWave(n = 512, gap = 0.3, dubLevel = 0.6, lubWidth = 0.1
 /** Sum of a Fourier series at phase `p` (0..1), for tests. */
 export function evalSeries(real: Float32Array, imag: Float32Array, p: number): number {
   let v = 0;
-  for (let k = 1; k < real.length; k++) v += real[k]! * Math.cos(2 * Math.PI * k * p) + imag[k]! * Math.sin(2 * Math.PI * k * p);
+  for (let k = 1; k < real.length; k++)
+    v += real[k]! * Math.cos(2 * Math.PI * k * p) + imag[k]! * Math.sin(2 * Math.PI * k * p);
   return v;
 }

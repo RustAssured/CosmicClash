@@ -256,7 +256,9 @@ export function createLastOneVoice(): TitanVoice {
         shimmer: 0.4,
         attack: 0.001,
       });
-      if (ev.onDamaged > 0.3) partials(c, o, t + 0.01, f * 2.76, TINK, { decay: 0.1, gain: 0.08 * ring });
+      // glass rings AND chips: a bright ceramic tink and a shard click ride every blow (more of it on damaged glass)
+      partials(c, o, t + 0.004, f * 2.76, TINK, { decay: 0.1, gain: 0.5 * ring });
+      noiseHit(c, o, t, { dur: 0.012, gain: 0.1 * ring, filter: { type: 'highpass', f0: 6000 }, attack: 0.0004 });
     },
 
     onGuard(c, t, ev) {
@@ -275,7 +277,7 @@ export function createLastOneVoice(): TitanVoice {
       // the celadon shell shatters: a shower of glass over a slow falling bell cluster
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.9);
-      gravel(c, o, t, { dur: 1.8, grains: 70, f: 6500, spread: 1.8, gain: 0.22, q: 2.2, decayShape: 1.2 });
+      gravel(c, o, t, { dur: 1.8, grains: 70, f: 6500, spread: 1.8, gain: 0.55, q: 1.6, decayShape: 1.2 });
       for (const [i, f] of [987.77, 739.99, 587.33, 440, 293.66].entries())
         partials(c, o, t + 0.12 * i, f, GLASS, { decay: 2.2, gain: 0.07, shimmer: 0.4 });
     },

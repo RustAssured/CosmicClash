@@ -10,6 +10,15 @@ export {
 } from './generate';
 export type { LastOneRig, TendrilRoot } from './art/lastone';
 export type { AsteroidRig } from './art/asteroid';
+export {
+  groupNexusCells,
+  type NexusRig,
+  type NexusNode,
+  type NexusEdge,
+  type NexusGroups,
+} from './art/nexus';
+export { LINK, linkIndex, rasterLink, RIVET_OFFSET, type LinkSink } from './art/chainLink';
+export type { SupernovaRig } from './art/supernova';
 export { renderPortrait, type Portrait } from './portrait';
 export { blend } from './art/color';
 export { hash01 } from './art/noise';

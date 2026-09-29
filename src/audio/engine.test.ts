@@ -86,6 +86,18 @@ function allEvents(a: TitanId, b: TitanId): SimEvent[] {
       'momentum',
       'fragment-lost',
       'something-new',
+      // keywords the other titans' cue ids will contain (documented by their owner later)
+      'chain-sever',
+      'node-dark',
+      'moon-lost',
+      'disk-shed',
+      'crust-break',
+      'ocean-boil',
+      'atmosphere-strip',
+      'core-collapse',
+      'graph-harvest',
+      'swarm-split',
+      'node-merge',
     ])
       ev.push({ t: 'cue', slot, titan, id, x: 800, y: 300, amount: 0.5 });
   }
@@ -327,6 +339,46 @@ describe('event handling', () => {
       1,
     );
     expect(ctx.leakedSources().length).toBe(persistent);
+  });
+  it('every titan pair survives a long fight of changing scenes with the clock running: no violations, no NaN into a param', async () => {
+    for (const [a, b] of [
+      ['nexus', 'blackhole'],
+      ['supernova', 'planet'],
+      ['planet', 'nexus'],
+      ['blackhole', 'supernova'],
+    ] as const) {
+      const { eng, ctx } = await ready(5);
+      for (let i = 0; i < 900; i++) {
+        ctx.currentTime += 1 / 60;
+        const s = scene({ intensity: (i % 90) / 90, lowestIntegrity: 0.1 + ((i * 7) % 100) / 120 }, a, b);
+        const f = s.fighters!;
+        f[0].speed = (i * 41) % 800;
+        f[1].speed = (i * 59) % 800;
+        f[0].massFrac = i % 300 < 150 ? 0.05 + (i % 150) / 60 : 1.2; // through the thin, heavy and normal regimes (a black hole grows past 1)
+        f[1].massFrac = 0.1 + ((i * 3) % 120) / 100;
+        f[0].resource = (i % 200) / 200;
+        f[1].resource = 1 - (i % 130) / 130;
+        eng.updateAt(s, 1 / 60, 0.1);
+        if (i % 30 === 0)
+          eng.handleAt(
+            allEvents(a, b).filter((e) => e.t === 'cue' || e.t === 'matter' || e.t === 'ko'),
+            ctx.currentTime + 0.01,
+          );
+      }
+      expect(takeViolations(), `${a} vs ${b}`).toEqual([]);
+    }
+  });
+  it('leaving the fight stops every continuous voice (only the score keeps running)', async () => {
+    const { eng, ctx } = await ready(6);
+    eng.updateAt(scene({ phase: 'menu', fighters: null }), 1 / 60, 0.2);
+    const baseline = ctx.leakedSources().length;
+    for (const t of TITAN_IDS) {
+      eng.updateAt(scene({}, t, t), 1 / 60, 0.2);
+      expect(ctx.leakedSources().length, `${t} started nothing?`).toBeGreaterThan(baseline);
+      eng.updateAt(scene({ phase: 'menu', fighters: null }), 1 / 60, 0.2);
+      expect(ctx.leakedSources().length - baseline, `${t} left a source running`).toBeLessThanOrEqual(0);
+    }
+    expect(takeViolations()).toEqual([]);
   });
   it('is deterministic: the same seed and events build an identical graph', async () => {
     const shape = async (): Promise<string> => {

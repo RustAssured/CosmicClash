@@ -160,6 +160,22 @@ Reading it. *Floors:* the worst rows are ironNickel/chain/core/mantle at 1.0-1.4
 vs glass/eye/celadon/crystal 3-9% (Lash), KINETIC vs most solids 3-4%, THERMAL vs ice 6% and lattice 27% (fire spreads for seconds; the lattice is *meant* to burn), TIDAL vs gas/plasma/cloud 8% (capped by `TEAR_COST_FLOOR`) and 43% at Crush level, CRUSH vs gas/ocean 6-11% / 27%.
 Above the band by design: lattice under ASSIMILATION/THERMAL and TIDAL vs gas at Crush level (the counters); KINETIC at Crush level is 20-25% on soft matter (the Meteor is ~1350, so ~18%).
 
+**Real moves on the real generated titans** (`npx tsx tools/matter/moves.ts`: forward aim, each hitbox landing once, continuous ones swept every `rehit` ticks, raw matter result: no Guard shell, no part interception, no lunge movement; % of the target's mass 300 ticks later):
+
+| attacker move | nominal energy | -> lastone | -> asteroid |
+|---|---:|---:|---:|
+| lastone.lash (strike) | 340 | 6.4% | 2.0% |
+| lastone.lunge (strike) | 260 | 4.1% | 2.5% |
+| lastone.shatter (crush) | 1100 | 9.9% | 9.1% |
+| lastone.gaze (signature) | 800 | 5.1% | 3.2% |
+| lastone.lastlight (ultimate) | 4680 | 57.0% | 27.9% |
+| asteroid.shoulder (strike) | 260 | 2.3% | 2.0% |
+| asteroid.meteor (crush) | 1350 | 16.3% | 15.2% |
+| asteroid.swarm (signature) | 140 | 0.0% | 1.1% |
+| asteroid.kessler (ultimate) | 2300 | 28.3% | 29.4% |
+
+So a Last One vs Asteroid fight needs ~30 Lashes/Thrusts or ~5 Meteors to wear the Asteroid down to a third; the Guard shells (absorb 20-75%) and misses lengthen that, they are the combat layer's dial. The Lash is the weakest Strike against the Asteroid (2.0%): regolith/iron shrug shearing, which is the intended matchup, but it is never ~0.
+
 ### Damage floors (why nothing is immune except the horizon)
 
 Every model spends its whole energy budget; what its primary mechanism cannot use falls through to a cheaper fallback, and no cell costs more than a cap to remove:
@@ -228,7 +244,7 @@ dither), and are weakened (bonds ×0.65, integrity ≤ 210). With `params.harves
   centre of mass, edge normals for tumbling rim light), smaller/fluid → particles. Urgency levels (`CONN_SOFT` 6 ticks / `CONN_STEADY` 3 / `CONN_NOW` next tick) keep the cost low while cracks/burn erode.
   **Local shortcut** (`localPass`): every removal (killed cell, broken bond) is an *event* whose live neighbours form the change *frontier* (`Body.noteKill/noteBreak`, events unioned when they touch). Since the previous pass every component was anchored, so any path crossed a removal through the frontier of ONE cluster: if the frontier of every cluster still reaches itself
   (a breadth-first growth from all frontier cells at once, ≤ 64 rings / 6000 cells) nothing was cut off and the full flood is skipped; complete components found the same way (no core cell inside, and each cluster chain keeps exactly one still-growing group) are released as islands without the flood. Otherwise — a big slab, a spent budget, an anchor (core-disc) cell
-  that died, fluid materials, matter added by heal/grow/restore — the full flood runs. Islands are released in a canonical order (ascending lowest cell, cells sorted) on both paths, so `core.forceFullConn = true` must give bit-identical hashes (tested on 26 scenarios + an 80-scenario sweep). About half of the passes and ~80% of their cost disappear in a fight.
+  that died, fluid materials, matter added by heal/grow/restore — the full flood runs. Islands are released in a canonical order (ascending lowest cell, cells sorted) on both paths, so `core.forceFullConn = true` must give bit-identical hashes (tested on 16 scenarios in `timeslice.test.ts` + an 80-scenario offline sweep). About half of the passes and ~80% of their cost disappear in a fight.
 - **Chunks** (`chunks.ts`): rigid bodies (rotation, slow drag, soft arena walls, gravity sources, consumption), cap `MAX_DEBRIS_CHUNKS`: overflow degrades the oldest/smallest to dust; gravel (<5 mass, >25 s) wears away. A fast heavy chunk hitting a body applies a capped KINETIC point blow and bounces; brittle fast chunks fracture (Voronoi split, momentum
   conserving). ~1 in 4 chunks render in front of the titans, the rest behind and slightly darker.
 - **Particles** (`particles.ts`): pooled SoA (`MAX_PARTICLES`), interned colour ramps, drag, gravity, homing, consumption; pixel-art dithering instead of alpha. Kinds: spark, ember, dust, gas, ash, glint, plasma, shard, mote.
@@ -262,7 +278,7 @@ dither), and are weakened (bonds ×0.65, integrity ≤ 210). With `params.harves
 
 `dev/matter/index.html` (port 5202): click/drag to fire any type/shape/flags, overlays (temperature, integrity, bonds, infection, islands, stress, materials), stepper, carve/heal/restore, live ledger and ms/tick.
 `tools/matter/gallery.ts` renders contact sheets (`fracture|kinetic|iron|crush|thermal|tidal|assim|star|carve`), `bench.ts` performance (`--assert` fails on budget breaches; `harness.ts` is its shared replay/min-of-N timing), `perf.test.ts` the regression guard,
-`calibrate.ts` the tables above (`ONLY=rock,ironNickel TYPES=FRACTURE npx tsx tools/matter/calibrate.ts` to focus), `tables.ts` the archetype tables. `warmUp()` (exported from `@/matter`) pre-JITs the hot paths on a private scene (~0.4 s): call it while loading.
+`calibrate.ts` the tables above (`ONLY=rock,ironNickel TYPES=FRACTURE npx tsx tools/matter/calibrate.ts` to focus), `moves.ts` the real titan moves on the real bodies, `tables.ts` the archetype tables. `warmUp()` (exported from `@/matter`) pre-JITs the hot paths on a private scene (~0.4 s): call it while loading.
 
 ## 7. Mass ledger
 

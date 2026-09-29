@@ -1,5 +1,15 @@
 import { clamp } from '../dsp/math';
-import { GLASS, envelope, makeOut, noiseHit, noiseSource, partials, tone, type Out, type PartialSet } from './synth';
+import {
+  GLASS,
+  envelope,
+  makeOut,
+  noiseHit,
+  noiseSource,
+  partials,
+  tone,
+  type Out,
+  type PartialSet,
+} from './synth';
 import type { VoiceCtx } from './types';
 
 /**
@@ -13,7 +23,17 @@ export function scrape(
   c: VoiceCtx,
   o: Out,
   t: number,
-  s: { dur: number; f0: number; f1: number; q?: number; gain: number; rate: number; depth?: number; attack?: number; kind?: 'white' | 'brown' },
+  s: {
+    dur: number;
+    f0: number;
+    f1: number;
+    q?: number;
+    gain: number;
+    rate: number;
+    depth?: number;
+    attack?: number;
+    kind?: 'white' | 'brown';
+  },
 ): void {
   const ac = c.ac;
   const src = noiseSource(c, s.kind ?? 'white');
@@ -58,19 +78,40 @@ export function ratchet(
     const u = n > 1 ? i / (n - 1) : 0;
     const gap = s.from * Math.pow(s.to / s.from, u);
     const g = s.gain * (0.7 + 0.3 * c.rand());
-    noiseHit(c, o, ti, { dur: 0.012, gain: g, filter: { type: 'bandpass', f0: s.f * (0.8 + 0.5 * c.rand()), q: 3 }, attack: 0.0005 });
-    if (s.ping) partials(c, o, ti, (s.pingHz ?? s.f * 0.4) * (0.9 + 0.3 * c.rand()), s.ping, { decay: 0.05, gain: g * 0.35, maxHz: 9000 });
+    noiseHit(c, o, ti, {
+      dur: 0.012,
+      gain: g,
+      filter: { type: 'bandpass', f0: s.f * (0.8 + 0.5 * c.rand()), q: 3 },
+      attack: 0.0005,
+    });
+    if (s.ping)
+      partials(c, o, ti, (s.pingHz ?? s.f * 0.4) * (0.9 + 0.3 * c.rand()), s.ping, {
+        decay: 0.05,
+        gain: g * 0.35,
+        maxHz: 9000,
+      });
     ti += gap;
   }
   return ti;
 }
 
 /** Bubbles: short sine chirps rising in pitch at random moments (boiling water, gas escaping). */
-export function bubbles(c: VoiceCtx, o: Out, t: number, s: { dur: number; count: number; f: number; gain: number }): void {
+export function bubbles(
+  c: VoiceCtx,
+  o: Out,
+  t: number,
+  s: { dur: number; count: number; f: number; gain: number },
+): void {
   for (let i = 0; i < s.count; i++) {
     const ts = t + c.rand() * s.dur;
     const f = s.f * (0.6 + 0.9 * c.rand());
-    tone(c, o, ts, { f0: f, f1: f * (1.5 + c.rand()), dur: 0.035 + 0.05 * c.rand(), gain: s.gain * (0.4 + 0.6 * c.rand()), attack: 0.003 });
+    tone(c, o, ts, {
+      f0: f,
+      f1: f * (1.5 + c.rand()),
+      dur: 0.035 + 0.05 * c.rand(),
+      gain: s.gain * (0.4 + 0.6 * c.rand()),
+      attack: 0.003,
+    });
   }
 }
 
@@ -79,7 +120,15 @@ export function pingsDown(
   c: VoiceCtx,
   o: Out,
   t: number,
-  s: { count: number; f: number; step: number; spacing: number; decay: number; gain: number; set: PartialSet },
+  s: {
+    count: number;
+    f: number;
+    step: number;
+    spacing: number;
+    decay: number;
+    gain: number;
+    set: PartialSet;
+  },
 ): void {
   for (let i = 0; i < s.count; i++) {
     const detune = 1 + (c.rand() - 0.5) * 0.02;
@@ -92,11 +141,20 @@ export function pingsDown(
 }
 
 /** Rising high-frequency glitter: many tiny bright pings (Hawking radiation, embers, sparks). */
-export function glitter(c: VoiceCtx, o: Out, t: number, s: { dur: number; count: number; f: number; spread: number; gain: number }): void {
+export function glitter(
+  c: VoiceCtx,
+  o: Out,
+  t: number,
+  s: { dur: number; count: number; f: number; spread: number; gain: number },
+): void {
   for (let i = 0; i < s.count; i++) {
     const ts = t + Math.pow(c.rand(), 1.4) * s.dur;
     const f = s.f * Math.pow(2, (c.rand() - 0.3) * s.spread);
-    partials(c, o, ts, f, GLASS, { decay: 0.04 + 0.1 * c.rand(), gain: s.gain * (0.4 + 0.6 * c.rand()), maxHz: 12000 });
+    partials(c, o, ts, f, GLASS, {
+      decay: 0.04 + 0.1 * c.rand(),
+      gain: s.gain * (0.4 + 0.6 * c.rand()),
+      maxHz: 12000,
+    });
   }
 }
 
@@ -172,7 +230,14 @@ export function silentGain(c: VoiceCtx, dest: AudioNode): GainNode {
 }
 
 /** An LFO oscillator whose output (± `depth`) is added to `param`. Returns the oscillator (its `frequency` can be retargeted). */
-export function lfoInto(c: VoiceCtx, bed: Bed, param: AudioParam, rate: number, depth: number, type: OscillatorType = 'sine'): { osc: OscillatorNode; depth: GainNode } {
+export function lfoInto(
+  c: VoiceCtx,
+  bed: Bed,
+  param: AudioParam,
+  rate: number,
+  depth: number,
+  type: OscillatorType = 'sine',
+): { osc: OscillatorNode; depth: GainNode } {
   const osc = c.ac.createOscillator();
   osc.type = type;
   osc.frequency.value = rate;

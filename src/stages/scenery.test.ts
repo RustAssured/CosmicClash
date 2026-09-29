@@ -3,9 +3,17 @@ import { STAGE_IDS } from '@/contracts';
 import { STAGES, createScenery, isStageImplemented } from './index';
 
 describe('scenery registry (no GL needed to construct)', () => {
-  it('implements the nursery; every other stage is honest about using the stand-in', () => {
-    expect(isStageImplemented('nursery')).toBe(true);
-    for (const id of STAGE_IDS.filter((s) => s !== 'nursery')) expect(isStageImplemented(id)).toBe(false);
+  it('every stage has its own bespoke scenery', () => {
+    for (const id of STAGE_IDS) expect(isStageImplemented(id)).toBe(true);
+  });
+
+  it('each stage builds a different scenery class with its own noise seed (never a recolour)', () => {
+    const names = new Set(STAGE_IDS.map((id) => createScenery(id).constructor.name));
+    expect(names.size).toBe(STAGE_IDS.length);
+    const seeds = new Set(
+      STAGE_IDS.map((id) => (createScenery(id) as unknown as { noiseSeed: number }).noiseSeed),
+    );
+    expect(seeds.size).toBe(STAGE_IDS.length);
   });
 
   it.each(STAGE_IDS)('createScenery(%s) returns a StageScenery with a sane look', (id) => {
@@ -23,11 +31,12 @@ describe('scenery registry (no GL needed to construct)', () => {
     s.dispose(); // safe before init
   });
 
-  it('light position defaults come from the stage lighting (screenPos) for the generic stand-in', () => {
-    const s = createScenery('rim');
+  it.each(STAGE_IDS)('%s reports its light at the stage lighting screenPos before any GL exists', (id) => {
+    const s = createScenery(id);
     const out = { x: 0, y: 0 };
     s.lightScreenPos(out);
-    expect(out.x).toBeCloseTo(STAGES.rim.lighting.screenPos[0] * 640, 6);
-    expect(out.y).toBeCloseTo(STAGES.rim.lighting.screenPos[1] * 360, 6);
+    // composed at the reference camera: the light sits where StageInfo says it does (within the whole-pixel parallax rounding)
+    expect(Math.abs(out.x - STAGES[id].lighting.screenPos[0] * 640)).toBeLessThan(6);
+    expect(Math.abs(out.y - STAGES[id].lighting.screenPos[1] * 360)).toBeLessThan(6);
   });
 });

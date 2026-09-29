@@ -1,0 +1,1117 @@
+{
+  "id": "nexus",
+  "name": "The Nexus",
+  "nameKo": "넥서스",
+  "epithet": "De Nexus",
+  "attributes": {
+    "mass": 6,
+    "cohesion": 6,
+    "heat": 4,
+    "gravity": 4,
+    "reach": 8,
+    "tempo": 4
+  },
+  "resource": {
+    "id": "nodes",
+    "name": "Nodes",
+    "nameKo": "마디",
+    "max": 16,
+    "start": 12,
+    "display": "pips"
+  },
+  "destruction": "ASSIMILATION",
+  "passive": {
+    "name": "Growth",
+    "text": "Matter harvested from the enemy is built into the graph: new nodes bud, the frame thickens and the Nexus slowly grows heavier."
+  },
+  "failureMode": {
+    "name": "Dark Nodes",
+    "text": "Chains are the only links between nodes. Cut one and the far side of the graph goes dark and breaks away; a Nexus with few live nodes is short of reach, harvest and cage."
+  },
+  "materials": [
+    {
+      "key": "crystal",
+      "base": "crystal",
+      "visual": {
+        "ramp": ["#0f0a2a", "#241556", "#4a2792", "#8a39bd", "#c760d6", "#8fc4ff", "#d4ecff", "#ffffff"],
+        "emissive": 46,
+        "char": "#1a1230",
+        "crack": "#0a0620",
+        "debris": "#9a7ae0"
+      }
+    },
+    {
+      "key": "hubcore",
+      "base": "core",
+      "visual": {
+        "ramp": ["#8a1050", "#e0307a", "#ff7aa8", "#ffc4d8", "#fff2f6"],
+        "emissive": 230,
+        "char": "#4a1030",
+        "crack": "#2a0818",
+        "debris": "#ff7aa8"
+      }
+    },
+    {
+      "key": "chain",
+      "base": "chain",
+      "visual": {
+        "ramp": ["#140609", "#2a0d13", "#48141e", "#6a1c26", "#8f262f", "#b83a38", "#dc5f4a", "#ffb59a"],
+        "emissive": 0,
+        "char": "#1a0c0c",
+        "crack": "#0c0406",
+        "debris": "#a83a30"
+      }
+    },
+    {
+      "key": "node",
+      "base": "node",
+      "visual": {
+        "ramp": ["#1e0410", "#4a0818", "#7c0c28", "#b0143a", "#dc1e48", "#f8506a", "#ffb0b8"],
+        "emissive": 84,
+        "char": "#2a0c14",
+        "crack": "#12040a",
+        "debris": "#f0405a"
+      }
+    },
+    {
+      "key": "nodecore",
+      "base": "node",
+      "visual": {
+        "ramp": ["#7a0c30", "#d4204a", "#ff5a78", "#ffb0bc", "#fff0f2"],
+        "emissive": 230,
+        "char": "#4a1020",
+        "crack": "#2a0810",
+        "debris": "#ff5a78"
+      }
+    },
+    {
+      "key": "lattice",
+      "base": "lattice",
+      "visual": {
+        "ramp": ["#2a0612", "#5c0e28", "#8e1a3c", "#c2304e", "#ee6078", "#ffb0bc"],
+        "emissive": 36,
+        "char": "#2a1014",
+        "crack": "#12060a",
+        "debris": "#d8506c"
+      }
+    },
+    {
+      "key": "deadnode",
+      "base": "node",
+      "visual": {
+        "ramp": ["#141012", "#241e20", "#382f32", "#50464a", "#6c6266", "#8a8084"],
+        "emissive": 0,
+        "char": "#1a1416",
+        "crack": "#0a0608",
+        "debris": "#50464a"
+      }
+    }
+  ],
+  "art": {
+    "w": 224,
+    "h": 208,
+    "coreX": 112,
+    "coreY": 104,
+    "coreRadius": 6,
+    "params": {
+      "centre": [112, 104],
+      "hub": {
+        "r": 18,
+        "coreR": 5
+      },
+      "nodes": [
+        {
+          "a": -8,
+          "d": 40,
+          "r": 9,
+          "ring": 1
+        },
+        {
+          "a": 52,
+          "d": 38,
+          "r": 8.5,
+          "ring": 1
+        },
+        {
+          "a": 118,
+          "d": 42,
+          "r": 9,
+          "ring": 1
+        },
+        {
+          "a": 178,
+          "d": 37,
+          "r": 8.5,
+          "ring": 1
+        },
+        {
+          "a": 238,
+          "d": 41,
+          "r": 9,
+          "ring": 1
+        },
+        {
+          "a": 300,
+          "d": 38,
+          "r": 8.5,
+          "ring": 1
+        },
+        {
+          "a": 22,
+          "d": 76,
+          "r": 11,
+          "ring": 2
+        },
+        {
+          "a": 88,
+          "d": 66,
+          "r": 10,
+          "ring": 2
+        },
+        {
+          "a": 148,
+          "d": 63,
+          "r": 10,
+          "ring": 2
+        },
+        {
+          "a": 208,
+          "d": 64,
+          "r": 10,
+          "ring": 2
+        },
+        {
+          "a": 268,
+          "d": 68,
+          "r": 10,
+          "ring": 2
+        },
+        {
+          "a": 330,
+          "d": 78,
+          "r": 11,
+          "ring": 2
+        }
+      ],
+      "edges": [
+        [0, 1],
+        [0, 2],
+        [0, 3],
+        [0, 4],
+        [0, 5],
+        [0, 6],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 5],
+        [5, 6],
+        [6, 1],
+        [7, 1],
+        [7, 2],
+        [8, 2],
+        [8, 3],
+        [9, 3],
+        [9, 4],
+        [10, 4],
+        [10, 5],
+        [11, 5],
+        [11, 6],
+        [12, 6],
+        [12, 1],
+        [7, 8],
+        [8, 9],
+        [10, 11],
+        [12, 7]
+      ],
+      "bow": 3.2,
+      "tassels": 10,
+      "buds": 6
+    }
+  },
+  "moves": [
+    {
+      "id": "nexus.latch",
+      "slot": "strike",
+      "name": "Latch",
+      "nameKo": "고리 걸기",
+      "frame": {
+        "startup": 12,
+        "active": 8,
+        "recovery": 20,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 6
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "latch",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 96,
+                "oy1": -43.0,
+                "width": 9
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 240,
+                "duration": 1,
+                "flags": 4,
+                "params": {
+                  "latch": 210
+                }
+              },
+              "knockback": {
+                "x": 40,
+                "y": 0
+              },
+              "guardPressure": 0.15,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 165,
+                "oy1": -78,
+                "width": 9
+              },
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 50,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "latch",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 96,
+                "oy1": -8.0,
+                "width": 9
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 240,
+                "duration": 1,
+                "flags": 4,
+                "params": {
+                  "latch": 210
+                }
+              },
+              "knockback": {
+                "x": 40,
+                "y": 0
+              },
+              "guardPressure": 0.15,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 165,
+                "oy1": -8,
+                "width": 9
+              },
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 50,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "latch",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 96,
+                "oy1": 27.0,
+                "width": 9
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 240,
+                "duration": 1,
+                "flags": 4,
+                "params": {
+                  "latch": 210
+                }
+              },
+              "knockback": {
+                "x": 40,
+                "y": 0
+              },
+              "guardPressure": 0.15,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 165,
+                "oy1": 62,
+                "width": 9
+              },
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 50,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["chain", "latch"],
+      "extra": {
+        "chain": {
+          "kind": "latch",
+          "attach": 110,
+          "nodes": 1
+        },
+        "pose": {
+          "startup": {
+            "lean": -4
+          },
+          "active": {
+            "lean": 5
+          },
+          "recovery": {
+            "lean": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "nexus.constrict",
+      "slot": "crush",
+      "name": "Constrict",
+      "nameKo": "조이기",
+      "frame": {
+        "startup": 30,
+        "active": 12,
+        "recovery": 42,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 10
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "grip",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 116,
+                "oy": -34,
+                "r": 46
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 700,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "compress": 7,
+                  "crater": 12
+                }
+              },
+              "knockback": {
+                "x": -260,
+                "y": 0
+              },
+              "guardPressure": 0.8,
+              "reachScale": 0.5
+            },
+            {
+              "id": "bind",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 116,
+                "oy": -34,
+                "r": 46
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 220,
+                "duration": 1,
+                "flags": 4,
+                "params": {
+                  "latch": 230
+                }
+              },
+              "knockback": {
+                "x": -40,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -30,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 30,
+              "ix": 140,
+              "iy": 0,
+              "damp": 0.1
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "grip",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 116,
+                "oy": 0,
+                "r": 46
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 700,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "compress": 7,
+                  "crater": 12
+                }
+              },
+              "knockback": {
+                "x": -260,
+                "y": 0
+              },
+              "guardPressure": 0.8,
+              "reachScale": 0.5
+            },
+            {
+              "id": "bind",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 116,
+                "oy": 0,
+                "r": 46
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 220,
+                "duration": 1,
+                "flags": 4,
+                "params": {
+                  "latch": 230
+                }
+              },
+              "knockback": {
+                "x": -40,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -30,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 30,
+              "ix": 140,
+              "iy": 0,
+              "damp": 0.1
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "grip",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 116,
+                "oy": 34,
+                "r": 46
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 700,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "compress": 7,
+                  "crater": 12
+                }
+              },
+              "knockback": {
+                "x": -260,
+                "y": 0
+              },
+              "guardPressure": 0.8,
+              "reachScale": 0.5
+            },
+            {
+              "id": "bind",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 116,
+                "oy": 34,
+                "r": 46
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 220,
+                "duration": 1,
+                "flags": 4,
+                "params": {
+                  "latch": 230
+                }
+              },
+              "knockback": {
+                "x": -40,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "reachScale": 0.5
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -30,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 30,
+              "ix": 140,
+              "iy": 0,
+              "damp": 0.1
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["chain", "grab", "root"],
+      "extra": {
+        "root": {
+          "mul": 0.3,
+          "ticks": 150,
+          "chains": 3,
+          "snap": 700
+        },
+        "recoil": 0.05,
+        "pose": {
+          "startup": {
+            "lean": -7
+          },
+          "active": {
+            "lean": 8
+          },
+          "recovery": {
+            "lean": 2
+          }
+        }
+      }
+    },
+    {
+      "id": "nexus.slither",
+      "slot": "surge",
+      "name": "Slither",
+      "nameKo": "미끄러짐",
+      "frame": {
+        "startup": 3,
+        "active": 22,
+        "recovery": 26,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 300,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 300,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 300,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "intangible": [4, 22],
+      "tags": ["glide", "chains-trail"],
+      "extra": {
+        "trail": true
+      }
+    },
+    {
+      "id": "nexus.harvest",
+      "slot": "signature",
+      "name": "Harvest",
+      "nameKo": "수확",
+      "frame": {
+        "startup": 14,
+        "active": 30,
+        "recovery": 26,
+        "cancelWindow": 0.4,
+        "chargeMax": 40,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "harvest",
+              "from": 0,
+              "to": 30,
+              "shape": {
+                "kind": "field",
+                "ox": 122,
+                "oy": -40,
+                "r": 64,
+                "falloff": 0.6
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 55,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "latch": 70,
+                  "harvest": 0.9
+                }
+              },
+              "knockback": {
+                "x": -22,
+                "y": 0
+              },
+              "guardPressure": 0.05,
+              "reachScale": 0.5,
+              "rehit": 4
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -20,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "harvest",
+              "from": 0,
+              "to": 30,
+              "shape": {
+                "kind": "field",
+                "ox": 122,
+                "oy": 0,
+                "r": 64,
+                "falloff": 0.6
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 55,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "latch": 70,
+                  "harvest": 0.9
+                }
+              },
+              "knockback": {
+                "x": -22,
+                "y": 0
+              },
+              "guardPressure": 0.05,
+              "reachScale": 0.5,
+              "rehit": 4
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -20,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "harvest",
+              "from": 0,
+              "to": 30,
+              "shape": {
+                "kind": "field",
+                "ox": 122,
+                "oy": 40,
+                "r": 64,
+                "falloff": 0.6
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 55,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "latch": 70,
+                  "harvest": 0.9
+                }
+              },
+              "knockback": {
+                "x": -22,
+                "y": 0
+              },
+              "guardPressure": 0.05,
+              "reachScale": 0.5,
+              "rehit": 4
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -20,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["charge", "harvest", "field"],
+      "extra": {
+        "chargePower": 1,
+        "chargeReach": [0.9, 1.35],
+        "pose": {
+          "startup": {
+            "lean": -3
+          },
+          "charge": {
+            "lean": -5
+          },
+          "active": {
+            "lean": 3
+          }
+        }
+      }
+    },
+    {
+      "id": "nexus.oog",
+      "slot": "ultimate",
+      "name": "Ingesloten Oog",
+      "nameKo": "갇힌 눈",
+      "frame": {
+        "startup": 66,
+        "active": 110,
+        "recovery": 64,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "spiral",
+              "from": 0,
+              "to": 40,
+              "shape": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 90,
+                "oy1": -30,
+                "width": 12
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 220,
+                "duration": 1,
+                "flags": 4,
+                "params": {
+                  "latch": 200
+                }
+              },
+              "knockback": {
+                "x": 0,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 230,
+                "oy1": 24,
+                "width": 12
+              },
+              "reachScale": 0.5,
+              "rehit": 8
+            }
+          ],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "spiral",
+              "from": 0,
+              "to": 40,
+              "shape": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 90,
+                "oy1": -30,
+                "width": 12
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 220,
+                "duration": 1,
+                "flags": 4,
+                "params": {
+                  "latch": 200
+                }
+              },
+              "knockback": {
+                "x": 0,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 230,
+                "oy1": 24,
+                "width": 12
+              },
+              "reachScale": 0.5,
+              "rehit": 8
+            }
+          ],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "spiral",
+              "from": 0,
+              "to": 40,
+              "shape": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 90,
+                "oy1": -30,
+                "width": 12
+              },
+              "damage": {
+                "type": "ASSIMILATION",
+                "energy": 220,
+                "duration": 1,
+                "flags": 4,
+                "params": {
+                  "latch": 200
+                }
+              },
+              "knockback": {
+                "x": 0,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "sweepTo": {
+                "kind": "line",
+                "ox0": 26,
+                "oy0": -8,
+                "ox1": 230,
+                "oy1": 24,
+                "width": 12
+              },
+              "reachScale": 0.5,
+              "rehit": 8
+            }
+          ],
+          "movement": []
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 1,
+      "tags": ["ultimate", "enclose", "armor", "chains"],
+      "extra": {
+        "cage": {
+          "segments": 8,
+          "radius": [175, 44],
+          "build": 56,
+          "closeFrom": 60,
+          "closeTo": 100,
+          "hp": 260,
+          "breakAt": 3,
+          "crush": {
+            "energy": 2800,
+            "latch": 240,
+            "compress": 10,
+            "crater": 16
+          }
+        },
+        "ctl": {
+          "startup": 0.1,
+          "active": 0.15,
+          "recovery": 0.3
+        },
+        "pose": {
+          "startup": {
+            "lean": -6
+          },
+          "active": {
+            "lean": 3
+          },
+          "recovery": {
+            "lean": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "nexus.guard",
+      "slot": "guard",
+      "name": "Chain Mesh",
+      "nameKo": "사슬 그물",
+      "frame": {
+        "startup": 3,
+        "active": 0,
+        "recovery": 5,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": []
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["guard"],
+      "extra": {
+        "shell": {
+          "absorb": {
+            "KINETIC": 0.8,
+            "FRACTURE": 0.55,
+            "CRUSH": 0.5,
+            "ASSIMILATION": 0.4,
+            "TIDAL": 0.3,
+            "THERMAL": 0.12
+          }
+        }
+      }
+    }
+  ],
+  "ai": {
+    "style": "Builds, traps and encloses: roots the foe with Constrict, keeps chains attached, harvests what it infected and retreats to regrow; goes for the Enclosed Eye when the foe is slowed or cornered.",
+    "weights": {
+      "aggression": 0.45,
+      "patience": 0.7,
+      "zoning": 0.5,
+      "retreat": 0.55,
+      "trap": 0.9,
+      "punish": 0.7,
+      "gaze": 0
+    }
+  },
+  "ui": {
+    "accent": "#d63a4e",
+    "accent2": "#8fd4ff",
+    "tagline": "Everything connects. Everything is mine."
+  }
+}

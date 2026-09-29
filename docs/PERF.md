@@ -10,27 +10,43 @@ Each builder appends their own section below; the Lead's integrated numbers come
 
 ## Matter (B2)
 
-Benchmark: `node --expose-gc --import tsx tools/matter/bench.ts` (add `--json` for machine output). Node 22, 4 vCPU Xeon @ 2.8 GHz, **shared with three other builders' processes (load average 6–9 on 4 cores)**, so the `max` columns include OS pre-emption and are an upper bound; averages and percentiles are stable to ±15% between runs. Per-tick time is `world.tick()` only, measured with `performance.now()` around the call (the sim itself never reads a clock; `core.clock`/`core.prof` enable the per-section profiler for the bench). The bench warms the JIT with a 300-tick run first. Bodies: a 168 px layered disc and a 180 px celadon ovoid (~22k cells each), every damage type in rotation, tidal well on one body.
+Benchmark: `node --expose-gc --import tsx tools/matter/bench.ts` (`--json` machine output, `--assert` exit code on budget breaches, `REPS=n`); regression guard `tools/matter/perf.test.ts` (part of `vitest run`). Node 22, 4 vCPU Xeon @ 2.8 GHz, **shared with the other builders' processes (load average 3–13 on 4 cores while measuring)**.
+
+**Method.** Wall-clock per-tick numbers on a shared machine are polluted by OS pre-emption, and `process.cpuUsage()` / `threadCpuUsage()` only advance in ~4 ms steps here, so neither can resolve one tick (main-thread CPU time is still reported, averaged over a whole run).
+The simulation is deterministic, so every scenario is **replayed 5 times and the per-tick MINIMUM is judged** ("load-robust"): scheduler noise disappears, everything the simulation itself causes (allocation, GC it triggers, cache misses, JIT-independent work) stays. The pooled raw wall-clock samples of all replays are printed next to it.
+A "step" is what `Match.step()` pays for the matter world: `applyDamage` (on the ticks that have a hit) + `world.tick()`. Bodies: a layered disc and a celadon ovoid; **r=84 (~22k cells each) is a stress size, twice a real titan; r=55 (~10k cells) is the real size** (Last One 176×176 map, Asteroid 144×128).
+Every damage type in rotation, a gravity well on one body, the section profiler on.
+
+Step = applyDamage + tick, ms, load-robust (min of 5 replays):
 
 | scenario | ticks | avg | p50 | p95 | p99 | max |
 |---|---|---|---|---|---|---|
-| 60 s scripted fight (a hit every 24 ticks, all six types) | 3600 | 0.58 | 0.38 | 1.64 | 3.99 | 16.4 (8.5 on a quieter run) |
-| saturated: a hit every 4 ticks for 30 s | 1800 | 0.62 | 0.23 | 2.80 | 5.48 | 9.2 |
-| pools pre-filled (400 chunks + 6000 particles) + a hit every 4 ticks | 900 | 0.84 | 0.54 | 2.44 | 6.32 | 18.6 (9.7 on a quieter run) |
+| 22k cells, 60 s fight (a hit every 24 ticks, all six types) | 3600 | 0.31 | 0.28 | 0.80 | 1.36 | 4.22 |
+| 22k cells, **saturated** (a hit every 4 ticks) | 1800 | 0.40 | 0.20 | 1.53 | **2.22** | **3.40** |
+| 22k cells, pools full (400 chunks + 6000 particles), a hit every 4 ticks | 900 | 0.51 | 0.30 | 1.72 | **2.66** | **3.33** |
+| 10k cells (real size), 60 s fight | 3600 | 0.07 | 0.01 | 0.42 | 0.79 | 1.53 |
+| 10k cells, saturated | 1800 | 0.17 | 0.07 | 0.75 | 1.25 | 2.18 |
+| 10k cells, pools full | 900 | 0.21 | 0.12 | 0.70 | 1.30 | 1.77 |
 
-All values in ms per tick. `renderLayers` (called every 3rd tick in the bench): avg 0.24 ms, p99 0.73 (standard fight); avg 0.58, p99 1.51 with both pools full.
+Raw wall clock of the same runs (all replays pooled, machine quiet at that moment): p99 2.4-3.4 ms / max 5.6-12.6 ms at 22k, p99 1.0-1.6 ms / max 4.4-7.1 ms at 10k; under load 10-13 the raw max reaches 40-170 ms (whole-process pre-emption, not reproducible tick-for-tick). CPU per tick (main thread, averaged): 0.47 / 0.52 / 0.76 ms at 22k, 0.13 / 0.26 / 0.43 ms at 10k.
+`renderLayers` (every 3rd tick in the bench): avg 0.14-0.66 ms, p99 0.3-1.3 ms (5.7 ms once with both pools full at 10k under load).
 
-**Verdict against the 5 ms/tick budget:** the mean is 0.6–0.8 ms even with both pools saturated, i.e. ~85% headroom. The p99 (4.0–6.3 ms) sits at or just above the budget only on the ticks where a large blow lands (a FRACTURE cut or a crush shock ring plus the connectivity flood fill of a freshly split body); those ticks are ≤ 1–2% of ticks. Nothing here is amortised across ticks by cheating: TIDAL runs every 3rd tick with its cost carried, connectivity has three urgency levels (6/3/1 ticks), and visuals refresh only dirty 16×16 tiles (glow/infection at 30 Hz). The rare 9–18 ms `max` outliers were not reproducible on a quiet machine (8.5–9.7 ms there) and are worst in the first ~25 ticks of a cold JIT; **call `warmUp()` while loading** (measured: worst of the first 20 fight ticks 13–26 ms cold, 3–9 ms after `warmUp()`; costs ~0.4 s).
+**Verdict against the Lead's round-2 targets** (saturated: p99 <= 3 ms, max <= 5 ms; single `applyDamage` FRACTURE/KINETIC/CRUSH <= 1.5 ms): met at both sizes. The worst tick of the 22k fight is a full connectivity flood that frees a big slab (3.4 ms of 4.2). Regression assertion: `perf.test.ts` fails if the saturated 22k scenario's load-robust p99 exceeds 3.5 ms (and a real-size, pools-full run's p99 3 ms).
 
-Mean ms per tick by section (standard fight): jobs 0.03, cracks+fuses 0.002, thermal 0.03, infection 0.08, connectivity 0.10, shock waves 0.02, chunks 0.03, particles 0.02, visual refresh 0.23, stats 0.05. On the ticks > 2.5 ms the dominant sections are visuals (~1.4 ms), connectivity (~1.3 ms) and chunk extraction (~0.7 ms).
+Mean ms per tick by section (22k saturated): jobs 0.10, cracks+fuses 0.00, thermal 0.04, infection 0.02, connectivity 0.05, waves 0.01, chunks 0.02, particles 0.04, visual refresh 0.10, stats 0.04. On the worst ticks the mass sits in connectivity (full floods), visual refresh (~0.5 ms) and jobs (TIDAL fields / the deferred FRACTURE chisel, ~0.3-0.4 ms).
 
-Per call: `applyDamage` FRACTURE 2.8 ms (Dijkstra cuts + crack seeding, the most expensive single call), KINETIC 1.6 ms, CRUSH 1.9 ms, THERMAL 0.08 ms, ASSIMILATION 0.19 ms; `overlap` point r20 91 µs, cone 461 µs; `solidAt` 0.15 µs; `hash()` over two 22k-cell bodies 1.5 ms; `carve()` 100–520 ms (harness only).
+Per `applyDamage` call on a 22k-cell body (load-robust, 40 random events per type at 300-2200 energy; p50 / p90 / max ms): FRACTURE 0.93 / 1.45 / 1.54, KINETIC 0.63 / 1.00 / 1.03, CRUSH 0.82 / 1.05 / 1.17, THERMAL 0.13 / 0.16 / 0.16, ASSIMILATION 0.09 / 0.22 / 0.24. At the real size (10k cells): FRACTURE 0.44 / 0.53 / 0.61, KINETIC 0.35 / 0.40 / 0.44, CRUSH (1500 energy) 0.83 / 0.87 / 1.40. `overlap` point r20 0.04 ms, cone 120 0.35 ms, `solidAt` < 1 us, `hash()` over two 22k-cell bodies 0.45 ms, `carve()` 100-520 ms (harness only).
 
-Allocation: **idle 1000 ticks (bodies, chunks, particles, burning and infection live) grow the heap by ~6 KB with GC forced.** During fights, allocation happens at *event* rate only (chunk sprites, interned particle ramps, `applyDamage` results); a 1800-tick barrage allocates ~100 MB in total, of which the remainder is `refreshRect` (visual refresh) and shock-ring stepping. Scavenges of that garbage are the likeliest source of the residual p99 tail (V8 `--trace-gc` showed 7–14 ms scavenges under load).
+What changed in round 2 to get here (before: p99 2.7-4.5 ms, applyDamage FRACTURE 2.8 / CRUSH 1.9 ms cold or under load, raw max up to 19 ms):
+- **Crater engine**: candidates are scanned straight from the body-local box around the impact (no world-space shape query, no per-cell weight call), compacted in place to the cells the later passes can touch (elliptical distance <= 1.75), and the value noise is only evaluated in the band where it can change the outcome: CRUSH 1500 energy 1.5-2.5 ms -> 0.8-1.0 ms.
+- **Deferred chisel**: FRACTURE's chewing share runs 3 ticks after the blow from the job queue (also keeps slabs intact: connectivity has released them by then), so the blow tick is cheaper.
+- **Connectivity**: the full flood (O(body), ~1 ms at 22k cells) is replaced by a *local pass* from the changed spots whenever it can prove the result (nothing cut off, or only small complete islands): ~50% of the passes and ~80% of their cost in a fight; the full flood remains for big slabs, core-disc losses, fluids and matter added. Proven equivalent: `core.forceFullConn = true` gives bit-identical state hashes (16 scenarios in the unit tests, an 80-scenario sweep offline).
+- Visual fast path no longer touches the material object for pristine cells; `warmUp()` pre-JITs the hot paths (worst of the first 20 fight ticks 13-26 ms cold -> 3-9 ms).
+- Tried and dropped: goal-directed (A*) cut search (no gain: the heuristic is weak next to bond-weighted edge costs), a larger local-search budget (12000 cells made the worst ticks worse).
 
-Mass ledger after the 60 s fight: residual −2.5e-5 (exact conservation is asserted in 24 fuzz barrages and the unit tests).
+Allocation: **idle 1000 ticks (bodies, chunks, particles, burning, infection live) grow the heap by 8 KB with GC forced.** During fights allocation is at *event* rate only (chunk sprites, interned particle ramps, `applyDamage` results, job copies). Mass ledger residual after the 60 s fights: 8e-5 (exact conservation is asserted in the fuzz barrages and unit tests).
 
-Not measured: real-GPU cost of the layers (matter only fills two pooled 640×360 logical-resolution RGBA layers; upload cost belongs to the renderer), and behaviour on other JS engines.
+Not measured: real-GPU cost of the two 640x360 layers (upload belongs to the renderer), other JS engines, and the integrated Match.step() (fighter ticks + AI + sim).
 
 ## Render (B1)
 

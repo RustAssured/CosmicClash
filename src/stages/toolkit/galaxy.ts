@@ -28,8 +28,9 @@ export interface GalaxyDisc {
   /** Spiral arm count (0 = smooth elliptical) and pitch (tan of the pitch angle; ≈ 0.25 tightly wound … 0.6 open). */
   arms: number;
   pitch: number;
-  /** Linear HDR colours: bulge/core, disk & arms, star-forming knots. */
+  /** Linear HDR colours: bulge/core, inner disk, outer disk & arms, star-forming knots. */
   core: Rgb;
+  mid: Rgb;
   arm: Rgb;
   knot: Rgb;
   /** Overall brightness multiplier, dust-lane strength 0..1, knot strength 0..1, rotation speed multiplier. */
@@ -65,7 +66,7 @@ float ext = R * 1.75;
 vec2 off = position.xy * ext;
 if (c.x + ext < -8.0 || c.y + ext < -8.0 || c.x - ext > uRes.x + 8.0 || c.y - ext > uRes.y + 8.0) {
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-  vLocal = vec2(0.0); vG1 = vec4(0.0); vCore = vec4(0.0); vArm = vec4(0.0); vKnot = vec4(0.0); vR = 1.0; vSeed = 0.0;
+  vLocal = vec2(0.0); vG1 = vec4(0.0); vCore = vec4(0.0); vArm = vec4(0.0); vKnot = vec4(0.0); vMid = vec3(0.0); vR = 1.0; vSeed = 0.0;
   return;
 }
 gl_Position = toNdc(c + off);
@@ -74,6 +75,7 @@ vG1 = aG1;
 vCore = aG2;
 vArm = aG3;
 vKnot = aG4;
+vMid = aG5.rgb;
 vR = R;
 vSeed = aG0.w;
 `;
@@ -88,19 +90,22 @@ float rr = length(pl) / vR;
 if (rr > 1.7) discard;
 float theta = atan(pl.y, pl.x) - uSpin * vArm.w * galOmega(rr);
 float arms = vG1.z;
-float bulge = exp(-rr * 11.0) * 1.6 + exp(-rr * 3.5) * 0.18;
+float bulge = exp(-rr * 12.0) * 1.15 + exp(-rr * 3.5) * 0.12;
 vec3 col;
 if (arms > 0.5) {
   float disk = exp(-rr * 3.1) * (1.0 - smoothstep(0.9, 1.6, rr));
   float phase = arms * (theta - log(rr + 0.06) / vG1.w);
-  float spiral = pow(0.5 + 0.5 * cos(phase), 2.6);
+  float spiral = pow(0.5 + 0.5 * cos(phase), 4.2);
   // dust lanes hug the concave (inner) edge of each arm, and dim what lies behind them
   float lane = pow(0.5 + 0.5 * cos(phase - 0.85), 5.0) * smoothstep(0.06, 0.32, rr) * (1.0 - smoothstep(0.8, 1.3, rr));
   float clump = vnoise(pl / vR * 9.0 + vSeed * 13.0);
-  disk *= (0.16 + 0.95 * spiral) * (0.65 + 0.7 * clump);
+  disk *= (0.05 + 1.25 * spiral) * (0.65 + 0.7 * clump);
   disk *= 1.0 - vKnot.w * 0.85 * lane;
-  float kn = smoothstep(0.66, 0.86, vnoise(pl / vR * 26.0 + vSeed * 7.0)) * spiral * smoothstep(0.1, 0.35, rr) * (1.0 - smoothstep(0.7, 1.15, rr));
-  col = vCore.rgb * bulge * (1.0 - vKnot.w * 0.35 * lane) + vArm.rgb * disk * 0.9 + vKnot.rgb * kn;
+  float kn = smoothstep(0.8, 0.87, vnoise(pl / vR * 80.0 + vSeed * 7.0)) * spiral * spiral * smoothstep(0.1, 0.35, rr) * (1.0 - smoothstep(0.45, 0.9, rr));
+  // warm core → inner disk → cool outer disk, walked along the radius so the colours never overlap additively into mud
+  vec3 diskCol = mix(mix(vCore.rgb * 0.85, vMid, smoothstep(0.04, 0.26, rr)), vArm.rgb, smoothstep(0.26, 0.7, rr));
+  vec3 bulgeCol = mix(vMid, vCore.rgb, exp(-rr * 9.0));
+  col = bulgeCol * bulge * (1.0 - vKnot.w * 0.35 * lane) + diskCol * disk + vKnot.rgb * kn;
 } else {
   // smooth elliptical: a de Vaucouleurs-ish profile, slightly mottled
   float e = exp(-pow(rr, 0.28) * 5.6) * 2.4;
@@ -124,17 +129,28 @@ export function addGalaxyDiscs(
   const a2 = new Float32Array(n * 4);
   const a3 = new Float32Array(n * 4);
   const a4 = new Float32Array(n * 4);
+  const a5 = new Float32Array(n * 4);
   discs.forEach((g, i) => {
     a0.set([g.x, g.y, g.radius, g.seed], i * 4);
     a1.set([g.inclination, g.positionAngle, g.arms, Math.max(0.05, g.pitch)], i * 4);
     a2.set([g.core[0], g.core[1], g.core[2], g.brightness], i * 4);
     a3.set([g.arm[0], g.arm[1], g.arm[2], g.spin], i * 4);
     a4.set([g.knot[0] * g.knots, g.knot[1] * g.knots, g.knot[2] * g.knots, g.dust], i * 4);
+    a5.set([g.mid[0], g.mid[1], g.mid[2], 0], i * 4);
   });
   return kit.addInstanced(name, {
     count: n,
-    attributes: { aG0: a0, aG1: a1, aG2: a2, aG3: a3, aG4: a4 },
-    varyings: ['vec2 vLocal', 'vec4 vG1', 'vec4 vCore', 'vec4 vArm', 'vec4 vKnot', 'float vR', 'float vSeed'],
+    attributes: { aG0: a0, aG1: a1, aG2: a2, aG3: a3, aG4: a4, aG5: a5 },
+    varyings: [
+      'vec2 vLocal',
+      'vec4 vG1',
+      'vec4 vCore',
+      'vec4 vArm',
+      'vec4 vKnot',
+      'vec3 vMid',
+      'float vR',
+      'float vSeed',
+    ],
     vertex: DISC_VERT,
     fragment: DISC_FRAG,
     vertexHeader: DISC_VERT_HEAD,
@@ -165,6 +181,9 @@ export interface GalaxyStarsOpts {
   dust: number;
   knots: number;
   bulge: number;
+  /** Fraction of disk stars that trace the arms (default 0.8) and the arms' angular scatter multiplier (default 1). */
+  armFraction?: number;
+  scatter?: number;
   /** Half-thickness of the disk as a fraction of the radius. */
   thickness: number;
   core: Rgb;
@@ -173,6 +192,8 @@ export interface GalaxyStarsOpts {
   outer: Rgb;
   knot: Rgb;
   dustColor: Rgb;
+  /** Opacity multiplier of the dust puffs (1 = default). */
+  dustAlpha?: number;
   brightness: number;
   spin: number;
 }
@@ -276,8 +297,8 @@ export function makeGalaxyStars(o: GalaxyStarsOpts): {
   ];
   for (let i = 0; i < o.stars; i++) {
     const r = radial();
-    const inArm = o.arms > 0 && rng.next() < 0.7;
-    const scatter = 0.09 + 0.16 * r;
+    const inArm = o.arms > 0 && rng.next() < (o.armFraction ?? 0.8);
+    const scatter = (0.09 + 0.16 * r) * (o.scatter ?? 1);
     const th = inArm ? armAngle(rng.int(o.arms), r) + gauss(rng) * scatter : rng.next() * Math.PI * 2;
     const z = gauss(rng) * o.thickness * (0.5 + r * 0.8);
     const t = Math.min(1, r / 0.9);
@@ -337,7 +358,10 @@ export function makeGalaxyStars(o: GalaxyStarsOpts): {
     const th = armAngle(rng.int(Math.max(1, o.arms)), r) - 0.16 + gauss(rng) * 0.045 * (1 + r);
     d0.set([r, th, gauss(rng) * o.thickness * 0.3, 0], i * 4);
     d1.set([rng.range(5, 15) * (1 + r), 0, 0, rng.next()], i * 4);
-    d2.set([o.dustColor[0], o.dustColor[1], o.dustColor[2], rng.range(0.05, 0.13)], i * 4);
+    d2.set(
+      [o.dustColor[0], o.dustColor[1], o.dustColor[2], rng.range(0.05, 0.13) * (o.dustAlpha ?? 1)],
+      i * 4,
+    );
   }
   return {
     stars: { s0: s0.subarray(0, n * 4), s1: s1.subarray(0, n * 4), s2: s2.subarray(0, n * 4), count: n },

@@ -200,9 +200,17 @@ export const IRON: PartialSet = {
   decays: [1, 0.8, 0.6, 0.45, 0.3],
 };
 /** Steel chain links and hardened chain: hollow, ringing, a little "tinny": inharmonic ring modes that die from the top down. */
-export const CHAIN: PartialSet = { ratios: [1, 1.59, 2.27, 3.03, 4.9], amps: [1, 0.7, 0.5, 0.32, 0.18], decays: [1, 0.8, 0.55, 0.38, 0.22] };
+export const CHAIN: PartialSet = {
+  ratios: [1, 1.59, 2.27, 3.03, 4.9],
+  amps: [1, 0.7, 0.5, 0.32, 0.18],
+  decays: [1, 0.8, 0.55, 0.38, 0.22],
+};
 /** A big bronze bell (hum, prime, tierce, quint, nominal): the orbital ring of a moon slam. Long, warm, low. */
-export const BELL: PartialSet = { ratios: [0.5, 1, 1.183, 1.506, 2, 2.514], amps: [0.6, 1, 0.7, 0.5, 0.6, 0.3], decays: [1.6, 1, 0.8, 0.6, 0.5, 0.3] };
+export const BELL: PartialSet = {
+  ratios: [0.5, 1, 1.183, 1.506, 2, 2.514],
+  amps: [0.6, 1, 0.7, 0.5, 0.6, 0.3],
+  decays: [1.6, 1, 0.8, 0.6, 0.5, 0.3],
+};
 /** Ceramic "tink": a short bar mode set. */
 export const TINK: PartialSet = {
   ratios: [1, 2.76, 5.4, 8.93],
@@ -255,6 +263,8 @@ export function gravel(
     gain: number;
     q?: number;
     decayShape?: number;
+    /** Soften the grains' hard edges with a low-pass at this frequency (rock and earth should not click). */
+    lowpass?: number;
   },
 ): AudioBufferSourceNode {
   const ac = c.ac;
@@ -285,7 +295,14 @@ export function gravel(
   }
   gn.gain.setValueAtTime(0, Math.max(clear, t + g0.dur) + 0.02);
   src.connect(f);
-  f.connect(gn);
+  if (g0.lowpass) {
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = g0.lowpass;
+    lp.Q.value = 0.5;
+    f.connect(lp);
+    lp.connect(gn);
+  } else f.connect(gn);
   gn.connect(o.input);
   src.start(t, noiseOffset(c, g0.dur));
   src.stop(Math.max(clear, t + g0.dur) + 0.08);

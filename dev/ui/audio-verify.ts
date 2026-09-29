@@ -1,15 +1,24 @@
 import type { AudioEvent, AudioScene, StageId, TitanId } from '@/contracts';
-import { createAudioEngine, type AudioEngineExt } from '@/audio/engine';
+import type { AudioEngineExt } from '@/audio/engine';
+import { bandShare, decayTime, envelopeDb, firstAbove, spectralCentroid } from '@/audio/dsp/analysis';
 import {
-  bandShare,
-  decayTime,
-  envelopeDb,
-  firstAbove,
+  SR,
+  hit,
+  metric,
+  minus,
+  nonFiniteSamples,
   peak,
+  render,
+  resetNonFinite,
   rms,
-  spectralCentroid,
+  scene,
+  settle,
   toDb,
-} from '@/audio/dsp/analysis';
+  type EventMetric,
+  type Rendered,
+} from './audio-render';
+import { runStageVerification, type StageReport } from './audio-stages';
+import { runTitanVerification, type TitanReport } from './audio-titans';
 
 /**
  * Numeric verification of the REAL audio engine in a real browser: every scenario renders through an OfflineAudioContext
@@ -20,16 +29,6 @@ import {
  * voice is, how long the reverb tails are, and how soon after an event the first sample appears. It cannot say whether any of
  * it is BEAUTIFUL — only ears can.
  */
-const SR = 44100;
-
-export interface EventMetric {
-  name: string;
-  /** Peak of the event ALONE (scene bed subtracted), before the compressor and limiter: how hot the voice is. */
-  peakDb: number;
-  rmsDb: number;
-  centroidHz: number;
-  tailSec: number;
-}
 export interface VerifyReport {
   sampleRate: number;
   events: EventMetric[];
@@ -60,115 +59,19 @@ export interface VerifyReport {
   /** Spread of the 50 ms RMS envelope: rhythm layers make the hot score far more dynamic than the calm drone. */
   scoreCalmDynDb: number;
   scoreHotDynDb: number;
-  /** Spectral centroid above 300 Hz (sub-bass thump excluded) of the Last One's glass being hit… */
   /** Spectral centroid above 300 Hz (the shared sub-bass thump excluded): the glassy Last One being hit. */
   glassCentroidHz: number;
   /** Same measure for the Asteroid being hit: rock should sit well below glass. */
   rockCentroidHz: number;
+  /** Per-titan character: hit centroid, sub-bass, the continuous bed, and the behaviours of each titan's bed. */
+  titans: TitanReport | null;
+  /** Per-stage score character (see audio-stages.ts). */
+  stages: StageReport | null;
   gainMasterZeroPeak: number;
   gainHalfDb: number;
   uiPeakDb: number;
   uiMaxTailSec: number;
 }
-
-/**
- * The score smooths intensity (rises with a 0.35 s time constant, as in play, where update() runs every frame). Offline there
- * are no frames, so feed it two seconds of them first — WITHOUT scheduling — then pre-schedule `horizon` seconds at the settled
- * intensity. One single call would plan the whole clip at ~5 % of the intensity asked for.
- */
-function settle(eng: AudioEngineExt, s: AudioScene, horizon: number): void {
-  for (let i = 0; i < 120; i++) eng.updateAt(s, 1 / 60, 0);
-  eng.updateAt(s, 1 / 60, horizon);
-}
-
-const scene = (o: Partial<AudioScene> = {}, a: TitanId = 'lastone', b: TitanId = 'asteroid'): AudioScene => ({
-  phase: 'fight',
-  stage: 'nursery',
-  intensity: 0.6,
-  listenerX: 800,
-  lowestIntegrity: 0.8,
-  timeScale: 1,
-  fighters: [
-    { titan: a, x: 700, speed: 260, massFrac: 1, charge: 0, resource: 10, meter: 0.3, state: 'idle' },
-    { titan: b, x: 900, speed: 120, massFrac: 1, charge: 0, resource: 10, meter: 0.3, state: 'idle' },
-  ],
-  ...o,
-});
-
-interface Rendered {
-  /** Mono fold (for spectral metrics). */
-  mono: Float32Array;
-  /** True per-channel peak |sample|. */
-  peak: number;
-  /** Count of NaN / ±Infinity samples: must always be zero. */
-  nonFinite: number;
-}
-
-let totalNonFinite = 0;
-async function render(
-  seconds: number,
-  setup: (eng: AudioEngineExt, ctx: OfflineAudioContext) => void,
-  opts: { unsafeBypassLimiter?: boolean; seed?: number } = {},
-): Promise<Rendered> {
-  const ctx = new OfflineAudioContext(2, Math.ceil(SR * seconds), SR);
-  const eng = createAudioEngine({
-    context: ctx,
-    seed: opts.seed ?? 1,
-    unsafeBypassLimiter: opts.unsafeBypassLimiter,
-  });
-  await eng.unlock();
-  setup(eng, ctx);
-  const buf = await ctx.startRendering();
-  const l = buf.getChannelData(0);
-  const r = buf.getChannelData(1);
-  const mono = new Float32Array(l.length);
-  let pk = 0;
-  let bad = 0;
-  for (let i = 0; i < l.length; i++) {
-    const a = l[i]!;
-    const b = r[i]!;
-    if (!Number.isFinite(a) || !Number.isFinite(b)) {
-      bad++;
-      continue;
-    }
-    mono[i] = 0.5 * (a + b);
-    pk = Math.max(pk, Math.abs(a), Math.abs(b));
-  }
-  totalNonFinite += bad;
-  return { mono, peak: pk, nonFinite: bad };
-}
-
-/** Metrics of the event ALONE: `x` is the event render minus the bed (the same scene without the event). */
-function metric(name: string, x: Float32Array, t0 = 0): EventMetric {
-  const from = Math.floor(SR * t0);
-  const seg = x.subarray(from);
-  return {
-    name,
-    peakDb: toDb(peak(x)),
-    rmsDb: toDb(rms(seg, 0, Math.min(seg.length, SR))),
-    centroidHz: spectralCentroid(seg, SR, 0, 8192, 300),
-    tailSec: decayTime(seg, SR, 40, 20),
-  };
-}
-
-const hit = (over: Partial<Extract<AudioEvent, { t: 'hit' }>> = {}): AudioEvent => ({
-  t: 'hit',
-  attacker: 0,
-  target: 1,
-  titan: 'asteroid',
-  x: 800,
-  y: 300,
-  dirX: 1,
-  dirY: 0,
-  type: 'KINETIC',
-  energy: 900,
-  cellsRemoved: 40,
-  massRemoved: 12,
-  blocked: 0,
-  heavy: false,
-  onDamaged: 0,
-  ...over,
-});
 
 /** A worst-case event storm: everything at once, over `seconds`, from both titans. */
 function storm(seconds: number, eng: AudioEngineExt): number {
@@ -211,7 +114,7 @@ function storm(seconds: number, eng: AudioEngineExt): number {
 }
 
 export async function runVerification(opts: { quick?: boolean } = {}): Promise<VerifyReport> {
-  totalNonFinite = 0;
+  resetNonFinite();
   const events: EventMetric[] = [];
   const setupFor =
     (ev: AudioEvent[], s: AudioScene) =>
@@ -239,8 +142,7 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
   ): Promise<Float32Array> => {
     const bed = await bedFor(seconds, s);
     const withEv = await render(seconds, setupFor(ev, s), { unsafeBypassLimiter: true });
-    const diff = new Float32Array(withEv.mono.length);
-    for (let i = 0; i < diff.length; i++) diff[i] = withEv.mono[i]! - bed.mono[i]!;
+    const diff = minus(withEv.mono, bed.mono);
     events.push(metric(name, diff, 0.05));
     return diff;
   };
@@ -288,46 +190,6 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
     { t: 'charge', slot: 0, titan: 'lastone', moveId: 'lastone.gaze', frac: 0, phase: 'start' },
     { t: 'charge', slot: 0, titan: 'lastone', moveId: 'lastone.gaze', frac: 0.7, phase: 'hold' },
   ]);
-  // the four titans without a dedicated voice file yet (flavour table in voices/generic.ts): they must sit at sensible levels too
-  for (const titan of ['nexus', 'blackhole', 'supernova', 'planet'] as const) {
-    const sc = scene({}, titan, 'asteroid');
-    await one(`generic ${titan} hit`, [hit({ type: 'THERMAL', titan, target: 0, attacker: 1 })], 2.6, sc);
-    await one(
-      `generic ${titan} windup`,
-      [
-        {
-          t: 'move',
-          slot: 0,
-          titan,
-          moveId: `${titan}.strike`,
-          moveSlot: 'strike',
-          aim: 'forward',
-          x: 700,
-          y: 300,
-        },
-      ],
-      2.6,
-      sc,
-    );
-    await one(
-      `generic ${titan} release`,
-      [
-        {
-          t: 'release',
-          slot: 0,
-          titan,
-          moveId: `${titan}.strike`,
-          moveSlot: 'strike',
-          x: 700,
-          y: 300,
-          power: 0.8,
-        },
-      ],
-      2.6,
-      sc,
-    );
-    await one(`generic ${titan} ko`, [{ t: 'ko', slot: 0, x: 700, y: 300 }], 5, sc);
-  }
   await one('surge lastone', [{ t: 'surge', slot: 0, titan: 'lastone', x: 700, y: 300, dirX: 1, dirY: 0 }]);
   await one('surge asteroid', [
     { t: 'surge', slot: 1, titan: 'asteroid', x: 900, y: 300, dirX: -1, dirY: 0 },
@@ -383,9 +245,11 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
     return {
       sampleRate: SR,
       events,
-      nonFiniteSamples: totalNonFinite,
+      nonFiniteSamples: nonFiniteSamples(),
       fuzzRuns: 0,
       fuzzWorstRawPeak: nan,
+      titans: null,
+      stages: null,
       silenceRmsDb,
       bedPeakDb: toDb(bedReport.peak),
       bedRmsDb: toDb(rms(bedReport.mono)),
@@ -416,14 +280,14 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
   // --- fuzz: many seeds, every titan pair, every damage type: nothing may ever diverge or go non-finite (raw, i.e. WITHOUT
   // the limiter, because the limiter would hide a diverging voice — and NaN in the chain would silence the game for good)
   const kinds = ['FRACTURE', 'ASSIMILATION', 'TIDAL', 'THERMAL', 'CRUSH', 'KINETIC'] as const;
-  const titans: TitanId[] = ['lastone', 'asteroid', 'nexus', 'blackhole', 'supernova', 'planet'];
+  const roster: TitanId[] = ['lastone', 'asteroid', 'nexus', 'blackhole', 'supernova', 'planet'];
   let fuzzWorstRaw = 0;
   let fuzzRuns = 0;
   for (let seed = 1; seed <= 24; seed++) {
     const evs: AudioEvent[] = [];
     for (let i = 0; i < 12; i++) {
-      const titan = titans[(seed + i) % titans.length]!;
-      const other = titans[(seed * 3 + i) % titans.length]!;
+      const titan = roster[(seed + i) % roster.length]!;
+      const other = roster[(seed * 3 + i) % roster.length]!;
       evs.push(
         hit({
           type: kinds[(seed + i) % 6]!,
@@ -460,7 +324,7 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
       4,
       (eng) => {
         eng.setVolumes({ music: 0 });
-        eng.updateAt(scene({}, titans[seed % 6]!, titans[(seed + 1) % 6]!), 1 / 60, 0);
+        eng.updateAt(scene({}, roster[seed % 6]!, roster[(seed + 1) % 6]!), 1 / 60, 0);
         for (let i = 0; i < evs.length; i += 5)
           eng.handleAt(evs.slice(i, i + 5), 0.05 + (i / evs.length) * 3);
       },
@@ -548,12 +412,16 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
   const half = await gainProbe(0.5);
 
   const ui = events.filter((e) => e.name.startsWith('ui '));
+  const titans = await runTitanVerification();
+  const stages = await runStageVerification();
   return {
     sampleRate: SR,
     events,
-    nonFiniteSamples: totalNonFinite,
+    nonFiniteSamples: nonFiniteSamples(),
     fuzzRuns,
     fuzzWorstRawPeak: fuzzWorstRaw,
+    titans,
+    stages,
     silenceRmsDb,
     bedPeakDb: toDb(bedReport.peak),
     bedRmsDb: toDb(rms(bedReport.mono)),

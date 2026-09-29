@@ -14,6 +14,7 @@ import { Btn, type ScriptEvent } from './input';
  *   &p1=human|ai|dummy&p2=...        (controllers; default dummy for p1/p2 unless mode says otherwise)
  *   &script0=20:crush,80:sig*30      (scripted input for slot 0; see parseScript)
  *   &script1=...
+ *   &gap=380                         (px between the fighters at round start; 40..700)
  *   &hud=0|1  &debug=0|1  &freeze=1  &scale=2
 
  * Script tick 0 = the tick the fight goes live (intro is fast-forwarded silently in harness mode).
@@ -32,6 +33,8 @@ export interface HarnessParams {
   p2: 'human' | 'ai' | 'dummy';
   script0: ScriptEvent[];
   script1: ScriptEvent[];
+  /** Distance in px between the fighters at round start (default 380). */
+  gap: number;
   hud: boolean;
   debug: boolean;
   freeze: boolean;
@@ -134,6 +137,7 @@ export function parseHarnessParams(search: string): HarnessParams {
     p2: ctl(q.get('p2'), mode === 'aivai' ? 'ai' : 'dummy'),
     script0: parseScript(q.get('script0')),
     script1: parseScript(q.get('script1')),
+    gap: Math.min(700, Math.max(40, parseInt(q.get('gap') ?? '380', 10) || 380)),
     hud: q.get('hud') !== '0',
     debug: q.get('debug') === '1',
     freeze: q.get('freeze') === '1' || (has('t') && q.get('freeze') !== '0'),

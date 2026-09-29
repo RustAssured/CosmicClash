@@ -40,7 +40,7 @@ export interface MatchDeps {
 const KO_PHASE_TICKS = 72;
 const KO_SLOWMO_TICKS = 50;
 const TIMEOVER_PHASE_TICKS = 48;
-const START_HALF_GAP = 190;
+const DEFAULT_START_GAP = 380;
 const INFINITE_RESET_DELAY = 90;
 /** Fraction of missing matter that regrows (as scars) between rounds. */
 const ROUND_HEAL_FRACTION = 0.3;
@@ -133,7 +133,8 @@ export class Match implements MatchApi {
 
   private startX(slot: 0 | 1): number {
     const cx = (this.arena.minX + this.arena.maxX) / 2;
-    return slot === 0 ? cx - START_HALF_GAP : cx + START_HALF_GAP;
+    const half = (this.config.startGap ?? DEFAULT_START_GAP) / 2;
+    return slot === 0 ? cx - half : cx + half;
   }
 
   private emit(e: SimEvent): void {

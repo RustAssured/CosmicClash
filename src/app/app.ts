@@ -85,6 +85,8 @@ export class App {
   session: Session | null = null;
   paused = false;
   ready = false;
+  /** Harness: draw no UI/HUD layer at all (clean screenshots). */
+  hideUi = false;
 
   private canvas!: HTMLCanvasElement;
   private trainingFrameData = false;
@@ -401,7 +403,7 @@ export class App {
       f.fx = this.fx.sample(0);
       this.ui.draw(null);
     }
-    f.ui = this.ui.layer;
+    f.ui = this.hideUi ? null : this.ui.layer;
     if (this.loadingText) {
       this.drawLoading();
       this.layers.push(this.loadingLayer);

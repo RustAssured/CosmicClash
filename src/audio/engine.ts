@@ -12,9 +12,6 @@ import {
 import { generateImpulseResponse } from './dsp/ir';
 import { clamp, clamp01, hardClipCurve, limiterCurve, volumeCurve } from './dsp/math';
 import { ScoreEngine } from './score/engine';
-import { createAsteroidVoice } from './voices/asteroid';
-import { createGenericVoice } from './voices/generic';
-import { createLastOneVoice } from './voices/lastone';
 import {
   magnitude,
   playCueGeneric,
@@ -29,6 +26,7 @@ import {
 } from './voices/sfx';
 import { GLASS, makeOut, noiseHit, partials, riser, thump, tone, whistlePass } from './voices/synth';
 import type { TitanVoice, VoiceCtx } from './voices/types';
+import { createTitanVoice } from './voices/index';
 import { UI_TRIM, playUi } from './voices/ui';
 
 /** Time between an event reaching `handle()` and its first sample: schedules a little ahead so start times are exact. */
@@ -48,7 +46,8 @@ const MOVE_TRIM: Readonly<Record<string, number>> = {
   guard: 2,
 };
 const SURGE_TRIM = 3;
-const CUE_TRIM = 3;
+/** The Last One's and the Asteroid's cues are small pings authored quietly; the four newer voices author their cues at full level. */
+const CUE_TRIM: Readonly<Partial<Record<TitanId, number>>> = { lastone: 3, asteroid: 3 };
 
 /** Concurrent one-shot cap (events, not nodes). Above it, low-priority sounds are dropped. */
 const POLYPHONY = 28;
@@ -316,12 +315,9 @@ class Engine implements AudioEngineExt {
   private voiceFor(id: TitanId): TitanVoice {
     let v = this.voices.get(id);
     if (!v) {
-      v =
-        id === 'lastone'
-          ? createLastOneVoice()
-          : id === 'asteroid'
-            ? createAsteroidVoice()
-            : createGenericVoice(id);
+      // every roster titan has its own voice file; an id this build has never heard of gets an empty voice (all handlers are
+      // optional), which falls through to the shared titan-neutral sounds: it still sounds like a fight
+      v = createTitanVoice(id);
       this.voices.set(id, v);
     }
     return v;
@@ -476,7 +472,7 @@ class Engine implements AudioEngineExt {
       case 'cue': {
         if (!c.take(0)) return;
         const v = this.voiceFor(ev.titan);
-        const tc = this.trimmed(CUE_TRIM);
+        const tc = this.trimmed(CUE_TRIM[ev.titan] ?? 1);
         if (v.onCue) v.onCue(tc, t, ev);
         else playCueGeneric(tc, t, ev.amount, c.panOf(ev.x));
         return;

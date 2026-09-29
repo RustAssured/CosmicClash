@@ -124,6 +124,78 @@ export function bandShare(
   return all > 0 ? band / all : 0;
 }
 
+/** Power spectrum (|X|²) of a Hann-windowed segment, zero-padded to a power of two; bin k is at k·sampleRate/n. */
+function powerSpectrum(x: ArrayLike<number>, from: number, len: number): { pw: Float64Array; n: number } {
+  let n = 1;
+  while (n < len) n <<= 1;
+  const re = new Float64Array(n);
+  const im = new Float64Array(n);
+  const end = Math.min(x.length, from + len);
+  const m = end - from;
+  for (let i = 0; i < m; i++)
+    re[i] = x[from + i]! * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / Math.max(1, m - 1)));
+  fft(re, im);
+  const pw = new Float64Array(n / 2);
+  for (let k = 1; k < n / 2; k++) pw[k] = re[k]! * re[k]! + im[k]! * im[k]!;
+  return { pw, n };
+}
+
+/** The strongest frequency in Hz between `loHz` and `hiHz` (a drone's pitch). Zero if the segment is silent. */
+export function peakFrequency(
+  x: ArrayLike<number>,
+  sampleRate: number,
+  loHz: number,
+  hiHz: number,
+  from = 0,
+  len = 65536,
+): number {
+  const { pw, n } = powerSpectrum(x, from, len);
+  let best = 0;
+  let bestK = 0;
+  for (let k = 1; k < pw.length; k++) {
+    const f = (k * sampleRate) / n;
+    if (f < loHz || f > hiHz) continue;
+    if (pw[k]! > best) {
+      best = pw[k]!;
+      bestK = k;
+    }
+  }
+  return best > 0 ? (bestK * sampleRate) / n : 0;
+}
+
+/** RMS level in dBFS of the part of a segment that lies between `loHz` and `hiHz` (Parseval on the windowed spectrum). */
+export function bandLevelDb(
+  x: ArrayLike<number>,
+  sampleRate: number,
+  loHz: number,
+  hiHz: number,
+  from = 0,
+  len = 32768,
+): number {
+  const { pw, n } = powerSpectrum(x, from, len);
+  let sum = 0;
+  for (let k = 1; k < pw.length; k++) {
+    const f = (k * sampleRate) / n;
+    if (f >= loHz && f < hiHz) sum += pw[k]!;
+  }
+  // window power gain of a Hann window is 3/8; the one-sided spectrum carries half the energy in each bin pair
+  const meanSquare = (2 * sum) / (n * n * 0.375 * (Math.min(len, x.length - from) / n));
+  return 10 * Math.log10(Math.max(1e-18, meanSquare));
+}
+
+/** Number of local maxima above `thr` in a series, at least `minGap` samples apart: a beat counter over an envelope. */
+export function countPeaks(env: ArrayLike<number>, thr: number, minGap: number): number {
+  let n = 0;
+  let last = -Infinity;
+  for (let i = 1; i < env.length - 1; i++) {
+    if (env[i]! > thr && env[i]! >= env[i - 1]! && env[i]! > env[i + 1]! && i - last >= minGap) {
+      n++;
+      last = i;
+    }
+  }
+  return n;
+}
+
 /** First sample index whose magnitude exceeds `thr`, or −1. */
 export function firstAbove(x: ArrayLike<number>, thr: number): number {
   for (let i = 0; i < x.length; i++) if (Math.abs(x[i]!) > thr) return i;

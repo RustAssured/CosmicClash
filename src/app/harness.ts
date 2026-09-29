@@ -34,6 +34,7 @@ export function harnessMatchConfig(p: HarnessParams): MatchConfig {
     slots: [slot(p.a, aivai ? 'ai' : p.p1), slot(p.b, aivai ? 'ai' : p.p2)],
     startState: p.state,
     infinite: p.mode === 'training',
+    startGap: p.gap,
   };
 }
 
@@ -162,7 +163,7 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
       });
       if (params.t > 0) app.loop.stepTicks(params.t, false);
       if (params.freeze) app.loop.pause();
-      if (!params.hud) app.ui.showTitle(); // hud=0: hide the HUD (the title screen draws nothing over a live match here)
+      app.hideUi = !params.hud;
     } else {
       const screen =
         { title: 'title', menu: 'mode', select: 'select', controller: 'controller' }[params.mode as string] ??

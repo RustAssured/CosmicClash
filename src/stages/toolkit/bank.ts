@@ -22,8 +22,9 @@ export interface DustBankOpts {
   speed: number;
   alpha: number;
   forceK: number;
-  /** Strength of the lit lip. */
+  /** Strength of the lit lip and its width as a fraction of the screen height (default 0.05: a thin bright edge). */
   rimK?: number;
+  lip?: number;
 }
 
 const BANK_FRAGMENT = /* glsl */ `
@@ -35,6 +36,7 @@ uniform float uSpeed;
 uniform float uAlpha;
 uniform float uForceK;
 uniform float uRimK;
+uniform float uLip;
 void main() {
   vec2 sp = warpByForces(screenPx(), -uForceK);
   vec2 lp = sp + uView * uParallax;
@@ -42,9 +44,11 @@ void main() {
   float n = fbm(vec2(lp.x / uScaleXY.x + t, lp.y / uScaleXY.y - t * 0.4), 4);
   vec2 s = sp / uRes;
   float edge = s.y + (n - 0.5) * uShape.z - uShape.x + uShape.y * (s.x - 0.5);
-  float a = smoothstep(0.0, uShape.w, edge) * uAlpha;
-  float lip = smoothstep(0.0, 0.05, edge) * (1.0 - smoothstep(0.05, 0.16, edge));
-  vec3 col = uCol + uRim * lip * (0.4 + 0.6 * n) * uRimK;
+  // a crisp torn edge (uLip wide), then the dust thickens with depth over the softness distance
+  float a = smoothstep(0.0, uLip * 0.6, edge) * mix(0.5, 1.0, smoothstep(0.0, uShape.w, edge)) * uAlpha;
+  float lip = smoothstep(0.0, uLip * 0.3, edge) * (1.0 - smoothstep(uLip * 0.3, uLip, edge));
+  float pat = smoothstep(0.2, 0.9, fbm(vec2(lp.x / 70.0 - t, lp.y / 40.0), 3));   // the light catches the edge unevenly
+  vec3 col = uCol * (0.55 + 0.9 * n) + uRim * lip * (0.12 + 0.88 * pat) * uRimK;
   o = vec4(col, a);
 }
 `;
@@ -59,5 +63,6 @@ export function addDustBank(kit: SceneryKit, name: string, o: DustBankOpts): Kit
     uAlpha: { value: o.alpha },
     uForceK: { value: o.forceK },
     uRimK: { value: o.rimK ?? 1 },
+    uLip: { value: o.lip ?? 0.05 },
   });
 }

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { STAGE_IDS } from '@/contracts';
 import {
+  bandLevelDb,
   bandShare,
+  countPeaks,
+  peakFrequency,
   decayTime,
   envelopeDb,
   fft,
@@ -182,6 +185,23 @@ describe('analysis', () => {
     expect(bandShare(mix, SR, 20, 300)).toBeGreaterThan(0.9);
     expect(bandShare(mix, SR, 3000, 8000)).toBeLessThan(0.1);
     expect(bandShare(new Float32Array(4096), SR, 0, 1000)).toBe(0);
+  });
+  it("peakFrequency finds a drone's pitch, bandLevelDb measures a band, countPeaks counts beats", () => {
+    const drone = Float32Array.from(
+      { length: 65536 },
+      (_, i) => 0.3 * Math.sin((2 * Math.PI * 52 * i) / SR) + 0.02 * Math.sin((2 * Math.PI * 3000 * i) / SR),
+    );
+    expect(peakFrequency(drone, SR, 20, 200)).toBeGreaterThan(51.2);
+    expect(peakFrequency(drone, SR, 20, 200)).toBeLessThan(52.8);
+    expect(peakFrequency(new Float32Array(4096), SR, 20, 200)).toBe(0);
+    // a 0.3-amplitude sine is -13.5 dBFS RMS; a 0.02 one is -37 dBFS: each band reports its own
+    expect(bandLevelDb(drone, SR, 20, 200)).toBeGreaterThan(-15);
+    expect(bandLevelDb(drone, SR, 20, 200)).toBeLessThan(-12);
+    expect(bandLevelDb(drone, SR, 2000, 4000)).toBeGreaterThan(-39);
+    expect(bandLevelDb(drone, SR, 2000, 4000)).toBeLessThan(-35);
+    const env = Array.from({ length: 200 }, (_, i) => (i % 20 === 5 ? 1 : 0.1));
+    expect(countPeaks(env, 0.5, 3)).toBe(10);
+    expect(countPeaks(env, 0.5, 30)).toBe(5); // 5, 45, 85, 125, 165: each candidate 20 samples after a kept one is skipped
   });
   it('peak / rms / firstAbove', () => {
     const s = sine(100, 4800);

@@ -107,9 +107,9 @@ export class NurseryScenery extends SceneryBase {
   readonly look: SceneryLook = { ...LOOK };
   protected readonly noiseSeed = 0x4e5572;
   private info: StageInfo = STAGE_INFO.nursery;
-  private lightLayerX = 0;
-  private lightLayerY = 0;
-  private lightParallax = 0.1;
+  private lightParallax = 0.09;
+  private lightLayerX = atRef(78, -26, 0.09)[0];
+  private lightLayerY = atRef(78, -26, 0.09)[1];
   private view = { x0: REF_X0, y0: REF_Y0 };
   private bakes: WebGLRenderTarget[] = [];
   private ambient: AmbientLife | null = null;

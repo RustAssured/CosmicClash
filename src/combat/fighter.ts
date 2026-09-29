@@ -151,6 +151,9 @@ export class FighterImpl implements Fighter {
   intangible = false;
   freezeTicks = 0;
   freezeAge = 0;
+  /** Time-limited speed multiplier put on this fighter by the foe (chains, tar, …): 1 = none. See `applyStatus`. */
+  statusMul = 1;
+  statusTicks = 0;
   lastHitTick = -1e9;
   lastHitDirX = 1;
   lastHitDirY = 0;
@@ -406,6 +409,7 @@ export class FighterImpl implements Fighter {
     this.input = ctx.input;
     this.live = ctx.live;
     this.freezeTicks = 0;
+    if (this.statusTicks > 0 && --this.statusTicks === 0) this.statusMul = 1;
     const t = this.body.transform;
     this.prevTx = t.x;
     this.prevTy = t.y;
@@ -865,15 +869,17 @@ export class FighterImpl implements Fighter {
     if (!m.def || !m.variant || m.phase === 'charge') return;
     const keys = m.variant.movement;
     const et = this.effTick();
+    // a rooted or slowed fighter's dashes and lunges are shortened too
+    const push = 0.35 + 0.65 * this.statusMul;
     while (m.keyIdx < keys.length && keys[m.keyIdx]!.at <= et) {
       const k = keys[m.keyIdx++]!;
       if (m.def.slot === 'surge') {
-        const sp = Math.hypot(k.ix, k.iy);
+        const sp = Math.hypot(k.ix, k.iy) * push;
         this.vx = m.dirX * sp;
         this.vy = m.dirY * sp;
       } else {
-        this.vx += k.ix * this.facing;
-        this.vy += k.iy;
+        this.vx += k.ix * this.facing * push;
+        this.vy += k.iy * push;
       }
       if (k.damp !== undefined) m.damp = k.damp;
     }
@@ -1008,7 +1014,15 @@ export class FighterImpl implements Fighter {
   private integrate(): void {
     const dt = TICK_DT;
     const m = this.mv;
-    const top = topSpeed(this.def, this.stats);
+    let top = topSpeed(this.def, this.stats);
+    const sm = this.statusMul;
+    if (sm < 1) {
+      // rooted / slowed: a lower top speed and a strong drag on whatever velocity is left
+      top *= sm;
+      const k = Math.pow(sm, dt * 3);
+      this.vx *= k;
+      this.vy *= k;
+    }
     let ctl = this.controlMul();
     if (this.state === 'victory') ctl = 0.2;
     // impulse-driven moves (dashes, lunges) glide on their own damping; steering is nearly off
@@ -1820,6 +1834,21 @@ export class FighterImpl implements Fighter {
    *  Fighter API: freeze / layers / debug / rounds
    * ---------------------------------------------------------------------------------------------- */
 
+  /**
+   * Put a time-limited speed multiplier on this fighter (`mul` < 1 slows/roots it for `ticks` fighter ticks; a stronger effect
+   * replaces a weaker one, an equal or weaker one only extends the time). Used by the foe's chains.
+   */
+  applyStatus(mul: number, ticks: number): void {
+    if (this.ko) return;
+    if (this.statusTicks <= 0 || mul <= this.statusMul) this.statusMul = mul;
+    this.statusTicks = Math.max(this.statusTicks, ticks);
+  }
+
+  clearStatus(): void {
+    this.statusMul = 1;
+    this.statusTicks = 0;
+  }
+
   freeze(ticks: number): void {
     this.freezeTicks = Math.max(this.freezeTicks, ticks);
     this.freezeAge = 0;
@@ -1936,6 +1965,8 @@ export class FighterImpl implements Fighter {
     this.stunEndTick = -1e9;
     this.lastHitTick = -1e9;
     this.freezeTicks = 0;
+    this.statusMul = 1;
+    this.statusTicks = 0;
     this.world.heal(this.body.id, healFraction, seed);
     const t = this.body.transform;
     t.x = Math.round(x);

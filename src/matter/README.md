@@ -25,9 +25,9 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 | `liveBounds(bodyId, out)` | world AABB of a body's live cells (for `FighterView.bounds*`) |
 | `refresh(bodyId?)` | force visual/stat refresh without ticking |
 | `ledger()` | mass ledger report (`error` must be ≈ 0) |
-| `diagnostics()` | live chunk/particle counts and masses |
+| `diagnostics()` | live chunk/particle counts and masses, pending jobs (multi-tick slices + deferred chisels) |
 | `settleBody(id)` | run the connectivity pass now (tests, carve) |
-| `core` | internal state (tests/bench only; `core.clock` + `core.prof` enable the section profiler) |
+| `core` | internal state (tests/bench only; `core.clock` + `core.prof` enable the section profiler; `core.forceFullConn = true` disables the local connectivity shortcut) |
 
 `warmUp(ticks = 100)` runs a small private scene through every damage type once (~0.4 s, no shared state, hashes of real worlds unaffected — tested) so V8 has optimised code before the first real fight. Call it once while loading / on the title screen; without it the first ~20 ticks of a fight cost 13–26 ms instead of 3–9 ms.
 
@@ -38,6 +38,8 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 4. `drainEvents` yields `{t:'matter', kind: detach|ignite|crack|consume|harvest|impact|evaporate|boil, x, y, mass, slot}`; noisy kinds are aggregated over a time window.
 
 ### Semantics worth knowing
+- **Work spread over ticks is deterministic and part of the hashed state:** multi-tick events (`duration > 1`), the deferred FRACTURE chisel (3 ticks after the blow), crack fronts, shrapnel fuses, shock rings and TIDAL cadence all advance inside `tick()`; `heal/restore` cancel the jobs and rings aimed at the body, `removeBody` drops them. Hence a FRACTURE `DamageResult` reports few `cellsRemoved` (slabs arrive later as `detach` events, the pit as dust): use `cellsTouched`, `impulse` and `contact` for hit feedback.
+- **Energy:** raw energy pays every cost (each cell's cost already divides by its resistance); `params.crater` is a lower bound on a KINETIC/CRUSH bowl (the energy is always spent); nothing but the horizon is immune (see DESTRUCTION *Damage floors*).
 - **All geometry is WORLD space.** Cell `(i,j)` centre: `t.x + (i+.5−anchorX)·facing + leanShift(lean, j)`, `t.y + (j+.5−anchorY)` (integer row shear, exactly `space.ts`).
 - **Energy:** 1 ≈ destroys one baseline cell. `duration > 1` delivers `energy/duration` per tick (or `energy` per tick with CONTINUOUS) through a job queue; calling every tick with `duration: 1` works equally.
 - `stats(id)` returns the body's own live `BodyStats` object, updated in place (copy what you keep). `mass` includes the *pool* (mass received from sinks not yet built into cells), so accretors exceed `massFrac` 1; `grow()` builds cells from the pool first.
@@ -54,7 +56,7 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 | `body.ts` | `Body` (internal `MatterBody`): coordinates, tiles, region stats, fronts/fuses storage |
 | `bodyinit.ts` | bonds (grain seams, faults, layers), surface flags, snapshot |
 | `cells.ts` | the only cell-removal / bond-break primitives (`killCell`, `breakBond*`) |
-| `connectivity.ts`, `debris.ts`, `chunks.ts`, `particles.ts`, `stream.ts`, `render.ts` | detachment, chunk extraction/physics/raster, particles, homing streams, screen layers |
+| `connectivity.ts`, `debris.ts`, `chunks.ts`, `particles.ts`, `stream.ts`, `render.ts` | detachment (full flood + the local shortcut from the change frontier), chunk extraction/physics/raster, particles, homing streams, screen layers |
 | `fracture.ts`, `cuts.ts`, `cracks.ts` | FRACTURE: dual-lattice Dijkstra cuts, crack fronts |
 | `kinetic.ts`, `crater.ts`, `impact.ts` | KINETIC and the shared bowl-crater engine; first-contact geometry |
 | `crush.ts` | CRUSH: compaction, shock rings, tectonic faults |
@@ -71,16 +73,16 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 1. **Determinism:** same seed + same call sequence ⇒ identical `world.hash()` (incl. carve, every damage type and 600 ticks of aftermath).
 2. **Mass conservation:** `world.ledger().error ≈ 0` after every scenario (see DESTRUCTION §7).
 3. **Bond graph consistency:** a bond byte is non-zero only between two live cells; void cells have zero integrity/bonds; SURFACE flags equal "has a void 4-neighbour".
-4. **No allocation in the tick** after warm-up (bench: ~4 KB heap growth over 1000 ticks with GC forced); chunk/ramp creation allocate at *event* rate only.
+4. **No allocation in the tick** after warm-up (bench: ~8 KB heap growth over 1000 ticks with GC forced); chunk/ramp creation allocate at *event* rate only.
 5. `restore()` returns every per-cell array to its pristine values exactly.
 6. Hit detection (`overlap`, `solidAt`) equals brute force over the live cells for mirrored and leaning bodies.
 
 ## Testing & tooling
 ```
-npx vitest run src/matter                          # 60 tests: contract behaviour, determinism, ledger, per-model behaviour, lifecycle, render
-npx tsx tools/matter/bench.ts                      # per-tick ms (avg/p50/p95/p99/max), section breakdown, worst-case pools, idle allocation
+npx vitest run src/matter tools/matter             # 109 tests: contract behaviour, determinism (incl. jobs in flight, connectivity shortcut == full flood), ledger, per-model behaviour, lifecycle, render, perf guard
+npx tsx tools/matter/bench.ts                      # step ms (load-robust min-of-5 replays + raw wall + cpu), section breakdown, pools full, 22k and 10k bodies, applyDamage per call
 node --expose-gc --import tsx tools/matter/bench.ts   # forces GC around the allocation check
-npx tsx tools/matter/calibrate.ts                  # mass removed per energy, per archetype x damage type
+npx tsx tools/matter/calibrate.ts                  # % of a titan-size disc removed by a Strike (300) / Crush (1500), per archetype x damage type
 npx tsx tools/matter/gallery.ts all                # contact sheets into .scratch/
 npx vite --port 5202 --strictPort  ->  http://localhost:5202/dev/matter/   # interactive sandbox
 ```

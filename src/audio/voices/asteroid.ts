@@ -31,9 +31,10 @@ export function createAsteroidVoice(): TitanVoice {
     gravel(c, o, t + 0.008, {
       dur: 0.22 + 0.25 * mag,
       grains: 12 + Math.round(mag * 22),
-      f: 900,
-      spread: 2.8,
+      f: 700,
+      spread: 2.4,
       gain: 0.2 + 0.1 * mag,
+      lowpass: 1800,
     });
     thump(c, makeOut(c, pan * 0.3, 0), t, 74 - 20 * mag, 28, 0.25 + 0.4 * mag, 0.3 + 0.35 * mag);
   };

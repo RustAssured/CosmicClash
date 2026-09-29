@@ -1,20 +1,23 @@
 /**
  * Titan legibility sheet. Renders every implemented titan intact / carved to 50 % / carved to 10 % (through the REAL matter world's
  * `carve`) at 1×, 3× and 4×, plus a 64 px thumbnail row, to `.scratch/titans/*.png` so the art can be LOOKED AT.
- *   npx tsx tools/titans/sheet.ts [lastone|asteroid] [--light=nursery|cold|noon] [--out=dir]
+ *   npx tsx tools/titans/sheet.ts [titan id …] [--light=nursery|cold|noon] [--out=dir]
  */
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { DEFAULT_LIGHTING, type MatterMap, type StageLighting, type TitanDef } from '@/contracts';
 import { createMatterWorld } from '@/matter';
 import { generateTitanBody } from '@/titans/generate';
-import lastone from '@/titans/lastone.json';
-import asteroid from '@/titans/asteroid.json';
 import { writeContactSheet, writePng, type SheetItem } from '../lead/png';
 
-const defs: Record<string, TitanDef> = {
-  lastone: lastone as unknown as TitanDef,
-  asteroid: asteroid as unknown as TitanDef,
+/** Any titan with a `src/titans/<id>.json` can be sheeted, implemented or not (work in progress). */
+const loadDef = (id: string): TitanDef => {
+  const path = `src/titans/${id}.json`;
+  if (!existsSync(path)) throw new Error(`no ${path}`);
+  return JSON.parse(readFileSync(path, 'utf8')) as TitanDef;
 };
+const ALL = ['lastone', 'asteroid', 'nexus', 'blackhole', 'supernova', 'planet'].filter((id) =>
+  existsSync(`src/titans/${id}.json`),
+);
 const lights: Record<string, StageLighting> = {
   nursery: DEFAULT_LIGHTING,
   cold: {
@@ -100,8 +103,8 @@ function thumbnail(src: SheetItem, target: number): SheetItem {
 }
 
 mkdirSync(outDir, { recursive: true });
-for (const id of which.length ? which : Object.keys(defs)) {
-  const def = defs[id]!;
+for (const id of which.length ? which : ALL) {
+  const def = loadDef(id);
   const t0 = performance.now();
   const g = generateTitanBody(def, SEED, lighting);
   const ms = performance.now() - t0;

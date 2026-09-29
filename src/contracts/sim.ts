@@ -291,6 +291,8 @@ export interface MatchConfig {
   startState?: 'intact' | '50' | '10';
   /** Training: infinite time, no KO, regenerating dummy. */
   infinite?: boolean;
+  /** Distance in px between the fighters' anchors at each round start (default 380). The harness uses it to stage contact quickly. */
+  startGap?: number;
 }
 
 export type RoundPhase = 'intro' | 'fight' | 'ko' | 'timeover' | 'roundend' | 'matchend';

@@ -319,3 +319,31 @@ export function replay(o: FightOpts, reps = 3): Replayed {
   }
   return { step: min!, tick: minTick!, rawStep: raw, last, cpuPerTick: cpu, sec: secBest! };
 }
+
+/**
+ * How much slower than the reference machine this process currently runs: the minimum time of a fixed integer workload over
+ * many runs, relative to `REFERENCE_MS` (measured on a quiet 2.8 GHz Xeon). >= 1 when the CPU is shared or slow; used to scale
+ * budgets in the regression test so a busy CI box does not fail a healthy build.
+ */
+const REFERENCE_MS = 6.7;
+export function speedFactor(): number {
+  const work = (n: number): number => {
+    let x = 0x9e3779b9 | 0;
+    let acc = 0;
+    for (let i = 0; i < n; i++) {
+      x ^= x << 13;
+      x ^= x >>> 17;
+      x ^= x << 5;
+      acc = (acc + (x & 1023)) | 0;
+    }
+    return acc;
+  };
+  for (let w = 0; w < 3; w++) work(3_000_000);
+  let best = Infinity;
+  for (let r = 0; r < 25; r++) {
+    const t0 = performance.now();
+    work(3_000_000);
+    best = Math.min(best, performance.now() - t0);
+  }
+  return Math.max(1, best / REFERENCE_MS);
+}
