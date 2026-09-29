@@ -5,7 +5,6 @@ export {
   type PortraitProvider,
   type PortraitSprite,
   type UIDeps,
-  type UIExtraAction,
 } from './types';
 export { DIFFICULTY_LABELS } from './labels';
 export { PixelCanvas } from './pixel/canvas';

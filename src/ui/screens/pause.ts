@@ -62,7 +62,7 @@ export function createPauseScreen(): Screen {
         } else if (cur.id === 'dummy') {
           const i = DUMMIES.indexOf(ctx.training.dummy);
           ctx.training.dummy = DUMMIES[(i + d + DUMMIES.length) % DUMMIES.length]!;
-          ctx.deps.onExtra?.({ type: 'setDummy', mode: ctx.training.dummy });
+          ctx.emit({ type: 'setDummy', mode: ctx.training.dummy });
         } else ctx.emit({ type: 'toggleTraining' });
         ctx.sound('tick');
         // the frame-data flag lives in the HudState the app owns; show the flip immediately
@@ -84,12 +84,12 @@ export function createPauseScreen(): Screen {
           break;
         case 'reset':
           ctx.emit({ type: 'restartRound' });
-          ctx.deps.onExtra?.({ type: 'resetPositions' });
+          ctx.emit({ type: 'resetPositions' });
           ctx.emit({ type: 'resume' });
           ctx.pop();
           break;
         case 'heal':
-          ctx.deps.onExtra?.({ type: 'healBoth' });
+          ctx.emit({ type: 'healBoth' });
           ctx.emit({ type: 'resume' });
           ctx.pop();
           break;

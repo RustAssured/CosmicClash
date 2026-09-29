@@ -90,7 +90,7 @@ export function createOptionsScreen(): Screen {
       }
       case 'quality': {
         s.quality = ((s.quality + dir + 3) % 3) as 0 | 1 | 2;
-        ctx.deps.onQuality?.(s.quality);
+        ctx.emit({ type: 'setQuality', quality: s.quality });
         ctx.saveSettings();
         ctx.sound('tick');
         break;

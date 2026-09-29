@@ -16,7 +16,6 @@ import { FIXTURE_TITANS, fakeHud, fixturePortraitProvider } from './fixtures';
 import { showScreen } from './ui';
 import { createUI } from './index';
 import { UI_STORAGE_KEY } from './settings';
-import type { UIExtraAction } from './types';
 
 interface Rig {
   ui: GameUI;
@@ -24,8 +23,8 @@ interface Rig {
   pads: ReturnType<typeof createFakeGamepads>;
   actions: UIAction[];
   sounds: UiSoundId[];
-  extras: UIExtraAction[];
-  quality: number[];
+  /** Every action ever drained, in order (`drain()` clears `actions`; this keeps the record). */
+  history: UIAction[];
   store: ReturnType<typeof createMemoryStore>;
   win: EventTarget;
   step: (frames?: number) => void;
@@ -58,8 +57,7 @@ function rig(
   input.attach();
   const actions: UIAction[] = [];
   const sounds: UiSoundId[] = [];
-  const extras: UIExtraAction[] = [];
-  const quality: number[] = [];
+  const history: UIAction[] = [];
   const store = o.store ?? createMemoryStore();
   const ui = createUI({
     input,
@@ -71,8 +69,6 @@ function rig(
     storage: store,
     sound: (id) => sounds.push(id),
     newSeed: () => 1234,
-    onExtra: (a) => extras.push(a),
-    onQuality: (q) => quality.push(q),
     now: () => now,
     attractAfterSec: o.attractAfterSec ?? 1e9,
   });
@@ -81,7 +77,9 @@ function rig(
       now += 16;
       input.poll(now);
       ui.update(1 / 60);
+      const before = actions.length;
       ui.drainActions(actions);
+      for (let k = before; k < actions.length; k++) history.push(actions[k]!);
     }
   };
   const tap = (pad: FakePad, b: number): void => {
@@ -102,8 +100,7 @@ function rig(
     pads,
     actions,
     sounds,
-    extras,
-    quality,
+    history,
     store,
     win,
     step,
@@ -151,7 +148,7 @@ describe('boot → title', () => {
     const a = r.drain();
     expect(a[0]).toEqual({ type: 'unlockAudio' });
     expect(a[1]).toEqual({ type: 'setVolume', master: 0.8, music: 0.7, sfx: 0.8 });
-    expect(r.quality).toEqual([2]);
+    expect(a[2]).toEqual({ type: 'setQuality', quality: 2 });
     expect(r.sounds).toContain('confirm');
   });
   it('a keyboard press also boots (it is a real user gesture)', () => {
@@ -355,7 +352,27 @@ describe('pause, results and attract', () => {
     expect(r.drain()).toContainEqual({ type: 'toggleTraining' });
     r.tap(pad, Pad.DOWN); // DUMMY
     r.tap(pad, Pad.RIGHT);
-    expect(r.extras).toContainEqual({ type: 'setDummy', mode: 'guard' });
+    expect(r.drain()).toContainEqual({ type: 'setDummy', mode: 'guard' });
+  });
+
+  it('training pause menu: RESET POSITIONS and HEAL BOTH emit their own actions, then resume', () => {
+    const r = rig();
+    const pad = r.pads.plug(proStandard());
+    r.ui.showHud();
+    r.ui.draw(fakeHud({ mode: 'training', training: true }));
+    r.ui.showPause(true);
+    r.step(20);
+    for (let i = 0; i < 4; i++) r.tap(pad, Pad.DOWN); // → RESET POSITIONS
+    r.tap(pad, Pad.EAST);
+    const reset = r.drain().map((a) => a.type);
+    expect(reset).toEqual(expect.arrayContaining(['resetPositions', 'resume']));
+    r.ui.showPause(false);
+    r.step(5);
+    r.ui.showPause(true);
+    r.step(20);
+    for (let i = 0; i < 5; i++) r.tap(pad, Pad.DOWN); // → HEAL BOTH
+    r.tap(pad, Pad.EAST);
+    expect(r.drain().map((a) => a.type)).toEqual(expect.arrayContaining(['healBoth', 'resume']));
   });
 
   it('results: waits a beat, then REMATCH emits rematch; TITLE quits', () => {
@@ -414,7 +431,7 @@ describe('pause, results and attract', () => {
 });
 
 describe('options', () => {
-  it('volume changes emit setVolume and persist; quality notifies; deadzone/labels reach the input manager', () => {
+  it('volume changes emit setVolume and persist; quality emits setQuality; deadzone/labels reach the input manager', () => {
     const r = rig();
     const pad = r.pads.plug(proStandard());
     showScreen(r.ui, 'options');
@@ -437,7 +454,7 @@ describe('options', () => {
     r.tap(pad, Pad.DOWN);
     r.tap(pad, Pad.DOWN); // quality
     r.tap(pad, Pad.RIGHT);
-    expect(r.quality[r.quality.length - 1]).toBe(0);
+    expect(r.drain().filter((a) => a.type === 'setQuality')).toEqual([{ type: 'setQuality', quality: 0 }]);
     expect(r.sounds).toContain('tick');
   });
 });

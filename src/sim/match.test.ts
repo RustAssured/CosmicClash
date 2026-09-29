@@ -218,3 +218,16 @@ describe('sources', () => {
     ]);
   });
 });
+
+describe('script source stick events', () => {
+  it('applies a stick event at script tick 0 on the very first poll', () => {
+    const s = createScriptSource([{ tick: 0, buttons: 0, hold: 0, moveX: 1, moveY: 0, moveTicks: 3 }], 10);
+    const f: InputFrame = { moveX: 0, moveY: 0, held: 0, pressed: 0, released: 0 };
+    const xs: number[] = [];
+    for (let t = 11; t < 17; t++) {
+      s.poll(t, f);
+      xs.push(f.moveX);
+    }
+    expect(xs).toEqual([1, 1, 0, 0, 0, 0]); // held for ticks 0..2 of script time; first poll is script tick 1
+  });
+});

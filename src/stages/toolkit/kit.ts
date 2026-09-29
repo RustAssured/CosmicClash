@@ -455,6 +455,9 @@ export class SceneryKit {
       varyings: string[];
       vertex: string;
       fragment: string;
+      /** Declarations (uniforms, helper functions) placed before `main` in each shader; the kit's own uniforms are already declared in the vertex shader (uView, uRes, uTime, uFlow, uIntensity, forces) but NOT in the fragment shader. */
+      vertexHeader?: string;
+      fragmentHeader?: string;
       blend: LayerBlend;
       uniforms?: Record<string, IUniform>;
       /** Thin out with the quality tier like sprite clouds (prefix of the instances). */
@@ -481,6 +484,7 @@ export class SceneryKit {
       vertexShader: `${SCENERY_HEAD}${NOISE_GLSL}${FORCES_GLSL}
 in vec3 position;
 ${decl}${varyOut}
+${o.vertexHeader ?? ''}
 vec4 toNdc(vec2 p) { return vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0); }
 void main() {
 ${o.vertex}
@@ -488,6 +492,7 @@ ${o.vertex}
       fragmentShader: `${SCENERY_HEAD}${NOISE_GLSL}
 ${varyIn}
 out vec4 o;
+${o.fragmentHeader ?? ''}
 void main() {
 ${o.fragment}
 }`,

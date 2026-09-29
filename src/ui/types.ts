@@ -58,10 +58,6 @@ export interface PortraitSprite {
 /** The app wires this to the titan generator (`MatterMap.pixels` of a fresh pristine body); dev/ui uses synthetic sprites. */
 export type PortraitProvider = (id: TitanId) => PortraitSprite | null;
 
-/** Training-mode requests that the current `UIAction` union cannot carry (see docs/proposals/001). */
-export type UIExtraAction =
-  { type: 'setDummy'; mode: 'idle' | 'guard' | 'ai' } | { type: 'resetPositions' } | { type: 'healBoth' };
-
 export interface UIDeps {
   input: InputManager;
   titans: readonly TitanInfo[];
@@ -76,10 +72,6 @@ export interface UIDeps {
   sound?: (id: UiSoundId) => void;
   /** Seed source for `startMatch` (default: a time-derived seed). */
   newSeed?: () => number;
-  /** Called when the render-quality option changes (`UIAction` has no slot for it; see proposal 001). */
-  onQuality?: (q: 0 | 1 | 2) => void;
-  /** Called for training commands beyond the `UIAction` union. */
-  onExtra?: (a: UIExtraAction) => void;
   /** Version label shown on the title screen. */
   version?: string;
   /** Wall clock (ms) for idle timers; default `performance.now`. */

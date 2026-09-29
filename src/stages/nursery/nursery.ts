@@ -3,10 +3,11 @@ import { Rng, type StageInfo } from '@/contracts';
 import { STAGE_INFO } from '../info';
 import { AmbientLife } from '../toolkit/ambient';
 import { makeBakeTarget, prepareBake } from '../toolkit/bake';
+import { REF_X0, REF_Y0, atCol, atRef, addHeroStars, type HeroStar } from '../toolkit/compose';
 import { makeCloudSteps } from '../toolkit/clouds';
 import { mixRgb, paletteRamps, rampAt, scale, type Rgb } from '../toolkit/color';
 import { SceneryBase } from '../toolkit/base';
-import { SceneryKit, SpriteBuilder } from '../toolkit/kit';
+import { SpriteBuilder, type SceneryKit } from '../toolkit/kit';
 import { addNebula } from '../toolkit/nebula';
 import { Noise2 } from '../toolkit/noise';
 import { layerBounds, makeStarField } from '../toolkit/stars';
@@ -100,30 +101,6 @@ void main() {
   o = vec4(col, a);
 }
 `;
-
-/** Design-time camera: the scenery is composed as seen from the arena centre. */
-const REF_X0 = 480;
-const REF_Y0 = 110;
-
-/** Convert a reference-screen position to layer coordinates for a layer with the given parallax. */
-const atRef = (sx: number, sy: number, p: number): [number, number] => [sx + REF_X0 * p, sy + REF_Y0 * p];
-/** A pillar column placed by its screen position at the reference camera. */
-const atCol = (sx: number, topSy: number, p: number): { x: number; top: number } => ({
-  x: sx + REF_X0 * p,
-  top: topSy + REF_Y0 * p,
-});
-
-interface HeroStar {
-  sx: number;
-  sy: number;
-  size: number;
-  /** Core radius in px. */
-  core: number;
-  bright: number;
-  tint: Rgb;
-  parallax: number;
-  rot: number;
-}
 
 export class NurseryScenery extends SceneryBase {
   readonly id = 'nursery' as const;
@@ -339,32 +316,7 @@ export class NurseryScenery extends SceneryBase {
     const hp = atRef(heroes[0]!.sx, heroes[0]!.sy, heroes[0]!.parallax);
     this.lightLayerX = hp[0];
     this.lightLayerY = hp[1];
-    heroes.forEach((h, i) => {
-      const [x, y] = atRef(h.sx, h.sy, h.parallax);
-      const b = new SpriteBuilder();
-      b.push(
-        x,
-        y,
-        0,
-        i / heroes.length,
-        h.size,
-        h.size,
-        h.rot,
-        h.tint[0] * h.bright,
-        h.tint[1] * h.bright,
-        h.tint[2] * h.bright,
-        1,
-      );
-      kit.addSprites(`hero-${i}`, {
-        buffer: b.build(),
-        parallax: h.parallax,
-        blend: 'add',
-        profile: 'star',
-        soft: h.core,
-        twinkle: 0.05,
-        forceK: 0.1,
-      });
-    });
+    addHeroStars(kit, 'hero', heroes);
 
     yield 0.36;
 

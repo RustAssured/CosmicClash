@@ -149,14 +149,25 @@ export class FakeGain extends FakeNode {
     this.gain = P(ctx, 'gain', 1);
   }
 }
+export class FakePeriodicWave {
+  constructor(
+    readonly real: Float32Array,
+    readonly imag: Float32Array,
+  ) {}
+}
 export class FakeOsc extends FakeNode {
   type: OscillatorType = 'sine';
   frequency: FakeParam;
   detune: FakeParam;
+  wave: FakePeriodicWave | null = null;
   constructor(ctx: FakeContext) {
     super(ctx, 'oscillator');
     this.frequency = P(ctx, 'frequency', 440);
     this.detune = P(ctx, 'detune', 0);
+  }
+  setPeriodicWave(w: FakePeriodicWave): void {
+    this.wave = w;
+    this.type = 'custom';
   }
 }
 export class FakeBiquad extends FakeNode {
@@ -283,6 +294,14 @@ export class FakeContext {
   }
   createBuffer(ch: number, len: number, sr: number): FakeBuffer {
     return new FakeBuffer(ch, len, sr);
+  }
+  createPeriodicWave(real: Float32Array, imag: Float32Array): FakePeriodicWave {
+    if (real.length !== imag.length || real.length < 2) fail('createPeriodicWave: real/imag must match and have length >= 2');
+    for (let i = 0; i < real.length; i++) {
+      finite(real[i]!, `periodicWave.real[${i}]`);
+      finite(imag[i]!, `periodicWave.imag[${i}]`);
+    }
+    return new FakePeriodicWave(real, imag);
   }
   resume(): Promise<void> {
     this.state = 'running';

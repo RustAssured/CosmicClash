@@ -25,7 +25,7 @@ import {
 
 const json = process.argv.includes('--json');
 const assertBudget = process.argv.includes('--assert');
-const REPS = Number(process.env.REPS ?? 3);
+const REPS = Number(process.env.REPS ?? 5);
 
 const fmt = (s: Stats): string =>
   `avg ${s.avg.toFixed(2)}  p50 ${s.p50.toFixed(2)}  p95 ${s.p95.toFixed(2)}  p99 ${s.p99.toFixed(2)}  max ${s.max.toFixed(2)} ms`;

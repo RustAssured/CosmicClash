@@ -31,6 +31,8 @@ export function createNullSource(): InputSource {
 export function createScriptSource(events: readonly ScriptEvent[], offset = 0): InputSource {
   let prevHeld = 0;
   let stickUntil = -1;
+  /** Script time of the previous poll: a stick event applies on the first poll at or after its tick, exactly once. */
+  let lastT = -Infinity;
   let sx = 0;
   let sy = 0;
   return {
@@ -42,7 +44,7 @@ export function createScriptSource(events: readonly ScriptEvent[], offset = 0): 
         const e = events[i]!;
         if (e.buttons !== 0) {
           if (t >= e.tick && t <= e.tick + e.hold) held |= e.buttons;
-        } else if (e.moveTicks > 0 && t === e.tick) {
+        } else if (e.moveTicks > 0 && t >= e.tick && lastT < e.tick) {
           sx = e.moveX;
           sy = e.moveY;
           stickUntil = e.moveTicks >= 1e8 ? Infinity : e.tick + e.moveTicks;
@@ -58,6 +60,7 @@ export function createScriptSource(events: readonly ScriptEvent[], offset = 0): 
       out.held = held;
       out.pressed = held & ~prevHeld;
       out.released = prevHeld & ~held;
+      lastT = t;
       prevHeld = held;
     },
   };

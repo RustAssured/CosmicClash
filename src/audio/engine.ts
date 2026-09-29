@@ -72,8 +72,6 @@ export interface AudioEngineExt extends AudioEngine {
   handleAt(events: readonly AudioEvent[], when: number): void;
   /** Advance continuous voices and pre-schedule the score up to `horizon` seconds of context time. */
   updateAt(scene: AudioScene, dtSec: number, horizon: number): void;
-  /** Peak |sample| seen since the last call, before the limiter and after it. */
-  readPeak(): { pre: number; post: number };
   /** Reported output latency (base + output) in ms, if the browser exposes it. */
   latencyMs(): number;
   /** Resume the context on the next user gesture of any kind (click, key, touch, pointer, gamepad activity). */

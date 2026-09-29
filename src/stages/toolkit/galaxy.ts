@@ -1,3 +1,4 @@
+import type { IUniform } from 'three';
 import { Rng, hash32 } from '@/contracts';
 import type { Rgb } from './color';
 import type { KitLayer, SceneryKit } from './kit';
@@ -40,9 +41,19 @@ export interface GalaxyDisc {
 }
 
 const GALAXY_COMMON = /* glsl */ `
-uniform float uSpin;        // radians of rotation per unit rotation-speed (scenery clock × rate)
+uniform float uSpin;        // radians of rotation at unit angular speed (scenery clock × rate)
 // Differential rotation: inner parts turn faster (flat-ish rotation curve in velocity, so ω ∝ 1/√r).
 float galOmega(float rr) { return 1.0 / sqrt(rr + 0.15); }
+`;
+
+const DISC_VERT_HEAD = /* glsl */ `
+uniform float uParallax;
+uniform float uForceK;
+${GALAXY_COMMON}
+`;
+const DISC_FRAG_HEAD = /* glsl */ `
+uniform float uIntensity;
+${GALAXY_COMMON}
 `;
 
 const DISC_VERT = /* glsl */ `
@@ -50,11 +61,11 @@ float par = uParallax;
 vec2 c = aG0.xy - floor(uView * par + 0.5);
 c = warpByForces(c, uForceK);
 float R = aG0.z;
-float half = R * 1.75;
-vec2 off = position.xy * half;
-if (c.x + half < -8.0 || c.y + half < -8.0 || c.x - half > uRes.x + 8.0 || c.y - half > uRes.y + 8.0) {
+float ext = R * 1.75;
+vec2 off = position.xy * ext;
+if (c.x + ext < -8.0 || c.y + ext < -8.0 || c.x - ext > uRes.x + 8.0 || c.y - ext > uRes.y + 8.0) {
   gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-  vLocal = vec2(0.0); vG1 = vec4(0.0); vCore = vec4(0.0); vArm = vec4(0.0); vR = 1.0; vSeed = 0.0;
+  vLocal = vec2(0.0); vG1 = vec4(0.0); vCore = vec4(0.0); vArm = vec4(0.0); vKnot = vec4(0.0); vR = 1.0; vSeed = 0.0;
   return;
 }
 gl_Position = toNdc(c + off);
@@ -62,13 +73,13 @@ vLocal = off;
 vG1 = aG1;
 vCore = aG2;
 vArm = aG3;
+vKnot = aG4;
 vR = R;
 vSeed = aG0.w;
 `;
 
 const DISC_FRAG = /* glsl */ `
-${GALAXY_COMMON}
-float ci = max(cos(vG1.x), 0.1);
+float ci = max(cos(vG1.x), 0.08);
 float cp = cos(vG1.y);
 float sp = sin(vG1.y);
 vec2 q = vec2(vLocal.x * cp + vLocal.y * sp, -vLocal.x * sp + vLocal.y * cp);   // undo the position angle
@@ -78,53 +89,56 @@ if (rr > 1.7) discard;
 float theta = atan(pl.y, pl.x) - uSpin * vArm.w * galOmega(rr);
 float arms = vG1.z;
 float bulge = exp(-rr * 11.0) * 1.6 + exp(-rr * 3.5) * 0.18;
-float disk = exp(-rr * 3.1) * (1.0 - smoothstep(0.9, 1.6, rr));
-float lane = 0.0;
-float spiral = 0.5;
 vec3 col;
 if (arms > 0.5) {
+  float disk = exp(-rr * 3.1) * (1.0 - smoothstep(0.9, 1.6, rr));
   float phase = arms * (theta - log(rr + 0.06) / vG1.w);
-  spiral = pow(0.5 + 0.5 * cos(phase), 2.6);
-  // dust lanes hug the concave (inner) edge of each arm
-  lane = pow(0.5 + 0.5 * cos(phase - 0.85), 5.0) * smoothstep(0.06, 0.32, rr) * (1.0 - smoothstep(0.8, 1.3, rr));
+  float spiral = pow(0.5 + 0.5 * cos(phase), 2.6);
+  // dust lanes hug the concave (inner) edge of each arm, and dim what lies behind them
+  float lane = pow(0.5 + 0.5 * cos(phase - 0.85), 5.0) * smoothstep(0.06, 0.32, rr) * (1.0 - smoothstep(0.8, 1.3, rr));
   float clump = vnoise(pl / vR * 9.0 + vSeed * 13.0);
   disk *= (0.16 + 0.95 * spiral) * (0.65 + 0.7 * clump);
-  disk *= 1.0 - vArm.z * 0.85 * lane;
+  disk *= 1.0 - vKnot.w * 0.85 * lane;
   float kn = smoothstep(0.66, 0.86, vnoise(pl / vR * 26.0 + vSeed * 7.0)) * spiral * smoothstep(0.1, 0.35, rr) * (1.0 - smoothstep(0.7, 1.15, rr));
-  col = vCore.rgb * bulge + vArm.rgb * disk * 0.9 + vec3(0.0);
-  col += vArm.rgb * kn * 0.9;
-  o = vec4(col * vCore.w, 1.0);
-  return;
+  col = vCore.rgb * bulge * (1.0 - vKnot.w * 0.35 * lane) + vArm.rgb * disk * 0.9 + vKnot.rgb * kn;
+} else {
+  // smooth elliptical: a de Vaucouleurs-ish profile, slightly mottled
+  float e = exp(-pow(rr, 0.28) * 5.6) * 2.4;
+  float mott = 0.85 + 0.3 * vnoise(pl / vR * 6.0 + vSeed * 5.0);
+  col = mix(vArm.rgb, vCore.rgb, smoothstep(0.0, 0.5, exp(-rr * 6.0))) * e * mott;
 }
-// smooth elliptical: a de Vaucouleurs-ish profile, slightly mottled
-float e = exp(-pow(rr, 0.28) * 5.6) * 2.4;
-float mott = 0.85 + 0.3 * vnoise(pl / vR * 6.0 + vSeed * 5.0);
-col = mix(vArm.rgb, vCore.rgb, smoothstep(0.0, 0.5, exp(-rr * 6.0))) * e * mott;
-o = vec4(col * vCore.w, 1.0);
+o = vec4(col * vCore.w * (1.0 + 0.3 * uIntensity), 1.0);
 `;
 
-/** Analytic galaxy discs (additive). Returns the layer; drive rotation through `uSpin` via `galaxySpin`. */
-export function addGalaxyDiscs(kit: SceneryKit, name: string, parallax: number, discs: readonly GalaxyDisc[], forceK = 0.1): KitLayer {
+/** Analytic galaxy discs (additive). Rotation is driven through the layer's `uSpin` uniform: see `setDiscSpin`. */
+export function addGalaxyDiscs(
+  kit: SceneryKit,
+  name: string,
+  parallax: number,
+  discs: readonly GalaxyDisc[],
+  forceK = 0.1,
+): KitLayer {
   const n = discs.length;
   const a0 = new Float32Array(n * 4);
   const a1 = new Float32Array(n * 4);
   const a2 = new Float32Array(n * 4);
   const a3 = new Float32Array(n * 4);
+  const a4 = new Float32Array(n * 4);
   discs.forEach((g, i) => {
     a0.set([g.x, g.y, g.radius, g.seed], i * 4);
     a1.set([g.inclination, g.positionAngle, g.arms, Math.max(0.05, g.pitch)], i * 4);
     a2.set([g.core[0], g.core[1], g.core[2], g.brightness], i * 4);
-    a3.set([g.arm[0], g.arm[1], g.dust, g.spin], i * 4);
+    a3.set([g.arm[0], g.arm[1], g.arm[2], g.spin], i * 4);
+    a4.set([g.knot[0] * g.knots, g.knot[1] * g.knots, g.knot[2] * g.knots, g.dust], i * 4);
   });
-  // colour channel b of the arm colour rides in the knot slot to keep four attributes: pack it into aG1? — use a dedicated attribute
-  const a4 = new Float32Array(n * 4);
-  discs.forEach((g, i) => a4.set([g.arm[2], g.knot[0], g.knot[1], g.knot[2]], i * 4));
-  const layer = kit.addInstanced(name, {
+  return kit.addInstanced(name, {
     count: n,
     attributes: { aG0: a0, aG1: a1, aG2: a2, aG3: a3, aG4: a4 },
-    varyings: ['vec2 vLocal', 'vec4 vG1', 'vec4 vCore', 'vec4 vArm', 'float vR', 'float vSeed'],
-    vertex: DISC_VERT.replace('vArm = aG3;', 'vArm = vec4(aG3.x, aG3.y, aG3.z, aG3.w);'),
+    varyings: ['vec2 vLocal', 'vec4 vG1', 'vec4 vCore', 'vec4 vArm', 'vec4 vKnot', 'float vR', 'float vSeed'],
+    vertex: DISC_VERT,
     fragment: DISC_FRAG,
+    vertexHeader: DISC_VERT_HEAD,
+    fragmentHeader: DISC_FRAG_HEAD,
     blend: 'add',
     uniforms: {
       uParallax: { value: parallax },
@@ -132,7 +146,6 @@ export function addGalaxyDiscs(kit: SceneryKit, name: string, parallax: number, 
       uSpin: { value: 0 },
     },
   });
-  return layer;
 }
 
 /* ---------------------------------------------------------------------------------------------- *
@@ -164,13 +177,28 @@ export interface GalaxyStarsOpts {
   spin: number;
 }
 
+const STARS_VERT_HEAD = /* glsl */ `
+uniform float uParallax;
+uniform float uForceK;
+uniform vec2 uCentre;
+uniform float uRadius;
+uniform float uInc;
+uniform float uPA;
+uniform float uTwinkle;
+${GALAXY_COMMON}
+`;
+const STARS_FRAG_HEAD = /* glsl */ `
+uniform float uSoft;
+uniform float uAlphaScale;
+`;
+
 const STARS_VERT = /* glsl */ `
 float par = uParallax;
 float r = aS0.x;                     // 0..1.6 normalised radius
 float th0 = aS0.y;
 float z = aS0.z;                     // height above the plane, normalised
 float rr = r + 0.0001;
-float th = th0 + uSpin * aS1.y * (1.0 / sqrt(rr + 0.15));
+float th = th0 + uSpin * galOmega(rr);
 vec3 p = vec3(cos(th) * r, sin(th) * r, z) * uRadius;
 float ci = cos(uInc);
 float si = sin(uInc);
@@ -213,13 +241,24 @@ export function makeGalaxyStars(o: GalaxyStarsOpts): {
   const rng = new Rng(o.seed);
   const tanP = Math.max(0.05, o.pitch);
   const rd = 0.33; // disk scale length (fraction of radius)
-  const armAngle = (k: number, r: number): number => (k * Math.PI * 2) / Math.max(1, o.arms) + Math.log(r + 0.06) / tanP;
+  const armAngle = (k: number, r: number): number =>
+    (k * Math.PI * 2) / Math.max(1, o.arms) + Math.log(r + 0.06) / tanP;
   const total = o.stars + o.knots + o.bulge;
   const s0 = new Float32Array(total * 4);
   const s1 = new Float32Array(total * 4);
   const s2 = new Float32Array(total * 4);
   let n = 0;
-  const put = (r: number, th: number, z: number, size: number, rot: number, tw: number, c: Rgb, k: number, a: number): void => {
+  const put = (
+    r: number,
+    th: number,
+    z: number,
+    size: number,
+    rot: number,
+    tw: number,
+    c: Rgb,
+    k: number,
+    a: number,
+  ): void => {
     s0.set([r, th, z, 0], n * 4);
     s1.set([size, rot, 0, tw], n * 4);
     s2.set([c[0] * k, c[1] * k, c[2] * k, a], n * 4);
@@ -230,7 +269,11 @@ export function makeGalaxyStars(o: GalaxyStarsOpts): {
     const u = rng.next();
     return Math.min(1.5, -rd * Math.log(1 - u * 0.985));
   };
-  const lerpRgb = (a: Rgb, b: Rgb, t: number): [number, number, number] => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const lerpRgb = (a: Rgb, b: Rgb, t: number): [number, number, number] => [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ];
   for (let i = 0; i < o.stars; i++) {
     const r = radial();
     const inArm = o.arms > 0 && rng.next() < 0.7;
@@ -238,15 +281,34 @@ export function makeGalaxyStars(o: GalaxyStarsOpts): {
     const th = inArm ? armAngle(rng.int(o.arms), r) + gauss(rng) * scatter : rng.next() * Math.PI * 2;
     const z = gauss(rng) * o.thickness * (0.5 + r * 0.8);
     const t = Math.min(1, r / 0.9);
-    const col = t < 0.3 ? lerpRgb(o.core, o.inner, t / 0.3) : t < 0.65 ? lerpRgb(o.inner, o.arm, (t - 0.3) / 0.35) : lerpRgb(o.arm, o.outer, (t - 0.65) / 0.35);
+    const col =
+      t < 0.3
+        ? lerpRgb(o.core, o.inner, t / 0.3)
+        : t < 0.65
+          ? lerpRgb(o.inner, o.arm, (t - 0.3) / 0.35)
+          : lerpRgb(o.arm, o.outer, (t - 0.65) / 0.35);
     // brightness: a heavy tail of bright stars, blue-shifted in the arms
-    const k = o.brightness * (0.22 + 1.6 * Math.pow(rng.next(), 7)) * (inArm ? 1.25 : 0.9) * (1 - 0.35 * Math.min(1, r));
+    const k =
+      o.brightness *
+      (0.22 + 1.6 * Math.pow(rng.next(), 7)) *
+      (inArm ? 1.25 : 0.9) *
+      (1 - 0.35 * Math.min(1, r));
     put(r, th, z, rng.range(0.55, 1.15) * (1 + 0.6 * Math.pow(rng.next(), 6)), 0, rng.next(), col, k, 1);
   }
   for (let i = 0; i < o.knots; i++) {
     const r = 0.16 + rng.next() * 0.72;
     const th = armAngle(rng.int(Math.max(1, o.arms)), r) + gauss(rng) * 0.05;
-    put(r, th, gauss(rng) * o.thickness * 0.4, rng.range(1.6, 3.4), 0, rng.next(), o.knot, o.brightness * rng.range(0.7, 1.7), 1);
+    put(
+      r,
+      th,
+      gauss(rng) * o.thickness * 0.4,
+      rng.range(1.6, 3.4),
+      0,
+      rng.next(),
+      o.knot,
+      o.brightness * rng.range(0.7, 1.7),
+      1,
+    );
   }
   for (let i = 0; i < o.bulge; i++) {
     // Plummer-like: r = a / sqrt(u^(-2/3) - 1)
@@ -254,7 +316,17 @@ export function makeGalaxyStars(o: GalaxyStarsOpts): {
     const r = Math.min(0.6, 0.11 / Math.sqrt(Math.pow(u, -2 / 3) - 1 + 1e-6));
     const th = rng.next() * Math.PI * 2;
     const z = gauss(rng) * 0.09 * (1 + r);
-    put(r, th, z, rng.range(0.6, 1.25), 0, rng.next(), lerpRgb(o.core, o.inner, Math.min(1, r * 2.5)), o.brightness * (0.3 + 1.3 * Math.pow(rng.next(), 5)), 1);
+    put(
+      r,
+      th,
+      z,
+      rng.range(0.6, 1.25),
+      0,
+      rng.next(),
+      lerpRgb(o.core, o.inner, Math.min(1, r * 2.5)),
+      o.brightness * (0.3 + 1.3 * Math.pow(rng.next(), 5)),
+      1,
+    );
   }
   // dust: puffs on the inner edge of each arm, drawn dark
   const d0 = new Float32Array(o.dust * 4);
@@ -274,7 +346,10 @@ export function makeGalaxyStars(o: GalaxyStarsOpts): {
 }
 
 /** Shuffle instance order so that a prefix (quality-tier thinning) is an unbiased subsample. */
-function shuffled(a: { s0: Float32Array; s1: Float32Array; s2: Float32Array; count: number }, seed: number): void {
+function shuffled(
+  a: { s0: Float32Array; s1: Float32Array; s2: Float32Array; count: number },
+  seed: number,
+): void {
   const rng = new Rng(seed);
   const swap = (arr: Float32Array, i: number, j: number): void => {
     for (let k = 0; k < 4; k++) {
@@ -304,7 +379,7 @@ export function addGalaxyStars(
 ): { stars: KitLayer; dust: KitLayer; setSpin(timeSec: number): void } {
   const g = makeGalaxyStars(o);
   shuffled(g.stars, hash32(o.seed, 1));
-  const uniforms = (soft: number): Record<string, import('three').IUniform> => ({
+  const uniforms = (soft: number): Record<string, IUniform> => ({
     uParallax: { value: parallax },
     uForceK: { value: forceK },
     uSpin: { value: 0 },
@@ -316,7 +391,13 @@ export function addGalaxyStars(
     uSoft: { value: soft },
     uAlphaScale: { value: 1 },
   });
-  const common = { varyings: ['vec2 vQ', 'vec4 vCol'], vertex: STARS_VERT, fragment: STARS_FRAG };
+  const common = {
+    varyings: ['vec2 vQ', 'vec4 vCol'],
+    vertex: STARS_VERT,
+    fragment: STARS_FRAG,
+    vertexHeader: STARS_VERT_HEAD,
+    fragmentHeader: STARS_FRAG_HEAD,
+  };
   const stars = kit.addInstanced(`${name}-stars`, {
     ...common,
     count: g.stars.count,
@@ -324,6 +405,7 @@ export function addGalaxyStars(
     blend: 'add',
     uniforms: uniforms(3.2),
     tierScale: true,
+    compensate: 'uAlphaScale',
   });
   const dust = kit.addInstanced(`${name}-dust`, {
     ...common,

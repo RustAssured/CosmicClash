@@ -243,6 +243,7 @@ export class CutFinder {
     const maxR2 = o.maxRange * o.maxRange;
     const minSep2 = o.minSep * o.minSep;
     const hasGuide = o.guideLat > 0;
+
     let found = -1;
     let iters = 0;
     while (this.heapN > 0) {

@@ -26,10 +26,10 @@ export function toHex(c: number): string {
 export function mix(c0: number, c1: number, t: number): number {
   const u = 1 - t;
   return rgba(
-    pr(c0) * u + pr(c1) * t,
-    pg(c0) * u + pg(c1) * t,
-    pb(c0) * u + pb(c1) * t,
-    pa(c0) * u + pa(c1) * t,
+    Math.round(pr(c0) * u + pr(c1) * t),
+    Math.round(pg(c0) * u + pg(c1) * t),
+    Math.round(pb(c0) * u + pb(c1) * t),
+    Math.round(pa(c0) * u + pa(c1) * t),
   );
 }
 

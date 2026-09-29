@@ -8,7 +8,7 @@ import {
   type UIScreenId,
 } from '@/contracts';
 import { createInputManager } from '@/input';
-import { createUI, showScreen, titanInfoFromDef, type UIExtraAction } from '@/ui';
+import { createUI, showScreen, titanInfoFromDef } from '@/ui';
 import { FIXTURE_TITANS, fakeHud, fixturePortraitProvider } from '@/ui/fixtures';
 import { stagePreview } from '@/ui/screens/stage';
 import { STAGE_INFO } from '@/stages/info';
@@ -24,7 +24,7 @@ import { createAudioEngine } from '@/audio/engine';
  *   &hud=1                                                                           draw the in-match HUD instead
  *   &attract=<seconds>                                                               idle time before attract mode
  *
- * Test hooks on `window.__sandbox`: the UI, the input manager, every UIAction and UIExtraAction seen, the last audio events.
+ * Test hooks on `window.__sandbox`: the UI, the input manager, every UIAction seen, the last audio events.
  */
 declare global {
   interface Window {
@@ -33,8 +33,6 @@ declare global {
       input: ReturnType<typeof createInputManager>;
       audio: ReturnType<typeof createAudioEngine>;
       actions: UIAction[];
-      extras: UIExtraAction[];
-      quality: number[];
       /** Every menu sound the UI asked for, in order. */
       sounds: string[];
       frames: number;
@@ -80,8 +78,6 @@ const audio = createAudioEngine();
 audio.autoUnlock(document);
 
 const actions: UIAction[] = [];
-const extras: UIExtraAction[] = [];
-const quality: number[] = [];
 const sounds: string[] = [];
 const ui = createUI({
   input,
@@ -94,8 +90,6 @@ const ui = createUI({
     sounds.push(id);
     audio.handle([{ t: 'ui', id }]);
   },
-  onQuality: (v) => quality.push(v),
-  onExtra: (a) => extras.push(a),
   version: 'sandbox',
   attractAfterSec: Number(q.get('attract') ?? 60),
 });
@@ -110,8 +104,6 @@ const box = {
   input,
   audio,
   actions,
-  extras,
-  quality,
   sounds,
   frames: 0,
   ready: false,

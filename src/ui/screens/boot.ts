@@ -19,7 +19,7 @@ export function createBootScreen(): Screen {
         ctx.emit({ type: 'unlockAudio' });
         const s = ctx.settings;
         ctx.emit({ type: 'setVolume', master: s.master / 10, music: s.music / 10, sfx: s.sfx / 10 });
-        ctx.deps.onQuality?.(s.quality);
+        ctx.emit({ type: 'setQuality', quality: s.quality });
         ctx.sound('confirm');
         ctx.go('title');
       }

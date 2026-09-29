@@ -48,6 +48,7 @@ export type SimEvent =
       t: 'hit';
       attacker: 0 | 1;
       target: 0 | 1;
+      /** The TARGET's titan id. */
       titan: TitanId;
       x: number;
       y: number;
@@ -66,13 +67,15 @@ export type SimEvent =
   | { t: 'guard'; slot: 0 | 1; x: number; y: number; type: DamageType; broke: boolean }
   /** Expanding ring: renderer refraction + stage dust ripple. strength 0..1, radius = final radius px. */
   | { t: 'shockwave'; x: number; y: number; strength: number; radius: number; hue: number }
-  /** Freeze sim for `ticks` (Match applies; already clamped 60–220 ms). */
+  /** Freeze sim for `ticks` (Match applies; clamped 60–220 ms) and calls `freeze(ticks)` on BOTH fighters once per event; frozen fighters keep buffering input. */
   | { t: 'hitstop'; ticks: number }
   /** Camera shake impulse toward (dirX,dirY), amplitude px, low-frequency damped. */
   | { t: 'shake'; dirX: number; dirY: number; amp: number }
+  /** amount is a fraction (0.1 = 10 % micro-zoom). */
   | { t: 'zoom'; amount: number }
   | { t: 'roll'; radians: number }
   | { t: 'flash'; amount: number }
+  /** scale is a fraction of real speed (0.05..1) for `ticks` sim ticks. */
   | { t: 'timescale'; scale: number; ticks: number }
   | { t: 'ko'; slot: 0 | 1; x: number; y: number }
   /** Matter-world happenings: island detached, ignition, crack burst, mass consumed by a sink, chunk impact. */

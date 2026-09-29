@@ -23,6 +23,7 @@ import {
   volumeCurve,
 } from './math';
 import { MODES, STAGE_MUSIC, degreeToHz, degreeToMidi } from './scales';
+import { evalSeries, fourierCoefficients, heartbeatWave } from './waves';
 
 const SR = 48000;
 const sine = (f: number, n: number, sr = SR): Float32Array =>
@@ -103,6 +104,28 @@ describe('scales and stage music', () => {
       expect(s.chords.length).toBeGreaterThan(2);
       for (const ch of s.chords) for (const d of ch) expect(d).toBeLessThan(MODES[s.mode].length + 1);
     }
+  });
+});
+
+describe('waves', () => {
+  it('a heartbeat has a lub louder than its dub, and rests in between', () => {
+    const w = heartbeatWave(512, 0.3, 0.6);
+    expect(w[0]).toBeCloseTo(1, 6);
+    expect(w[Math.round(0.3 * 512)]).toBeCloseTo(0.6, 2);
+    expect(w[Math.round(0.65 * 512)]).toBe(0);
+  });
+  it('its Fourier series reproduces the shape (the oscillator will draw it from these coefficients)', () => {
+    const w = heartbeatWave(512, 0.3, 0.6);
+    const { real, imag } = fourierCoefficients(w, 48);
+    expect(real[0]).toBe(0);
+    let mean = 0;
+    for (const v of w) mean += v / w.length;
+    for (const p of [0, 0.3, 0.65]) {
+      const orig = w[Math.round(p * 512)]! - mean; // DC is dropped by Web Audio
+      expect(evalSeries(real, imag, p)).toBeCloseTo(orig, 1);
+    }
+    expect(evalSeries(real, imag, 0)).toBeGreaterThan(evalSeries(real, imag, 0.3));
+    expect(evalSeries(real, imag, 0.3)).toBeGreaterThan(evalSeries(real, imag, 0.65));
   });
 });
 

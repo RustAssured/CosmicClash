@@ -199,6 +199,10 @@ export const IRON: PartialSet = {
   amps: [1, 0.7, 0.45, 0.28, 0.16],
   decays: [1, 0.8, 0.6, 0.45, 0.3],
 };
+/** Steel chain links and hardened chain: hollow, ringing, a little "tinny": inharmonic ring modes that die from the top down. */
+export const CHAIN: PartialSet = { ratios: [1, 1.59, 2.27, 3.03, 4.9], amps: [1, 0.7, 0.5, 0.32, 0.18], decays: [1, 0.8, 0.55, 0.38, 0.22] };
+/** A big bronze bell (hum, prime, tierce, quint, nominal): the orbital ring of a moon slam. Long, warm, low. */
+export const BELL: PartialSet = { ratios: [0.5, 1, 1.183, 1.506, 2, 2.514], amps: [0.6, 1, 0.7, 0.5, 0.6, 0.3], decays: [1.6, 1, 0.8, 0.6, 0.5, 0.3] };
 /** Ceramic "tink": a short bar mode set. */
 export const TINK: PartialSet = {
   ratios: [1, 2.76, 5.4, 8.93],
