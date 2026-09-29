@@ -14,6 +14,7 @@ import { Pad, createInputManager, createMemoryStore, type InputManager } from '@
 import { createFakeGamepads, proStandard, xboxStandard, type FakePad } from '@/input/testing';
 import { STAGE_INFO } from '@/stages/info';
 import { FIXTURE_TITANS, fakeHud, fixturePortraitProvider } from './fixtures';
+import { announcement } from './hud';
 import { damageDealt } from './screens/results';
 import { showScreen } from './ui';
 import { createUI } from './index';
@@ -437,6 +438,34 @@ describe('pause, results and attract', () => {
     r.ui.draw(hud);
     expect(r.ui.screen).toBe('results');
     expect(inkCount(r.ui, 270, 144, 370, 210)).toBeGreaterThan(80);
+  });
+
+  it('round-end call-out names the round winner from the tally (MatchApi.winner is only the match winner); a level tally is a draw', () => {
+    announcement(fakeHud({ phase: 'fight', wins: [1, 0], round: 2 }));
+    const won = announcement(fakeHud({ phase: 'roundend', wins: [1, 1], round: 2, phaseTick: 10 }));
+    expect(won?.en).toMatch(/WINS$/);
+    expect(won?.en).toContain(fakeHud().match.fighters[1].def.name.toUpperCase());
+    announcement(fakeHud({ phase: 'fight', wins: [1, 1], round: 3 }));
+    expect(announcement(fakeHud({ phase: 'roundend', wins: [1, 1], round: 3, phaseTick: 10 }))?.en).toBe(
+      'DRAW',
+    );
+    // the shell's own standard words are replaced by the richer phase call-outs (with the "!" and the Hangeul)
+    expect(announcement(fakeHud({ phase: 'fight', phaseTick: 3, announcer: 'FIGHT' }))?.en).toBe('FIGHT!');
+  });
+
+  it('results wait for the winner call-out: shown over the fight for ~110 sim ticks, then cover it', () => {
+    const r = rig();
+    r.ui.showHud();
+    r.ui.draw(fakeHud({ phase: 'matchend', phaseTick: 1 }));
+    r.ui.showResults(0);
+    r.step(2);
+    expect(r.ui.screen).toBe('hud');
+    r.ui.draw(fakeHud({ phase: 'matchend', phaseTick: 60 }));
+    r.step(1);
+    expect(r.ui.screen).toBe('hud');
+    r.ui.draw(fakeHud({ phase: 'matchend', phaseTick: 120 }));
+    r.step(1);
+    expect(r.ui.screen).toBe('results');
   });
 
   it('input guards are robust to slow frames: at 2 fps the results screen accepts input after a few frames, not many seconds', () => {

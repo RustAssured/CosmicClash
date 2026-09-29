@@ -26,7 +26,7 @@ import { Body, type WorldPoint, CONN_NOW, CONN_STEADY } from './body';
 import { initBody } from './bodyinit';
 import { stepChunks } from './chunks';
 import { runConnectivity } from './connectivity';
-import { stepFronts } from './cracks';
+import { stepFronts, stepSlowCuts } from './cracks';
 import { WorldCore } from './core';
 import { beginDamage, DamageCtx } from './dmg';
 import { CHISEL_DELAY, applyFracture, chisel } from './fracture';
@@ -460,6 +460,7 @@ class MatterWorldImpl implements MatterWorldEx {
     for (let i = 0; i < bodies.length; i++) {
       const b = bodies[i]!;
       stepFronts(core, b);
+      stepSlowCuts(core, b);
       stepFuses(core, b);
     }
     this.lap(1);

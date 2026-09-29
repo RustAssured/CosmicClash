@@ -62,7 +62,7 @@ describe('Supernova', () => {
   it('layers blow off as it is worn down, exposing the core, which then takes extra damage', () => {
     const { m, fa, sn } = duel('supernova', 'asteroid');
     m.setSources(null, null);
-    fa.world.carve(fa.body.id, 0.55, 3);
+    fa.world.carve(fa.body.id, 0.4, 3);
     for (let t = 0; t < 60; t++) m.step();
     expect(sn.layerBlows).toBeGreaterThanOrEqual(1);
     expect(fa.view.bodyStats.exposedCoreFrac).toBeGreaterThan(0);

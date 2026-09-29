@@ -158,6 +158,14 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
   let wb = 1;
   let lookX = 0;
   let lookY = 0;
+  let teleportCooldown = 0;
+  // Built-in director for ultimates and KOs (events carry everything it needs, so the app does not have to wire a focus).
+  let dirActive = false;
+  let dirX = 0;
+  let dirY = 0;
+  let dirAge = 0; // ticks since the ultimate started
+  let dirRelease = 0; // 1 → 0 fade after 'end'
+  let koHold = 0; // ticks of KO zoom-hold remaining
 
   const prev: Pose = { x: sx.x, y: sy.x, shakeX: 0, shakeY: 0, zoom: 1, roll: 0 };
   const cur: Pose = { x: sx.x, y: sy.x, shakeX: 0, shakeY: 0, zoom: 1, roll: 0 };
@@ -196,6 +204,21 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
     let hadZoom = false;
     let hadRoll = false;
     for (const e of events) {
+      if (e.t === 'ultimate') {
+        if (e.phase === 'start') {
+          dirActive = true;
+          dirX = e.x;
+          dirY = e.y;
+          dirAge = 0;
+          dirRelease = 1;
+          addShake(0, -1, 5); // the charge-up thud
+        } else if (dirActive) {
+          dirActive = false; // release: fade over ~1 s (dirRelease counts down)
+          addZoom(0.02);
+        }
+      } else if (e.t === 'ko') {
+        koHold = 100; // ~1.7 s of held push-in while the sim runs in slow motion
+      }
       if (e.t === 'shake') {
         hadShake = true;
         addShake(e.dirX, e.dirY, e.amp);
@@ -294,11 +317,11 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
       else if (sp.x > maxC) over = maxC - sp.x;
       if (over === 0) continue;
       const hardPass = m === hard;
-      // stronger catch-up the deeper inside the margin: 30 % of the shortfall per tick at the margin line, all of it at the hard one
-      const gain = hardPass ? 1 : clamp(0.3 + Math.abs(over) / soft, 0.3, 0.9);
+      // catch-up grows with depth into the margin (4 % of the shortfall per tick at the margin line, up to 50 %), and is total at the hard margin
+      const gain = hardPass ? 1 : clamp(0.04 + (0.5 * Math.abs(over)) / soft, 0.04, 0.5);
       sp.x += over * gain;
       if (sp.v * over < 0) sp.v = 0;
-      else sp.v += over * gain * 30;
+      else sp.v += over * gain * 8;
     }
   }
 
@@ -314,6 +337,10 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
       zoomBias = 0;
       roll = 0;
       havePrev = false;
+      teleportCooldown = 0;
+      dirActive = false;
+      dirRelease = 0;
+      koHold = 0;
       lookX = 0;
       lookY = 0;
       wa = 1;
@@ -333,6 +360,7 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
       const { a, b } = targets;
 
       // ---- target velocities → activity weights and lookahead (all smoothed; no jitter when a fighter stops) ----
+      if (!havePrev) teleportCooldown = 45; // first sight of the fighters: nothing to predict from
       let vax = 0;
       let vay = 0;
       let vbx = 0;
@@ -387,13 +415,35 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
         ty = lerp(ty, f.y, w);
         zoomTarget = clamp(f.zoom, 0, T.maxZoom - 1) * w;
       }
+      // ---- built-in ultimate director: lean toward the caster, then a slow push-in that never exceeds the zoom cap ----
+      // The fighters' framing still wins at the edges (edge safety below), so the opponent is never lost.
+      if (dirActive || dirRelease > 0) {
+        if (dirActive) {
+          dirAge++;
+          if (dirAge > 300) dirActive = false; // 5 s hard limit: a missed 'end' event must not trap the camera
+        } else dirRelease = Math.max(0, dirRelease - DT / 1.0);
+        const ramp = dirActive ? clamp01(dirAge / 40) : dirRelease; // 0.67 s ease-in, 1 s ease-out
+        const push = clamp01(dirAge / 240); // the slow push across ~4 s
+        const w = 0.55 * ramp;
+        tx = lerp(tx, dirX, w);
+        ty = lerp(ty, dirY, w * 0.6);
+        zoomTarget = Math.max(zoomTarget, (0.028 + 0.022 * push) * ramp);
+      }
+      if (koHold > 0) {
+        koHold--;
+        zoomTarget = Math.max(zoomTarget, 0.03 * clamp01(koHold / 30));
+      }
       const kz = 1 - Math.pow(0.5, DT / 0.3);
       zoomBias += (zoomTarget - zoomBias) * kz;
 
       clampCentre(tx, ty, arena, centreTmp);
       springStep(sx, centreTmp.x, omegaX, DT);
       springStep(sy, centreTmp.y, omegaY, DT);
-      edgeSafety(a, b, vax, vay, vbx, vby);
+      // A jump of more than 96 px in one tick is a teleport (round reset, scripted move), not a launch: the renderer treats it the same way.
+      if (Math.max(Math.abs(vax), Math.abs(vay), Math.abs(vbx), Math.abs(vby)) * DT > 96)
+        teleportCooldown = 45;
+      if (teleportCooldown > 0) teleportCooldown--;
+      else edgeSafety(a, b, vax, vay, vbx, vby);
 
       // ---- impulses ----
       consumeEvents(events);

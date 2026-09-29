@@ -310,10 +310,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| grip | 0–10 | point | CRUSH | 700 | — | compress=7, crater=12 | -260,0 | 0.8 |
+| grip | 0–10 | point | CRUSH | 1300 | — | compress=7, crater=12 | -260,0 | 0.8 |
 | bind | 0–10 | point | ASSIMILATION | 220 | LATCH | latch=230 | -40,0 | 0.2 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 920.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1520.
 
 Data-driven extras: `{"root":{"mul":0.3,"ticks":150,"chains":3,"snap":700},"recoil":0.05,"pose":{"startup":{"lean":-7},"active":{"lean":8},"recovery":{"lean":2}}}`
 
@@ -349,7 +349,7 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 220.
 
-Data-driven extras: `{"cage":{"segments":8,"radius":[175,44],"build":56,"closeFrom":60,"closeTo":100,"hp":260,"breakAt":3,"crush":{"energy":2800,"latch":240,"compress":10,"crater":16}},"ctl":{"startup":0.1,"active":0.15,"recovery":0.3},"pose":{"startup":{"lean":-6},"active":{"lean":3},"recovery":{"lean":0}}}`
+Data-driven extras: `{"cage":{"segments":8,"radius":[175,44],"build":56,"closeFrom":60,"closeTo":100,"hp":260,"breakAt":3,"crush":{"energy":9000,"latch":240,"compress":20,"crater":32}},"ctl":{"startup":0.1,"active":0.15,"recovery":0.3},"pose":{"startup":{"lean":-6},"active":{"lean":3},"recovery":{"lean":0}}}`
 
 #### Chain Mesh · 사슬 그물  `nexus.guard`  — guard
 
@@ -406,9 +406,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| shear | 0–10 | field | TIDAL | 240 | — | pull=1.2 | -60,0 | 0.15 |
+| shear | 0–10 | field | TIDAL | 1200 | — | pull=1.2 | -60,0 | 0.15 |
+| shear-rake | 0–10 | point | KINETIC | 230 | — | — | -30,0 | 0.15 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 240.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1430.
 
 Data-driven extras: `{"pose":{"startup":{"lean":-3},"active":{"lean":3}}}`
 
@@ -420,9 +421,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| maw | 0–16 | field | TIDAL | 1300 | — | pull=1.6 | -140,0 | 0.7 |
+| maw | 0–16 | field | TIDAL | 9000 | — | pull=1.6 | -140,0 | 0.7 |
+| maw-crush | 6–14 | point | CRUSH | 1000 | — | — | -60,0 | 0.7 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1300.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 10000.
 
 Data-driven extras: `{"pose":{"startup":{"lean":-6},"active":{"lean":4}}}`
 
@@ -454,9 +456,9 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| tide | 0–120 | field | TIDAL | 42 /3t | CONTINUOUS | pull=1.8 | -40,0 | 0.1 |
+| tide | 0–120 | field | TIDAL | 70 /3t | CONTINUOUS | pull=1.8 | -40,0 | 0.1 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 5040.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 8400.
 
 Data-driven extras: `{"well":{"radius":[200,340],"strength":[1600,3200],"consume":30,"pullFoe":700},"ctl":{"startup":0.1,"active":0.1,"recovery":0.3}}`
 

@@ -32,6 +32,7 @@ function hashBody(h: number, b: Body): number {
     h = mix32(h, b.frontDir[k]!);
     h = mixF(h, b.frontStress[k]!);
   }
+  h = mix32(h, b.slowN | (b.slowPos << 16));
   h = mix32(h, b.fuseCount);
   for (let k = 0; k < b.fuseCount; k++) {
     h = mix32(h, b.fuseCell[k]!);

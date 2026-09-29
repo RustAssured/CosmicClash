@@ -1,7 +1,7 @@
 import { LOGICAL_H, LOGICAL_W, MAX_DEBRIS_CHUNKS, TICK_DT, type ViewRect } from '@/contracts';
 import type { WorldCore } from './core';
 import { PK } from './particles';
-import { scalePx } from './util';
+import { lerpPx, scalePx } from './util';
 
 const EMPTY32 = new Uint32Array(0);
 const EMPTY8 = new Uint8Array(0);
@@ -590,7 +590,7 @@ export function rasterChunks(
   for (let k = 0; k < 8; k++) {
     const a = (k * Math.PI) / 4;
     const lit = Math.cos(a) * L.lx + Math.sin(a) * L.ly;
-    LIT[k] = Math.round(256 * (1 + 0.24 * lit));
+    LIT[k] = Math.round(256 * (1 + 0.5 * lit));
   }
   for (let s = 0; s < pool.hi; s++) {
     const c = pool.list[s]!;
@@ -641,7 +641,14 @@ export function rasterChunks(
         let p = pixels[si]! | 0;
         if (p >>> 24 === 0) continue;
         const nk = nrm[si]!;
-        if (nk !== 0) p = scalePx(p, LIT[(nk - 1 + rotSteps) & 7]!);
+        if (nk !== 0) {
+          const lk = LIT[(nk - 1 + rotSteps) & 7]!;
+          p = scalePx(p, lk);
+          // Rim facing away from the key light: a 1-px dark, hue-shifted (cool violet) edge that separates the chunk from a bright scene.
+          if (lk < 232) p = lerpPx(p, 0xff4a2436, 150);
+        }
+        // Undersides sit in shade: top of the chunk full, bottom ~25% darker.
+        p = scalePx(p, (284 - ((dy - sy + R) * 60) / (2 * R)) | 0);
         if (depthDim !== 256) p = scalePx(p, depthDim);
         const o = dy * W + dx;
         pix[o] = p;

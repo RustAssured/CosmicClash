@@ -30,6 +30,8 @@ export function cellMassOf(body: Body): number {
 /** Clear every transient process on a body (fronts, fuses, harvest, blow) and its per-cell transient state. */
 function clearTransients(body: Body): void {
   body.frontCount = 0;
+  body.slowN = 0;
+  body.slowPos = 0;
   body.fuseCount = 0;
   body.harvest = 0;
   body.harvestUntil = -1;

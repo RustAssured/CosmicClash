@@ -52,7 +52,7 @@ const pt: WorldPoint = { x: 0, y: 0 };
 const pt2: WorldPoint = { x: 0, y: 0 };
 
 /** Hash-based bucket heads for grouping crater cells into 3×3 fragments. */
-const BLOCK = 5;
+const BLOCK = 6;
 let blockHead = new Int32Array(1);
 let blockNext = new Int32Array(1);
 const usedBlocks: number[] = [];
@@ -294,7 +294,7 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
       ctx.massRemoved += mm * keep;
     }
     ctx.removed += cnt2;
-    if (cnt2 >= 6) {
+    if (cnt2 >= 9) {
       const ch = extractChunk(core, body, list.data, cnt2, vx, vy, (rng.next() - 0.5) * 14, keep);
       if (ch) {
         out.chunks++;

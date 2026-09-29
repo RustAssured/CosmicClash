@@ -26,8 +26,8 @@ import type { ActiveMove } from '../move';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
 
 /* ---- fuel economy -------------------------------------------------------------------------------------------------------- */
-/** Fraction of the star's initial mass that burns away per fuel point spent: spending all 100 fuel shrinks it by about a third. */
-const SHED_PER_FUEL = 0.0025;
+/** Fraction of the star's initial mass that burns away per fuel point spent: spending all 100 fuel shrinks it by over a third. */
+const SHED_PER_FUEL = 0.0038;
 /** Burning never takes the star below this mass fraction (the remnant), so spending fuel cannot kill it. */
 const SHED_FLOOR = 0.46;
 /** The debt of burnt mass is paid to the matter world in lumps: `world.shed` scans the whole map. */
@@ -44,7 +44,7 @@ const ABSORB_MAX = 8;
 const AURA_EVERY = 3;
 const AURA_RADIUS = 96;
 /** Exposed core: extra damage to the core per unit of exposure when a blow reaches it. */
-const EXPOSURE_GAIN = 1.1;
+const EXPOSURE_GAIN = 1.5;
 /** Mass fractions at which the outer layers blow off in a sheet (once each per round), and how much mass each takes. */
 const LAYER_BLOWS = [0.78, 0.6, 0.45];
 const LAYER_BLOW_MASS = 0.045;

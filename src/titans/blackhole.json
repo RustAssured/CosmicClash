@@ -162,6 +162,30 @@
               },
               "guardPressure": 0.15,
               "reachScale": 0.5
+            },
+            {
+              "id": "shear-rake",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 86,
+                "oy": -34,
+                "r": 34
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 230,
+                "duration": 1,
+                "flags": 0,
+                "params": {}
+              },
+              "knockback": {
+                "x": -30.0,
+                "y": 0
+              },
+              "guardPressure": 0.15,
+              "reachScale": 0.5
             }
           ],
           "movement": [
@@ -201,6 +225,30 @@
               },
               "guardPressure": 0.15,
               "reachScale": 0.5
+            },
+            {
+              "id": "shear-rake",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 86,
+                "oy": 0,
+                "r": 34
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 230,
+                "duration": 1,
+                "flags": 0,
+                "params": {}
+              },
+              "knockback": {
+                "x": -30.0,
+                "y": 0
+              },
+              "guardPressure": 0.15,
+              "reachScale": 0.5
             }
           ],
           "movement": [
@@ -236,6 +284,30 @@
               },
               "knockback": {
                 "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.15,
+              "reachScale": 0.5
+            },
+            {
+              "id": "shear-rake",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 86,
+                "oy": 34,
+                "r": 34
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 230,
+                "duration": 1,
+                "flags": 0,
+                "params": {}
+              },
+              "knockback": {
+                "x": -30.0,
                 "y": 0
               },
               "guardPressure": 0.15,
@@ -321,7 +393,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2600,
+                "energy": 1000,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -384,7 +456,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2600,
+                "energy": 1000,
                 "duration": 1,
                 "flags": 0,
                 "params": {}
@@ -447,7 +519,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2600,
+                "energy": 1000,
                 "duration": 1,
                 "flags": 0,
                 "params": {}

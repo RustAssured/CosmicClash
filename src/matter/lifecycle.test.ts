@@ -391,7 +391,7 @@ describe('debug overlays', () => {
         flags: DamageFlag.SEED_CRACK,
       }),
     );
-    run(world, 5);
+    run(world, 100);
     let first: unknown = null;
     for (const mode of DEBUG_MODES) {
       const l = world.debugOverlay(ids[0]!, mode as DebugOverlayMode)!;

@@ -2,19 +2,10 @@ import { CellFlag, type DamageResult } from '@/contracts';
 import { CONN_NOW } from './body';
 import type { Body, WorldPoint } from './body';
 import { breakBondD, breakBondR } from './cells';
-import { plantFrontToward } from './cracks';
+import { plantFrontToward, queueSlowEdge } from './cracks';
 import { RAMP_SHARD, MODE_MECH } from './debris';
 import { cohesionBondScale } from './bodyinit';
-import {
-  defaultCutOptions,
-  edgeBond,
-  edgeCells,
-  breakEdge,
-  setEdgeBond,
-  DX,
-  DY,
-  type CutFinder,
-} from './cuts';
+import { defaultCutOptions, edgeBond, edgeCells, setEdgeBond, DX, DY, type CutFinder } from './cuts';
 import {
   DF,
   T_FRACTURE,
@@ -502,7 +493,7 @@ function runCut(ctx: DamageCtx, finder: CutFinder, budget: number, grindBudget: 
         break;
       }
       spent += cost;
-      breakEdge(body, ux, uy, d);
+      queueSlowEdge(body, ux, uy, d);
       broken++;
       // Grind the two cells beside the cut and throw a glint or two.
       grindCell(ctx, a, perEdgeGrind);

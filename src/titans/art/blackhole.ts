@@ -147,7 +147,8 @@ export function paintBlackHole(
           0,
           set3.length - 1,
         );
-        set(i, mid, set3[idx]!, 96);
+        // where the band crosses the horizon it is light, not matter: it stays horizon so the black disc is one solid piece
+        set(i, frontBand && r < hz ? ids.horizon : mid, set3[idx]!, 96);
         continue;
       }
       // jets along the axis, above and below the photon ring

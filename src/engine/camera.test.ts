@@ -100,9 +100,9 @@ describe('camera framing', () => {
   it('director focus pulls the framing and applies a zoom bias within the 6% cap', () => {
     const cam = createCamera();
     cam.reset(800, 290);
-    run(cam, targets(700, 900, { focus: { x: 1000, y: 250, weight: 1, zoom: 0.05 } }), 240);
+    run(cam, targets(900, 1000, { focus: { x: 1080, y: 250, weight: 1, zoom: 0.05 } }), 240);
     const s = cam.sample(0).state;
-    expect(s.x).toBeGreaterThan(950);
+    expect(s.x).toBeGreaterThan(1030);
     expect(s.zoom).toBeGreaterThan(1.03);
     expect(s.zoom).toBeLessThanOrEqual(1.06 + 1e-9);
   });
@@ -334,17 +334,92 @@ describe('camera edge safety: a launched fighter never leaves the frame', () => 
   it('calm play keeps the heavy dolly (safety does not engage) and the view never jitters', () => {
     const cam = createCamera();
     cam.reset(400, 290);
-    run(cam, targets(700, 800), 12);
-    const travelled = (cam.sample(0).state.x - 400) / (750 - 400);
+    run(cam, targets(500, 600), 240); // settled on the pair
+    run(cam, targets(640, 740), 12); // they walk on; a calm 140 px shift
+    const travelled = (cam.sample(0).state.x - 550) / (690 - 550);
     expect(travelled).toBeLessThan(0.45);
-    let last = cam.sample(0).view.x0;
+    let last = cam.sample(1).view.x0;
     let maxStep = 0;
     for (let i = 0; i < 200; i++) {
-      cam.tick(targets(700 + i * 0.5, 800 + i * 0.5), []);
+      cam.tick(targets(640 + i * 0.5, 740 + i * 0.5), []);
       const x0 = cam.sample(1).view.x0;
       maxStep = Math.max(maxStep, Math.abs(x0 - last));
       last = x0;
     }
     expect(maxStep).toBeLessThan(6);
+  });
+});
+
+describe('camera ultimate and KO choreography', () => {
+  const ult = (phase: 'start' | 'end', x: number): SimEvent => ({
+    t: 'ultimate',
+    slot: 0,
+    titan: 'lastone',
+    phase,
+    x,
+    y: 250,
+  });
+  it('an ultimate leans toward the caster, pushes in slowly (never past the cap), keeps both fighters in view and releases', () => {
+    const cam = createCamera();
+    cam.reset(800, 290);
+    const t = targets(700, 900);
+    run(cam, t, 200);
+    const baseX = cam.sample(1).state.x;
+    cam.tick(t, [ult('start', 700)]);
+    let z0 = 0;
+    let maxZ = 1;
+    let minX = Infinity;
+    let worst = Infinity;
+    for (let i = 0; i < 260; i++) {
+      cam.tick(t, []);
+      const s = cam.sample(1);
+      if (i === 60) z0 = s.state.zoom;
+      maxZ = Math.max(maxZ, s.state.zoom);
+      minX = Math.min(minX, s.state.x);
+      worst = Math.min(worst, 700 - 90 - s.view.x0, s.view.x0 + LOGICAL_W - (900 + 90));
+    }
+    const mid = cam.sample(1);
+    expect(minX).toBeLessThan(baseX - 8);
+    expect(mid.state.zoom).toBeGreaterThan(1); // leaned toward the caster on the left
+    expect(z0).toBeGreaterThan(1.02);
+    expect(maxZ).toBeLessThanOrEqual(1.06 + 1e-9);
+    expect(maxZ).toBeGreaterThan(z0); // the push keeps growing
+    expect(worst).toBeGreaterThanOrEqual(0);
+    cam.tick(t, [ult('end', 700)]);
+    run(cam, t, 200);
+    const after = cam.sample(1);
+    expect(after.state.zoom).toBeLessThan(1.005);
+    expect(Math.abs(after.state.x - baseX)).toBeLessThan(3);
+  });
+  it('a missed end event cannot trap the camera (5 s limit)', () => {
+    const cam = createCamera();
+    cam.reset(800, 290);
+    const t = targets(650, 950);
+    cam.tick(t, [ult('start', 650)]);
+    run(cam, t, 700);
+    expect(cam.sample(1).state.zoom).toBeLessThan(1.005);
+  });
+  it('a KO blow: shake, micro-zoom, roll within 1.5 degrees, then a held push that eases out', () => {
+    const cam = createCamera();
+    cam.reset(800, 290);
+    const t = targets(700, 900);
+    run(cam, t, 100);
+    cam.tick(t, [{ t: 'ko', slot: 1, x: 900, y: 290 } as SimEvent]);
+    let maxRoll = 0;
+    let maxZoom = 1;
+    let maxShake = 0;
+    for (let i = 0; i < 40; i++) {
+      cam.tick(t, []);
+      const s = cam.sample(1).state;
+      maxRoll = Math.max(maxRoll, Math.abs(s.roll));
+      maxZoom = Math.max(maxZoom, s.zoom);
+      maxShake = Math.max(maxShake, Math.abs(s.shakeX) + Math.abs(s.shakeY));
+    }
+    expect(maxRoll).toBeGreaterThan(0);
+    expect(maxRoll).toBeLessThanOrEqual(1.5 * DEG + 1e-9);
+    expect(maxZoom).toBeGreaterThan(1.03);
+    expect(maxShake).toBeGreaterThan(3);
+    run(cam, t, 240);
+    expect(cam.sample(1).state.zoom).toBeLessThan(1.005);
   });
 });

@@ -204,6 +204,11 @@ export class Body implements MatterBody {
   readonly frontGen = new Int8Array(MAX_FRONTS);
   frontCount = 0;
 
+  /* ---- slow cuts: FRACTURE seams whose bonds are severed progressively (a visible growing fissure) ---- */
+  readonly slowEdges = new Int32Array(4096);
+  slowN = 0;
+  slowPos = 0;
+
   /* ---- shrapnel fuses (KINETIC EMBED) ---- */
   readonly fuseCell = new Int32Array(MAX_FUSES);
   readonly fuseTimer = new Int16Array(MAX_FUSES);

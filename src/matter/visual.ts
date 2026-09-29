@@ -210,8 +210,12 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         if (x > 0 && bondR[i - 1] === 0 && mat[i - 1] !== 0) weak = true;
         if (y > 0 && bondD[i - w] === 0 && mat[i - w] !== 0) weak = true;
         // A chasm: the far wall is dark, the near lip catches the light.
-        if (strong) col = lerpPx(col, md.crack | 0, 235);
-        else if (weak) col = lerpPx(col, light, 70);
+        if (strong) col = lerpPx(scalePx(col, 150), md.crack | 0, 250);
+        else if (weak) {
+          // The near lip catches the key light: a warm, hue-shifted glint that also feeds bloom a little.
+          col = lerpPx(col, lerpPx(light, L.key | 0, 90), 130);
+          if (em < 46) em = 46;
+        }
       }
 
       /* ---- heat glow ---- */

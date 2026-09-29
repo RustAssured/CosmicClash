@@ -438,7 +438,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 700,
+                "energy": 1300,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -509,7 +509,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 700,
+                "energy": 1300,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -580,7 +580,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 700,
+                "energy": 1300,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -1029,10 +1029,10 @@
           "hp": 260,
           "breakAt": 3,
           "crush": {
-            "energy": 2800,
+            "energy": 9000,
             "latch": 240,
-            "compress": 10,
-            "crater": 16
+            "compress": 20,
+            "crater": 32
           }
         },
         "ctl": {

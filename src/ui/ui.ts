@@ -32,6 +32,8 @@ import { loadUISettings, resolveStore, saveUISettings, type UISettings } from '.
 import type { TitanInfo, UIDeps } from './types';
 
 const FADE_SEC = 0.22;
+/** Sim ticks of the match-end call-out shown before the results screen covers the fight. */
+const RESULTS_DELAY_TICKS = 110;
 
 /**
  * The pixel UI. One instance draws every screen into ONE screen-space layer (640×360, transparent where the scenery should
@@ -56,6 +58,7 @@ class UIRuntime implements GameUI, UICtx {
   dt = 0;
   screenTime = 0;
   screenFrames = 0;
+  private pendingResults: 0 | 1 | -1 | null = null;
   private stack: UIScreenId[] = ['boot'];
   private readonly screens: Partial<Record<UIScreenId, Screen>> = {};
   private readonly actions: UIAction[] = [];
@@ -120,6 +123,11 @@ class UIRuntime implements GameUI, UICtx {
     this.screenTime += dtSec;
     this.screenFrames++;
     if (this.fade < 1) this.fade = Math.min(1, this.fade + dtSec / FADE_SEC);
+    if (this.pendingResults !== null) {
+      const m = this.hud?.match;
+      if (!m || m.phase !== 'matchend' || m.phaseTick >= RESULTS_DELAY_TICKS || this.screen !== 'hud')
+        this.showResults(this.pendingResults);
+    }
     this.input.pollIfStale();
     this.navAny = this.input.nav('any');
     const n = this.navAny;
@@ -156,11 +164,20 @@ class UIRuntime implements GameUI, UICtx {
   }
 
   showHud(): void {
+    this.pendingResults = null;
     this.stack = ['hud'];
     this.enterTop(undefined);
   }
 
   showResults(winner: 0 | 1 | -1): void {
+    // the shell calls this on the FIRST tick of the match's end: let the winner's call-out ("… WINS", 승리!) be seen over the
+    // fight first, then cover it (the HUD state drives the wait, so it is the sim's own clock, not the frame rate)
+    const m = this.hud?.match;
+    if (m && m.phase === 'matchend' && m.phaseTick < RESULTS_DELAY_TICKS && this.screen === 'hud') {
+      this.pendingResults = winner;
+      return;
+    }
+    this.pendingResults = null;
     this.stack = ['results'];
     this.enterTop(winner);
   }
@@ -190,6 +207,7 @@ class UIRuntime implements GameUI, UICtx {
   }
 
   showTitle(): void {
+    this.pendingResults = null;
     this.stack = ['title'];
     this.idle = 0;
     this.advantage.reset();

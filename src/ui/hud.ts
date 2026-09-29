@@ -266,20 +266,50 @@ interface Announce {
   color: number;
 }
 
+/**
+ * The wins as they stood while the round was being fought, and the round they belong to: at `roundend` the winner is whoever's
+ * tally went up since. (`MatchApi.winner` is only the MATCH winner, so a round the foe took would read as a draw.)
+ */
+const seen = { round: 0, w0: 0, w1: 0 };
+
+function trackWins(hud: HudState): void {
+  const [w0, w1] = hud.wins;
+  const live =
+    hud.phase === 'intro' || hud.phase === 'fight' || hud.phase === 'ko' || hud.phase === 'timeover';
+  if (live || hud.round < seen.round || w0 < seen.w0 || w1 < seen.w1) {
+    seen.round = hud.round;
+    seen.w0 = w0;
+    seen.w1 = w1;
+  }
+}
+
+/** Who took the round or match that just ended: 0 / 1, or -1 for a draw. */
+export function roundWinner(hud: HudState): 0 | 1 | -1 {
+  const m = hud.match;
+  if (hud.phase === 'matchend' && m.winner !== -1) return m.winner;
+  if (hud.wins[0] > seen.w0 && hud.wins[1] === seen.w1) return 0;
+  if (hud.wins[1] > seen.w1 && hud.wins[0] === seen.w0) return 1;
+  return m.winner;
+}
+
 export function announcement(hud: HudState): Announce | null {
+  trackWins(hud);
   const m = hud.match;
   const pt = m.phaseTick;
   const fightCallStart = ROUND_INTRO_TICKS - 45;
-  if (hud.announcer) {
+  // The call-outs come from the phase, not from `hud.announcer`: the shell's text has no "!", no winner and no Hangeul for
+  // most phases. (An announcer string that is NOT one of the shell's own standard words is still shown.)
+  if (hud.announcer && !STANDARD_CALLS.has(hud.announcer)) {
     const a = hud.announcer.toUpperCase();
     return { en: a, ko: koFor(a), scale: 3, age: Math.min(1, pt / 10), color: C.text };
   }
   switch (hud.phase) {
-    case 'intro':
+    case 'intro': {
+      const final = hud.wins[0] === ROUNDS_TO_WIN - 1 && hud.wins[1] === ROUNDS_TO_WIN - 1;
       if (pt < fightCallStart)
         return {
-          en: `ROUND ${hud.round}`,
-          ko: `라운드 ${hud.round}`,
+          en: final ? 'FINAL ROUND' : `ROUND ${hud.round}`,
+          ko: final ? '마지막 라운드' : `라운드 ${hud.round}`,
           scale: 3,
           age: Math.min(1, pt / 10),
           color: C.text,
@@ -291,6 +321,7 @@ export function announcement(hud: HudState): Announce | null {
         age: Math.min(1, (pt - fightCallStart) / 8),
         color: C.gold,
       };
+    }
     case 'fight':
       if (pt < 28) return { en: 'FIGHT!', ko: '시작!', scale: 3, age: 1, color: C.gold };
       return null;
@@ -300,7 +331,7 @@ export function announcement(hud: HudState): Announce | null {
       return { en: 'TIME UP', ko: '시간 종료', scale: 3, age: Math.min(1, pt / 10), color: C.gold };
     case 'roundend':
     case 'matchend': {
-      const w = m.winner;
+      const w = roundWinner(hud);
       if (w === -1) return { en: 'DRAW', ko: '무승부', scale: 3, age: Math.min(1, pt / 10), color: C.soft };
       const name = m.fighters[w].def.name.toUpperCase();
       return {
@@ -313,6 +344,8 @@ export function announcement(hud: HudState): Announce | null {
     }
   }
 }
+
+const STANDARD_CALLS = new Set(['ROUND', 'FIGHT', 'K.O.', 'TIME', '승리!', 'FINAL ROUND']);
 
 function koFor(a: string): string {
   if (a.startsWith('ROUND')) return `라운드 ${a.replace(/\D+/g, '')}`.trim();
