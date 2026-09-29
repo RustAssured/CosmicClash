@@ -4,7 +4,17 @@ import globals from 'globals';
 import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'docs/gallery/**', 'coverage/**', 'playwright-report/**', 'test-results/**', '.scratch/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'docs/gallery/**',
+      'coverage/**',
+      'playwright-report/**',
+      'test-results/**',
+      '.scratch/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

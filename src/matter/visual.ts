@@ -187,17 +187,18 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
           // Converted: a wire lattice (diagonal strands, glowing nodes where they cross) over a dark, crimson-tinted body.
           const a = (x + y) & 3;
           const b = (x - y) & 3;
-          const body = lerpPx(scalePx(col, 120), scalePx(md.infect | 0, 64), 176);
+          const body = lerpPx(scalePx(col, 100), scalePx(md.infect | 0, 64), 176);
           if (a === 0 && b === 0) {
             col = lerpPx(md.infect | 0, -1, 150);
-            if (em < 120) em = 120;
+            if (em < 170) em = 170;
           } else if (a === 0 || b === 0) {
             col = lerpPx(md.infect | 0, 0xffffe4d6 | 0, 40);
-            if (em < 44) em = 44;
+            if (em < 70) em = 70;
           } else col = body;
         } else if (inv >= BAYER4[((y & 3) << 2) | (x & 3)]! * 16 + 12) {
           // Creeping front: ordered dither of crimson into the untouched matter, denser as infection deepens.
           col = lerpPx(col, md.infect | 0, 190);
+          if (em < 34) em = 34;
         }
       }
 

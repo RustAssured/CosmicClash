@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseScript, type DamageEvent, type SimEvent, type TitanId } from '@/contracts';
-import { createMatterWorld } from '@/matter';
+import { createMatterWorld, type MatterWorldEx } from '@/matter';
 import type { FighterImpl } from './fighter';
 import type { PlanetBehaviour } from './behaviours/planet';
 import { createScriptSource, makeMatch, skipIntro } from './testing/harness';
@@ -112,7 +112,7 @@ describe('Planet', () => {
             map.material[i] = 0;
             map.integrity[i] = 0;
           }
-        fb.world.settleBody(fb.body.id);
+        (fb.world as MatterWorldEx).settleBody(fb.body.id);
       }
       const t = fb.body.transform;
       const before = fb.world.stats(fb.body.id).mass;
