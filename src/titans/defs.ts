@@ -7,7 +7,14 @@ import planetJson from './planet.json';
 import supernovaJson from './supernova.json';
 
 /** Titans whose art, moves and behaviour exist. The other four are Phase 2 content. */
-export const IMPLEMENTED_TITANS: TitanId[] = ['lastone', 'asteroid', 'nexus', 'supernova', 'planet'];
+export const IMPLEMENTED_TITANS: TitanId[] = [
+  'lastone',
+  'asteroid',
+  'nexus',
+  'blackhole',
+  'supernova',
+  'planet',
+];
 
 export const TITAN_DEFS: Partial<Record<TitanId, TitanDef>> = {
   lastone: lastoneJson as unknown as TitanDef,

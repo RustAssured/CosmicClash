@@ -335,6 +335,9 @@ export function createNexusVoice(): TitanVoice {
         case 'harvest':
           harvest(c, t, pan, a, 1.7);
           return;
+        case 'latch':
+          lock(c, t, pan, 0.6 + 0.4 * a, 1.3);
+          return;
         case 'merge':
           clank(c, t, pan, NODES[0]! * 3, 0.5, 1, 0.5, 2.2);
           partials(c, makeOut(c, pan, 0.6), t + 0.03, NODES[2]! * 3, CHAIN, {

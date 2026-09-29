@@ -240,7 +240,7 @@ export function stepSlowCuts(core: WorldCore, body: Body): void {
   if (body.slowPos >= body.slowN) return;
   const rng = body.rng;
   const pending = body.slowN - body.slowPos;
-  const rate = Math.max(2, Math.ceil(pending / 60));
+  const rate = Math.max(2, Math.ceil(pending / 36));
   let n = 0;
   let broke = false;
   while (n < rate && body.slowPos < body.slowN) {

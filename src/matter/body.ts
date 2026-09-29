@@ -208,6 +208,8 @@ export class Body implements MatterBody {
   readonly slowEdges = new Int32Array(4096);
   slowN = 0;
   slowPos = 0;
+  /** A CRUSH has cracked this body: fissures glow with magma from then on (visual only). */
+  magma = false;
 
   /* ---- shrapnel fuses (KINETIC EMBED) ---- */
   readonly fuseCell = new Int32Array(MAX_FUSES);

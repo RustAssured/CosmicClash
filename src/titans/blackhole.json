@@ -32,6 +32,9 @@
     {
       "key": "horizon",
       "base": "horizon",
+      "physics": {
+        "density": 0.4
+      },
       "visual": {
         "ramp": ["#000000", "#010103", "#02020a"],
         "emissive": 0,
@@ -44,7 +47,14 @@
       "key": "photon",
       "base": "diskGas",
       "physics": {
-        "toughness": 0.3
+        "toughness": 0.3,
+        "resist": {
+          "FRACTURE": 2.4,
+          "KINETIC": 2.4,
+          "CRUSH": 2.4,
+          "THERMAL": 2.4,
+          "TIDAL": 0.6
+        }
       },
       "visual": {
         "ramp": ["#7a3a10", "#ffb050", "#ffe6b0", "#ffffff"],
@@ -63,6 +73,15 @@
         "char": "#150a08",
         "crack": "#000000",
         "debris": "#ff8a2a"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 2.4,
+          "KINETIC": 2.4,
+          "CRUSH": 2.4,
+          "THERMAL": 2.4,
+          "TIDAL": 0.6
+        }
       }
     },
     {
@@ -74,6 +93,15 @@
         "char": "#150a08",
         "crack": "#000000",
         "debris": "#c4501a"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 2.4,
+          "KINETIC": 2.4,
+          "CRUSH": 2.4,
+          "THERMAL": 2.4,
+          "TIDAL": 0.6
+        }
       }
     },
     {
@@ -85,6 +113,15 @@
         "char": "#150a08",
         "crack": "#000000",
         "debris": "#6a1616"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 2.4,
+          "KINETIC": 2.4,
+          "CRUSH": 2.4,
+          "THERMAL": 2.4,
+          "TIDAL": 0.6
+        }
       }
     },
     {
@@ -114,7 +151,7 @@
       "squash": 0.3,
       "tilt": -0.2,
       "jet": {
-        "len": 60,
+        "len": 54,
         "w": 2.4
       }
     }

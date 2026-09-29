@@ -260,6 +260,8 @@ export interface Fighter {
   debugShapes(out: DebugShape[]): void;
   /** Prepare for the next round: reposition, keep damage as partially healed scars, refill resource/meter as rules say. */
   nextRound(x: number, y: number, facing: 1 | -1, healFraction: number, seed: number): void;
+  /** Harness/training only: set the ultimate meter (0..1). Optional; fighters that support it implement it. */
+  debugSetMeter?(v: number): void;
   /** Called by the match when the foe's KO is final/round decided (victory pose). */
   setVictory(): void;
   /** For the AI's short-horizon lookahead: frame data lookup by move id. */

@@ -15,12 +15,30 @@ describe('cueKind', () => {
     expect(cueKind('swarm')).toBe('swarm');
     expect(cueKind('node-merge')).toBe('merge');
   });
+  it('recognises every exact id the four newer titans emit', () => {
+    const emitted: [string, string][] = [
+      ['layer-blow', 'blow'],
+      ['crust-crack', 'crack'],
+      ['fuel-burn', 'burn'],
+      ['collapse', 'collapse'],
+      ['moon-lost', 'lost'],
+      ['atmo-strip', 'strip'],
+      ['ocean-boil', 'boil'],
+      ['node-dark', 'dark'],
+      ['harvest', 'harvest'],
+      ['chain-latch', 'latch'],
+      ['disk-shed', 'shed'],
+      ['consume', 'consume'],
+      ['hawking', 'hawking'],
+    ];
+    for (const [id, kind] of emitted) expect(cueKind(id), id).toBe(kind);
+  });
   it('returns null for an id it has never heard of, so voices fall back to something tasteful', () => {
     expect(cueKind('eye-exposed')).toBeNull();
     expect(cueKind('')).toBeNull();
     expect(cueKind('momentum')).toBeNull();
   });
-  it('knows all eleven kinds the Lead documented', () => {
+  it('knows the eleven kinds the Lead documented and the six ids the newer titans added', () => {
     expect([...CUE_KINDS].sort()).toEqual(
       [
         'sever',
@@ -34,6 +52,12 @@ describe('cueKind', () => {
         'harvest',
         'swarm',
         'merge',
+        'blow',
+        'crack',
+        'burn',
+        'latch',
+        'consume',
+        'hawking',
       ].sort(),
     );
   });

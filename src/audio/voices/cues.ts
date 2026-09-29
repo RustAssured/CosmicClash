@@ -15,6 +15,13 @@ export const CUE_KINDS = [
   'harvest',
   'swarm',
   'merge',
+  // the ids the four newer titans emit: layer-blow, crust-crack, fuel-burn, chain-latch, consume, hawking
+  'blow',
+  'crack',
+  'burn',
+  'latch',
+  'consume',
+  'hawking',
 ] as const;
 export type CueKind = (typeof CUE_KINDS)[number];
 

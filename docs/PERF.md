@@ -65,4 +65,16 @@ Measured with `node tools/render/perf.mjs [--layers]` (Playwright → headless C
 * **Uploads:** the layer texture cache uploaded exactly the dirty rect in the GPU verification (64 texels for an 8×8 change on a 640×360 layer) and nothing for unchanged versions (`node tools/render/verify.mjs`).
 * Frame *interval* in the sandbox on this box is ~0.4–4 s (software), so real-time behaviour was judged from stills and from the deterministic checks, not from motion.
 
+**Integrated per-stage sweep (round 3, all five stages, `npx tsx tools/lead/perf.ts --all --ticks=600 --frames=12` against a build in `.scratch/b1dist`, software GL, quality `auto` = tier 0 after the controller settles, loaded shared box).** Frame numbers are software rasteriser wall time and only show *relative* stage cost; sim ms is not mine (B2/B3 dominate it).
+
+| matchup @ stage | frame ms (software) | draw ms (software) | fps (software) |
+|---|---|---|---|
+| lastone vs asteroid @ nursery | 698 | 297 | 1.4 |
+| nexus vs planet @ rim | 562 | 289 | 1.8 |
+| blackhole vs supernova @ quasar | 540 | 223 | 1.8 |
+| planet vs blackhole @ redgiant | 388 | 274 | 2.6 |
+| supernova vs nexus @ tussenruimte | 321 | 203 | 3.0 |
+
+The nursery (two GPU-baked pillar layers + 5 fbm layers) is the most expensive stage; tussenruimte (sparse) the cheapest; rim's galaxy adds ≈ 40k instanced stars at tier 2 (thinned ×0.45/×0.75 at tiers 0/1). Stage load with `prepareStage` is spread over 36–55 frames of ≈ 5 ms slices (longest single slice = one shader compile: 35 ms quiet, up to 310 ms when the box was loaded). Unchanged: no real-GPU numbers exist.
+
 Not measured: any real-GPU time; motion smoothness of the dithered scenery under camera pans (judged from stills only — see the Known issues in the final report).

@@ -75,6 +75,10 @@ interface Persona {
   trap: number;
   punish: number;
   gaze: number;
+  /** Fuel-aware titans (resource is a burning stock): 0 = ignores it, 1 = bursts, then backs off to recover. */
+  fuelCare: number;
+  /** Titans whose resource counts guardians (moons): resource units kept home unless a blow is guaranteed. */
+  reserve: number;
   /** Preferred fighting range (px between anchors). */
   range: number;
 }
@@ -92,6 +96,8 @@ function personaOf(def: TitanDef): Persona {
     trap: g('trap', 0.1),
     punish: g('punish', 0.7),
     gaze: g('gaze', 0),
+    fuelCare: g('fuelCare', 0),
+    reserve: g('reserve', 0),
     // aggressive titans fight closer; zoners keep their distance; reach matters
     range: 120 + def.attributes.reach * 14 + zoning * 110 - aggression * 50,
   };
@@ -646,7 +652,11 @@ export class UtilityAI implements AIController {
       for (const mi of this.bySlot.ultimate!) {
         this.evalMove(mi, S, F, age, this.ev);
         if (this.ev.p > 0.35 || vuln > mi.startup * 0.6) {
-          const sc = (this.ev.dmg / 450) * (vuln > 30 ? 1.3 : 0.85) + 0.2;
+          let sc = (this.ev.dmg / 450) * (vuln > 30 ? 1.3 : 0.85) + 0.2;
+          // a titan that burns fuel spends its ultimate as the deliberate finisher once the stock runs low
+          if (pers.fuelCare > 0)
+            sc +=
+              0.4 * pers.fuelCare * (1 - clamp(S.resource / Math.max(1, this.def.resource.max) / 0.6, 0, 1));
           const c = this.add(
             `ultimate ${mi.def.name}`,
             'attack',
@@ -705,6 +715,21 @@ export class UtilityAI implements AIController {
       'make room',
     );
     r.ticks = 10 + Math.round(this.rng.next() * 14);
+    if (pers.fuelCare > 0) {
+      // burnt low: back away and go quiet so the stock recovers, rather than idling at empty inside the foe's reach
+      const fuel = S.resource / Math.max(1, this.def.resource.max);
+      if (fuel < 0.4 && vuln <= 6) {
+        const cool = this.add(
+          'cool off',
+          'space',
+          'retreat',
+          pers.fuelCare * 1.3 * (1 - fuel / 0.4) + 0.1,
+          `fuel ${(fuel * 100).toFixed(0)}%`,
+        );
+        cool.ticks = dist < 260 ? 30 : 12;
+        cool.delay = this.jitter();
+      }
+    }
     const st = this.add('strafe', 'space', 'strafe', 0.16 + (Math.abs(dy) / 260) * 0.4, 'line up height');
     st.dirY = Math.sign(dy) || (this.rng.chance(0.5) ? 1 : -1);
     st.ticks = 10;
@@ -863,6 +888,17 @@ export class UtilityAI implements AIController {
           if (mi.slot === 'signature') score += 0.3 * (pers.gaze + pers.zoning) * (mi.beam ? 1 : 0.55);
         }
         if (mi.projectile && dist < 90) score *= 0.5;
+        if (pers.fuelCare > 0 && !punish) {
+          // a burning stock: the lower it runs, the less a poke is worth (it must be spent on the blow that matters)
+          const fuel = S.resource / Math.max(1, this.def.resource.max);
+          score *= 1 - pers.fuelCare * (1 - clamp(fuel / 0.4, 0.15, 1));
+        }
+        if (pers.reserve > 0 && mi.resourceCost > 0) {
+          // guardians: spend one only when the blow is deliberate (good odds) and one stays home
+          const left = S.resource - mi.resourceCost;
+          if (left < pers.reserve - 1e-6 && !punish) score *= 0.3;
+          else score += 0.22 * pers.reserve * p;
+        }
         const c = this.add(
           `${punish ? 'punish' : 'attack'} ${mi.def.name} (${mi.aim})`,
           'attack',

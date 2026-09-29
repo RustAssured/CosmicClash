@@ -288,6 +288,13 @@ export function createBlackHoleVoice(): TitanVoice {
         case 'collapse':
           hawking(c, t, pan, 2.0, 1, 4);
           return;
+        case 'hawking':
+          hawking(c, t, pan, 1.6, 0.4 + 0.5 * a, 1.2);
+          return;
+        case 'consume':
+          gulp(c, t, pan, 0.6 + 0.4 * a, 0.4);
+          hawking(c, t + 0.15, pan, 0.6, 0.3, 0.6);
+          return;
         case 'strip':
         case 'harvest':
         case 'merge':

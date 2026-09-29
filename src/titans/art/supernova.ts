@@ -377,8 +377,8 @@ export function paintSupernova(
         if (m === ids.core) {
           // white-hot at the heart, the blue-white flash on the top of the gradient at the very centre
           const q = clamp01(r / p.coreR);
-          v = Math.max(v, 0.99 - 0.3 * q * q - 0.24 * clamp01(q * 1.6 - 0.2));
-          rel = 26 + (1 - q) * 6;
+          v = Math.max(v, 0.9 - 0.42 * q * q - 0.26 * clamp01(q * 1.6 - 0.2));
+          rel = 20 + (1 - q) * 6;
         }
         rel += 3.2 * (laneA - 0.5);
         colors[i] = pick(tint, v, x, y, 0.8);

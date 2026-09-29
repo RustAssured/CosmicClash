@@ -209,9 +209,22 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         if (y < h - 1 && bondD[i] === 0 && mat[i + w] !== 0) strong = true;
         if (x > 0 && bondR[i - 1] === 0 && mat[i - 1] !== 0) weak = true;
         if (y > 0 && bondD[i - w] === 0 && mat[i - w] !== 0) weak = true;
-        // A chasm: the far wall is dark, the near lip catches the light.
-        if (strong) col = lerpPx(scalePx(col, 150), md.crack | 0, 250);
-        else if (weak) {
+        // A chasm: the far wall is dark, the near lip catches the light. Big bodies get 2-px fissures (both walls dark) so they read
+        // at 640x360.
+        if (strong) {
+          col = lerpPx(scalePx(col, 150), md.crack | 0, 250);
+          if (body.magma && md.debris !== 'gas') {
+            // Tectonic fissure: molten rock shows through the crack.
+            col = lerpPx(col, 0xff2a8cff, 200);
+            if (em < 110) em = 110;
+          }
+        } else if (weak && w >= 90) {
+          col = lerpPx(scalePx(col, 170), md.crack | 0, 150);
+          if (body.magma && md.debris !== 'gas') {
+            col = lerpPx(col, 0xff2a8cff, 110);
+            if (em < 60) em = 60;
+          }
+        } else if (weak) {
           // The near lip catches the key light: a warm, hue-shifted glint that also feeds bloom a little.
           col = lerpPx(col, lerpPx(light, L.key | 0, 90), 130);
           if (em < 46) em = 46;
@@ -226,7 +239,8 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         const gr = md.glowRamp;
         const gi = Math.min(gr.length - 1, (f * (gr.length - 0.001)) | 0);
         const s = Math.min(240, ((T - GLOW_START) * 256) / 260) | 0;
-        col = lerpPx(col, gr[gi]! | 0, s);
+        // Atmosphere absorbs the heat: the gas itself glows (warm rim) instead of showing the surface's ramp.
+        col = lerpPx(col, md.debris === 'gas' ? lerpPx(0xff3c78ff, 0xffb4e6ff, f * 255) : gr[gi]! | 0, s);
         const flick = (fl & F_BURN) !== 0 ? hashI(x, y, tick >> 1) & 31 : 0;
         const e = 70 + f * 185 + flick;
         if (e > em) em = e > 255 ? 255 : e | 0;

@@ -99,6 +99,16 @@ function allEvents(a: TitanId, b: TitanId): SimEvent[] {
       'graph-harvest',
       'swarm-split',
       'node-merge',
+      // the exact ids the four newer titans emit
+      'layer-blow',
+      'crust-crack',
+      'fuel-burn',
+      'collapse',
+      'atmo-strip',
+      'harvest',
+      'chain-latch',
+      'consume',
+      'hawking',
     ])
       ev.push({ t: 'cue', slot, titan, id, x: 800, y: 300, amount: 0.5 });
   }
@@ -368,6 +378,39 @@ describe('event handling', () => {
       }
       expect(takeViolations(), `${a} vs ${b}`).toEqual([]);
     }
+  });
+  it('every exact cue id the titans emit has its own sound, different from the generic fallback for that titan', async () => {
+    const cases: [TitanId, string][] = [
+      ['supernova', 'layer-blow'],
+      ['supernova', 'fuel-burn'],
+      ['supernova', 'collapse'],
+      ['planet', 'crust-crack'],
+      ['planet', 'moon-lost'],
+      ['planet', 'atmo-strip'],
+      ['planet', 'ocean-boil'],
+      ['nexus', 'node-dark'],
+      ['nexus', 'harvest'],
+      ['nexus', 'chain-latch'],
+      ['blackhole', 'disk-shed'],
+      ['blackhole', 'consume'],
+      ['blackhole', 'hawking'],
+    ];
+    const shape = async (titan: TitanId, id: string): Promise<string> => {
+      const { eng, ctx } = await ready(3);
+      eng.updateAt(scene({ phase: 'menu', fighters: null }), 1 / 60, 0.1);
+      const before = ctx.nodes.length;
+      eng.handleAt([{ t: 'cue', slot: 0, titan, id, x: 800, y: 300, amount: 0.8 }], 0.5);
+      const made = ctx.nodes.slice(before);
+      expect(made.length, `${titan} ${id} is silent`).toBeGreaterThan(2);
+      return made
+        .map((n) => n.kind + ((n as FakeOsc).frequency?.events.map((e) => Math.round(e.v)).join('/') ?? ''))
+        .join(',');
+    };
+    for (const [titan, id] of cases) {
+      const fallback = await shape(titan, 'zzz-unknown');
+      expect(await shape(titan, id), `${titan} ${id} sounds like the generic blip`).not.toBe(fallback);
+    }
+    expect(takeViolations()).toEqual([]);
   });
   it("every resting pitch the score plays or glides to is in the stage's key (drone, pad, taiko, sub pulse, heartbeat)", async () => {
     for (const stage of STAGE_IDS) {

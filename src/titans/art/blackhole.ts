@@ -7,6 +7,7 @@ import {
   type StageLighting,
   type TitanDef,
 } from '@/contracts';
+import { blend } from './color';
 import { fbm, hash01 } from './noise';
 
 /**
@@ -73,7 +74,7 @@ export function buildBlackHoleRig(def: TitanDef, _seed: number): BlackHoleRig {
 export function paintBlackHole(
   def: TitanDef,
   seed: number,
-  _lighting: StageLighting,
+  lighting: StageLighting,
 ): { map: MatterMap; rig: BlackHoleRig } {
   const rig = buildBlackHoleRig(def, seed);
   const p = def.art.params as unknown as P;
@@ -163,6 +164,34 @@ export function paintBlackHole(
           set(i, ids.jet, R.jet[k]!, 40);
         }
       }
+    }
+  }
+  // the stage light barely touches a black hole, but its colour does tint the glowing gas a little
+  const tint = hex(lighting.color);
+  for (let i = 0; i < W * H; i++) {
+    const m = map.material[i]!;
+    if (m !== 0 && m !== ids.horizon) map.baseColor[i] = blend(map.baseColor[i]!, tint, 0.07);
+  }
+  // nothing may float free of the horizon: keep only the cells 4-connected to the core
+  const seen = new Uint8Array(W * H);
+  const stack: number[] = [Math.round(cy) * W + Math.round(cx)];
+  seen[stack[0]!] = 1;
+  while (stack.length > 0) {
+    const i = stack.pop()!;
+    const x = i % W;
+    const nb = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i >= W ? i - W : -1, i + W < W * H ? i + W : -1];
+    for (const j of nb) {
+      if (j < 0 || seen[j] || map.material[j] === 0) continue;
+      seen[j] = 1;
+      stack.push(j);
+    }
+  }
+  for (let i = 0; i < W * H; i++) {
+    if (map.material[i] !== 0 && !seen[i]) {
+      map.material[i] = 0;
+      map.baseColor[i] = 0;
+      map.density[i] = 0;
+      map.height[i] = 0;
     }
   }
   map.coreX = Math.round(cx);

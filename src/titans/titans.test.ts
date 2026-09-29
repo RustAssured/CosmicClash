@@ -43,9 +43,10 @@ describe('titan definitions', () => {
       lastone: { mass: 5, cohesion: 8, heat: 5, gravity: 3, reach: 7, tempo: 7 },
       asteroid: { mass: 3, cohesion: 6, heat: 5, gravity: 1, reach: 4, tempo: 9 },
       nexus: { mass: 6, cohesion: 6, heat: 4, gravity: 4, reach: 8, tempo: 4 },
+      blackhole: { mass: 8, cohesion: 9, heat: 10, gravity: 10, reach: 5, tempo: 2 },
       supernova: { mass: 7, cohesion: 3, heat: 10, gravity: 6, reach: 6, tempo: 5 },
       planet: { mass: 8, cohesion: 7, heat: 6, gravity: 7, reach: 6, tempo: 3 },
-    }[id as 'lastone' | 'asteroid' | 'nexus' | 'supernova' | 'planet'];
+    }[id as 'lastone' | 'asteroid' | 'nexus' | 'blackhole' | 'supernova' | 'planet'];
     expect(a).toEqual(want);
   });
 
@@ -91,8 +92,7 @@ describe('titan definitions', () => {
   });
 
   it('titans not implemented yet are absent (no stubs)', () => {
-    for (const id of TITAN_IDS)
-      expect(id in TITAN_DEFS).toBe(IMPLEMENTED_TITANS.includes(id));
+    for (const id of TITAN_IDS) expect(id in TITAN_DEFS).toBe(IMPLEMENTED_TITANS.includes(id));
   });
 });
 
@@ -203,8 +203,10 @@ describe.each(IMPLEMENTED_TITANS)('generator: %s', (id) => {
       expect(map.density[i]).toBeGreaterThan(0);
     }
     // every authored material really appears (no dead entries in the JSON)
+    // (runtime-only materials, such as the Nexus's darkened nodes, are swapped in by the behaviour and never painted)
     for (let id = 1; id <= def.materials.length; id++)
-      expect(used.has(id), `material ${def.materials[id - 1]!.key}`).toBe(true);
+      if (!def.materials[id - 1]!.key.startsWith('dead'))
+        expect(used.has(id), `material ${def.materials[id - 1]!.key}`).toBe(true);
     let maxH = 0;
     for (let i = 0; i < map.height.length; i++) maxH = Math.max(maxH, map.height[i]!);
     expect(maxH).toBeGreaterThan(100);

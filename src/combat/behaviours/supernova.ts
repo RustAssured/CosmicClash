@@ -737,7 +737,7 @@ export class SupernovaBehaviour extends Behaviour {
         const a = corePulse * (0.6 + 0.4 * SIN[(i * 3 + tick * 2) & 255]!);
         px[i] =
           0xff000000 | (Math.min(255, 70 * a) << 16) | (Math.min(255, 34 * a) << 8) | Math.min(255, 26 * a);
-        em[i] = Math.min(255, 120 * a);
+        em[i] = Math.min(255, 70 * a);
         any = true;
       } else if (m === ids.corona) {
         // the corona twinkles: sparse, quick, violet-white

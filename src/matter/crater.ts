@@ -1,7 +1,7 @@
 import type { WorldPoint } from './body';
 import { CONN_NOW } from './body';
 import { breakBondD, breakBondR, killCell } from './cells';
-import { MODE_MECH, RAMP_SHARD, endSpray, extractChunk, sprayCell } from './debris';
+import { MODE_MECH, RAMP_DUST, RAMP_SHARD, endSpray, extractChunk, sprayCell } from './debris';
 import { PK } from './particles';
 import { hardness, localToWorldF, resistOf, type DamageCtx } from './dmg';
 import { findImpact, type Impact } from './impact';
@@ -407,6 +407,31 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
         rid,
         0.3,
         1.2,
+        0,
+      );
+    }
+  }
+
+  // Dust plume: a billow of big soft puffs lifting off along the surface normal, slowly rising and fading (the crater "breathes").
+  {
+    const dustRid = body.rampIds[(mat[Math.floor(fy) * w + Math.floor(fx)] || 1) * 5 + RAMP_DUST]!;
+    const puffs = Math.min(14, 5 + Math.floor(Math.sqrt(budget) * 0.25));
+    for (let k = 0; k < puffs; k++) {
+      const a = Math.atan2(nOutWy, nOutWx) + (rng.next() - 0.5) * 1.9;
+      const sp = 18 + rng.next() * 46 * powerBoost;
+      core.particles.spawn(
+        core,
+        PK.dust,
+        pt2.x + (rng.next() - 0.5) * 6,
+        pt2.y + (rng.next() - 0.5) * 6,
+        Math.cos(a) * sp,
+        Math.sin(a) * sp - 12,
+        34 + rng.int(30),
+        3 + (rng.next() < 0.4 ? 1 : 0),
+        0,
+        dustRid,
+        0,
+        1.6,
         0,
       );
     }

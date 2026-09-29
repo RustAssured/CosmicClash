@@ -190,6 +190,7 @@ export function sprayCell(
   core.sprayVy = vy;
   core.sprayKind = kind;
   core.sprayRamp = body.rampIds[m * 5 + rk]!;
+  if (mode === MODE_VAPOR && kind === PK.gas) core.sprayRamp = hotGasRamp(core);
   if (rng.next() < prob) {
     spawnMassParticle(core, kind, core.sprayRamp, x, y, vx, vy, core.sprayMass);
     core.sprayMass = 0;
@@ -391,4 +392,16 @@ export function detachVelocity(
   const arm = Math.sqrt(lx * lx + ly * ly) + 1;
   const s = (((cross / arm) * speed) / (rad + 5)) * 0.55 + rng.gauss() * 0.7;
   out.spin = Math.max(-9, Math.min(9, s));
+}
+
+const HOT_GAS = [0xffc8f0ff, 0xff3c96ff, 0xff28508c, 0xff3c3c46];
+const hotGasIds = new WeakMap<object, number>();
+/** Shared warm steam/smoke ramp for vaporised matter (white-orange, ember red, then soot grey). */
+function hotGasRamp(core: WorldCore): number {
+  let id = hotGasIds.get(core.particles);
+  if (id === undefined) {
+    id = core.particles.internRamp(HOT_GAS);
+    hotGasIds.set(core.particles, id);
+  }
+  return id;
 }

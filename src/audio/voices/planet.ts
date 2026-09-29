@@ -368,6 +368,7 @@ export function createPlanetVoice(): TitanVoice {
           boil(c, t, pan, 1.1, a, 2.8);
           return;
         case 'break':
+        case 'crack':
         case 'collapse':
           crack(c, t, pan, 0.6 + 0.4 * a);
           impact(c, t + 0.05, pan, 0.4 + 0.3 * a, 0.5);

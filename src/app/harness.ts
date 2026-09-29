@@ -167,6 +167,7 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
         skipIntro: true,
         scripts: [params.script0, params.script1],
       });
+      if (params.meter >= 0) for (const f of app.session!.match.fighters) f.debugSetMeter?.(params.meter);
       if (params.t > 0) app.loop.stepTicks(params.t, false);
       if (params.freeze) app.loop.pause();
       app.hideUi = !params.hud;

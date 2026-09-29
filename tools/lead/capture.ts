@@ -103,7 +103,7 @@ if (suite === 'strips' || suite === 'all') {
   for (const t of titans)
     for (const [move, script] of Object.entries(SCRIPTS))
       await strip(
-        `${base}/?stage=nursery&a=${t}&b=${foe(t)}&seed=5&hud=0&freeze=1&gap=${GAP}&script0=${encodeURIComponent(script)}`,
+        `${base}/?stage=nursery&a=${t}&b=${foe(t)}&seed=5&hud=0&freeze=1&gap=${GAP}&meter=1&script0=${encodeURIComponent(script)}`,
         `strip-${t}-${move}.png`,
         move === 'ultimate' ? 18 : 9,
       );

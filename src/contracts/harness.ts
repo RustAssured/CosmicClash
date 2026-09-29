@@ -15,6 +15,7 @@ import { Btn, type ScriptEvent } from './input';
  *   &script0=20:crush,80:sig*30      (scripted input for slot 0; see parseScript)
  *   &script1=...
  *   &q=0|1|2|auto                    (renderer quality tier; default auto)
+ *   &meter=1                        (start ultimate meters full so `script0=4:ult` fires)
  *   &gap=380                         (px between the fighters at round start; 40..700)
  *   &hud=0|1  &debug=0|1  &freeze=1  &scale=2
 
@@ -36,6 +37,8 @@ export interface HarnessParams {
   script1: ScriptEvent[];
   /** Distance in px between the fighters at round start (default 380). */
   gap: number;
+  /** Start both ultimate meters at this fraction (0..1); -1 = leave at 0. Lets scripts fire ultimates. */
+  meter: number;
   /** Renderer quality tier: 0 | 1 | 2, or 'auto' (default). Tests force 0 in software GL. */
   q: 0 | 1 | 2 | 'auto';
   hud: boolean;
@@ -143,6 +146,10 @@ export function parseHarnessParams(search: string): HarnessParams {
     q: ((): 0 | 1 | 2 | 'auto' => {
       const v = q.get('q');
       return v === '0' ? 0 : v === '1' ? 1 : v === '2' ? 2 : 'auto';
+    })(),
+    meter: ((): number => {
+      const v = parseFloat(q.get('meter') ?? '');
+      return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : -1;
     })(),
     gap: Math.min(700, Math.max(40, parseInt(q.get('gap') ?? '380', 10) || 380)),
     hud: q.get('hud') !== '0',

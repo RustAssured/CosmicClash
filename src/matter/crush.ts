@@ -54,6 +54,7 @@ const pt: WorldPoint = { x: 0, y: 0 };
 export function applyCrush(ctx: DamageCtx, res: DamageResult): void {
   const { core, body } = ctx;
   const cov = coverageOf(ctx);
+  body.magma = true;
   const E = ctx.energy;
   opts.budget = E;
   opts.craterR = ctx.params.crater ?? 0;

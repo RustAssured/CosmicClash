@@ -167,7 +167,7 @@ const nudge: MoveDef = {
           8,
           { kind: 'point', ox: 82, oy: s * 30, r: 30 },
           C,
-          320,
+          360,
           { compress: 5, crater: 8, shock: 0.6 },
           0,
           { x: 560, y: s * 90 - 30 },
@@ -191,7 +191,7 @@ const impact: MoveDef = {
   slot: 'crush',
   name: 'Impact',
   nameKo: '충격',
-  frame: frame(34, 8, 46, { hitstop: 14 }),
+  frame: frame(40, 8, 54, { hitstop: 14 }),
   variants: aims((aim) => {
     const s = AIM_SIGN[aim];
     return {
@@ -202,7 +202,7 @@ const impact: MoveDef = {
           8,
           { kind: 'point', ox: 96, oy: s * 34, r: 44 },
           C,
-          1500,
+          1400,
           { crater: 22, compress: 10, shock: 1.4, scatter: 1.2 },
           0,
           { x: 760, y: s * 120 - 60 },
@@ -261,7 +261,7 @@ const slam: MoveDef = {
     chargePower: 0.9,
     chargeReach: [0.8, 1.35],
     /** The moon is flung at speed px/tick and hits for `energy` (× charge power) as CRUSH with a crater; recoil is the share of the energy the moon itself takes. */
-    slam: { speed: 9, energy: 800, crater: 16, compress: 8, shock: 1.2, recoil: 0.14, life: 46 },
+    slam: { speed: 9, energy: 700, crater: 16, compress: 8, shock: 1.2, recoil: 0.14, life: 46 },
     ctl: { charge: 0.2, active: 0.25 },
     pose: { startup: { lean: -5 }, charge: { lean: -7 }, active: { lean: 5 } },
   },
@@ -294,7 +294,7 @@ const cataclysm: MoveDef = {
         62,
         { kind: 'point', ox: 140, oy: 0, r: 64 },
         C,
-        2400,
+        2100,
         { crater: 32, compress: 14, shock: 2.2, scatter: 1.6 },
         UNBLOCK,
         { x: 500, y: -160 },
@@ -308,7 +308,7 @@ const cataclysm: MoveDef = {
   tags: ['ultimate', 'armor', 'quake', 'moon'],
   extra: {
     /** After the quake each surviving moon is flung at the foe in turn: ticks after the quake between launches. */
-    barrage: { from: 66, gap: 10, speed: 11, energy: 700, crater: 14, compress: 7, shock: 1 },
+    barrage: { from: 66, gap: 10, speed: 11, energy: 600, crater: 14, compress: 7, shock: 1 },
     ctl: { startup: 0.1, active: 0.05, recovery: 0.3 },
     pose: { startup: { lean: -5 }, active: { lean: 3 } },
   },
@@ -355,7 +355,7 @@ export const planet: TitanDef = {
     coreY: 104,
     coreRadius: 13,
     params: {
-      radius: 74,
+      radius: 70,
       atmo: 8,
       surface: 5.5,
       crust: 11,
@@ -409,6 +409,7 @@ export const planet: TitanDef = {
       trap: 0.3,
       punish: 0.85,
       gaze: 0.6,
+      reserve: 1,
     },
   },
   ui: { accent: '#58a6d8', accent2: '#e0b06a', tagline: 'All things fall toward me.' },

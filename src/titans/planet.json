@@ -161,7 +161,7 @@
     "coreY": 104,
     "coreRadius": 13,
     "params": {
-      "radius": 74,
+      "radius": 70,
       "atmo": 8,
       "surface": 5.5,
       "crust": 11,
@@ -292,7 +292,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 320,
+                "energy": 360,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -337,7 +337,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 320,
+                "energy": 360,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -382,7 +382,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 320,
+                "energy": 360,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -434,9 +434,9 @@
       "name": "Impact",
       "nameKo": "충격",
       "frame": {
-        "startup": 34,
+        "startup": 40,
         "active": 8,
-        "recovery": 46,
+        "recovery": 54,
         "cancelWindow": 0.4,
         "chargeMax": 0,
         "hitstop": 14
@@ -456,7 +456,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1500,
+                "energy": 1400,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -502,7 +502,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1500,
+                "energy": 1400,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -548,7 +548,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1500,
+                "energy": 1400,
                 "duration": 1,
                 "flags": 0,
                 "params": {
@@ -785,7 +785,7 @@
         "chargeReach": [0.8, 1.35],
         "slam": {
           "speed": 9,
-          "energy": 800,
+          "energy": 700,
           "crater": 16,
           "compress": 8,
           "shock": 1.2,
@@ -865,7 +865,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2400,
+                "energy": 2100,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -933,7 +933,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2400,
+                "energy": 2100,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1001,7 +1001,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2400,
+                "energy": 2100,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1036,7 +1036,7 @@
           "from": 66,
           "gap": 10,
           "speed": 11,
-          "energy": 700,
+          "energy": 600,
           "crater": 14,
           "compress": 7,
           "shock": 1
@@ -1109,7 +1109,8 @@
       "retreat": 0.35,
       "trap": 0.3,
       "punish": 0.85,
-      "gaze": 0.6
+      "gaze": 0.6,
+      "reserve": 1
     }
   },
   "ui": {

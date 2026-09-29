@@ -217,10 +217,23 @@ export function createSupernovaVoice(): TitanVoice {
       const a = clamp01(ev.amount);
       switch (cueKind(ev.id)) {
         case 'shed':
+        case 'blow':
         case 'break':
           // outer layers blow off: a whump and a burst of crackle
           whump(c, t, pan, 0.5 + 0.3 * a, 0.6);
           sizzle(c, t + 0.02, pan, 0.8, 1);
+          return;
+        case 'burn':
+          // fuel burning: a hiss that flares and a rising whoosh of heat
+          sizzle(c, t, pan, 0.9, 1.3, 4200);
+          tone(c, makeOut(c, pan, 0.4), t, {
+            f0: 90,
+            f1: 260,
+            dur: 0.7,
+            gain: 0.2,
+            attack: 0.08,
+            type: 'triangle',
+          });
           return;
         case 'collapse':
           inhale(c, t, pan, 0.8);
