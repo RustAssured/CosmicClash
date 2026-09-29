@@ -1,0 +1,9 @@
+dist
+node_modules
+docs/gallery
+coverage
+playwright-report
+test-results
+.scratch
+package-lock.json
+*.md
