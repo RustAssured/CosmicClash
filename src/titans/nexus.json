@@ -44,9 +44,9 @@
           "FRACTURE": 1.05,
           "KINETIC": 0.825,
           "CRUSH": 0.675,
-          "THERMAL": 0.8,
+          "THERMAL": 0.6,
           "ASSIMILATION": 0.5,
-          "TIDAL": 0.338
+          "TIDAL": 0.15
         },
         "assimilable": 0.1
       }
@@ -66,9 +66,9 @@
           "FRACTURE": 1.05,
           "KINETIC": 0.825,
           "CRUSH": 0.675,
-          "THERMAL": 0.8,
+          "THERMAL": 0.6,
           "ASSIMILATION": 0.5,
-          "TIDAL": 0.338
+          "TIDAL": 0.15
         },
         "assimilable": 0.1
       }
@@ -88,9 +88,9 @@
           "FRACTURE": 1.05,
           "KINETIC": 0.825,
           "CRUSH": 0.675,
-          "THERMAL": 0.8,
+          "THERMAL": 0.6,
           "ASSIMILATION": 0.5,
-          "TIDAL": 0.338
+          "TIDAL": 0.15
         },
         "assimilable": 0.1,
         "bond": 420,
@@ -112,9 +112,9 @@
           "FRACTURE": 1.125,
           "KINETIC": 0.9,
           "CRUSH": 0.675,
-          "THERMAL": 0.8,
+          "THERMAL": 0.6,
           "ASSIMILATION": 0.5,
-          "TIDAL": 0.338
+          "TIDAL": 0.15
         },
         "assimilable": 0.1
       }
@@ -134,9 +134,9 @@
           "FRACTURE": 1.125,
           "KINETIC": 0.9,
           "CRUSH": 0.675,
-          "THERMAL": 0.8,
+          "THERMAL": 0.6,
           "ASSIMILATION": 0.5,
-          "TIDAL": 0.338
+          "TIDAL": 0.15
         },
         "assimilable": 0.1
       }
@@ -152,7 +152,7 @@
         "debris": "#d8506c"
       },
       "physics": {
-        "resist": { "THERMAL": 0.8, "ASSIMILATION": 0.5, "TIDAL": 0.338 },
+        "resist": { "THERMAL": 0.6, "ASSIMILATION": 0.5, "TIDAL": 0.15 },
         "assimilable": 0.1
       }
     },
@@ -171,9 +171,9 @@
           "FRACTURE": 1.125,
           "KINETIC": 0.9,
           "CRUSH": 0.675,
-          "THERMAL": 0.8,
+          "THERMAL": 0.6,
           "ASSIMILATION": 0.5,
-          "TIDAL": 0.338
+          "TIDAL": 0.15
         },
         "assimilable": 0.1
       }
@@ -887,5 +887,5 @@
       "idleRate": 2
     }
   },
-  "balance": { "power": 0.7, "durability": 1.428 }
+  "balance": { "power": 0.446, "durability": 2.243 }
 }
