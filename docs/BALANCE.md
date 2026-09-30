@@ -279,14 +279,15 @@ Level 3, titans lastone, asteroid, nexus, blackhole, supernova, planet. Each row
 | 13 | 39% | 52% | 54% | 66% | 50% | 39% | 16 | blackhole v planet 83% |
 | 14 | 45% | 48% | 43% | 53% | 63% | 49% | 13 | nexus v supernova 0% |
 | 15 | 43% | 52% | 49% | 53% | 59% | 45% | 9 | nexus v supernova 0% |
+| 16 | 46% | 52% | 46% | 57% | 59% | 40% | 10 | nexus v supernova 4% |
 
 | titan | power | durability |
 |---|---:|---:|
-| lastone | 0.710 | 1.408 |
-| asteroid | 1.348 | 0.742 |
-| nexus | 0.693 | 1.443 |
-| blackhole | 0.979 | 1.021 |
-| supernova | 2.386 | 0.419 |
-| planet | 0.466 | 2.144 |
+| lastone | 0.718 | 1.394 |
+| asteroid | 1.343 | 0.745 |
+| nexus | 0.700 | 1.428 |
+| blackhole | 0.961 | 1.040 |
+| supernova | 2.332 | 0.429 |
+| planet | 0.478 | 2.092 |
 
 <!-- autotune:end -->

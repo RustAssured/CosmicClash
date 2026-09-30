@@ -40,7 +40,7 @@
           "FRACTURE": 4,
           "ASSIMILATION": 4
         },
-        "bond": 150
+        "bond": 250
       },
       "visual": {
         "ramp": ["#ff8a2e", "#ffae38", "#ffd050", "#ffe98a", "#fff8d6", "#ffffff"],
@@ -62,7 +62,7 @@
           "FRACTURE": 4,
           "ASSIMILATION": 4
         },
-        "bond": 150
+        "bond": 250
       },
       "visual": {
         "ramp": ["#d23c2a", "#f0621f", "#ff8a2e", "#ffae38", "#ffd050", "#ffe98a", "#fff8d6"],
@@ -84,7 +84,7 @@
           "FRACTURE": 4,
           "ASSIMILATION": 4
         },
-        "bond": 150
+        "bond": 250
       },
       "visual": {
         "ramp": [
@@ -118,7 +118,7 @@
           "ASSIMILATION": 1,
           "TIDAL": 3.6
         },
-        "bond": 150
+        "bond": 250
       },
       "visual": {
         "ramp": ["#1b0d3a", "#3b1a68", "#6d34a0", "#a45ccc", "#e39ae6", "#fff0fb"],
@@ -142,7 +142,7 @@
           "ASSIMILATION": 1.1,
           "TIDAL": 3.8
         },
-        "bond": 150
+        "bond": 250
       },
       "visual": {
         "ramp": ["#5a1030", "#a01e34", "#e23f2c", "#ff7a30", "#ffb040", "#ffe080", "#fff6c8"],
@@ -1345,7 +1345,7 @@
     }
   },
   "balance": {
-    "power": 2.386,
-    "durability": 0.419
+    "power": 2.332,
+    "durability": 0.429
   }
 }
