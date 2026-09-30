@@ -42,9 +42,9 @@
       "physics": {
         "resist": {
           "FRACTURE": 1.1,
-          "KINETIC": 0.8,
-          "CRUSH": 0.7,
-          "THERMAL": 0.5,
+          "KINETIC": 1,
+          "CRUSH": 1,
+          "THERMAL": 1,
           "ASSIMILATION": 0.2,
           "TIDAL": 0.8
         }
@@ -58,9 +58,9 @@
         "toughness": 0.15,
         "resist": {
           "FRACTURE": 1.1,
-          "KINETIC": 0.8,
-          "CRUSH": 0.7,
-          "THERMAL": 0.5,
+          "KINETIC": 1,
+          "CRUSH": 1,
+          "THERMAL": 1,
           "ASSIMILATION": 0.2,
           "TIDAL": 0.8
         }
@@ -86,9 +86,9 @@
       "physics": {
         "resist": {
           "FRACTURE": 1.1,
-          "KINETIC": 0.8,
-          "CRUSH": 0.7,
-          "THERMAL": 0.5,
+          "KINETIC": 1,
+          "CRUSH": 1,
+          "THERMAL": 1,
           "ASSIMILATION": 0.2,
           "TIDAL": 0.8
         }
@@ -1343,5 +1343,5 @@
       "idleRate": 2
     }
   },
-  "balance": { "power": 0.752, "durability": 1.33 }
+  "balance": { "power": 0.615, "durability": 1.626 }
 }
