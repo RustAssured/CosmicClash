@@ -140,6 +140,26 @@ cost most of the round:
 * `resist` reads opposite ways in different damage modules (KINETIC and FRACTURE divide by it, TIDAL multiplies), so a per-titan override needs
   measuring, not reasoning.
 
+### Round 3 tuning pass (level 3, n = 20, sides alternated, seed 200; wins of the row titan)
+
+`resist` is now a plain multiplier on damage taken (higher = takes more), so per-material `physics.resist` overrides are per-attacker-type levers
+(Asteroid KINETIC, Last One FRACTURE, Planet CRUSH, Supernova THERMAL, Nexus ASSIMILATION, Black Hole TIDAL).
+
+| row v column | Asteroid | Last One | Nexus | Black Hole | Planet | Supernova |
+|---|---:|---:|---:|---:|---:|---:|
+| Nexus | 13 | 14 | | 7 | 6 | 2 |
+| Black Hole | 16 | 10 | 13 | | 0 | 15 |
+| Last One | 11 | | 6 | 10 | 5 | 7 |
+| Asteroid | | 9 | 7 | 4 | 2 | 16 |
+
+Changes: Nexus `harvest` 0.9 to 0.6, nodes/chain/crystal take more FRACTURE/KINETIC (1.4 to 1.5) and less CRUSH/THERMAL (0.7 to 0.9), lattice THERMAL 1.0
+(it was 90 to 100 % against Asteroid and Last One, now about 65 to 70 %); Last One shell/seam/inner take less (FRACTURE 1.1, THERMAL 0.5, ASSIMILATION 0.7)
+(it was 20 to 35 % against everything, now about 55 % against the Asteroid); Black Hole disk resist per type, energies x1.55 overall since the horizon
+soaks blows, and its Maw slower (see moves). **Not solved:** Planet beats the Black Hole 20 to 0 and the Asteroid 18 to 2 and Supernova beats Nexus 18 to 2
+whatever the resist override does; those matchups are decided by the Planet's and Supernova's own offense and mass (3b's titans). Nexus is still strongest
+against the two Phase 1 titans (65 to 70 %), which was the accepted trade for not dropping it further against Planet and Supernova. The AI ladder after the
+feints-off change and the harvest valuation fix is in the generated table below (Nexus 6 v 1 went from 14 % to about 50 %).
+
 ### The AI ladder (level 6 against level 1, mirrors, real world)
 
 The Last One mirror is a ladder only weakly (18 to 22 at n = 40 with the final settings; 34 to 16 at n = 50 with a noisier level table that failed the
