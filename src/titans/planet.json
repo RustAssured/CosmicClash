@@ -41,12 +41,7 @@
       },
       "physics": {
         "heatAbsorb": 0.4,
-        "resist": {
-          "CRUSH": 4,
-          "KINETIC": 4,
-          "FRACTURE": 4,
-          "THERMAL": 3.2
-        }
+        "resist": { "CRUSH": 4, "KINETIC": 4, "FRACTURE": 4, "THERMAL": 3.2 }
       }
     },
     {
@@ -61,12 +56,7 @@
       },
       "physics": {
         "heatAbsorb": 0.4,
-        "resist": {
-          "CRUSH": 4,
-          "KINETIC": 4,
-          "FRACTURE": 4,
-          "THERMAL": 3.2
-        }
+        "resist": { "CRUSH": 4, "KINETIC": 4, "FRACTURE": 4, "THERMAL": 3.2 }
       }
     },
     {
@@ -81,12 +71,7 @@
       },
       "physics": {
         "heatAbsorb": 0.4,
-        "resist": {
-          "CRUSH": 4,
-          "KINETIC": 4,
-          "FRACTURE": 4,
-          "THERMAL": 3.2
-        }
+        "resist": { "CRUSH": 4, "KINETIC": 4, "FRACTURE": 4, "THERMAL": 3.2 }
       }
     },
     {
@@ -100,12 +85,7 @@
         "debris": "#5d7e34"
       },
       "physics": {
-        "resist": {
-          "CRUSH": 4,
-          "KINETIC": 4,
-          "FRACTURE": 4,
-          "THERMAL": 3.2
-        }
+        "resist": { "CRUSH": 4, "KINETIC": 4, "FRACTURE": 4, "THERMAL": 3.2 }
       }
     },
     {
@@ -119,12 +99,7 @@
         "debris": "#cf9a52"
       },
       "physics": {
-        "resist": {
-          "CRUSH": 4,
-          "KINETIC": 4,
-          "FRACTURE": 4,
-          "THERMAL": 3.2
-        }
+        "resist": { "CRUSH": 4, "KINETIC": 4, "FRACTURE": 4, "THERMAL": 3.2 }
       }
     },
     {
@@ -138,12 +113,7 @@
         "debris": "#8a7466"
       },
       "physics": {
-        "resist": {
-          "CRUSH": 4,
-          "KINETIC": 4,
-          "FRACTURE": 4,
-          "THERMAL": 3.2
-        }
+        "resist": { "CRUSH": 4, "KINETIC": 4, "FRACTURE": 4, "THERMAL": 3.2 }
       }
     },
     {
@@ -157,12 +127,7 @@
         "debris": "#bfe4f4"
       },
       "physics": {
-        "resist": {
-          "CRUSH": 4,
-          "KINETIC": 4,
-          "FRACTURE": 4,
-          "THERMAL": 3.2
-        }
+        "resist": { "CRUSH": 4, "KINETIC": 4, "FRACTURE": 4, "THERMAL": 3.2 }
       }
     },
     {
@@ -176,12 +141,7 @@
         "debris": "#725248"
       },
       "physics": {
-        "resist": {
-          "CRUSH": 4,
-          "KINETIC": 4,
-          "FRACTURE": 4,
-          "THERMAL": 3.2
-        }
+        "resist": { "CRUSH": 4, "KINETIC": 4, "FRACTURE": 4, "THERMAL": 3.2 }
       }
     },
     {
@@ -196,12 +156,7 @@
         "glowRamp": ["#c0481c", "#ff9a30", "#ffe080", "#ffffff"]
       },
       "physics": {
-        "resist": {
-          "CRUSH": 4,
-          "KINETIC": 4,
-          "FRACTURE": 4,
-          "THERMAL": 3.2
-        }
+        "resist": { "CRUSH": 4, "KINETIC": 4, "FRACTURE": 4, "THERMAL": 3.2 }
       }
     },
     {
@@ -359,44 +314,20 @@
               "id": "nudge",
               "from": 0,
               "to": 8,
-              "shape": {
-                "kind": "point",
-                "ox": 82,
-                "oy": -30,
-                "r": 30
-              },
+              "shape": { "kind": "point", "ox": 82, "oy": -30, "r": 30 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 360,
+                "energy": 252,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "compress": 5,
-                  "crater": 8,
-                  "shock": 0.6
-                }
+                "params": { "compress": 4, "crater": 6.4, "shock": 0.48 }
               },
-              "knockback": {
-                "x": 560,
-                "y": -120
-              },
+              "knockback": { "x": 560, "y": -120 },
               "guardPressure": 0.4,
-              "sweepTo": {
-                "kind": "point",
-                "ox": 118,
-                "oy": -34,
-                "r": 34
-              }
+              "sweepTo": { "kind": "point", "ox": 118, "oy": -34, "r": 34 }
             }
           ],
-          "movement": [
-            {
-              "at": 8,
-              "ix": 120,
-              "iy": 0,
-              "damp": 0.2
-            }
-          ]
+          "movement": [{ "at": 8, "ix": 120, "iy": 0, "damp": 0.2 }]
         },
         "forward": {
           "hitboxes": [
@@ -404,44 +335,20 @@
               "id": "nudge",
               "from": 0,
               "to": 8,
-              "shape": {
-                "kind": "point",
-                "ox": 82,
-                "oy": 0,
-                "r": 30
-              },
+              "shape": { "kind": "point", "ox": 82, "oy": 0, "r": 30 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 360,
+                "energy": 252,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "compress": 5,
-                  "crater": 8,
-                  "shock": 0.6
-                }
+                "params": { "compress": 4, "crater": 6.4, "shock": 0.48 }
               },
-              "knockback": {
-                "x": 560,
-                "y": -30
-              },
+              "knockback": { "x": 560, "y": -30 },
               "guardPressure": 0.4,
-              "sweepTo": {
-                "kind": "point",
-                "ox": 118,
-                "oy": 0,
-                "r": 34
-              }
+              "sweepTo": { "kind": "point", "ox": 118, "oy": 0, "r": 34 }
             }
           ],
-          "movement": [
-            {
-              "at": 8,
-              "ix": 120,
-              "iy": 0,
-              "damp": 0.2
-            }
-          ]
+          "movement": [{ "at": 8, "ix": 120, "iy": 0, "damp": 0.2 }]
         },
         "down": {
           "hitboxes": [
@@ -449,58 +356,27 @@
               "id": "nudge",
               "from": 0,
               "to": 8,
-              "shape": {
-                "kind": "point",
-                "ox": 82,
-                "oy": 30,
-                "r": 30
-              },
+              "shape": { "kind": "point", "ox": 82, "oy": 30, "r": 30 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 360,
+                "energy": 252,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "compress": 5,
-                  "crater": 8,
-                  "shock": 0.6
-                }
+                "params": { "compress": 4, "crater": 6.4, "shock": 0.48 }
               },
-              "knockback": {
-                "x": 560,
-                "y": 60
-              },
+              "knockback": { "x": 560, "y": 60 },
               "guardPressure": 0.4,
-              "sweepTo": {
-                "kind": "point",
-                "ox": 118,
-                "oy": 34,
-                "r": 34
-              }
+              "sweepTo": { "kind": "point", "ox": 118, "oy": 34, "r": 34 }
             }
           ],
-          "movement": [
-            {
-              "at": 8,
-              "ix": 120,
-              "iy": 0,
-              "damp": 0.2
-            }
-          ]
+          "movement": [{ "at": 8, "ix": 120, "iy": 0, "damp": 0.2 }]
         }
       },
       "resourceCost": 0,
       "meterCost": 0,
       "tags": ["shove"],
       "extra": {
-        "pose": {
-          "startup": {
-            "lean": -4
-          },
-          "active": {
-            "lean": 6
-          }
-        }
+        "pose": { "startup": { "lean": -4 }, "active": { "lean": 6 } }
       }
     },
     {
@@ -523,44 +399,26 @@
               "id": "slam",
               "from": 0,
               "to": 8,
-              "shape": {
-                "kind": "point",
-                "ox": 96,
-                "oy": -34,
-                "r": 44
-              },
+              "shape": { "kind": "point", "ox": 96, "oy": -34, "r": 44 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1000,
+                "energy": 700,
                 "duration": 1,
                 "flags": 0,
                 "params": {
-                  "crater": 22,
-                  "compress": 10,
-                  "shock": 1.4,
+                  "crater": 17.6,
+                  "compress": 8,
+                  "shock": 1.12,
                   "scatter": 1.2
                 }
               },
-              "knockback": {
-                "x": 760,
-                "y": -180
-              },
+              "knockback": { "x": 760, "y": -180 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -90,
-              "iy": 0,
-              "damp": 0.3
-            },
-            {
-              "at": 34,
-              "ix": 150,
-              "iy": -40,
-              "damp": 0.05
-            }
+            { "at": 0, "ix": -90, "iy": 0, "damp": 0.3 },
+            { "at": 34, "ix": 150, "iy": -40, "damp": 0.05 }
           ]
         },
         "forward": {
@@ -569,44 +427,26 @@
               "id": "slam",
               "from": 0,
               "to": 8,
-              "shape": {
-                "kind": "point",
-                "ox": 96,
-                "oy": 0,
-                "r": 44
-              },
+              "shape": { "kind": "point", "ox": 96, "oy": 0, "r": 44 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1000,
+                "energy": 700,
                 "duration": 1,
                 "flags": 0,
                 "params": {
-                  "crater": 22,
-                  "compress": 10,
-                  "shock": 1.4,
+                  "crater": 17.6,
+                  "compress": 8,
+                  "shock": 1.12,
                   "scatter": 1.2
                 }
               },
-              "knockback": {
-                "x": 760,
-                "y": -60
-              },
+              "knockback": { "x": 760, "y": -60 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -90,
-              "iy": 0,
-              "damp": 0.3
-            },
-            {
-              "at": 34,
-              "ix": 150,
-              "iy": 0,
-              "damp": 0.05
-            }
+            { "at": 0, "ix": -90, "iy": 0, "damp": 0.3 },
+            { "at": 34, "ix": 150, "iy": 0, "damp": 0.05 }
           ]
         },
         "down": {
@@ -615,44 +455,26 @@
               "id": "slam",
               "from": 0,
               "to": 8,
-              "shape": {
-                "kind": "point",
-                "ox": 96,
-                "oy": 34,
-                "r": 44
-              },
+              "shape": { "kind": "point", "ox": 96, "oy": 34, "r": 44 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1000,
+                "energy": 700,
                 "duration": 1,
                 "flags": 0,
                 "params": {
-                  "crater": 22,
-                  "compress": 10,
-                  "shock": 1.4,
+                  "crater": 17.6,
+                  "compress": 8,
+                  "shock": 1.12,
                   "scatter": 1.2
                 }
               },
-              "knockback": {
-                "x": 760,
-                "y": 60
-              },
+              "knockback": { "x": 760, "y": 60 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -90,
-              "iy": 0,
-              "damp": 0.3
-            },
-            {
-              "at": 34,
-              "ix": 150,
-              "iy": 40,
-              "damp": 0.05
-            }
+            { "at": 0, "ix": -90, "iy": 0, "damp": 0.3 },
+            { "at": 34, "ix": 150, "iy": 40, "damp": 0.05 }
           ]
         }
       },
@@ -661,15 +483,9 @@
       "tags": ["heavy", "ram", "quake"],
       "extra": {
         "pose": {
-          "startup": {
-            "lean": -9
-          },
-          "active": {
-            "lean": 8
-          },
-          "recovery": {
-            "lean": 2
-          }
+          "startup": { "lean": -9 },
+          "active": { "lean": 8 },
+          "recovery": { "lean": 2 }
         }
       }
     },
@@ -689,36 +505,15 @@
       "variants": {
         "up": {
           "hitboxes": [],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 430,
-              "iy": 0,
-              "damp": 0.04
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 430, "iy": 0, "damp": 0.04 }]
         },
         "forward": {
           "hitboxes": [],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 430,
-              "iy": 0,
-              "damp": 0.04
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 430, "iy": 0, "damp": 0.04 }]
         },
         "down": {
           "hitboxes": [],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 430,
-              "iy": 0,
-              "damp": 0.04
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 430, "iy": 0, "damp": 0.04 }]
         }
       },
       "resourceCost": 0,
@@ -746,36 +541,19 @@
               "id": "launch",
               "from": 0,
               "to": 6,
-              "shape": {
-                "kind": "point",
-                "ox": 76,
-                "oy": 0,
-                "r": 20
-              },
+              "shape": { "kind": "point", "ox": 76, "oy": 0, "r": 20 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 120,
+                "energy": 84,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "crater": 5
-                }
+                "params": { "crater": 4 }
               },
-              "knockback": {
-                "x": 200,
-                "y": 0
-              },
+              "knockback": { "x": 200, "y": 0 },
               "guardPressure": 0.3
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": -40,
-              "iy": 0,
-              "damp": 0.2
-            }
-          ]
+          "movement": [{ "at": 0, "ix": -40, "iy": 0, "damp": 0.2 }]
         },
         "forward": {
           "hitboxes": [
@@ -783,36 +561,19 @@
               "id": "launch",
               "from": 0,
               "to": 6,
-              "shape": {
-                "kind": "point",
-                "ox": 76,
-                "oy": 0,
-                "r": 20
-              },
+              "shape": { "kind": "point", "ox": 76, "oy": 0, "r": 20 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 120,
+                "energy": 84,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "crater": 5
-                }
+                "params": { "crater": 4 }
               },
-              "knockback": {
-                "x": 200,
-                "y": 0
-              },
+              "knockback": { "x": 200, "y": 0 },
               "guardPressure": 0.3
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": -40,
-              "iy": 0,
-              "damp": 0.2
-            }
-          ]
+          "movement": [{ "at": 0, "ix": -40, "iy": 0, "damp": 0.2 }]
         },
         "down": {
           "hitboxes": [
@@ -820,36 +581,19 @@
               "id": "launch",
               "from": 0,
               "to": 6,
-              "shape": {
-                "kind": "point",
-                "ox": 76,
-                "oy": 0,
-                "r": 20
-              },
+              "shape": { "kind": "point", "ox": 76, "oy": 0, "r": 20 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 120,
+                "energy": 84,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "crater": 5
-                }
+                "params": { "crater": 4 }
               },
-              "knockback": {
-                "x": 200,
-                "y": 0
-              },
+              "knockback": { "x": 200, "y": 0 },
               "guardPressure": 0.3
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": -40,
-              "iy": 0,
-              "damp": 0.2
-            }
-          ]
+          "movement": [{ "at": 0, "ix": -40, "iy": 0, "damp": 0.2 }]
         }
       },
       "resourceCost": 1,
@@ -867,20 +611,11 @@
           "recoil": 0.14,
           "life": 46
         },
-        "ctl": {
-          "charge": 0.2,
-          "active": 0.25
-        },
+        "ctl": { "charge": 0.2, "active": 0.25 },
         "pose": {
-          "startup": {
-            "lean": -5
-          },
-          "charge": {
-            "lean": -7
-          },
-          "active": {
-            "lean": 5
-          }
+          "startup": { "lean": -5 },
+          "charge": { "lean": -7 },
+          "active": { "lean": 5 }
         }
       }
     },
@@ -913,18 +648,12 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 20,
+                "energy": 14,
                 "duration": 1,
                 "flags": 16,
-                "params": {
-                  "compress": 4,
-                  "crater": 6
-                }
+                "params": { "compress": 3.2, "crater": 4.8 }
               },
-              "knockback": {
-                "x": -70,
-                "y": 0
-              },
+              "knockback": { "x": -70, "y": 0 },
               "guardPressure": 0.2,
               "rehit": 2
             },
@@ -932,39 +661,24 @@
               "id": "quake",
               "from": 52,
               "to": 62,
-              "shape": {
-                "kind": "point",
-                "ox": 140,
-                "oy": 0,
-                "r": 64
-              },
+              "shape": { "kind": "point", "ox": 140, "oy": 0, "r": 64 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2000,
+                "energy": 1400,
                 "duration": 1,
                 "flags": 32,
                 "params": {
-                  "crater": 32,
-                  "compress": 14,
-                  "shock": 2.2,
+                  "crater": 25.6,
+                  "compress": 11.2,
+                  "shock": 1.76,
                   "scatter": 1.6
                 }
               },
-              "knockback": {
-                "x": 500,
-                "y": -160
-              },
+              "knockback": { "x": 500, "y": -160 },
               "guardPressure": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.05
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.05 }]
         },
         "forward": {
           "hitboxes": [
@@ -981,18 +695,12 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 20,
+                "energy": 14,
                 "duration": 1,
                 "flags": 16,
-                "params": {
-                  "compress": 4,
-                  "crater": 6
-                }
+                "params": { "compress": 3.2, "crater": 4.8 }
               },
-              "knockback": {
-                "x": -70,
-                "y": 0
-              },
+              "knockback": { "x": -70, "y": 0 },
               "guardPressure": 0.2,
               "rehit": 2
             },
@@ -1000,39 +708,24 @@
               "id": "quake",
               "from": 52,
               "to": 62,
-              "shape": {
-                "kind": "point",
-                "ox": 140,
-                "oy": 0,
-                "r": 64
-              },
+              "shape": { "kind": "point", "ox": 140, "oy": 0, "r": 64 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2000,
+                "energy": 1400,
                 "duration": 1,
                 "flags": 32,
                 "params": {
-                  "crater": 32,
-                  "compress": 14,
-                  "shock": 2.2,
+                  "crater": 25.6,
+                  "compress": 11.2,
+                  "shock": 1.76,
                   "scatter": 1.6
                 }
               },
-              "knockback": {
-                "x": 500,
-                "y": -160
-              },
+              "knockback": { "x": 500, "y": -160 },
               "guardPressure": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.05
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.05 }]
         },
         "down": {
           "hitboxes": [
@@ -1049,18 +742,12 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 20,
+                "energy": 14,
                 "duration": 1,
                 "flags": 16,
-                "params": {
-                  "compress": 4,
-                  "crater": 6
-                }
+                "params": { "compress": 3.2, "crater": 4.8 }
               },
-              "knockback": {
-                "x": -70,
-                "y": 0
-              },
+              "knockback": { "x": -70, "y": 0 },
               "guardPressure": 0.2,
               "rehit": 2
             },
@@ -1068,39 +755,24 @@
               "id": "quake",
               "from": 52,
               "to": 62,
-              "shape": {
-                "kind": "point",
-                "ox": 140,
-                "oy": 0,
-                "r": 64
-              },
+              "shape": { "kind": "point", "ox": 140, "oy": 0, "r": 64 },
               "damage": {
                 "type": "CRUSH",
-                "energy": 2000,
+                "energy": 1400,
                 "duration": 1,
                 "flags": 32,
                 "params": {
-                  "crater": 32,
-                  "compress": 14,
-                  "shock": 2.2,
+                  "crater": 25.6,
+                  "compress": 11.2,
+                  "shock": 1.76,
                   "scatter": 1.6
                 }
               },
-              "knockback": {
-                "x": 500,
-                "y": -160
-              },
+              "knockback": { "x": 500, "y": -160 },
               "guardPressure": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.05
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.05 }]
         }
       },
       "resourceCost": 0,
@@ -1116,19 +788,8 @@
           "compress": 7,
           "shock": 1
         },
-        "ctl": {
-          "startup": 0.1,
-          "active": 0.05,
-          "recovery": 0.3
-        },
-        "pose": {
-          "startup": {
-            "lean": -5
-          },
-          "active": {
-            "lean": 3
-          }
-        }
+        "ctl": { "startup": 0.1, "active": 0.05, "recovery": 0.3 },
+        "pose": { "startup": { "lean": -5 }, "active": { "lean": 3 } }
       }
     },
     {
@@ -1145,18 +806,9 @@
         "hitstop": 0
       },
       "variants": {
-        "up": {
-          "hitboxes": [],
-          "movement": []
-        },
-        "forward": {
-          "hitboxes": [],
-          "movement": []
-        },
-        "down": {
-          "hitboxes": [],
-          "movement": []
-        }
+        "up": { "hitboxes": [], "movement": [] },
+        "forward": { "hitboxes": [], "movement": [] },
+        "down": { "hitboxes": [], "movement": [] }
       },
       "resourceCost": 0,
       "meterCost": 0,
@@ -1193,8 +845,5 @@
     "accent2": "#e0b06a",
     "tagline": "All things fall toward me."
   },
-  "balance": {
-    "power": 0.501,
-    "durability": 1.996
-  }
+  "balance": { "power": 0.466, "durability": 2.144 }
 }

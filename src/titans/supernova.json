@@ -35,11 +35,12 @@
       "physics": {
         "density": 1.5,
         "resist": {
-          "CRUSH": 0.8,
+          "CRUSH": 0.3,
           "KINETIC": 0.8,
           "FRACTURE": 4,
           "ASSIMILATION": 4
-        }
+        },
+        "bond": 150
       },
       "visual": {
         "ramp": ["#ff8a2e", "#ffae38", "#ffd050", "#ffe98a", "#fff8d6", "#ffffff"],
@@ -56,11 +57,12 @@
       "physics": {
         "density": 0.5,
         "resist": {
-          "CRUSH": 0.8,
+          "CRUSH": 0.3,
           "KINETIC": 0.8,
           "FRACTURE": 4,
           "ASSIMILATION": 4
-        }
+        },
+        "bond": 150
       },
       "visual": {
         "ramp": ["#d23c2a", "#f0621f", "#ff8a2e", "#ffae38", "#ffd050", "#ffe98a", "#fff8d6"],
@@ -77,11 +79,12 @@
       "physics": {
         "density": 0.34,
         "resist": {
-          "CRUSH": 0.8,
+          "CRUSH": 0.3,
           "KINETIC": 0.8,
           "FRACTURE": 4,
           "ASSIMILATION": 4
-        }
+        },
+        "bond": 150
       },
       "visual": {
         "ramp": [
@@ -110,11 +113,12 @@
         "resist": {
           "FRACTURE": 0.65,
           "KINETIC": 0.75,
-          "CRUSH": 0.75,
+          "CRUSH": 0.3,
           "THERMAL": 0.4,
           "ASSIMILATION": 1,
           "TIDAL": 3.6
-        }
+        },
+        "bond": 150
       },
       "visual": {
         "ramp": ["#1b0d3a", "#3b1a68", "#6d34a0", "#a45ccc", "#e39ae6", "#fff0fb"],
@@ -133,11 +137,12 @@
         "resist": {
           "FRACTURE": 0.65,
           "KINETIC": 0.75,
-          "CRUSH": 0.75,
+          "CRUSH": 0.3,
           "THERMAL": 0.38,
           "ASSIMILATION": 1.1,
           "TIDAL": 3.8
-        }
+        },
+        "bond": 150
       },
       "visual": {
         "ramp": ["#5a1030", "#a01e34", "#e23f2c", "#ff7a30", "#ffb040", "#ffe080", "#fff6c8"],
@@ -186,10 +191,34 @@
         [1.6, 22, 0.23]
       ],
       "prominences": [
-        { "kind": "loop", "a0": -1.12, "a1": -0.7, "h": 30, "t": 5 },
-        { "kind": "plume", "a0": 0.62, "a1": 1.02, "h": 30, "t": 5.4 },
-        { "kind": "loop", "a0": 2.3, "a1": 2.72, "h": 26, "t": 4.6 },
-        { "kind": "plume", "a0": -2.4, "a1": -2.02, "h": 27, "t": 5 }
+        {
+          "kind": "loop",
+          "a0": -1.12,
+          "a1": -0.7,
+          "h": 30,
+          "t": 5
+        },
+        {
+          "kind": "plume",
+          "a0": 0.62,
+          "a1": 1.02,
+          "h": 30,
+          "t": 5.4
+        },
+        {
+          "kind": "loop",
+          "a0": 2.3,
+          "a1": 2.72,
+          "h": 26,
+          "t": 4.6
+        },
+        {
+          "kind": "plume",
+          "a0": -2.4,
+          "a1": -2.02,
+          "h": 27,
+          "t": 5
+        }
       ]
     }
   },
@@ -226,9 +255,15 @@
                 "energy": 380,
                 "duration": 1,
                 "flags": 0,
-                "params": { "shock": 0.6, "scatter": 1 }
+                "params": {
+                  "shock": 0.6,
+                  "scatter": 1
+                }
               },
-              "knockback": { "x": 210, "y": -80 },
+              "knockback": {
+                "x": 210,
+                "y": -80
+              },
               "guardPressure": 0.3,
               "sweepTo": {
                 "kind": "field",
@@ -239,7 +274,14 @@
               }
             }
           ],
-          "movement": [{ "at": 10, "ix": -70, "iy": 0, "damp": 0.3 }]
+          "movement": [
+            {
+              "at": 10,
+              "ix": -70,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
         },
         "forward": {
           "hitboxes": [
@@ -259,9 +301,15 @@
                 "energy": 380,
                 "duration": 1,
                 "flags": 0,
-                "params": { "shock": 0.6, "scatter": 1 }
+                "params": {
+                  "shock": 0.6,
+                  "scatter": 1
+                }
               },
-              "knockback": { "x": 210, "y": -10 },
+              "knockback": {
+                "x": 210,
+                "y": -10
+              },
               "guardPressure": 0.3,
               "sweepTo": {
                 "kind": "field",
@@ -272,7 +320,14 @@
               }
             }
           ],
-          "movement": [{ "at": 10, "ix": -70, "iy": 0, "damp": 0.3 }]
+          "movement": [
+            {
+              "at": 10,
+              "ix": -70,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
         },
         "down": {
           "hitboxes": [
@@ -292,9 +347,15 @@
                 "energy": 380,
                 "duration": 1,
                 "flags": 0,
-                "params": { "shock": 0.6, "scatter": 1 }
+                "params": {
+                  "shock": 0.6,
+                  "scatter": 1
+                }
               },
-              "knockback": { "x": 210, "y": 60 },
+              "knockback": {
+                "x": 210,
+                "y": 60
+              },
               "guardPressure": 0.3,
               "sweepTo": {
                 "kind": "field",
@@ -305,7 +366,14 @@
               }
             }
           ],
-          "movement": [{ "at": 10, "ix": -70, "iy": 0, "damp": 0.3 }]
+          "movement": [
+            {
+              "at": 10,
+              "ix": -70,
+              "iy": 0,
+              "damp": 0.3
+            }
+          ]
         }
       },
       "resourceCost": 0,
@@ -313,7 +381,14 @@
       "tags": ["burst"],
       "extra": {
         "fuel": 7,
-        "pose": { "startup": { "lean": -3 }, "active": { "lean": 5 } }
+        "pose": {
+          "startup": {
+            "lean": -3
+          },
+          "active": {
+            "lean": 5
+          }
+        }
       }
     },
     {
@@ -336,22 +411,48 @@
               "id": "ejecta",
               "from": 0,
               "to": 26,
-              "shape": { "kind": "point", "ox": 56, "oy": -26, "r": 30 },
+              "shape": {
+                "kind": "point",
+                "ox": 56,
+                "oy": -26,
+                "r": 30
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 1350,
                 "duration": 1,
                 "flags": 0,
-                "params": { "shock": 1.8, "scatter": 1.2 }
+                "params": {
+                  "shock": 1.8,
+                  "scatter": 1.2
+                }
               },
-              "knockback": { "x": 520, "y": -170 },
+              "knockback": {
+                "x": 520,
+                "y": -170
+              },
               "guardPressure": 1,
-              "sweepTo": { "kind": "point", "ox": 250, "oy": -118, "r": 38 }
+              "sweepTo": {
+                "kind": "point",
+                "ox": 250,
+                "oy": -118,
+                "r": 38
+              }
             }
           ],
           "movement": [
-            { "at": 0, "ix": -110, "iy": 0, "damp": 0.3 },
-            { "at": 32, "ix": -80, "iy": 0, "damp": 0.2 }
+            {
+              "at": 0,
+              "ix": -110,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 32,
+              "ix": -80,
+              "iy": 0,
+              "damp": 0.2
+            }
           ]
         },
         "forward": {
@@ -360,22 +461,48 @@
               "id": "ejecta",
               "from": 0,
               "to": 26,
-              "shape": { "kind": "point", "ox": 56, "oy": 0, "r": 30 },
+              "shape": {
+                "kind": "point",
+                "ox": 56,
+                "oy": 0,
+                "r": 30
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 1350,
                 "duration": 1,
                 "flags": 0,
-                "params": { "shock": 1.8, "scatter": 1.2 }
+                "params": {
+                  "shock": 1.8,
+                  "scatter": 1.2
+                }
               },
-              "knockback": { "x": 520, "y": -60 },
+              "knockback": {
+                "x": 520,
+                "y": -60
+              },
               "guardPressure": 1,
-              "sweepTo": { "kind": "point", "ox": 250, "oy": 0, "r": 38 }
+              "sweepTo": {
+                "kind": "point",
+                "ox": 250,
+                "oy": 0,
+                "r": 38
+              }
             }
           ],
           "movement": [
-            { "at": 0, "ix": -110, "iy": 0, "damp": 0.3 },
-            { "at": 32, "ix": -80, "iy": 0, "damp": 0.2 }
+            {
+              "at": 0,
+              "ix": -110,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 32,
+              "ix": -80,
+              "iy": 0,
+              "damp": 0.2
+            }
           ]
         },
         "down": {
@@ -384,22 +511,48 @@
               "id": "ejecta",
               "from": 0,
               "to": 26,
-              "shape": { "kind": "point", "ox": 56, "oy": 26, "r": 30 },
+              "shape": {
+                "kind": "point",
+                "ox": 56,
+                "oy": 26,
+                "r": 30
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 1350,
                 "duration": 1,
                 "flags": 0,
-                "params": { "shock": 1.8, "scatter": 1.2 }
+                "params": {
+                  "shock": 1.8,
+                  "scatter": 1.2
+                }
               },
-              "knockback": { "x": 520, "y": 50 },
+              "knockback": {
+                "x": 520,
+                "y": 50
+              },
               "guardPressure": 1,
-              "sweepTo": { "kind": "point", "ox": 250, "oy": 118, "r": 38 }
+              "sweepTo": {
+                "kind": "point",
+                "ox": 250,
+                "oy": 118,
+                "r": 38
+              }
             }
           ],
           "movement": [
-            { "at": 0, "ix": -110, "iy": 0, "damp": 0.3 },
-            { "at": 32, "ix": -80, "iy": 0, "damp": 0.2 }
+            {
+              "at": 0,
+              "ix": -110,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 32,
+              "ix": -80,
+              "iy": 0,
+              "damp": 0.2
+            }
           ]
         }
       },
@@ -409,9 +562,15 @@
       "extra": {
         "fuel": 22,
         "pose": {
-          "startup": { "lean": -8 },
-          "active": { "lean": 6 },
-          "recovery": { "lean": 2 }
+          "startup": {
+            "lean": -8
+          },
+          "active": {
+            "lean": 6
+          },
+          "recovery": {
+            "lean": 2
+          }
         }
       }
     },
@@ -431,22 +590,45 @@
       "variants": {
         "up": {
           "hitboxes": [],
-          "movement": [{ "at": 0, "ix": 700, "iy": 0, "damp": 0.03 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": 700,
+              "iy": 0,
+              "damp": 0.03
+            }
+          ]
         },
         "forward": {
           "hitboxes": [],
-          "movement": [{ "at": 0, "ix": 700, "iy": 0, "damp": 0.03 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": 700,
+              "iy": 0,
+              "damp": 0.03
+            }
+          ]
         },
         "down": {
           "hitboxes": [],
-          "movement": [{ "at": 0, "ix": 700, "iy": 0, "damp": 0.03 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": 700,
+              "iy": 0,
+              "damp": 0.03
+            }
+          ]
         }
       },
       "resourceCost": 0,
       "meterCost": 0,
       "intangible": [1, 11],
       "tags": ["dash", "trail"],
-      "extra": { "fuel": 2 }
+      "extra": {
+        "fuel": 2
+      }
     },
     {
       "id": "supernova.prominence",
@@ -468,20 +650,43 @@
               "id": "arc",
               "from": 0,
               "to": 12,
-              "shape": { "kind": "point", "ox": 34, "oy": -58, "r": 16 },
+              "shape": {
+                "kind": "point",
+                "ox": 34,
+                "oy": -58,
+                "r": 16
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 130,
                 "duration": 1,
                 "flags": 0,
-                "params": { "shock": 0.5, "scatter": 1 }
+                "params": {
+                  "shock": 0.5,
+                  "scatter": 1
+                }
               },
-              "knockback": { "x": 130, "y": 0 },
+              "knockback": {
+                "x": 130,
+                "y": 0
+              },
               "guardPressure": 0.4,
-              "sweepTo": { "kind": "point", "ox": 188, "oy": -54, "r": 22 }
+              "sweepTo": {
+                "kind": "point",
+                "ox": 188,
+                "oy": -54,
+                "r": 22
+              }
             }
           ],
-          "movement": [{ "at": 0, "ix": -30, "iy": 0, "damp": 0.2 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": -30,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
         },
         "forward": {
           "hitboxes": [
@@ -489,20 +694,43 @@
               "id": "arc",
               "from": 0,
               "to": 12,
-              "shape": { "kind": "point", "ox": 34, "oy": -58, "r": 16 },
+              "shape": {
+                "kind": "point",
+                "ox": 34,
+                "oy": -58,
+                "r": 16
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 130,
                 "duration": 1,
                 "flags": 0,
-                "params": { "shock": 0.5, "scatter": 1 }
+                "params": {
+                  "shock": 0.5,
+                  "scatter": 1
+                }
               },
-              "knockback": { "x": 130, "y": 0 },
+              "knockback": {
+                "x": 130,
+                "y": 0
+              },
               "guardPressure": 0.4,
-              "sweepTo": { "kind": "point", "ox": 188, "oy": 8, "r": 22 }
+              "sweepTo": {
+                "kind": "point",
+                "ox": 188,
+                "oy": 8,
+                "r": 22
+              }
             }
           ],
-          "movement": [{ "at": 0, "ix": -30, "iy": 0, "damp": 0.2 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": -30,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
         },
         "down": {
           "hitboxes": [
@@ -510,20 +738,43 @@
               "id": "arc",
               "from": 0,
               "to": 12,
-              "shape": { "kind": "point", "ox": 34, "oy": -58, "r": 16 },
+              "shape": {
+                "kind": "point",
+                "ox": 34,
+                "oy": -58,
+                "r": 16
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 130,
                 "duration": 1,
                 "flags": 0,
-                "params": { "shock": 0.5, "scatter": 1 }
+                "params": {
+                  "shock": 0.5,
+                  "scatter": 1
+                }
               },
-              "knockback": { "x": 130, "y": 0 },
+              "knockback": {
+                "x": 130,
+                "y": 0
+              },
               "guardPressure": 0.4,
-              "sweepTo": { "kind": "point", "ox": 188, "oy": 70, "r": 22 }
+              "sweepTo": {
+                "kind": "point",
+                "ox": 188,
+                "oy": 70,
+                "r": 22
+              }
             }
           ],
-          "movement": [{ "at": 0, "ix": -30, "iy": 0, "damp": 0.2 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": -30,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
         }
       },
       "resourceCost": 0,
@@ -541,9 +792,15 @@
           "energy": 16
         },
         "pose": {
-          "startup": { "lean": -4 },
-          "charge": { "lean": -6 },
-          "active": { "lean": 3 }
+          "startup": {
+            "lean": -4
+          },
+          "charge": {
+            "lean": -6
+          },
+          "active": {
+            "lean": 3
+          }
         }
       }
     },
@@ -567,15 +824,27 @@
               "id": "blast",
               "from": 4,
               "to": 40,
-              "shape": { "kind": "ring", "ox": 0, "oy": 0, "r0": 24, "r1": 76 },
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 24,
+                "r1": 76
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 3000,
                 "duration": 1,
                 "flags": 32,
-                "params": { "shock": 2.4, "scatter": 1.6 }
+                "params": {
+                  "shock": 2.4,
+                  "scatter": 1.6
+                }
               },
-              "knockback": { "x": 300, "y": -120 },
+              "knockback": {
+                "x": 300,
+                "y": -120
+              },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
@@ -601,9 +870,15 @@
                 "energy": 2200,
                 "duration": 1,
                 "flags": 32,
-                "params": { "shock": 1.8, "scatter": 1.4 }
+                "params": {
+                  "shock": 1.8,
+                  "scatter": 1.4
+                }
               },
-              "knockback": { "x": 520, "y": -140 },
+              "knockback": {
+                "x": 520,
+                "y": -140
+              },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
@@ -614,7 +889,14 @@
               }
             }
           ],
-          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.05 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
         },
         "forward": {
           "hitboxes": [
@@ -622,15 +904,27 @@
               "id": "blast",
               "from": 4,
               "to": 40,
-              "shape": { "kind": "ring", "ox": 0, "oy": 0, "r0": 24, "r1": 76 },
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 24,
+                "r1": 76
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 3000,
                 "duration": 1,
                 "flags": 32,
-                "params": { "shock": 2.4, "scatter": 1.6 }
+                "params": {
+                  "shock": 2.4,
+                  "scatter": 1.6
+                }
               },
-              "knockback": { "x": 300, "y": -120 },
+              "knockback": {
+                "x": 300,
+                "y": -120
+              },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
@@ -656,9 +950,15 @@
                 "energy": 2200,
                 "duration": 1,
                 "flags": 32,
-                "params": { "shock": 1.8, "scatter": 1.4 }
+                "params": {
+                  "shock": 1.8,
+                  "scatter": 1.4
+                }
               },
-              "knockback": { "x": 520, "y": -140 },
+              "knockback": {
+                "x": 520,
+                "y": -140
+              },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
@@ -669,7 +969,14 @@
               }
             }
           ],
-          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.05 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
         },
         "down": {
           "hitboxes": [
@@ -677,15 +984,27 @@
               "id": "blast",
               "from": 4,
               "to": 40,
-              "shape": { "kind": "ring", "ox": 0, "oy": 0, "r0": 24, "r1": 76 },
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 24,
+                "r1": 76
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 3000,
                 "duration": 1,
                 "flags": 32,
-                "params": { "shock": 2.4, "scatter": 1.6 }
+                "params": {
+                  "shock": 2.4,
+                  "scatter": 1.6
+                }
               },
-              "knockback": { "x": 300, "y": -120 },
+              "knockback": {
+                "x": 300,
+                "y": -120
+              },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
@@ -711,9 +1030,15 @@
                 "energy": 2200,
                 "duration": 1,
                 "flags": 32,
-                "params": { "shock": 1.8, "scatter": 1.4 }
+                "params": {
+                  "shock": 1.8,
+                  "scatter": 1.4
+                }
               },
-              "knockback": { "x": 520, "y": -140 },
+              "knockback": {
+                "x": 520,
+                "y": -140
+              },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
@@ -724,7 +1049,14 @@
               }
             }
           ],
-          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.05 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
         }
       },
       "resourceCost": 0,
@@ -732,11 +1064,21 @@
       "tags": ["ultimate", "armor", "blast", "collapse"],
       "extra": {
         "fuel": 60,
-        "ctl": { "startup": 0.1, "active": 0.05, "recovery": 0.3 },
+        "ctl": {
+          "startup": 0.1,
+          "active": 0.05,
+          "recovery": 0.3
+        },
         "pose": {
-          "startup": { "lean": -2 },
-          "active": { "lean": 0 },
-          "recovery": { "lean": 0 }
+          "startup": {
+            "lean": -2
+          },
+          "active": {
+            "lean": 0
+          },
+          "recovery": {
+            "lean": 0
+          }
         }
       }
     },
@@ -760,15 +1102,27 @@
               "id": "final",
               "from": 4,
               "to": 66,
-              "shape": { "kind": "ring", "ox": 0, "oy": 0, "r0": 24, "r1": 76 },
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 24,
+                "r1": 76
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 2000,
                 "duration": 1,
                 "flags": 32,
-                "params": { "shock": 3, "scatter": 2 }
+                "params": {
+                  "shock": 3,
+                  "scatter": 2
+                }
               },
-              "knockback": { "x": 700, "y": -170 },
+              "knockback": {
+                "x": 700,
+                "y": -170
+              },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
@@ -779,7 +1133,14 @@
               }
             }
           ],
-          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.05 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
         },
         "forward": {
           "hitboxes": [
@@ -787,15 +1148,27 @@
               "id": "final",
               "from": 4,
               "to": 66,
-              "shape": { "kind": "ring", "ox": 0, "oy": 0, "r0": 24, "r1": 76 },
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 24,
+                "r1": 76
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 2000,
                 "duration": 1,
                 "flags": 32,
-                "params": { "shock": 3, "scatter": 2 }
+                "params": {
+                  "shock": 3,
+                  "scatter": 2
+                }
               },
-              "knockback": { "x": 700, "y": -170 },
+              "knockback": {
+                "x": 700,
+                "y": -170
+              },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
@@ -806,7 +1179,14 @@
               }
             }
           ],
-          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.05 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
         },
         "down": {
           "hitboxes": [
@@ -814,15 +1194,27 @@
               "id": "final",
               "from": 4,
               "to": 66,
-              "shape": { "kind": "ring", "ox": 0, "oy": 0, "r0": 24, "r1": 76 },
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 24,
+                "r1": 76
+              },
               "damage": {
                 "type": "THERMAL",
                 "energy": 2000,
                 "duration": 1,
                 "flags": 32,
-                "params": { "shock": 3, "scatter": 2 }
+                "params": {
+                  "shock": 3,
+                  "scatter": 2
+                }
               },
-              "knockback": { "x": 700, "y": -170 },
+              "knockback": {
+                "x": 700,
+                "y": -170
+              },
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "ring",
@@ -833,7 +1225,14 @@
               }
             }
           ],
-          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.05 }]
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
         }
       },
       "resourceCost": 0,
@@ -842,11 +1241,21 @@
       "extra": {
         "followUpOnly": true,
         "fuel": 0,
-        "ctl": { "startup": 0.05, "active": 0.02, "recovery": 0.2 },
+        "ctl": {
+          "startup": 0.05,
+          "active": 0.02,
+          "recovery": 0.2
+        },
         "pose": {
-          "startup": { "lean": -2 },
-          "active": { "lean": 0 },
-          "recovery": { "lean": 0 }
+          "startup": {
+            "lean": -2
+          },
+          "active": {
+            "lean": 0
+          },
+          "recovery": {
+            "lean": 0
+          }
         }
       }
     },
@@ -864,9 +1273,18 @@
         "hitstop": 0
       },
       "variants": {
-        "up": { "hitboxes": [], "movement": [] },
-        "forward": { "hitboxes": [], "movement": [] },
-        "down": { "hitboxes": [], "movement": [] }
+        "up": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": []
+        }
       },
       "resourceCost": 0,
       "meterCost": 0,
@@ -904,8 +1322,14 @@
     "tagline": "Burn bright. Burn out."
   },
   "feel": {
-    "bob": { "amp": 3.2, "period": 5 },
-    "sway": { "amp": 2, "period": 6.4 },
+    "bob": {
+      "amp": 3.2,
+      "period": 5
+    },
+    "sway": {
+      "amp": 2,
+      "period": 6.4
+    },
     "thud": 1.1,
     "fx": {
       "kind": "ember",
@@ -920,5 +1344,8 @@
       "rise": -25
     }
   },
-  "balance": { "power": 2.446, "durability": 0.409 }
+  "balance": {
+    "power": 2.386,
+    "durability": 0.419
+  }
 }

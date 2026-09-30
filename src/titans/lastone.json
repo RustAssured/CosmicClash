@@ -44,7 +44,7 @@
           "FRACTURE": 1.1,
           "KINETIC": 1,
           "CRUSH": 1,
-          "THERMAL": 1,
+          "THERMAL": 1.6,
           "ASSIMILATION": 0.2,
           "TIDAL": 0.8
         }
@@ -60,7 +60,7 @@
           "FRACTURE": 1.1,
           "KINETIC": 1,
           "CRUSH": 1,
-          "THERMAL": 1,
+          "THERMAL": 1.6,
           "ASSIMILATION": 0.2,
           "TIDAL": 0.8
         }
@@ -88,7 +88,7 @@
           "FRACTURE": 1.1,
           "KINETIC": 1,
           "CRUSH": 1,
-          "THERMAL": 1,
+          "THERMAL": 1.6,
           "ASSIMILATION": 0.2,
           "TIDAL": 0.8
         }
@@ -1343,5 +1343,5 @@
       "idleRate": 2
     }
   },
-  "balance": { "power": 0.615, "durability": 1.626 }
+  "balance": { "power": 0.71, "durability": 1.408 }
 }
