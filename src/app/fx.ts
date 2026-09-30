@@ -37,6 +37,8 @@ export class FxState {
   private heat = 0;
   private lowIntegrity = 0;
   private timeScale = 1;
+  /** Comfort scale (0..1) applied to flash and chromatic aberration at sample time. */
+  flashScale = 1;
   private readonly out: FrameFx = {
     shockwaves: [],
     lenses: [],
@@ -194,8 +196,8 @@ export class FxState {
         o.lenses.push(lf);
       }
     }
-    o.flash = this.flash;
-    o.aberration = this.aberration;
+    o.flash = this.flash * this.flashScale;
+    o.aberration = this.aberration * this.flashScale;
     o.intensity = this.intensity();
     o.timeScale = this.timeScale;
     return o;

@@ -169,13 +169,15 @@ Re-measure after B2's rebalance before changing the AI further.
 
 ## AI ladder (generated)
 
-Mirror matches, real matter world, seed base 5000, target 50 fights per cell, sides alternated. Cells are the win rate of the HIGHER level (a draw counts half) with one standard error. Targets: 6v1 at least 70 %, and every adjacent-level cell above 50 %. * marks a cell at or below 50 %.
+Mirror matches, real matter world, seed base 6000, target 50 fights per cell, sides alternated. Cells are the win rate of the HIGHER level (a draw counts half) with one standard error. Targets: 6v1 at least 70 %, and every adjacent-level cell above 50 %. * marks a cell at or below 50 %.
 
 | titan | 6 v 1 | 6 v 3 | 3 v 1 | 5 v 3 | monotone |
 |---|---:|---:|---:|---:|---|
-| lastone | 72% ±6% (50) | 64% ±7% (50) | 86% ±5% (50) | 66% ±7% (50) | NO |
-| asteroid | 70% ±6% (50) | 56% ±7% (50) | 68% ±7% (50) | 54% ±7% (50) | yes |
-| nexus | 14%* ±5% (50) | 32%* ±7% (50) | 38%* ±7% (50) | 50%* ±7% (50) | NO |
-| blackhole | 90% ±4% (50) | 74% ±6% (50) | 66% ±7% (50) | 68% ±7% (50) | yes |
+| lastone | 64% ±7% (50) | 54% ±7% (50) | 74% ±6% (50) | 66% ±7% (50) | NO |
+| asteroid | 50%* ±7% (50) | 52% ±7% (50) | 68% ±7% (50) | 48%* ±7% (50) | NO |
+| nexus | 54% ±7% (50) | 60% ±7% (50) | 68% ±7% (50) | 50%* ±7% (50) | NO |
+| blackhole | 72% ±6% (50) | 68% ±7% (50) | 56% ±7% (50) | 68% ±7% (50) | yes |
+| supernova | 48%* ±7% (50) | 60% ±7% (50) | 50%* ±7% (50) | 60% ±7% (50) | NO |
+| planet | 60% ±7% (50) | 50%* ±7% (50) | 66% ±7% (50) | 58% ±7% (50) | NO |
 
 <!-- balance-ladder:end -->

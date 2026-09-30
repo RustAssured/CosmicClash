@@ -38,6 +38,14 @@
         "char": "#1a1230",
         "crack": "#0a0620",
         "debris": "#9a7ae0"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 1.4,
+          "KINETIC": 1.4,
+          "CRUSH": 0.9,
+          "THERMAL": 0.7
+        }
       }
     },
     {
@@ -49,6 +57,14 @@
         "char": "#4a1030",
         "crack": "#2a0818",
         "debris": "#ff7aa8"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 1.4,
+          "KINETIC": 1.4,
+          "CRUSH": 0.9,
+          "THERMAL": 0.7
+        }
       }
     },
     {
@@ -60,6 +76,14 @@
         "char": "#1a0c0c",
         "crack": "#0c0406",
         "debris": "#a83a30"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 1.4,
+          "KINETIC": 1.4,
+          "CRUSH": 0.9,
+          "THERMAL": 0.7
+        }
       }
     },
     {
@@ -74,9 +98,10 @@
       },
       "physics": {
         "resist": {
-          "FRACTURE": 0.9,
-          "KINETIC": 0.9,
-          "CRUSH": 0.75
+          "FRACTURE": 1.5,
+          "KINETIC": 1.5,
+          "CRUSH": 0.9,
+          "THERMAL": 0.8
         }
       }
     },
@@ -92,9 +117,10 @@
       },
       "physics": {
         "resist": {
-          "FRACTURE": 0.9,
-          "KINETIC": 0.9,
-          "CRUSH": 0.75
+          "FRACTURE": 1.5,
+          "KINETIC": 1.5,
+          "CRUSH": 0.9,
+          "THERMAL": 0.8
         }
       }
     },
@@ -107,6 +133,11 @@
         "char": "#2a1014",
         "crack": "#12060a",
         "debris": "#d8506c"
+      },
+      "physics": {
+        "resist": {
+          "THERMAL": 1.0
+        }
       }
     },
     {
@@ -121,9 +152,10 @@
       },
       "physics": {
         "resist": {
-          "FRACTURE": 0.9,
-          "KINETIC": 0.9,
-          "CRUSH": 0.75
+          "FRACTURE": 1.5,
+          "KINETIC": 1.5,
+          "CRUSH": 0.9,
+          "THERMAL": 0.8
         }
       }
     }
@@ -773,7 +805,7 @@
                 "flags": 16,
                 "params": {
                   "latch": 70,
-                  "harvest": 0.9
+                  "harvest": 0.6
                 }
               },
               "knockback": {
@@ -814,7 +846,7 @@
                 "flags": 16,
                 "params": {
                   "latch": 70,
-                  "harvest": 0.9
+                  "harvest": 0.6
                 }
               },
               "knockback": {
@@ -855,7 +887,7 @@
                 "flags": 16,
                 "params": {
                   "latch": 70,
-                  "harvest": 0.9
+                  "harvest": 0.6
                 }
               },
               "knockback": {

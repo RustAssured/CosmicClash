@@ -12,6 +12,8 @@ export type UIAction =
   | { type: 'unlockAudio' }
   | { type: 'setVolume'; master?: number; music?: number; sfx?: number }
   | { type: 'setQuality'; quality: 0 | 1 | 2 }
+  /** Comfort options, each 0..1 (1 = full effect): camera shake/zoom/roll, and screen flashes/aberration. */
+  | { type: 'setAccessibility'; shake: number; flash: number }
   /** Training: what the dummy does. */
   | { type: 'setDummy'; mode: 'idle' | 'guard' | 'ai' }
   | { type: 'resetPositions' }

@@ -131,7 +131,7 @@ so the Phase 3 tournament (`tools/ai/balance.ts`, `worker_threads`) is a small w
 * the public-only input channel, the reaction delay per level (measured), causality;
 * competence: levels 2 to 6 beat a do-nothing dummy with both titans; time-to-KO does not get worse with level and no round stalls out;
 * skill shows in mechanics: an isolated telegraphed Crush lands on level 1 far more often than on level 3, and on level 3 more than on
-  level 6 (which dodges nearly all of it);
+  level 5 (which dodges most of it);
 * blunder rate falls with level and is zero at level 6; determinism per seed; personalities visible in the log;
 * cost per decision (microseconds).
 

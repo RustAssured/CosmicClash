@@ -1,7 +1,7 @@
 {
   "id": "lastone",
   "name": "The Last One",
-  "nameKo": "마지막 하나",
+  "nameKo": "\ub9c8\uc9c0\ub9c9 \ud558\ub098",
   "epithet": "De Laatste",
   "attributes": {
     "mass": 5,
@@ -14,7 +14,7 @@
   "resource": {
     "id": "tendrils",
     "name": "Tendrils",
-    "nameKo": "촉수",
+    "nameKo": "\ucd09\uc218",
     "max": 24,
     "start": 24,
     "display": "pips"
@@ -38,6 +38,16 @@
         "char": "#1c2a2a",
         "crack": "#0d1a22",
         "debris": "#8fae9f"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 1.1,
+          "KINETIC": 1.0,
+          "CRUSH": 0.9,
+          "THERMAL": 0.5,
+          "ASSIMILATION": 0.7,
+          "TIDAL": 0.8
+        }
       }
     },
     {
@@ -45,7 +55,15 @@
       "base": "celadon",
       "physics": {
         "bond": 46,
-        "toughness": 0.15
+        "toughness": 0.15,
+        "resist": {
+          "FRACTURE": 1.1,
+          "KINETIC": 1.0,
+          "CRUSH": 0.9,
+          "THERMAL": 0.5,
+          "ASSIMILATION": 0.7,
+          "TIDAL": 0.8
+        }
       },
       "visual": {
         "ramp": ["#0e1a24", "#1a3340", "#2b5057", "#436e69", "#5f8c83", "#86a99b"],
@@ -64,6 +82,16 @@
         "char": "#2a3c40",
         "crack": "#16303a",
         "debris": "#a9cfc6"
+      },
+      "physics": {
+        "resist": {
+          "FRACTURE": 1.1,
+          "KINETIC": 1.0,
+          "CRUSH": 0.9,
+          "THERMAL": 0.5,
+          "ASSIMILATION": 0.7,
+          "TIDAL": 0.8
+        }
       }
     },
     {
@@ -198,7 +226,7 @@
       "id": "lastone.lash",
       "slot": "strike",
       "name": "Tendril Lash",
-      "nameKo": "촉수 채찍",
+      "nameKo": "\ucd09\uc218 \ucc44\ucc0d",
       "frame": {
         "startup": 10,
         "active": 16,
@@ -713,7 +741,7 @@
       "id": "lastone.lunge",
       "slot": "strike",
       "name": "Charging Thrust",
-      "nameKo": "돌진 찌르기",
+      "nameKo": "\ub3cc\uc9c4 \ucc0c\ub974\uae30",
       "frame": {
         "startup": 6,
         "active": 12,
@@ -944,7 +972,7 @@
       "id": "lastone.shatter",
       "slot": "crush",
       "name": "Shatter Blow",
-      "nameKo": "분쇄의 일격",
+      "nameKo": "\ubd84\uc1c4\uc758 \uc77c\uaca9",
       "frame": {
         "startup": 30,
         "active": 8,
@@ -1121,7 +1149,7 @@
       "id": "lastone.sidestep",
       "slot": "surge",
       "name": "Sidestep",
-      "nameKo": "옆걸음",
+      "nameKo": "\uc606\uac78\uc74c",
       "frame": {
         "startup": 2,
         "active": 14,
@@ -1182,7 +1210,7 @@
       "id": "lastone.gaze",
       "slot": "signature",
       "name": "Gaze",
-      "nameKo": "응시",
+      "nameKo": "\uc751\uc2dc",
       "frame": {
         "startup": 12,
         "active": 20,
@@ -1342,7 +1370,7 @@
       "id": "lastone.lastlight",
       "slot": "ultimate",
       "name": "The Last Light",
-      "nameKo": "마지막 빛",
+      "nameKo": "\ub9c8\uc9c0\ub9c9 \ube5b",
       "frame": {
         "startup": 96,
         "active": 84,
@@ -1620,7 +1648,7 @@
       "id": "lastone.guard",
       "slot": "guard",
       "name": "Tendril Shell",
-      "nameKo": "촉수 껍질",
+      "nameKo": "\ucd09\uc218 \uaecd\uc9c8",
       "frame": {
         "startup": 3,
         "active": 0,

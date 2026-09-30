@@ -92,6 +92,9 @@ export class App {
   private trainingFrameData = false;
   private trainingView: 'off' | 'hitboxes' | 'matter' = 'off';
   private matterMode = 0;
+  /** Comfort option: scales camera shake / zoom pulses / roll (0..1). */
+  private shakeScale = 1;
+  private readonly camEvents: SimEvent[] = [];
   private starting = false;
   private loadingText: string | null = null;
   private loadingFraction = 0;
@@ -319,7 +322,7 @@ export class App {
         b: { x: v1.x, y: v1.y, hw: (v1.boundsX1 - v1.boundsX0) / 2, hh: (v1.boundsY1 - v1.boundsY0) / 2 },
         arena: m.arena,
       },
-      ev,
+      this.cameraEvents(ev),
     );
     for (let i = 0; i < ev.length; i++) {
       const e = ev[i]!;
@@ -331,6 +334,23 @@ export class App {
     if (this.eventLog.length > 600) this.eventLog.splice(0, this.eventLog.length - 400);
     this.loop.timeScale = m.timeScale;
     if (m.phase === 'matchend' && m.phaseTick === 1) this.onMatchEnd(s);
+  }
+
+  /** Events for the camera with comfort scaling applied to shake/zoom/roll (the sim's own events are never modified). */
+  private cameraEvents(ev: readonly SimEvent[]): readonly SimEvent[] {
+    const k = this.shakeScale;
+    if (k >= 1) return ev;
+    const out = this.camEvents;
+    out.length = 0;
+    for (let i = 0; i < ev.length; i++) {
+      const e = ev[i]!;
+      if (e.t === 'shake') out.push({ ...e, amp: e.amp * k });
+      else if (e.t === 'zoom') out.push({ ...e, amount: e.amount * k });
+      else if (e.t === 'roll') out.push({ ...e, radians: e.radians * k });
+      else if (e.t === 'hit') out.push({ ...e, energy: e.energy * k });
+      else out.push(e);
+    }
+    return out;
   }
 
   private onMatchEnd(s: Session): void {
@@ -498,6 +518,10 @@ export class App {
         break;
       case 'setVolume':
         this.audio.setVolumes(a);
+        break;
+      case 'setAccessibility':
+        this.shakeScale = Math.min(1, Math.max(0, a.shake));
+        this.fx.flashScale = Math.min(1, Math.max(0, a.flash));
         break;
       case 'setQuality':
         this.renderer.debugSetTier(a.quality);
