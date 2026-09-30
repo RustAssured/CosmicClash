@@ -30,6 +30,14 @@ float hash13(vec3 p3) {
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 `;
 
+/** Dynamic light sources (the fighters' own lights). Positions are screen-space logical px (top-left origin). */
+const LIGHTS_GLSL = /* glsl */ `
+uniform vec4 uLt[4];       // x, y, falloff radius, intensity
+uniform vec3 uLtCol[4];
+uniform int uNLt;
+uniform int uRelight;      // 1 = relight the sprites (tier >= 1)
+`;
+
 export const FULLSCREEN_VERT = /* glsl */ `${HEAD}
 in vec3 position;
 out vec2 vUv;
@@ -42,7 +50,7 @@ void main() {
 /* ------------------------------------------------------------------------------------------------ *
  *  Scenery resolve: lens → supersample box filter → tone map → palette dither.   (MRT: colour, bloom)
  * ------------------------------------------------------------------------------------------------ */
-export const SCENERY_DITHER_FRAG = /* glsl */ `${HEAD}${COMMON}
+export const SCENERY_DITHER_FRAG = /* glsl */ `${HEAD}${COMMON}${LIGHTS_GLSL}
 uniform sampler2D uScene;      // HDR scenery, linear light, alpha = occluder opacity
 uniform int uTaps;             // 1 (scene at logical res) or 4 (2x supersampled)
 uniform sampler3D uLut;        // (idxA, idxB, ratio) per sRGB node, NEAREST
@@ -138,6 +146,17 @@ void main() {
     float L = luma(x);
     float Lc = L > uBand.w ? uBand.w + (L - uBand.w) * uBandRatio : L;
     x *= mix(1.0, Lc / max(L, 1e-4), band);
+  }
+  // Light from the bodies themselves: nebula and dust near a light take on its colour, more where the scenery has substance (so
+  // it reads as LIT gas, not an overlay), and a faint base so even empty space is touched. Applied after the fight-band
+  // compression so a fighter's own glow is not squashed by it.
+  for (int i = 0; i < 4; i++) {
+    if (i >= uNLt) break;
+    vec4 L = uLt[i];
+    float d = length(p - L.xy) / max(L.z, 1.0);
+    float f = 1.0 / (1.0 + d * d * 3.0) * (1.0 - smoothstep(0.9, 1.7, d));
+    float lm = clamp(luma(x) * 2.0, 0.0, 1.0);
+    x += uLtCol[i] * min(L.w, 1.1) * f * (0.11 + 0.4 * lm);
   }
   // Hue-preserving tone map: identity below the knee (so colours authored on a palette ramp stay on it), a soft
   // shoulder above it, and very bright light bleeds toward white the way an overexposed sensor does.
@@ -348,7 +367,7 @@ void main() {
  *  Post: shockwave refraction → chromatic aberration → + bloom + god rays → vignette → grain → flash.
  *  Everything keeps to the pixel grid: samples snap to whole source pixels and bloom/vignette are dithered.
  * ------------------------------------------------------------------------------------------------ */
-export const POST_FRAG = /* glsl */ `${HEAD}${COMMON}
+export const POST_FRAG = /* glsl */ `${HEAD}${COMMON}${LIGHTS_GLSL}
 uniform sampler2D uFrame;
 uniform sampler2D uBloom;
 uniform sampler2D uGod;
@@ -371,6 +390,52 @@ uniform float uGodTint;      // 0 = pure light-colour rays, 1 = rays tinted by t
 
 in vec2 vUv;
 out vec4 o;
+
+// Relight a sprite pixel by the OTHER bodies' lights. The pixel belongs to the nearest light (bodies carry their lights at their
+// centre, so this is a Voronoi split that also catches debris); its normal is a sphere seen from the front, tilted by the offset from
+// that body's centre; the side facing a light gets stepped (Bayer-dithered) warm light, the far side steps into shadow, and two
+// bodies close together shade each other. Emissive / already-bright pixels are left alone. Everything is quantised: no muddy gradients.
+vec3 relight(vec3 col, vec2 p, float th) {
+  int j = 0;
+  float dj = 1e9;
+  for (int i = 0; i < 4; i++) {
+    if (i >= uNLt) break;
+    float d = length(p - uLt[i].xy);
+    if (d < dj) { dj = d; j = i; }
+  }
+  vec2 cj = uLt[j].xy;
+  float Rb = clamp(uLt[j].z * 0.45, 42.0, 100.0);
+  vec2 o2 = (p - cj) / Rb;
+  float rl = length(o2);
+  vec2 od = o2 / max(rl, 1e-3);
+  float r = min(rl, 1.0);
+  vec3 n = normalize(vec3(od * r, sqrt(max(1.0 - r * r, 0.05))));
+  vec3 add = vec3(0.0);
+  float shade = 0.0;
+  for (int i = 0; i < 4; i++) {
+    if (i >= uNLt) break;
+    if (i == j) continue;
+    vec4 L = uLt[i];
+    vec2 toL = L.xy - p;
+    float dist = length(toL);
+    vec2 dir = toL / max(dist, 1e-3);
+    float fall = 1.0 / (1.0 + pow(dist / (L.z * 0.9), 2.0));
+    fall *= 1.0 - smoothstep(1.0, 2.0, dist / L.z);
+    float I = min(L.w, 1.3);
+    float lam = max(dot(n, normalize(vec3(dir, 0.5))), 0.0);
+    float lit = floor(I * fall * lam * 4.0 + th) / 4.0;
+    float dark = floor(I * fall * (1.0 - lam) * 3.0 + th) / 3.0;
+    add += uLtCol[i] * lit;
+    shade += 0.4 * dark;
+    // mutual occlusion: near another body, the side facing it loses ambient light
+    float Rbi = clamp(L.z * 0.45, 42.0, 100.0);
+    float occ = smoothstep(Rbi * 2.0, Rbi * 0.8, dist) * max(dot(od, dir), 0.0) * r;
+    shade += 0.2 * floor(occ * 3.0 + th) / 3.0;
+  }
+  float keep = 1.0 - smoothstep(0.62, 0.95, luma(col));   // glowing / near-white pixels keep their own light
+  col *= 1.0 - clamp(shade, 0.0, 0.5) * keep;
+  return col + add * 1.2 * keep;
+}
 
 vec3 fetchFrame(vec2 sp) {
   ivec2 q = ivec2(floor(sp));
@@ -410,6 +475,7 @@ void main() {
   rays = vec3(ditherQ(rays.r, uBloomLevels, th), ditherQ(rays.g, uBloomLevels, th), ditherQ(rays.b, uBloomLevels, th));
   // Glow never washes out a sprite's own pixels (silhouettes stay crisp); it still blooms around them.
   float cov = uHasLayers == 1 ? texelFetch(uCover, pxToTexel(clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1)), 0).a : 0.0;
+  if (uRelight == 1 && uNLt >= 2 && cov > 0.5) col = relight(col, floor(sp) + 0.5, th);
   col = col + bloom * (1.0 - uGlowDamp.x * cov) + rays * (1.0 - uGlowDamp.y * cov);
 
   float vig = 1.0 - uVignette * pow(smoothstep(0.55, 1.45, length(fromC * vec2(0.85, 1.0))), 1.6);

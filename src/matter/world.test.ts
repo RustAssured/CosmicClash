@@ -499,3 +499,57 @@ describe('detached chunks appear exactly where their cells were drawn (mirroring
     });
   }
 });
+
+describe('debris depth classes', () => {
+  it('are deterministic per chunk id, cover all three classes, and rendering never changes the world hash', async () => {
+    const { chunkDepth, Chunk } = await import('./chunks');
+    const counts = [0, 0, 0];
+    for (let id = 1; id <= 800; id++) {
+      const c = new Chunk();
+      c.id = id;
+      c.age = 100;
+      const d = chunkDepth(c);
+      expect(chunkDepth(c)).toBe(d);
+      counts[d]!++;
+    }
+    expect(counts[0]!).toBeGreaterThan(300); // back ~ 1/2
+    expect(counts[1]!).toBeGreaterThan(200); // fight plane ~ 3/8
+    expect(counts[2]!).toBeGreaterThan(60); // near ~ 1/8
+    expect(counts[2]!).toBeLessThan(160);
+    const fresh = new Chunk();
+    fresh.id = 8; // a near-class id: a fresh chunk still appears in place first
+    fresh.age = 2;
+    expect(chunkDepth(fresh)).toBe(1);
+    fresh.launchNear = true;
+    fresh.age = 20;
+    expect(chunkDepth(fresh)).toBe(2);
+    fresh.age = 200;
+    expect(chunkDepth(fresh)).toBe(
+      ((8 * 2654435761) >>> 0) % 8 < 4 ? 0 : ((8 * 2654435761) >>> 0) % 8 < 7 ? 1 : 2,
+    );
+  });
+
+  it('a long barrage renders all three layers without touching the hash (twice: same hash)', () => {
+    const run = (): number => {
+      const tb = bridge({ seed: 3, x: 300, y: 200, facing: 1 });
+      const { world, ids } = make(2, [tb]);
+      for (let i = 0; i < 6; i++) {
+        world.applyDamage(
+          ids[0]!,
+          ev({
+            type: 'CRUSH',
+            shape: { kind: 'point', x: 290 + i * 6, y: 200, r: 9 },
+            energy: 900,
+            flags: 0,
+          }),
+        );
+        for (let t = 0; t < 20; t++) {
+          world.tick();
+          world.renderLayers(view, (t % 4) / 4);
+        }
+      }
+      return world.hash();
+    };
+    expect(run()).toBe(run());
+  });
+});

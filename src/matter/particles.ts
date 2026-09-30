@@ -1,6 +1,6 @@
 import { LOGICAL_H, LOGICAL_W, MAX_PARTICLES, TICK_DT, type ParticleKind, type ViewRect } from '@/contracts';
 import type { WorldCore } from './core';
-import { BAYER4, lerpPx } from './util';
+import { BAYER4, lerpPx, scalePx } from './util';
 
 /** Particle kinds (Uint8). Order matches contracts ParticleKind. */
 export const PK = {
@@ -29,6 +29,8 @@ export const KIND_ID: Record<ParticleKind, number> = {
 /** Particle flag bits. */
 export const PF_STRETCH = 1;
 export const PF_HARVEST = 2;
+/** Near-camera puff: drawn into the 2x near layer with class parallax, growing as it ages (a plume thrown at the viewer). */
+export const PF_NEAR = 4;
 
 const MAX_RAMPS = 512;
 const RAMP_STRIDE = 8;
@@ -346,6 +348,9 @@ export function rasterParticles(
   pix: Uint32Array,
   emi: Uint8Array,
   yRange: { a: number; b: number },
+  nearPix?: Uint32Array,
+  nearEmi?: Uint8Array,
+  nearRange?: { a: number; b: number },
 ): void {
   const W = LOGICAL_W;
   const H = LOGICAL_H;
@@ -361,6 +366,10 @@ export function rasterParticles(
   for (let s = 0; s < hi; s++) {
     const l = life[s]!;
     if (l === 0) continue;
+    if ((flags[s]! & PF_NEAR) !== 0) {
+      if (nearPix && nearEmi && nearRange) drawNearPuff(pool, s, view, ext, nearPix, nearEmi, nearRange);
+      continue;
+    }
     const pvx = vx[s]!;
     const pvy = vy[s]!;
     const px = Math.floor(x[s]! + pvx * ext - vx0);
@@ -453,4 +462,47 @@ export function rasterParticles(
   }
   yRange.a = minY;
   yRange.b = maxY;
+}
+
+/** A big soft puff in the near (2x) layer: pixel-doubled, dither-faded, growing with age. */
+function drawNearPuff(
+  pool: ParticlePool,
+  s: number,
+  view: ViewRect,
+  ext: number,
+  pix: Uint32Array,
+  emi: Uint8Array,
+  range: { a: number; b: number },
+): void {
+  const W = LOGICAL_W;
+  const H = LOGICAL_H;
+  const frac = pool.life[s]! / pool.lifeMax[s]!;
+  const sx = Math.floor(pool.x[s]! + pool.vx[s]! * ext - view.x0);
+  const sy = Math.floor(pool.y[s]! + pool.vy[s]! * ext - view.y0);
+  const base = pool.size[s]!;
+  const d = Math.round((base + (1 - frac) * base * 0.9) * 2);
+  const r = d / 2;
+  if (sx + r < 0 || sy + r < 0 || sx - r >= W || sy - r >= H) return;
+  const rid = pool.rampId[s]!;
+  const len = pool.rampLen[rid]!;
+  const ci = len <= 1 ? 0 : Math.min(len - 1, Math.floor((1 - frac) * len));
+  const col = pool.rampColors[rid * RAMP_STRIDE + ci]! | 0;
+  const thr = Math.max(1, Math.ceil(Math.min(1, frac / 0.5) * 12));
+  const y0 = Math.max(0, Math.floor(sy - r));
+  const y1 = Math.min(H - 1, Math.ceil(sy + r));
+  if (y0 < range.a) range.a = y0;
+  if (y1 > range.b) range.b = y1;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = Math.max(0, Math.floor(sx - r)); x <= Math.min(W - 1, Math.ceil(sx + r)); x++) {
+      const dx = x + 0.5 - sx;
+      const dy = y + 0.5 - sy;
+      if (dx * dx + dy * dy > r * r) continue;
+      if (BAYER4[((y & 3) << 2) | (x & 3)]! >= thr) continue;
+      // Underside shade: the lower half of a puff is darker (volume).
+      const sh = (256 - Math.max(0, Math.min(90, ((dy + r) * 90) / (2 * r)))) | 0;
+      const o = y * W + x;
+      pix[o] = scalePx(col, sh);
+      emi[o] = 0;
+    }
+  }
 }

@@ -218,6 +218,13 @@ function currentFx(): FrameFx {
   fx.lenses.length = 0;
   if (lensOn) fx.lenses.push({ x: B.x, y: B.y - 10, horizonR: 26, strength: 1 });
   fx.timeScale = simTime < koUntil ? 0.3 : 1;
+  // the bodies carry lights (the app derives them per titan): A a cool one, B a strong warm one (`lights=0` turns them off)
+  if (num('lights', 1) > 0) {
+    fx.lights = [
+      { x: A.x, y: A.y, radius: 120, r: 0.62, g: 0.95, b: 0.88, intensity: 0.28, slot: 0 },
+      { x: B.x, y: B.y, radius: 280, r: 1, g: 0.72, b: 0.38, intensity: 0.95, slot: 1 },
+    ];
+  } else fx.lights = undefined;
   return fx;
 }
 

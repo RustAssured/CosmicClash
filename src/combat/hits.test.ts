@@ -585,8 +585,8 @@ describe('The Asteroid: momentum, rubble pile, fragments', () => {
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.every((h) => h.type === 'KINETIC' && h.energy < 100)).toBe(true);
     d.sb.moveX = 0;
-    // let the move end; fragments come home
-    d.step(160);
+    // let the move end; fragments come home (the foe now stays in reach after each nudge, so the flock keeps hitting longer)
+    for (let q = 0; q < 40 && beh.fragmentsOut > 0; q++) d.step(10);
     expect(beh.fragmentsOut).toBe(0);
     expect(d.f1.view.resource).toBeGreaterThanOrEqual(11);
     expect(d.events.some((e) => e.t === 'resource' && e.kind === 'gain')).toBe(true);

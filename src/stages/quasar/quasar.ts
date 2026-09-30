@@ -29,6 +29,7 @@ const LOOK: SceneryLook = {
   godRayHalo: 300,
   godRayDecay: 0.98,
   vignette: 0.7,
+  foreground: { color: [0.045, 0.06, 0.18], alpha: 0.8, density: 0.7 }, // indigo dust, sparse
   // near-black sky: a fighter's dark body needs a lifted backlight rim and the halo can stay gentle
   spriteHalo: { strength: 0.24, radius: 9, desat: 0.3, rim: 0.45, rimReach: 1, lift: 0.2 },
 };

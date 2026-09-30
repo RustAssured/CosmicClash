@@ -47,6 +47,7 @@ import { generateTitanBody, rememberRig, rigOfMap, type TitanRig } from '@/titan
 import { buildRigFor } from '@/titans/rigs';
 import type { Behaviour, HitInfo, InterceptResult } from './behaviour';
 import { createBehaviour } from './behaviours';
+import { resolveFeel, type Feel } from './feel';
 import { InputBuffer } from './inputBuffer';
 import { ActiveMove, MAX_HITBOXES, aimFromStick, fillDisplacement, resolveFrame } from './move';
 import {
@@ -105,6 +106,7 @@ const emptyBodyStats = (): BodyStats => ({
  * `Behaviour` (tendrils, fragments…) plus the titan's JSON move data. Zero allocation per tick.
  */
 /** Where the graded tether starts (the hard cap is MAX_FIGHTER_DX/DY): see docs/proposals/006-fighter-tether.md. */
+const TAU = Math.PI * 2;
 const TETHER_SOFT_DX = 330;
 const TETHER_SOFT_DY = 140;
 
@@ -166,6 +168,22 @@ export class FighterImpl implements Fighter {
   lastHitDirY = 0;
   lastDealtTick = -1e9;
   tickNo = 0;
+  /** Per-titan body-weight tuning (defaults from mass; the JSON `feel` block overrides). */
+  readonly feel: Feel;
+  /** Decaying knock velocity (px/s) and its ease-out time constant (s): what a blow does, kept apart from steering velocity. */
+  kvx = 0;
+  kvy = 0;
+  private kvTau: number = T.knockTau;
+  /** Acceleration state of the underdamped stick-to-velocity filter. */
+  private accX = 0;
+  private accY = 0;
+  /** Visual offsets (whole px, added to the transform only): hit vibration and attacker follow-through. */
+  private shudderAmp = 0;
+  private followX = 0;
+  private followY = 0;
+  private fxDist = 0;
+  private lastFxTick = -1e9;
+  private fxIdle = 0;
 
   /* ---- per-tick context (valid inside tick()) ---- */
   events: SimEvent[] = [];
@@ -322,6 +340,7 @@ export class FighterImpl implements Fighter {
     const acc = hex(opts.def.ui.accent);
     const acc2 = hex(opts.def.ui.accent2);
     this.sparkRamp = [0xffffffff, acc2, acc, (acc & 0x00ffffff) | 0x99000000];
+    this.feel = resolveFeel(opts.def);
     this.particleSpawn = {
       kind: 'spark',
       x: 0,
@@ -457,6 +476,7 @@ export class FighterImpl implements Fighter {
 
     this.integrate();
     this.applyTransform();
+    this.emitMoveFx();
     if (this.moveActiveNow) this.resolveMoveHits();
     this.threatCount = 0;
     this.behaviour.resolveVolumes(ctx);
@@ -491,8 +511,10 @@ export class FighterImpl implements Fighter {
     this.hitstunTicks = 0;
     this.intangible = false;
     // final tumble away from the blow
-    this.vx += this.lastHitDirX * 150;
-    this.vy += this.lastHitDirY * 90 - 30;
+    // the finishing blow launches far and slow (it plays under the 0.3x time scale)
+    this.kvx = this.kvx * T.koKnockMul + this.lastHitDirX * 150 * this.feel.knockMul;
+    this.kvy = this.kvy * T.koKnockMul + this.lastHitDirY * 90 - 30;
+    this.kvTau = T.koKnockTau;
     this.view.ko = true;
     this.view.state = 'ko';
     this.events.push({ t: 'ko', slot: this.slot, x: this.px, y: this.py });
@@ -840,6 +862,15 @@ export class FighterImpl implements Fighter {
       power: m.power,
     });
     m.released = true;
+    if (def.slot === 'crush' || def.slot === 'ultimate') {
+      // a low-frequency thud for a big body's heavy release, hit or whiff
+      const thud =
+        T.thudGain *
+        Math.pow(Math.max(0.5, this.stats.mass) / 5, T.thudMassExp) *
+        this.feel.thud *
+        (def.slot === 'ultimate' ? 1.4 : 1);
+      if (thud > 0.8) this.events.push({ t: 'shake', dirX: 0, dirY: 1, amp: thud });
+    }
     this.behaviour.onRelease(m);
   }
 
@@ -1046,14 +1077,20 @@ export class FighterImpl implements Fighter {
     const sy = ctl > 0 ? this.input.moveY : 0;
     const mag = Math.hypot(sx, sy);
     const steering = ctl > 0 && mag > T.stickDeadzone;
-    const half = Math.pow(0.5, dt / T.glideHalfLife);
+    const half = Math.pow(0.5, dt / (T.glideHalfLife * this.feel.glideMul));
     if (steering) {
-      const a = 1 - Math.exp((-dt * Math.max(0.05, ctl)) / T.accelTau);
-      this.vx = this.steerAxis(this.vx, sx * top * ctl, a, half);
-      this.vy = this.steerAxis(this.vy, sy * top * T.vertSpeedMul * ctl, a, half);
-    } else if (!driven) {
-      this.vx *= half;
-      this.vy *= half;
+      // underdamped velocity filter: heavier bodies respond with a lag, overshoot their target speed a little and then settle
+      const w = (T.steerOmega * Math.sqrt(Math.max(0.05, ctl))) / Math.sqrt(this.feel.accelMul);
+      const z = this.feel.zeta;
+      this.vx = this.steerAxis2(this.vx, sx * top * ctl, w, z, half, true);
+      this.vy = this.steerAxis2(this.vy, sy * top * T.vertSpeedMul * ctl, w, z, half, false);
+    } else {
+      this.accX = 0;
+      this.accY = 0;
+      if (!driven) {
+        this.vx *= half;
+        this.vy *= half;
+      }
     }
     // soft altitude spring toward the rest altitude (a pull, never a floor)
     if (this.state !== 'ko' && (Math.abs(this.input.moveY) < 0.3 || ctl === 0)) {
@@ -1075,36 +1112,56 @@ export class FighterImpl implements Fighter {
     if (du < 80) this.vy += (1 - Math.max(0, du) / 80) ** 2 * 700 * dt;
     if (dd < 80) this.vy -= (1 - Math.max(0, dd) / 80) ** 2 * 700 * dt;
 
-    this.px += this.vx * dt;
-    this.py += this.vy * dt;
+    // knock velocity: an exponential ease-out (fast at the hit, dying over roughly 0.9 s)
+    const kd = Math.exp(-dt / this.kvTau);
+    this.kvx *= kd;
+    this.kvy *= kd;
+    if (Math.abs(this.kvx) < 2) this.kvx = 0;
+    if (Math.abs(this.kvy) < 2) this.kvy = 0;
+    this.px += (this.vx + this.kvx) * dt;
+    this.py += (this.vy + this.kvy) * dt;
     const minX = a.minX + margin;
     const maxX = a.maxX - margin;
     if (this.px < minX) {
       this.px = minX;
       if (this.vx < 0) this.vx = 0;
+      if (this.kvx < 0) this.kvx = 0;
     } else if (this.px > maxX) {
       this.px = maxX;
       if (this.vx > 0) this.vx = 0;
+      if (this.kvx > 0) this.kvx = 0;
     }
     const minY = a.minY + 90;
     const maxY = a.maxY - 60;
     if (this.py < minY) {
       this.py = minY;
       if (this.vy < 0) this.vy = 0;
+      if (this.kvy < 0) this.kvy = 0;
     } else if (this.py > maxY) {
       this.py = maxY;
       if (this.vy > 0) this.vy = 0;
+      if (this.kvy > 0) this.kvy = 0;
     }
 
     this.faceFoe();
     this.constrainToFoe();
   }
 
-  /** One axis of first-order steering: accelerate with τ toward the target, glide (half-life) when the target is slower. */
-  private steerAxis(v: number, target: number, a: number, half: number): number {
+  /** One axis of underdamped steering: a spring toward the target speed while speeding up, the glide (half-life) when slowing. */
+  private steerAxis2(v: number, target: number, w: number, z: number, half: number, isX: boolean): number {
     const accelerating = Math.abs(target) > Math.abs(v) || Math.sign(target) !== Math.sign(v);
-    if (accelerating) return v + (target - v) * a;
-    return target + (v - target) * half;
+    if (!accelerating) {
+      if (isX) this.accX = 0;
+      else this.accY = 0;
+      return target + (v - target) * half;
+    }
+    const dt = TICK_DT;
+    let acc = isX ? this.accX : this.accY;
+    acc += (w * w * (target - v) - 2 * z * w * acc) * dt;
+    const nv = v + acc * dt;
+    if (isX) this.accX = acc;
+    else this.accY = acc;
+    return nv;
   }
 
   private faceFoe(): void {
@@ -1127,15 +1184,18 @@ export class FighterImpl implements Fighter {
     if (Math.abs(dx) > MAX_FIGHTER_DX) {
       this.px = fv.x + Math.sign(dx) * MAX_FIGHTER_DX;
       if (this.vx * dx > 0) this.vx = 0;
+      if (this.kvx * dx > 0) this.kvx = 0;
     } else if (Math.abs(dx) > TETHER_SOFT_DX && this.vx * dx > 0) {
       // graded pull-back: the outward speed bleeds off ever faster toward the hard cap (knockback still carries, it just tires)
       const s = (Math.abs(dx) - TETHER_SOFT_DX) / (MAX_FIGHTER_DX - TETHER_SOFT_DX);
       this.vx *= 1 - 0.3 * s * s;
+      if (this.kvx * dx > 0) this.kvx *= 1 - 0.3 * s * s;
     }
     const dy = this.py - fv.y;
     if (Math.abs(dy) > MAX_FIGHTER_DY) {
       this.py = fv.y + Math.sign(dy) * MAX_FIGHTER_DY;
       if (this.vy * dy > 0) this.vy = 0;
+      if (this.kvy * dy > 0) this.kvy = 0;
     } else if (Math.abs(dy) > TETHER_SOFT_DY && this.vy * dy > 0) {
       const s = (Math.abs(dy) - TETHER_SOFT_DY) / (MAX_FIGHTER_DY - TETHER_SOFT_DY);
       this.vy *= 1 - 0.3 * s * s;
@@ -1254,13 +1314,34 @@ export class FighterImpl implements Fighter {
     const acc = w * w * (target - this.leanF) - 2 * T.leanZeta * w * this.leanV;
     this.leanV += acc * dt;
     this.leanF += this.leanV * dt;
-    // idle breathing bob (deterministic in the tick counter)
+    // idle breathing bob and a slower sway (deterministic in the tick counter; per-titan period and amplitude from `feel`)
     const calm =
       this.state === 'idle' || this.state === 'move' || this.state === 'intro' || this.state === 'guard';
-    const bob = calm ? Math.sin(this.tickNo * 0.052 + this.slot * 1.7) * T.idleBob : 0;
+    const F = this.feel;
+    const ph = this.slot * 1.7;
+    const bob =
+      calm && F.bobAmp > 0 ? Math.sin(this.tickNo * ((TAU * TICK_DT) / F.bobPeriod) + ph) * F.bobAmp : 0;
+    const sway =
+      calm && F.swayAmp > 0
+        ? Math.sin(this.tickNo * ((TAU * TICK_DT) / F.swayPeriod) + ph * 2.3) * F.swayAmp
+        : 0;
+    // hit vibration and follow-through are visual offsets only: the body's position (px, py) is untouched
+    let ox = this.followX;
+    let oy = this.followY;
+    if (this.shudderAmp > 0.05) {
+      const a = this.shudderAmp;
+      const k = this.tickNo * 2.399;
+      ox += Math.sin(k * 5.1 + ph) * a;
+      oy += Math.cos(k * 3.7 + ph) * a * 0.7;
+      this.shudderAmp *= T.shudderDecay;
+    } else this.shudderAmp = 0;
+    this.followX *= T.followDecay;
+    this.followY *= T.followDecay;
+    if (Math.abs(this.followX) < 0.05) this.followX = 0;
+    if (Math.abs(this.followY) < 0.05) this.followY = 0;
     // whole pixels: what you see is what is hit (space.ts maps integer transforms 1:1 onto cells)
-    t.x = Math.round(this.px);
-    t.y = Math.round(this.py + bob);
+    t.x = Math.round(this.px + sway + ox);
+    t.y = Math.round(this.py + bob + oy);
     t.facing = this.facing;
     t.lean = Math.round(this.leanF * this.facing);
   }
@@ -1516,14 +1597,14 @@ export class FighterImpl implements Fighter {
         onDamaged: (foe as unknown as { lastOnDamaged?: number }).lastOnDamaged ?? 0,
       });
       if (res.hitstop > 0 && !info.continuous) ev.push({ t: 'hitstop', ticks: res.hitstop });
-      const massK = Math.pow(this.stats.mass / 5, 0.3);
+      const massK = Math.pow((this.stats.mass + fv.stats.mass) / 10, 0.55);
       const amp =
         clamp(0.09 * Math.pow(e.energy * (info.continuous ? 6 : 1), 0.62), 0.6, 14) *
         massK *
         (1 - res.blocked * 0.6);
       ev.push({ t: 'shake', dirX: e.dirX, dirY: e.dirY, amp: graze ? amp * 0.4 : amp });
       if (info.heavy && !graze) {
-        ev.push({ t: 'zoom', amount: clamp(e.energy / 40000, 0.008, 0.045) });
+        ev.push({ t: 'zoom', amount: clamp((e.energy / 40000) * massK, 0.008, 0.06) });
         ev.push({ t: 'roll', radians: clamp(e.energy / 90000, 0.003, 0.02) * (e.dirX >= 0 ? 1 : -1) });
       }
       if (e.energy >= 600 && res.blocked < 0.8 && !info.continuous && !graze)
@@ -1531,8 +1612,8 @@ export class FighterImpl implements Fighter {
           t: 'shockwave',
           x: res.x,
           y: res.y,
-          strength: clamp(e.energy / 3200, 0.15, 1),
-          radius: 50 + e.energy * 0.09,
+          strength: clamp((e.energy / 3200) * massK, 0.15, 1),
+          radius: (50 + e.energy * 0.09) * massK,
           hue: this.def.destruction === 'THERMAL' ? 0.06 : this.def.destruction === 'FRACTURE' ? 0.42 : 0.1,
         });
       if (!graze)
@@ -1560,6 +1641,16 @@ export class FighterImpl implements Fighter {
       ev.push({ t: 'shake', dirX: e.dirX, dirY: e.dirY, amp: 16 });
       ev.push({ t: 'shockwave', x: res.x, y: res.y, strength: 1, radius: 240, hue: 0.1 });
       ev.push({ t: 'zoom', amount: 0.05 });
+    }
+    if (!graze && !info.continuous) {
+      // follow-through: the attacker pushes a few px THROUGH the contact, then eases back
+      const push =
+        clamp(1.2 + e.energy / 500, 1.2, T.followMax) * this.feel.shudder * (res.blocked > 0.5 ? 0.4 : 1);
+      this.followX += e.dirX * push;
+      this.followY += e.dirY * push * 0.5;
+      const t = this.body.transform;
+      t.x = Math.round(this.px + this.followX);
+      t.y = Math.round(this.py + this.followY);
     }
     this.spawnHitSparks(res, e);
     this.behaviour.onDealt(e.energy);
@@ -1716,12 +1807,41 @@ export class FighterImpl implements Fighter {
     this.lastHitDirX = evIn.dirX;
     this.lastHitDirY = evIn.dirY;
     const mass = Math.max(1, this.stats.mass);
-    const massRatio = T.massNeutral / mass;
     const guarded = this.guardUp && blocked > 0.25;
     const kbMul = (guarded ? T.guardKnockbackMul : 1) * (info.continuous ? 0.5 : 1);
     if (!this.ko) {
-      this.vx += (info.knockX * massRatio + dr.impulseX * T.worldImpulseGain * massRatio) * kbMul;
-      this.vy += (info.knockY * massRatio + dr.impulseY * T.worldImpulseGain * massRatio) * kbMul;
+      // Knock velocity scales with attacker mass over defender mass and eases out (a decaying velocity, not a launch);
+      // the body itself recoils: a lean/shear kick that a heavy defender shows instead of moving.
+      const ratio = clamp(
+        Math.pow(Math.max(0.5, attacker.view.stats.mass) / mass, T.knockMassExp),
+        T.knockRatioMin,
+        T.knockRatioMax,
+      );
+      const rawX = info.knockX + dr.impulseX * T.worldImpulseGain;
+      const rawY = info.knockY + dr.impulseY * T.worldImpulseGain;
+      const k = T.knockScale * ratio * kbMul * this.feel.knockMul;
+      let kx = rawX * k;
+      let ky = rawY * k;
+      const sp = Math.hypot(kx, ky);
+      if (sp > T.knockMax) {
+        kx *= T.knockMax / sp;
+        ky *= T.knockMax / sp;
+      }
+      this.kvx += kx;
+      this.kvy += ky;
+      // a light blow is a nudge that dies fast; only a heavy one carries for the full ease-out
+      this.kvTau = Math.max(this.kvTau * 0.5, T.knockTau * clamp(Math.hypot(kx, ky) / 350, 0.3, 1));
+      const raw = Math.hypot(rawX, rawY);
+      const kick = clamp(raw * T.recoilGain * Math.sqrt(ratio) * kbMul * this.feel.recoil, 0, T.recoilMax);
+      this.leanV += Math.sign(evIn.dirX || 1) * kick * this.facing;
+      this.shudderAmp = Math.max(
+        this.shudderAmp,
+        clamp(T.shudderBase + e.energy / T.shudderEnergy, 0.9, 2) *
+          this.feel.shudder *
+          (info.continuous ? 0.4 : 1),
+      );
+      // the frames frozen by hit-stop already show the vibration
+      if (!info.continuous) this.applyShudderNow();
     }
     if (!this.ko && this.live) {
       this.meter = Math.min(1, this.meter + rawEnergy * T.meterTaken * (1 - blocked * 0.6));
@@ -1747,6 +1867,59 @@ export class FighterImpl implements Fighter {
     res.hitstop = info.continuous ? 0 : Math.round(clamp(base, HITSTOP_MIN_TICKS, HITSTOP_MAX_TICKS));
     this.syncView(); // the attacker (and the AI) read this fighter's view before its own tick comes round
     return res;
+  }
+
+  /**
+   * Continuous movement emissions from the titan's `feel.fx` (a wake of dust or gas, embers, motes...): density follows distance
+   * travelled times sqrt(mass), a few particles at most every third tick, so the world's particle pool is never the bottleneck.
+   */
+  private emitMoveFx(): void {
+    const fx = this.feel.fx;
+    if (!fx || !this.live || this.ko || this.tickNo - this.lastFxTick < 3) return;
+    const svx = this.vx + this.kvx;
+    const svy = this.vy + this.kvy;
+    const speed = Math.hypot(svx, svy);
+    const mf = Math.sqrt(Math.max(0.5, this.stats.mass) / 5);
+    this.fxDist += speed * TICK_DT * 3;
+    this.fxIdle += fx.idleRate * mf * TICK_DT * 3;
+    let n = Math.floor((this.fxDist / 100) * fx.perHundredPx * mf + this.fxIdle);
+    if (n <= 0) return;
+    this.fxDist = 0;
+    this.fxIdle = 0;
+    n = Math.min(n, 3);
+    this.lastFxTick = this.tickNo;
+    const h = Math.imul(this.tickNo + this.slot * 7919, 2654435761) >>> 0;
+    const u = (h & 0xffff) / 0xffff - 0.5;
+    const w = ((h >>> 16) & 0xffff) / 0xffff - 0.5;
+    const dirx = speed > 20 ? svx / speed : -this.facing;
+    const s = this.particleSpawn;
+    s.kind = fx.kind;
+    s.ramp = fx.ramp;
+    s.life[0] = fx.life[0];
+    s.life[1] = fx.life[1];
+    s.spread = fx.spread;
+    s.emissive = fx.emissive;
+    s.size = fx.size;
+    s.fieldScale = 0.4;
+    s.drag = 1.2;
+    s.x = this.px - dirx * fx.behind + u * 26;
+    s.y = this.py + w * 40;
+    s.vx = -svx * 0.12;
+    s.vy = fx.rise - svy * 0.1;
+    s.count = n;
+    this.world.spawnParticles(s);
+    // restore the shared spawn record to the hit-spark defaults
+    s.size = 1;
+    s.drag = 1.5;
+    s.fieldScale = 0.2;
+  }
+
+  /** Displace the transform by the first vibration sample now (the hit-stop frames are drawn before the next tick). */
+  private applyShudderNow(): void {
+    const t = this.body.transform;
+    const a = this.shudderAmp;
+    t.x = Math.round(this.px + a * (this.slot === 0 ? 1 : -1));
+    t.y = Math.round(this.py - a * 0.5);
   }
 
   private enterHitstun(ticks: number): void {
@@ -1866,8 +2039,8 @@ export class FighterImpl implements Fighter {
     const v = this.view;
     v.x = this.px;
     v.y = this.py;
-    v.vx = this.vx;
-    v.vy = this.vy;
+    v.vx = this.vx + this.kvx;
+    v.vy = this.vy + this.kvy;
     v.facing = this.facing;
     const b = this.liveBounds();
     v.boundsX0 = b.x0;
@@ -2049,6 +2222,14 @@ export class FighterImpl implements Fighter {
     this.freezeTicks = 0;
     this.statusMul = 1;
     this.statusTicks = 0;
+    this.kvx = 0;
+    this.kvy = 0;
+    this.kvTau = T.knockTau;
+    this.accX = 0;
+    this.accY = 0;
+    this.shudderAmp = 0;
+    this.followX = 0;
+    this.followY = 0;
     this.world.heal(this.body.id, healFraction, seed);
     const t = this.body.transform;
     t.x = Math.round(x);

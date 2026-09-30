@@ -40,6 +40,7 @@ const LOOK: SceneryLook = {
   godRayHalo: 230,
   godRayDecay: 0.978,
   vignette: 0.55,
+  foreground: { color: [0.15, 0.054, 0.18], alpha: 1 }, // dark plum dust
 };
 
 /** The big luminous haze behind everything: intensity falls off from the newborn stars and is modulated by warped fbm. */

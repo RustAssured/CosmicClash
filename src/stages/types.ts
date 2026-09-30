@@ -88,6 +88,8 @@ export interface SceneryLook {
   fightBand?: { top: number; bottom: number; feather: number; ceiling: number; keep: number };
   /** 0..1: how much bloom / god rays are damped ON a sprite's own pixels (they still glow around it). [bloom, rays] */
   glowDamp?: [number, number];
+  /** Foreground dust and small rocks passing in front of the fighters (renderer pass): linear tint (default neutral dark), alpha multiplier and density. */
+  foreground?: { color: [number, number, number]; alpha?: number; density?: number };
 }
 
 /**

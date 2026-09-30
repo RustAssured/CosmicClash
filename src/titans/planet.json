@@ -1192,5 +1192,27 @@
     "accent": "#58a6d8",
     "accent2": "#e0b06a",
     "tagline": "All things fall toward me."
+  },
+  "feel": {
+    "bob": {
+      "amp": 4.5,
+      "period": 6.5
+    },
+    "sway": {
+      "amp": 2.0,
+      "period": 8.0
+    },
+    "thud": 1.2,
+    "fx": {
+      "kind": "gas",
+      "ramp": ["#e8f4ff", "#9cc4e8", "#4c6a90"],
+      "perHundredPx": 3,
+      "idleRate": 1.5,
+      "size": 2,
+      "life": [30, 60],
+      "spread": 20,
+      "behind": 40,
+      "rise": -6
+    }
   }
 }

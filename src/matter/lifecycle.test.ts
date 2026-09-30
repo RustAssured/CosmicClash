@@ -474,7 +474,7 @@ describe('render layers, particles, chunks and gravity', () => {
     const px = new Uint32Array(6 * 4).fill(rgba(200, 120, 60, 255));
     world.spawnChunk({ pixels: px, w: 6, h: 4, x: 320, y: 180, vx: 60, vy: 0, spin: 0, mass: 5 });
     const l0 = world.renderLayers(view, 0);
-    expect(l0.map((l) => l.id).sort()).toEqual(['debris-back', 'fx-front']);
+    expect(l0.map((l) => l.id).sort()).toEqual(['debris-back', 'debris-near', 'fx-front']);
     const layers = l0.slice();
     const find = (layer: (typeof l0)[number]): number[] => {
       const out: number[] = [];

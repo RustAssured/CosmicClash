@@ -1,7 +1,7 @@
 {
   "id": "lastone",
   "name": "The Last One",
-  "nameKo": "\ub9c8\uc9c0\ub9c9 \ud558\ub098",
+  "nameKo": "마지막 하나",
   "epithet": "De Laatste",
   "attributes": {
     "mass": 5,
@@ -14,7 +14,7 @@
   "resource": {
     "id": "tendrils",
     "name": "Tendrils",
-    "nameKo": "\ucd09\uc218",
+    "nameKo": "촉수",
     "max": 24,
     "start": 24,
     "display": "pips"
@@ -226,7 +226,7 @@
       "id": "lastone.lash",
       "slot": "strike",
       "name": "Tendril Lash",
-      "nameKo": "\ucd09\uc218 \ucc44\ucc0d",
+      "nameKo": "촉수 채찍",
       "frame": {
         "startup": 10,
         "active": 16,
@@ -741,7 +741,7 @@
       "id": "lastone.lunge",
       "slot": "strike",
       "name": "Charging Thrust",
-      "nameKo": "\ub3cc\uc9c4 \ucc0c\ub974\uae30",
+      "nameKo": "돌진 찌르기",
       "frame": {
         "startup": 6,
         "active": 12,
@@ -972,7 +972,7 @@
       "id": "lastone.shatter",
       "slot": "crush",
       "name": "Shatter Blow",
-      "nameKo": "\ubd84\uc1c4\uc758 \uc77c\uaca9",
+      "nameKo": "분쇄의 일격",
       "frame": {
         "startup": 30,
         "active": 8,
@@ -1149,7 +1149,7 @@
       "id": "lastone.sidestep",
       "slot": "surge",
       "name": "Sidestep",
-      "nameKo": "\uc606\uac78\uc74c",
+      "nameKo": "옆걸음",
       "frame": {
         "startup": 2,
         "active": 14,
@@ -1210,7 +1210,7 @@
       "id": "lastone.gaze",
       "slot": "signature",
       "name": "Gaze",
-      "nameKo": "\uc751\uc2dc",
+      "nameKo": "응시",
       "frame": {
         "startup": 12,
         "active": 20,
@@ -1370,7 +1370,7 @@
       "id": "lastone.lastlight",
       "slot": "ultimate",
       "name": "The Last Light",
-      "nameKo": "\ub9c8\uc9c0\ub9c9 \ube5b",
+      "nameKo": "마지막 빛",
       "frame": {
         "startup": 96,
         "active": 84,
@@ -1648,7 +1648,7 @@
       "id": "lastone.guard",
       "slot": "guard",
       "name": "Tendril Shell",
-      "nameKo": "\ucd09\uc218 \uaecd\uc9c8",
+      "nameKo": "촉수 껍질",
       "frame": {
         "startup": 3,
         "active": 0,
@@ -1687,5 +1687,27 @@
         }
       }
     }
-  ]
+  ],
+  "feel": {
+    "bob": {
+      "amp": 1.6,
+      "period": 3.4
+    },
+    "sway": {
+      "amp": 1.2,
+      "period": 5.0
+    },
+    "fx": {
+      "kind": "glint",
+      "ramp": ["#ffffff", "#bfe8e0", "#6fb0a8"],
+      "perHundredPx": 8,
+      "size": 1,
+      "life": [14, 30],
+      "emissive": 180,
+      "spread": 25,
+      "behind": 20,
+      "rise": -12,
+      "idleRate": 2
+    }
+  }
 }

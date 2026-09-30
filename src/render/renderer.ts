@@ -18,6 +18,7 @@ import {
   Vector3,
   Vector4,
   WebGLRenderer,
+  type IUniform,
   type TextureDataType,
   type WebGLRenderTarget,
 } from 'three';
@@ -47,6 +48,7 @@ import {
   type StageScenery,
 } from '@/stages/types';
 import { LayerCompositor } from './compositor';
+import { Foreground } from './foreground';
 import { bayerTexels } from './dither';
 import { FullscreenPass, dataTexture, disposeSharedGeometry, makeRT, resetSharedGeometry } from './gl';
 import { LayerTextures } from './layerTextures';
@@ -171,6 +173,8 @@ export interface DebuggableRenderer extends Renderer {
   debugLayout(): { scale: number; x: number; y: number; w: number; h: number };
   /** Force a tier now (also what the adaptive controller does). Ignored when out of range. */
   debugSetTier(tier: QualityTier): void;
+  /** Switch the foreground dust pass on or off (verification). */
+  debugSetForeground(on: boolean): void;
   /** The stage whose scenery is currently drawn (null while none is ready). */
   debugActiveStage(): StageId | null;
 }
@@ -292,6 +296,25 @@ class PixelRenderer implements DebuggableRenderer {
     nImpulse: 0,
   };
   private readonly postShock = new Float32Array(MAX_SHOCKS * 4);
+  /** Dynamic lights of the bodies (screen px): x, y, radius, intensity per light, and their colours. Shared by the grade, post and foreground passes. */
+  private readonly lightData: IUniform<Float32Array> = { value: new Float32Array(16) };
+  private readonly lightCol: IUniform<Float32Array> = { value: new Float32Array(12) };
+  private readonly nLights: IUniform<number> = { value: 0 };
+  private foreground: Foreground | null = null;
+  private fgEnabled = true;
+  private readonly fgShared = {
+    view: { value: new Vector2() },
+    time: { value: 0 },
+    flow: { value: 0 },
+    intensity: { value: 0 },
+    shock: { value: this.forces.shock },
+    nShock: { value: 0 },
+    imp: { value: this.forces.impulse },
+    imp2: { value: this.forces.impulse2 },
+    nImp: { value: 0 },
+    lights: this.lightData,
+    nLights: this.nLights,
+  };
   /** Reused every frame (no per-frame allocation). */
   private readonly sceneryFrame: SceneryFrame = {
     timeSec: 0,
@@ -434,6 +457,9 @@ class PixelRenderer implements DebuggableRenderer {
   }
 
   private buildPasses(): void {
+    this.foreground = new Foreground(this.res, this.fgShared);
+    this.foreground.setTier(this.tierNow);
+    this.foreground.setEnabled(this.fgEnabled);
     const res = { value: this.res };
     this.bayerTex = new DataTexture(bayerTexels(4), 4, 4, RedFormat, UnsignedByteType);
     this.bayerTex.minFilter = NearestFilter;
@@ -467,6 +493,10 @@ class PixelRenderer implements DebuggableRenderer {
       uHaloLift: { value: new Vector2(0.14, 0) },
       uBand: { value: new Vector4(0, 0, 40, 0.5) },
       uBandRatio: { value: 0.3 },
+      uLt: this.lightData,
+      uLtCol: this.lightCol,
+      uNLt: this.nLights,
+      uRelight: { value: 0 },
     });
     this.haloBlur = new FullscreenPass(HALO_BLUR_FRAG, {
       uSrc: { value: null },
@@ -528,6 +558,10 @@ class PixelRenderer implements DebuggableRenderer {
       uCover: { value: this.layerRT.textures[0] },
       uHasLayers: { value: 0 },
       uGlowDamp: { value: new Vector2(0.6, 0.9) },
+      uLt: this.lightData,
+      uLtCol: this.lightCol,
+      uNLt: this.nLights,
+      uRelight: { value: 0 },
       uShock: { value: this.postShock },
       uNumShock: { value: 0 },
       uAberration: { value: 0 },
@@ -636,6 +670,12 @@ class PixelRenderer implements DebuggableRenderer {
     u.uPalLin!.value = p.palette.lin;
     this.godColor.set(p.palette.godColor[0], p.palette.godColor[1], p.palette.godColor[2]);
     p.scenery.setQuality(this.tierNow);
+    this.foreground?.setup(
+      STAGES[p.id].arena,
+      p.scenery.look.foreground ?? { color: [0.03, 0.03, 0.04] },
+      0x46470 + STAGES[p.id].index * 977,
+    );
+    this.foreground?.setTier(this.tierNow);
     this.wantedStage = p.id;
     this.lastTimeSec = -1;
     this.sceneTime = 0;
@@ -798,6 +838,25 @@ class PixelRenderer implements DebuggableRenderer {
       lens[k * 4 + 3] = l.strength;
       k++;
     }
+    const lt = this.lightData.value;
+    const lc = this.lightCol.value;
+    let nl = 0;
+    const lights = fx.lights;
+    if (lights) {
+      for (let i = 0; i < lights.length && nl < 4; i++) {
+        const l = lights[i]!;
+        if (!(l.intensity > 0.02) || !(l.radius > 1)) continue;
+        lt[nl * 4] = l.x - vx;
+        lt[nl * 4 + 1] = l.y - vy;
+        lt[nl * 4 + 2] = l.radius;
+        lt[nl * 4 + 3] = l.intensity;
+        lc[nl * 3] = l.r;
+        lc[nl * 3 + 1] = l.g;
+        lc[nl * 3 + 2] = l.b;
+        nl++;
+      }
+    }
+    this.nLights.value = nl;
     this.ditherPass.uniforms.uNumLens!.value = k;
     (this.ditherPass.uniforms.uLens!.value as Float32Array).set(lens);
   }
@@ -878,6 +937,18 @@ class PixelRenderer implements DebuggableRenderer {
       r.clear(true, false, false);
     }
     if (hasLayers) this.layerComposite.render(r, this.frameRT);
+    // ---- foreground: soft dust and small rocks drifting in front of the fighters (before bloom and post) ----
+    if (this.foreground?.active && this.tierNow > 0) {
+      const fu = this.fgShared;
+      fu.view.value.set(view.x0, view.y0);
+      fu.time.value = this.sceneTime;
+      fu.flow.value = this.sceneTime;
+      fu.intensity.value = fx.intensity;
+      fu.nShock.value = this.forces.nShock;
+      fu.nImp.value = this.forces.nImpulse;
+      this.foreground.setBand(restY + band.top - view.y0, restY + band.bottom - view.y0);
+      this.foreground.render(r, this.frameRT);
+    }
 
     // ---- bloom pyramid ----
     this.runBloom();
@@ -893,6 +964,7 @@ class PixelRenderer implements DebuggableRenderer {
 
     // ---- post ----
     const pu = this.postPass.uniforms;
+    pu.uRelight!.value = this.tierNow > 0 ? 1 : 0;
     pu.uNumShock!.value = this.forces.nShock;
     pu.uAberration!.value = Math.min(1, fx.aberration);
     pu.uFlash!.value = Math.min(1, fx.flash) * 0.5;
@@ -958,8 +1030,14 @@ class PixelRenderer implements DebuggableRenderer {
       this.postPass.uniforms.uBloom!.value = this.bloomRTs[0]!.texture;
     }
     this.godPass.uniforms.uSamples!.value = this.tier.godSamples;
+    this.foreground?.setTier(t);
     this.active?.scenery.setQuality(t);
     this.prepared?.scenery.setQuality(t);
+  }
+
+  debugSetForeground(on: boolean): void {
+    this.fgEnabled = on;
+    this.foreground?.setEnabled(on);
   }
 
   debugSetTier(tier: QualityTier): void {
@@ -1105,6 +1183,7 @@ class PixelRenderer implements DebuggableRenderer {
     this.disposeStage(this.prepared);
     this.active = null;
     this.prepared = null;
+    this.foreground?.dispose();
     this.layers.dispose();
     this.compositor.dispose();
     for (const p of [

@@ -30,7 +30,9 @@ export const TUNING = {
   overlapAllowance: 9,
   /** Soft wall: fraction of arena.softWall over which speed into the wall is bled off. */
   wallBleed: 0.9,
-  /** Bob (px) of the idle breathing offset applied to the body transform. */
+  /** Stick response of the underdamped velocity filter: natural frequency (rad/s) for a mass-5 body before the per-titan feel. */
+  steerOmega: 8.6,
+  /** Bob (px) of the idle breathing offset applied to the body transform (only when a titan's feel does not set one). */
   idleBob: 1.4,
 
   /* ---- lean (integer row shear; spring-damper so direction changes overshoot a little) ---- */
@@ -39,8 +41,31 @@ export const TUNING = {
   leanZeta: 0.5,
 
   /* ---- hits ---- */
-  /** Knockback = hitbox.knockback / (effective mass / 5); velocity impulse in px/s. */
+  /** Knockback = hitbox.knockback x knockScale x (attacker mass / defender mass)^knockMassExp, capped: px/s of decaying knock velocity. */
   massNeutral: 5,
+  knockScale: 0.62,
+  knockMassExp: 1,
+  knockRatioMin: 0.22,
+  knockRatioMax: 1.9,
+  knockMax: 580,
+  /** Time constant (s) of the knock velocity's exponential ease-out (a 450 px/s knock travels about 180 px in about 0.9 s). */
+  knockTau: 0.4,
+  /** A blow that KOs launches this much harder and slower (long ease-out under the slow-motion time scale). */
+  koKnockMul: 1.7,
+  koKnockTau: 0.95,
+  /** Recoil: lean velocity kick per unit of raw knockback, capped (px/s of shear velocity). */
+  recoilGain: 0.16,
+  recoilMax: 150,
+  /** Victim vibration amplitude (px) = shudderBase + energy/shudderEnergy, decaying by shudderDecay per tick; capped at 2. */
+  shudderBase: 0.9,
+  shudderEnergy: 1500,
+  shudderDecay: 0.8,
+  /** Attacker follow-through: visual push (px) through the contact and its per-tick decay. */
+  followMax: 5,
+  followDecay: 0.84,
+  /** Low-frequency thud shake of a heavy release (Crush or Ultimate), amplitude = thudGain x (mass/5)^thudMassExp. */
+  thudGain: 1.6,
+  thudMassExp: 1.1,
   /** Fraction of the matter world's reported impulse that becomes knockback (on top of the hitbox's own). */
   worldImpulseGain: 0.02,
   /** Hit-stun ticks = base × sqrt(energy/300) × sqrt(5/mass), clamped. Heavy titans are stunned less. */

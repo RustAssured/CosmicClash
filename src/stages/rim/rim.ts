@@ -27,6 +27,7 @@ const LOOK: SceneryLook = {
   godRayHalo: 200,
   godRayDecay: 0.976,
   vignette: 0.6,
+  foreground: { color: [0.06, 0.15, 0.15], alpha: 0.9 }, // teal-black dust
 };
 
 /** Angular speed of the galaxy at unit ω, radians per scenery second. */

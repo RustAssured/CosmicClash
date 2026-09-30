@@ -27,6 +27,7 @@ const LOOK: SceneryLook = {
   godRayHalo: 260,
   godRayDecay: 0.98,
   vignette: 0.6,
+  foreground: { color: [0.18, 0.054, 0.036], alpha: 1 }, // charred umber
 };
 
 /** Design position of the star at the reference camera (screen px) and its radius. */

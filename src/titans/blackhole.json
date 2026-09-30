@@ -1,7 +1,7 @@
 {
   "id": "blackhole",
   "name": "Black Hole",
-  "nameKo": "\ube14\ub799\ud640",
+  "nameKo": "블랙홀",
   "epithet": "De Leegte",
   "attributes": {
     "mass": 8,
@@ -14,7 +14,7 @@
   "resource": {
     "id": "accreted",
     "name": "Accreted mass",
-    "nameKo": "\uac15\ucc29 \uc9c8\ub7c9",
+    "nameKo": "강착 질량",
     "max": 100,
     "start": 30,
     "display": "bar"
@@ -165,7 +165,7 @@
       "id": "blackhole.shear",
       "slot": "strike",
       "name": "Shear",
-      "nameKo": "\uc804\ub2e8",
+      "nameKo": "전단",
       "frame": {
         "startup": 13,
         "active": 10,
@@ -384,7 +384,7 @@
       "id": "blackhole.maw",
       "slot": "crush",
       "name": "Maw",
-      "nameKo": "\uc544\uac00\ub9ac",
+      "nameKo": "아가리",
       "frame": {
         "startup": 40,
         "active": 16,
@@ -603,7 +603,7 @@
       "id": "blackhole.slip",
       "slot": "surge",
       "name": "Slip",
-      "nameKo": "\ubbf8\ub044\ub7ec\uc9d0",
+      "nameKo": "미끄러짐",
       "frame": {
         "startup": 3,
         "active": 22,
@@ -657,7 +657,7 @@
       "id": "blackhole.well",
       "slot": "signature",
       "name": "Gravity Well",
-      "nameKo": "\uc911\ub825 \uc6b0\ubb3c",
+      "nameKo": "중력 우물",
       "frame": {
         "startup": 14,
         "active": 50,
@@ -789,7 +789,7 @@
       "id": "blackhole.spaghetti",
       "slot": "ultimate",
       "name": "Spaghettification",
-      "nameKo": "\uc2a4\ud30c\uac8c\ud2f0\ud654",
+      "nameKo": "스파게티화",
       "frame": {
         "startup": 60,
         "active": 120,
@@ -921,7 +921,7 @@
       "id": "blackhole.guard",
       "slot": "guard",
       "name": "Disk Shield",
-      "nameKo": "\uac15\ucc29 \ubc29\ud328",
+      "nameKo": "강착 방패",
       "frame": {
         "startup": 3,
         "active": 0,
@@ -977,5 +977,28 @@
     "accent": "#ff9a3a",
     "accent2": "#7ab8ff",
     "tagline": "Nothing leaves."
+  },
+  "feel": {
+    "bob": {
+      "amp": 0,
+      "period": 4
+    },
+    "sway": {
+      "amp": 0,
+      "period": 6
+    },
+    "recoil": 0.6,
+    "shudder": 0.5,
+    "fx": {
+      "kind": "ember",
+      "ramp": ["#ffe0a0", "#ff8a30", "#602010"],
+      "perHundredPx": 10,
+      "idleRate": 5,
+      "size": 2,
+      "life": [20, 44],
+      "emissive": 160,
+      "spread": 30,
+      "behind": 40
+    }
   }
 }

@@ -1,7 +1,7 @@
 import { RAMP_DUST, RAMP_SHARD } from './debris';
 import { localToWorldF, type DamageCtx } from './dmg';
 import { findImpact, type Impact } from './impact';
-import { PF_STRETCH, PK } from './particles';
+import { PF_NEAR, PF_STRETCH, PK } from './particles';
 import type { WorldPoint } from './body';
 
 const imp: Impact = { fx: 0, fy: 0, nx: 1, ny: 0, hasNormal: false };
@@ -104,6 +104,52 @@ export function impactBurst(ctx: DamageCtx): void {
       2.6,
       0,
     );
+  }
+  // Heavy hits: dust that hugs and travels along the surface (both tangent directions), and a plume thrown at the camera.
+  if (ctx.energy >= 400) {
+    const tx = -ny;
+    const ty = nx;
+    const travel = Math.min(9, Math.round(4 + 3 * k));
+    for (let i = 0; i < travel; i++) {
+      const dir = i & 1 ? 1 : -1;
+      const sp = 60 + rng.next() * 90;
+      P.spawn(
+        core,
+        PK.dust,
+        bx + nx * 1.5 + tx * dir * rng.next() * 3,
+        by + ny * 1.5 + ty * dir * rng.next() * 3,
+        tx * dir * sp + nx * 14,
+        ty * dir * sp + ny * 14,
+        26 + rng.int(18),
+        2 + (rng.next() < 0.5 ? 1 : 0),
+        0,
+        dust,
+        0,
+        0.7,
+        0,
+      );
+    }
+    const plume = Math.min(8, Math.round(3 + 2.5 * k));
+    for (let i = 0; i < plume; i++) {
+      const a = a0 + (rng.next() - 0.5) * 1.6;
+      const sp = 12 + rng.next() * 34;
+      const p = P.spawn(
+        core,
+        PK.dust,
+        bx + (rng.next() - 0.5) * 8,
+        by + (rng.next() - 0.5) * 8,
+        Math.cos(a) * sp,
+        Math.sin(a) * sp - 6,
+        42 + rng.int(28),
+        4 + rng.int(3),
+        0,
+        dust,
+        0,
+        1.1,
+        0,
+      );
+      P.flags[p] = PF_NEAR;
+    }
   }
   // A few bright shards of the material itself.
   for (let i = 0; i < 3 + Math.round(2 * k); i++) {

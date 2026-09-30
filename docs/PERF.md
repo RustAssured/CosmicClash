@@ -77,4 +77,6 @@ Measured with `node tools/render/perf.mjs [--layers]` (Playwright → headless C
 
 The nursery (two GPU-baked pillar layers + 5 fbm layers) is the most expensive stage; tussenruimte (sparse) the cheapest; rim's galaxy adds ≈ 40k instanced stars at tier 2 (thinned ×0.45/×0.75 at tiers 0/1). Stage load with `prepareStage` is spread over 36–55 frames of ≈ 5 ms slices (longest single slice = one shader compile: 35 ms quiet, up to 310 ms when the box was loaded). Unchanged: no real-GPU numbers exist.
 
+**Round 5 additions (dynamic body lights, sprite relight, foreground dust).** Cost is per frame and fixed, independent of scenery: the light loop in the scenery grade (≤ 4 lights, ~10 ALU per pixel per light), the sprite relight in post (only on sprite pixels, ≤ 4 lights, tier ≥ 1) and the foreground pass (one instanced draw of ≤ 72 quads: 36 at tier 1, none at tier 0). Estimated at < 0.5 ms on an integrated GPU; not measured on real hardware. Tier 0 = no relight, no foreground; the light tint of the scenery stays (it is a few ALU ops). In software GL the sandbox nursery at tier 1 went from ≈ 200 to ≈ 230 ms CPU-side per frame (noise-level on the loaded box).
+
 Not measured: any real-GPU time; motion smoothness of the dithered scenery under camera pans (judged from stills only — see the Known issues in the final report).

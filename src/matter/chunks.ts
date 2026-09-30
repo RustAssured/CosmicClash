@@ -35,7 +35,11 @@ export class Chunk {
   age = 0;
   grace = 0;
   origin = -1;
-  front = false;
+  /** Thrown fast and big by a blow: renders in the near class for its first ticks (see `chunkDepth`). */
+  launchNear = false;
+  /** Render-only: the view origin when the chunk was first drawn (parallax is measured from there, so a fresh chunk appears exactly where its cells were). */
+  refX = NaN;
+  refY = NaN;
   brittle = 0.5;
   heat = 0;
   /** No body impacts until `age` reaches this (post-bounce immunity). */
@@ -149,7 +153,8 @@ export class ChunkPool {
     c.vx = vx;
     c.vy = vy;
     c.angle = 0;
-    c.spin = spin;
+    // Heavy slabs tumble lazily, gravel spins fast.
+    c.spin = spin * Math.max(0.25, Math.min(1.4, 1.4 / (1 + mass / 60)));
     c.mass = mass;
     c.w = w;
     c.h = h;
@@ -165,12 +170,19 @@ export class ChunkPool {
     c.heat = heat;
     c.asleep = false;
     c.noHitUntil = 0;
-    // depth cheat: ~1 in 4 chunks render in front of the titans (deterministic from id)
-    c.front = ((c.id * 2654435761) >>> 0) % 4 === 0;
+    c.refX = NaN;
+    c.refY = NaN;
+    c.launchNear = pxCount(pixels) >= 20 && vx * vx + vy * vy >= 140 * 140;
     this.massLive += mass;
     computeChunkGeometry(c);
     return c;
   }
+}
+
+function pxCount(pixels: Uint32Array): number {
+  let n = 0;
+  for (let i = 0; i < pixels.length; i++) if (pixels[i]! >>> 24 !== 0) n++;
+  return n;
 }
 
 /** Radius, opaque cell count and edge normals from the sprite. */
@@ -469,9 +481,19 @@ export function stepChunks(core: WorldCore): void {
     else if (c.y > a.maxY - wall) vy -= (c.y - (a.maxY - wall)) * 2.2 * dt;
     c.vx = vx;
     c.vy = vy;
-    c.x += vx * dt;
-    c.y += vy * dt;
-    c.angle += c.spin * dt;
+    // Inertia: a big piece knocked off a massive body starts slowly and accelerates (longer for heavier ones); its spin spins up later.
+    const spinUp = c.mass < 4 ? 0 : Math.min(30, 4 + Math.sqrt(c.mass) * 1.6);
+    let mv = 1;
+    let ms = 1;
+    if (c.age < spinUp * 1.6) {
+      const a1 = Math.min(1, c.age / spinUp);
+      mv = 0.35 + 0.65 * a1 * a1 * (3 - 2 * a1);
+      const a2 = Math.min(1, c.age / (spinUp * 1.6));
+      ms = a2 * a2;
+    }
+    c.x += vx * dt * mv;
+    c.y += vy * dt * mv;
+    c.angle += c.spin * dt * ms;
     if (!anyField && vx * vx + vy * vy < 3 && Math.abs(c.spin) < 0.08) {
       c.vx = 0;
       c.vy = 0;
@@ -569,18 +591,42 @@ function collideBodies(core: WorldCore, c: Chunk): void {
 
 const LIT = new Int32Array(8);
 
-/** Rasterise all visible chunks into the back and front screen layers. */
-export function rasterChunks(
-  core: WorldCore,
-  view: ViewRect,
-  alpha: number,
-  backPix: Uint32Array,
-  backEmi: Uint8Array,
-  frontPix: Uint32Array,
-  frontEmi: Uint8Array,
-  backRange: { a: number; b: number },
-  frontRange: { a: number; b: number },
-): void {
+/** Depth classes: 0 = behind the titans (hazy, 1x), 1 = the fight plane (1x, over the titans), 2 = near the camera (2x pixel doubling). */
+export const DEPTH_BACK = 0;
+export const DEPTH_MID = 1;
+export const DEPTH_NEAR = 2;
+/** Parallax gain per class about the view centre: near debris slides past faster than the fight, far debris barely moves. */
+export const PARALLAX = [0.9, 1, 1.35] as const;
+/** Ticks a fast, big chunk thrown by a blow stays in the near class (it flies at the viewer, then falls back to its class). */
+const NEAR_LAUNCH_TICKS = 55;
+
+/** Deterministic depth class of a chunk (from its id, plus the launch boost from its age). Render-only: never read by the sim. */
+export function chunkDepth(c: Chunk): 0 | 1 | 2 {
+  // A fresh chunk first appears in place (fight plane, 1x); it moves to its depth class a few ticks later.
+  if (c.age < 6) return DEPTH_MID;
+  if (c.launchNear && c.age < NEAR_LAUNCH_TICKS) return DEPTH_NEAR;
+  const h = ((c.id * 2654435761) >>> 0) % 8;
+  return h < 4 ? DEPTH_BACK : h < 7 ? DEPTH_MID : DEPTH_NEAR;
+}
+
+/** Targets of the chunk rasteriser: three screen layers (pixels + emissive) and the rows each one touched. */
+export interface ChunkTargets {
+  backPix: Uint32Array;
+  backEmi: Uint8Array;
+  frontPix: Uint32Array;
+  frontEmi: Uint8Array;
+  nearPix: Uint32Array;
+  nearEmi: Uint8Array;
+  backRange: { a: number; b: number };
+  frontRange: { a: number; b: number };
+  nearRange: { a: number; b: number };
+}
+
+/** Cap on 2x chunks drawn per frame (they are large: keeps fill cost and clutter bounded). */
+const MAX_NEAR_DRAWN = 24;
+
+/** Rasterise all visible chunks into the back, front (fight plane) and near (2x) screen layers. */
+export function rasterChunks(core: WorldCore, view: ViewRect, alpha: number, t: ChunkTargets): void {
   const pool = core.chunks;
   const W = LOGICAL_W;
   const H = LOGICAL_H;
@@ -592,23 +638,35 @@ export function rasterChunks(
     const lit = Math.cos(a) * L.lx + Math.sin(a) * L.ly;
     LIT[k] = Math.round(256 * (1 + 0.5 * lit));
   }
+  let nearDrawn = 0;
   for (let s = 0; s < pool.hi; s++) {
     const c = pool.list[s]!;
     if (!c.alive) continue;
-    const sx = c.x + c.vx * ext - view.x0;
-    const sy = c.y + c.vy * ext - view.y0;
-    const R = c.radius + 1;
+    const depth = chunkDepth(c);
+    if (depth === DEPTH_NEAR && nearDrawn >= MAX_NEAR_DRAWN) continue;
+    const par = PARALLAX[depth];
+    const sc = depth === DEPTH_NEAR ? 2 : 1;
+    // Screen position: about the view centre, scaled by the class parallax (integer view origin => stable, pixel-clean).
+    if (c.refX !== c.refX) {
+      c.refX = view.x0;
+      c.refY = view.y0;
+    }
+    const sx = c.x + c.vx * ext - view.x0 + (1 - par) * (view.x0 - c.refX);
+    const sy = c.y + c.vy * ext - view.y0 + (1 - par) * (view.y0 - c.refY);
+    const R = (c.radius + 1) * sc;
     if (sx + R < 0 || sy + R < 0 || sx - R >= W || sy - R >= H) continue;
+    if (depth === DEPTH_NEAR) nearDrawn++;
     const q = Math.round(c.angle / QSTEP);
     const th = q * QSTEP;
     const cs = Math.cos(th);
     const sn = Math.sin(th);
     const rotSteps = ((q * 8) / QUANT) | 0; // approx normal rotation in 45° units
-    // Chunks behind the titans are a touch darker: cheap depth.
-    const depthDim = c.front ? 256 : 214;
-    const pix = c.front ? frontPix : backPix;
-    const emi = c.front ? frontEmi : backEmi;
-    const range = c.front ? frontRange : backRange;
+    // Depth cues: back chunks are darker and hazed; near chunks are shaded harder underneath and rimmed dark.
+    const depthDim = depth === DEPTH_BACK ? 206 : 256;
+    const pix = depth === DEPTH_BACK ? t.backPix : depth === DEPTH_MID ? t.frontPix : t.nearPix;
+    const emi = depth === DEPTH_BACK ? t.backEmi : depth === DEPTH_MID ? t.frontEmi : t.nearEmi;
+    const range = depth === DEPTH_BACK ? t.backRange : depth === DEPTH_MID ? t.frontRange : t.nearRange;
+    const under = depth === DEPTH_NEAR ? 96 : 60;
     const y0 = Math.max(0, Math.floor(sy - R));
     const y1 = Math.min(H - 1, Math.ceil(sy + R));
     const { pixels, w, h, nrm } = c;
@@ -616,6 +674,7 @@ export function rasterChunks(
     const emis = c.emis;
     const heat = c.heat;
     const heatE = heat > 6 ? Math.min(255, heat) : 0;
+    const inv = 1 / sc;
     if (y0 < range.a) range.a = y0;
     if (y1 > range.b) range.b = y1;
     for (let dy = y0; dy <= y1; dy++) {
@@ -626,12 +685,12 @@ export function rasterChunks(
       const half = Math.sqrt(disc);
       const x0 = Math.max(0, Math.floor(sx - half));
       const x1 = Math.min(W - 1, Math.ceil(sx + half));
-      // sprite coords at (x0 + 0.5): u = cs*rx + sn*ry + cx ; v = -sn*rx + cs*ry + cy
-      let rx = x0 + 0.5 - sx;
-      let u = cs * rx + sn * ry + c.cx;
-      let v = -sn * rx + cs * ry + c.cy;
-      const dU = cs;
-      const dV = -sn;
+      // sprite coords at (x0 + 0.5): u = (cs*rx + sn*ry)/sc + cx ; v = (-sn*rx + cs*ry)/sc + cy  (nearest: pixel doubling at 2x)
+      const rx = x0 + 0.5 - sx;
+      let u = (cs * rx + sn * ry) * inv + c.cx;
+      let v = (-sn * rx + cs * ry) * inv + c.cy;
+      const dU = cs * inv;
+      const dV = -sn * inv;
       for (let dx = x0; dx <= x1; dx++, u += dU, v += dV) {
         if (u < 0 || v < 0) continue;
         const iu = u | 0;
@@ -644,19 +703,21 @@ export function rasterChunks(
         if (nk !== 0) {
           const lk = LIT[(nk - 1 + rotSteps) & 7]!;
           p = scalePx(p, lk);
-          // Rim facing away from the key light: a 1-px dark, hue-shifted (cool violet) edge that separates the chunk from a bright scene.
-          if (lk < 232) p = lerpPx(p, 0xff4a2436, 150);
+          // Rim facing away from the key light: a dark, hue-shifted (cool violet) edge that separates the chunk from a bright scene.
+          if (lk < 232) p = lerpPx(p, 0xff4a2436, depth === DEPTH_NEAR ? 190 : 150);
         }
-        // Undersides sit in shade: top of the chunk full, bottom ~25% darker.
-        p = scalePx(p, (284 - ((dy - sy + R) * 60) / (2 * R)) | 0);
-        if (depthDim !== 256) p = scalePx(p, depthDim);
+        // Undersides sit in shade: top of the chunk full, bottom darker (harder for near chunks).
+        p = scalePx(p, (284 - ((dy - sy + R) * under) / (2 * R)) | 0);
+        if (depthDim !== 256) {
+          p = scalePx(p, depthDim);
+          p = lerpPx(p, 0xff3a2a40, 34); // aerial haze: cool, dark
+        }
         const o = dy * W + dx;
         pix[o] = p;
         let e = hasE ? emis[si]! : 0;
         if (heatE > e) e = heatE;
         if (e > 0) emi[o] = e;
       }
-      rx = 0;
     }
   }
 }

@@ -1315,5 +1315,28 @@
     "accent": "#ff9a3c",
     "accent2": "#fff0b0",
     "tagline": "Burn bright. Burn out."
+  },
+  "feel": {
+    "bob": {
+      "amp": 3.2,
+      "period": 5.0
+    },
+    "sway": {
+      "amp": 2.0,
+      "period": 6.4
+    },
+    "thud": 1.1,
+    "fx": {
+      "kind": "ember",
+      "ramp": ["#fff2c0", "#ff9a30", "#b02010"],
+      "perHundredPx": 14,
+      "idleRate": 8,
+      "size": 2,
+      "life": [20, 46],
+      "emissive": 200,
+      "spread": 45,
+      "behind": 30,
+      "rise": -25
+    }
   }
 }

@@ -28,6 +28,7 @@ const LOOK: SceneryLook = {
   godRayHalo: 280,
   godRayDecay: 0.98,
   vignette: 0.7,
+  foreground: { color: [0.06, 0.15, 0.105], alpha: 0.8, density: 0.6 }, // faint celadon-black veil
   // celadon sprites on celadon-black: the dark halo carries most of the readability, so it is a touch stronger and the backlight lift modest
   spriteHalo: { strength: 0.3, radius: 10, desat: 0.4, rim: 0.5, rimReach: 1, lift: 0.16 },
 };

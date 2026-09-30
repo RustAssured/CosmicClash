@@ -839,6 +839,103 @@ async function main(): Promise<void> {
     r.setStage('tussenruimte');
   }
 
+  /* ---------- 17. the bodies as lights: scenery tinted near the source, sprites relit on the lit side, foreground leaves the fight band clear ---------- */
+  {
+    await r.prepareStage('quasar');
+    r.debugSetTier(1);
+    const bg = blackBackdrop();
+    void bg;
+    const lightFx = (on: boolean): FrameFx => ({
+      ...noFx(),
+      lights: on
+        ? [
+            { x: view.x0 + 480, y: view.y0 + 180, radius: 260, r: 1, g: 0.6, b: 0.2, intensity: 1, slot: 1 },
+            {
+              x: view.x0 + 200,
+              y: view.y0 + 180,
+              radius: 100,
+              r: 0.6,
+              g: 0.9,
+              b: 0.9,
+              intensity: 0.3,
+              slot: 0,
+            },
+          ]
+        : undefined,
+    });
+    const body = makeRockBody('lit', 77, 96, 'celadon');
+    body.pulse(1);
+    const l = body.layer;
+    const wx = view.x0 + 200;
+    const wy = view.y0 + 200;
+    Object.assign(l, { x: wx, y: wy, prevX: wx, prevY: wy, facing: 1, lean: 0, version: l.version + 1 });
+    r.debugSetForeground(false);
+    r.draw(frameOf([], { stage: 'quasar', tick: 15000, fx: lightFx(false) }));
+    const dark = r.captureLogical();
+    r.draw(frameOf([], { stage: 'quasar', tick: 15000, fx: lightFx(true) }));
+    const tinted = r.captureLogical();
+    const redAt = (f: Uint32Array, x0: number, y0: number, x1: number, y1: number): number => {
+      let s = 0;
+      let n = 0;
+      for (let y = y0; y < y1; y++)
+        for (let x = x0; x < x1; x++) {
+          const p = f[y * LOGICAL_W + x]!;
+          s += (p & 255) + ((p >>> 8) & 255) * 0.5;
+          n++;
+        }
+      return s / n;
+    };
+    const nearGain = redAt(tinted, 400, 150, 470, 210) - redAt(dark, 400, 150, 470, 210);
+    const farGain = redAt(tinted, 20, 290, 80, 340) - redAt(dark, 20, 290, 80, 340);
+    check(
+      'a body light tints the scenery near it and barely touches the far corner',
+      nearGain > 3 && nearGain > farGain * 2.5,
+      `near +${nearGain.toFixed(1)}, far +${farGain.toFixed(1)} (warm-channel levels)`,
+    );
+    r.draw(frameOf([l], { stage: 'quasar', tick: 15001, fx: lightFx(false) }));
+    const unlit = r.captureLogical();
+    r.draw(frameOf([l], { stage: 'quasar', tick: 15001, fx: lightFx(true) }));
+    const lit = r.captureLogical();
+    // the sprite spans about x 152..248 around wx; the warm light sits to its right: right third vs left third
+    const dR = redAt(lit, 215, 150, 240, 210) - redAt(unlit, 215, 150, 240, 210);
+    const dL = redAt(lit, 160, 150, 185, 210) - redAt(unlit, 160, 150, 185, 210);
+    check(
+      'a sprite is relit by the other body’s light: the side facing it gains warmth, the far side does not',
+      dR > 2 && dR > dL + 2,
+      `facing side ${dR.toFixed(1)}, far side ${dL.toFixed(1)}`,
+    );
+    r.debugSetForeground(false);
+    r.draw(frameOf([], { stage: 'quasar', tick: 15002 }));
+    const noFg = r.captureLogical();
+    r.debugSetForeground(true);
+    r.draw(frameOf([], { stage: 'quasar', tick: 15002 }));
+    const withFg = r.captureLogical();
+    // the fight band (screen y ≈ 60–250, the middle of the frame): the foreground changes few pixels there
+    let bandChanged = 0;
+    let edgeChanged = 0;
+    let bandN = 0;
+    let edgeN = 0;
+    for (let y = 0; y < LOGICAL_H; y++)
+      for (let x = 0; x < LOGICAL_W; x++) {
+        const inBand = y >= 70 && y < 250;
+        const ch = noFg[y * LOGICAL_W + x] !== withFg[y * LOGICAL_W + x];
+        if (inBand) {
+          bandN++;
+          if (ch) bandChanged++;
+        } else {
+          edgeN++;
+          if (ch) edgeChanged++;
+        }
+      }
+    check(
+      'the foreground pass leaves the fight band mostly clear (denser near the frame edges)',
+      bandChanged / bandN < 0.2 && edgeChanged / edgeN >= bandChanged / bandN,
+      `pixels changed: band ${((100 * bandChanged) / bandN).toFixed(1)} %, edges ${((100 * edgeChanged) / edgeN).toFixed(1)} %`,
+    );
+    r.debugSetTier(1);
+    r.setStage('tussenruimte');
+  }
+
   /* ---------- 16. the five stages are visibly distinct (never a recolour of one another) ---------- */
   {
     const stages = ['nursery', 'rim', 'redgiant', 'quasar', 'tussenruimte'] as const;

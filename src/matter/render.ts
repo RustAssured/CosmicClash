@@ -6,7 +6,8 @@ import { rasterParticles } from './particles';
 /**
  * The pooled screen-space debris/particle layers. Two layers, allocated lazily once and re-used every call:
  *   debris-back  z -20: settled/drifting chunks behind the titans (~3 of 4 chunks, deterministic from chunk id)
- *   fx-front     z +10: the remaining chunks, all particles (sparks, embers, dust, gas, streams), with an emissive mask
+ *   fx-front     z +10: the fight-plane chunks, all particles (sparks, embers, dust, gas, streams), with an emissive mask
+ *   debris-near  z +15: chunks near the camera (and near-camera puffs) drawn at 2x pixel doubling with extra parallax
  * Chunks are rasterised rotated with nearest sampling (angle quantised to 1/48 turn), edge-lit per tumble angle.
  */
 export class MatterRender {
@@ -14,6 +15,9 @@ export class MatterRender {
   private front: RenderLayer | null = null;
   private backEmi: Uint8Array | null = null;
   private frontEmi: Uint8Array | null = null;
+  private near: RenderLayer | null = null;
+  private nearEmi: Uint8Array | null = null;
+  private readonly nearRange = { a: 0, b: -1 };
   private readonly out: RenderLayer[] = [];
   private readonly backRange = { a: 0, b: -1 };
   private readonly frontRange = { a: 0, b: -1 };
@@ -29,7 +33,11 @@ export class MatterRender {
     front.emissive = this.frontEmi;
     this.back = back;
     this.front = front;
-    this.out.push(back, front);
+    const near = makeLayer('debris-near', 'screen', 15, LOGICAL_W, LOGICAL_H);
+    this.nearEmi = new Uint8Array(LOGICAL_W * LOGICAL_H);
+    near.emissive = this.nearEmi;
+    this.near = near;
+    this.out.push(back, front, near);
   }
 
   render(core: WorldCore, view: ViewRect, alpha: number): RenderLayer[] {
@@ -49,27 +57,43 @@ export class MatterRender {
       r.a = LOGICAL_H;
       r.b = -1;
     };
+    const near = this.near!;
+    const nearEmi = this.nearEmi!;
     clear(back, backEmi, this.backRange);
     clear(front, frontEmi, this.frontRange);
-    rasterChunks(
-      core,
+    clear(near, nearEmi, this.nearRange);
+    rasterChunks(core, view, alpha, {
+      backPix: back.pixels,
+      backEmi,
+      frontPix: front.pixels,
+      frontEmi,
+      nearPix: near.pixels,
+      nearEmi,
+      backRange: this.backRange,
+      frontRange: this.frontRange,
+      nearRange: this.nearRange,
+    });
+    rasterParticles(
+      core.particles,
       view,
       alpha,
-      back.pixels,
-      backEmi,
       front.pixels,
       frontEmi,
-      this.backRange,
       this.frontRange,
+      near.pixels,
+      nearEmi,
+      this.nearRange,
     );
-    rasterParticles(core.particles, view, alpha, front.pixels, frontEmi, this.frontRange);
     this.version++;
     back.version = this.version;
     front.version = this.version;
+    near.version = this.version;
     back.dirty = null;
     front.dirty = null;
+    near.dirty = null;
     back.visible = this.backRange.b >= this.backRange.a;
     front.visible = this.frontRange.b >= this.frontRange.a;
+    near.visible = this.nearRange.b >= this.nearRange.a;
     return this.out;
   }
 }

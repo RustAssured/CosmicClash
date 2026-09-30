@@ -1,7 +1,7 @@
 {
   "id": "nexus",
   "name": "The Nexus",
-  "nameKo": "\ub125\uc11c\uc2a4",
+  "nameKo": "넥서스",
   "epithet": "De Nexus",
   "attributes": {
     "mass": 6,
@@ -14,7 +14,7 @@
   "resource": {
     "id": "nodes",
     "name": "Nodes",
-    "nameKo": "\ub9c8\ub514",
+    "nameKo": "마디",
     "max": 16,
     "start": 12,
     "display": "pips"
@@ -286,7 +286,7 @@
       "id": "nexus.latch",
       "slot": "strike",
       "name": "Latch",
-      "nameKo": "\uace0\ub9ac \uac78\uae30",
+      "nameKo": "고리 걸기",
       "frame": {
         "startup": 12,
         "active": 8,
@@ -467,7 +467,7 @@
       "id": "nexus.constrict",
       "slot": "crush",
       "name": "Constrict",
-      "nameKo": "\uc870\uc774\uae30",
+      "nameKo": "조이기",
       "frame": {
         "startup": 30,
         "active": 12,
@@ -719,7 +719,7 @@
       "id": "nexus.slither",
       "slot": "surge",
       "name": "Slither",
-      "nameKo": "\ubbf8\ub044\ub7ec\uc9d0",
+      "nameKo": "미끄러짐",
       "frame": {
         "startup": 3,
         "active": 22,
@@ -775,7 +775,7 @@
       "id": "nexus.harvest",
       "slot": "signature",
       "name": "Harvest",
-      "nameKo": "\uc218\ud655",
+      "nameKo": "수확",
       "frame": {
         "startup": 14,
         "active": 30,
@@ -933,7 +933,7 @@
       "id": "nexus.oog",
       "slot": "ultimate",
       "name": "Ingesloten Oog",
-      "nameKo": "\uac07\ud78c \ub208",
+      "nameKo": "갇힌 눈",
       "frame": {
         "startup": 66,
         "active": 110,
@@ -1111,7 +1111,7 @@
       "id": "nexus.guard",
       "slot": "guard",
       "name": "Chain Mesh",
-      "nameKo": "\uc0ac\uc2ac \uadf8\ubb3c",
+      "nameKo": "사슬 그물",
       "frame": {
         "startup": 3,
         "active": 0,
@@ -1167,5 +1167,26 @@
     "accent": "#d63a4e",
     "accent2": "#8fd4ff",
     "tagline": "Everything connects. Everything is mine."
+  },
+  "feel": {
+    "bob": {
+      "amp": 2.2,
+      "period": 4.2
+    },
+    "sway": {
+      "amp": 1.4,
+      "period": 5.6
+    },
+    "fx": {
+      "kind": "spark",
+      "ramp": ["#ffd0d8", "#ff5a78", "#7a1030"],
+      "perHundredPx": 8,
+      "size": 2,
+      "life": [8, 18],
+      "emissive": 220,
+      "spread": 60,
+      "behind": 30,
+      "idleRate": 2
+    }
   }
 }
