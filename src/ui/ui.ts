@@ -61,6 +61,7 @@ class UIRuntime implements GameUI, UICtx {
   firstMatch = false;
   private pendingResults: 0 | 1 | -1 | null = null;
   private lastWallMs: number | null = null;
+  private comfortSent = false;
   private stack: UIScreenId[] = ['boot'];
   private readonly screens: Partial<Record<UIScreenId, Screen>> = {};
   private readonly actions: UIAction[] = [];
@@ -130,6 +131,11 @@ class UIRuntime implements GameUI, UICtx {
     this.t += dtSec;
     this.screenTime += dtSec;
     this.screenFrames++;
+    if (!this.comfortSent) {
+      // the stored comfort settings reach the shell on the very first frame, before any options screen is opened
+      this.comfortSent = true;
+      this.emit({ type: 'setAccessibility', shake: this.settings.shake / 4, flash: this.settings.flash / 4 });
+    }
     if (this.fade < 1) this.fade = Math.min(1, this.fade + dtSec / FADE_SEC);
     if (this.pendingResults !== null) {
       const m = this.hud?.match;

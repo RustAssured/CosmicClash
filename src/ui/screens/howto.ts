@@ -209,6 +209,7 @@ function drawMoves(ctx: UICtx): void {
  * ------------------------------------------------------------------------------------------------ */
 function drawTechnique(ctx: UICtx): void {
   const cv = ctx.cv;
+  drawComfortNote(ctx);
   const cols = [
     {
       x: 40,
@@ -271,4 +272,20 @@ function drawTechnique(ctx: UICtx): void {
       drawText(cv, 'TAKEN  +', c.x + 24, 142, { color: C.p2, font: 'micro', tracking: 1 });
     }
   });
+}
+
+/** A quiet photosensitivity note under the three panels, with where to change it. */
+function drawComfortNote(ctx: UICtx): void {
+  const cv = ctx.cv;
+  const y = 262;
+  cv.hline(40, y - 6, LOGICAL_W - 80, C.line0);
+  drawText(cv, 'COMFORT', 40, y, { color: C.gold, font: 'micro', tracking: 1 });
+  drawText(
+    cv,
+    'This game has flashes and screen shake. Reduce or turn them down in OPTIONS (REDUCED MOTION).',
+    100,
+    y,
+    { color: C.soft, font: 'micro' },
+  );
+  drawText(cv, '번쩍임과 화면 흔들림은 설정에서 줄일 수 있습니다.', 100, y + 10, { color: C.celadonDeep });
 }

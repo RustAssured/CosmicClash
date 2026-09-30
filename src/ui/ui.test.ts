@@ -152,7 +152,7 @@ describe('boot → title', () => {
     const pad = r.pads.plug(proStandard());
     r.step(5);
     expect(r.ui.screen).toBe('boot');
-    expect(r.actions.length).toBe(0);
+    expect(r.drain()).toEqual([{ type: 'setAccessibility', shake: 1, flash: 1 }]); // the stored comfort settings, on the first frame
     r.tap(pad, Pad.WEST);
     expect(r.ui.screen).toBe('title');
     const a = r.drain();
@@ -166,6 +166,49 @@ describe('boot → title', () => {
     r.step(3);
     r.key('Space');
     expect(r.ui.screen).toBe('title');
+  });
+});
+
+describe('comfort options', () => {
+  const toOptions = (r: Rig, pad: FakePad): void => {
+    r.step(3);
+    r.tap(pad, Pad.EAST);
+    r.step(20);
+    for (let i = 0; i < 5; i++) r.tap(pad, Pad.DOWN); // → OPTIONS
+    r.tap(pad, Pad.EAST);
+    expect(r.ui.screen).toBe('options');
+    r.drain();
+  };
+  const down = (r: Rig, pad: FakePad, n: number): void => {
+    for (let i = 0; i < n; i++) r.tap(pad, Pad.DOWN);
+  };
+  it('SCREEN SHAKE and FLASH step in quarters, emit setAccessibility and persist; the boot frame sends the stored values', () => {
+    const store = createMemoryStore();
+    store.setItem(UI_STORAGE_KEY, JSON.stringify({ seenHowTo: true, shake: 2, flash: 3 }));
+    const r = rig({ store });
+    const pad = r.pads.plug(proStandard());
+    r.step(1);
+    expect(r.history[0]).toEqual({ type: 'setAccessibility', shake: 0.5, flash: 0.75 });
+    toOptions(r, pad);
+    down(r, pad, 8); // MASTER … GRAPHICS QUALITY, then SCREEN SHAKE
+    r.tap(pad, Pad.LEFT);
+    expect(r.drain()).toContainEqual({ type: 'setAccessibility', shake: 0.25, flash: 0.75 });
+    down(r, pad, 1);
+    r.tap(pad, Pad.RIGHT);
+    r.tap(pad, Pad.RIGHT);
+    r.tap(pad, Pad.RIGHT); // clamps at 100 %
+    expect(r.drain().at(-1)).toEqual({ type: 'setAccessibility', shake: 0.25, flash: 1 });
+    expect(JSON.parse(store.data.get(UI_STORAGE_KEY)!)).toMatchObject({ shake: 1, flash: 4 });
+  });
+  it('REDUCED MOTION is one press: both to 25 %', () => {
+    const r = rig();
+    const pad = r.pads.plug(proStandard());
+    toOptions(r, pad);
+    down(r, pad, 10);
+    r.tap(pad, Pad.EAST);
+    expect(r.drain()).toContainEqual({ type: 'setAccessibility', shake: 0.25, flash: 0.25 });
+    r.draw();
+    expect(inkCount(r.ui, 100, 40, 540, 330)).toBeGreaterThan(3000);
   });
 });
 

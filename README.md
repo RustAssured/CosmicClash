@@ -16,6 +16,7 @@ Nothing is downloaded at runtime. Every sprite, sound and font (including the Ha
 - [Play](#play)
 - [How to play](#how-to-play)
 - [Controls](#controls)
+- [Gallery](#gallery)
 - [Using a Switch Pro Controller](#using-a-switch-pro-controller)
 - [Browser support](#browser-support)
 - [Troubleshooting](#troubleshooting)
@@ -67,13 +68,20 @@ the rival's matter removed, matter left) offers **Rematch** or **Title**.
 Modes: **Versus** (two players, one screen), **VS AI** (six difficulty levels, "Titan" being the top), **Training** (frame data,
 hitboxes and matter overlays, no clock, no KO) and, after a minute idle on the title screen, an AI-versus-AI attract mode.
 
-**Titans.** Six are designed; the roster screen shows which are playable in this build and greys out the rest.
+**The six titans.** All six are playable in this build.
 
-| Titan | Destroys by | Sounds like |
+| Titan | Destroys by | Failure mode (how it comes apart) |
 |---|---|---|
-| The Last One | FRACTURE: shears along the weakest bonds, chunks tumble off | struck glass and ceramic |
-| The Asteroid | KINETIC: ballistic craters, ejecta and shrapnel that bursts later | rock, iron and a whistle |
-| The Nexus, Black Hole, Supernova, Planet | assimilation, tidal, thermal, crush and tectonics | see `docs/TITANS.md` |
+| **The Last One** | FRACTURE: shears along the weakest bonds; chunks tumble off | *Bared Eye*: tendrils sever one by one, leaving the eye exposed to heavy damage |
+| **The Nexus** | ASSIMILATION: converts cells to its own lattice, then harvests them | *Dark Nodes*: chains are the only links; cut one and the far side of the graph goes dark and breaks away |
+| **Black Hole** | TIDAL: tears loose matter into streams and swallows it | *Hawking Evaporation*: the horizon cannot be hit, the disk can; at low mass the hole shrinks and evaporates in sparkle |
+| **Supernova** | THERMAL: heat spreads; what ignites burns to ash and embers | *Stripped Layers*: heavy damage blows the plasma off and exposes a core that takes far more damage; at zero fuel it collapses into one last nova |
+| **Planet** | CRUSH: compresses and cracks, with craters, shock rings and faults | *Broken World*: cracks reveal magma, the atmosphere is stripped away (and the shield against heat), moons can be knocked out of orbit |
+| **The Asteroid** | KINETIC: ballistic craters, ejecta and shrapnel that bursts later | *Rubble Pile*: below about a third of its mass the rock loses cohesion: quick, but its blows hit softer |
+
+Each also has a passive (the Last One regrows severed tendrils, the Nexus grows heavier as it harvests, the Black Hole gets heavier and
+slower as it feeds, the Supernova turns absorbed heat back into fuel, the Planet gathers debris into orbit, the Asteroid builds
+momentum); the definitions are in `src/titans/*.json` and `docs/TITANS.md`.
 
 ## Controls
 
@@ -117,11 +125,28 @@ Menus: arrows or WASD, Space or Enter to confirm, Backspace or Esc to go back. P
 
 Everything is remappable on the **Controller Check** screen (title menu, or Options, or the pause menu). The Options screen also
 has button-label style (Auto / Nintendo / Xbox / PlayStation), *Confirm by label* (Nintendo A is the right button) or *by
-position* (always the bottom button), stick deadzone, rumble strength and graphics quality.
+position* (always the bottom button), stick deadzone, rumble strength, graphics quality and two comfort sliders, **Screen shake** and **Flash effects** (0 to 100 % in
+quarters, with a one-press **Reduced motion** preset that sets both to 25 %). A note about flashes and shake is on the last HOW TO PLAY page.
 
 ![Controller Check with ZR held on a Switch Pro Controller (a simulated pad from the test harness)](docs/gallery/ui-controller-check.png)
 
 *Controller Check with ZR held. This screenshot comes from the browser tests, which drive the game with a simulated Pro Controller.*
+
+## Gallery
+
+Screenshots from this repository's own tools and browser tests (software-rendered, so slower than a GPU would be, but the frames
+are exact).
+
+| | |
+|---|---|
+| ![Nursery: Supernova against Black Hole](docs/gallery/integrated-r4-nursery-supernova-blackhole.png) | ![Red Giant's Wake: Planet against Nexus](docs/gallery/integrated-r4-redgiant-planet-nexus.png) |
+| *Stellar Nursery: Supernova against Black Hole* | *Red Giant's Wake: Planet against Nexus* |
+| ![Quasar Void: the Last One](docs/gallery/integrated-r4-quasar-lastone.png) | ![Supernova's ultimate](docs/gallery/integrated-r4-ult-supernova.png) |
+| *Quasar Void: the Last One* | *The Supernova's ultimate* |
+| ![Nexus cage](docs/gallery/titans-nexus-cage.png) | ![Crush fissures in live matter](docs/gallery/matter-live-crush-fissure.png) |
+| *The Nexus closing its cage* | *Crush: a fissure through live matter* |
+| ![Tidal stream](docs/gallery/matter-live-tidal-stream.png) | ![Titan select](docs/gallery/ui-select.png) |
+| *Tidal: matter torn into a stream* | *Titan select* |
 
 ## Using a Switch Pro Controller
 
@@ -254,6 +279,10 @@ Read this before you rely on the controller layer.
   Controller Check screen exists so the difference between the tables and reality is visible and fixable by any player.
 - **WebHID** report parsing and the HD-rumble encoder are written from the community's reverse-engineered protocol notes and have
   never talked to a real controller. They are off unless you turn them on.
+- **Comfort settings are wired but not clinically validated.** The UI stores the two sliders and sends them to the game on the first
+  frame and on every change (tested); the game scales camera shake and white flashes with them. Nobody with photosensitivity has
+  tried it, and 25 % is a judgement, not a measured safe level: treat the game as unsuitable for people with photosensitive
+  epilepsy until that is checked.
 - **The live game has been driven through a real browser, but slowly.** The keyboard path from the title to a running match, the
   pause menu, the announcer, the training overlay and the results screen were checked with screenshots of the built game in headless
   Chromium with software WebGL, which runs at about one frame a second here. Nothing was played by hand at 60 fps on a GPU: feel,

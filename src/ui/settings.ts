@@ -12,6 +12,9 @@ export interface UISettings {
   lastStage: StageId;
   aiLevel: Difficulty;
   /** The HOW TO PLAY pages have been shown once (they open by themselves on the very first launch). */
+  /** Comfort: camera shake and flash effects in quarter steps, 0..4 (4 = full). */
+  shake: number;
+  flash: number;
   seenHowTo: boolean;
   /** Matches started on this device: the in-match hint strip shows during the very first one. */
   matches: number;
@@ -28,6 +31,8 @@ export const defaultUISettings = (): UISettings => ({
   lastP2: 'asteroid',
   lastStage: 'nursery',
   aiLevel: 3,
+  shake: 4,
+  flash: 4,
   seenHowTo: false,
   matches: 0,
 });
@@ -57,6 +62,8 @@ export function parseUISettings(raw: string | null): UISettings {
       ? (o.lastStage as StageId)
       : d.lastStage,
     aiLevel: int(o.aiLevel, 1, 6, d.aiLevel) as Difficulty,
+    shake: int(o.shake, 0, 4, d.shake),
+    flash: int(o.flash, 0, 4, d.flash),
     seenHowTo: o.seenHowTo === true,
     matches: int(o.matches, 0, 100000, d.matches),
   };

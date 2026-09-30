@@ -24,7 +24,7 @@ const CONFIRM_MODES: ConfirmMode[] = ['label', 'positional'];
 const QUALITY = ['LOW', 'MEDIUM', 'HIGH'];
 
 interface Row extends MenuItem {
-  kind: 'volume' | 'deadzone' | 'enum' | 'rumble' | 'link';
+  kind: 'volume' | 'deadzone' | 'enum' | 'rumble' | 'link' | 'comfort' | 'preset';
 }
 
 /** Options: volumes, deadzone, label mode, confirm mode, rumble, quality, and a way into the key/button remap. */
@@ -38,6 +38,9 @@ export function createOptionsScreen(): Screen {
     { id: 'confirm', en: 'CONFIRM BUTTON', ko: '확인 버튼', kind: 'enum' },
     { id: 'rumble', en: 'RUMBLE', ko: '진동', kind: 'rumble' },
     { id: 'quality', en: 'GRAPHICS QUALITY', ko: '화질', kind: 'enum' },
+    { id: 'shake', en: 'SCREEN SHAKE', ko: '화면 흔들림', kind: 'comfort' },
+    { id: 'flash', en: 'FLASH EFFECTS', ko: '번쩍임', kind: 'comfort' },
+    { id: 'reduced', en: 'REDUCED MOTION', ko: '움직임 줄이기', kind: 'preset' },
     { id: 'keys', en: 'CONTROLS & REMAP', ko: '조작 설정', kind: 'link' },
   ];
   const menu = new Menu(rows);
@@ -46,6 +49,9 @@ export function createOptionsScreen(): Screen {
     const s = ctx.settings;
     ctx.emit({ type: 'setVolume', master: s.master / 10, music: s.music / 10, sfx: s.sfx / 10 });
   };
+
+  const emitComfort = (ctx: UICtx): void =>
+    ctx.emit({ type: 'setAccessibility', shake: ctx.settings.shake / 4, flash: ctx.settings.flash / 4 });
 
   const adjust = (ctx: UICtx, row: Row, dir: -1 | 1): void => {
     const s = ctx.settings;
@@ -88,6 +94,15 @@ export function createOptionsScreen(): Screen {
         ctx.sound('tick');
         break;
       }
+      case 'shake':
+      case 'flash': {
+        const k = row.id as 'shake' | 'flash';
+        s[k] = Math.max(0, Math.min(4, s[k] + dir));
+        emitComfort(ctx);
+        ctx.saveSettings();
+        ctx.sound('tick');
+        break;
+      }
       case 'quality': {
         s.quality = ((s.quality + dir + 3) % 3) as 0 | 1 | 2;
         ctx.emit({ type: 'setQuality', quality: s.quality });
@@ -115,6 +130,12 @@ export function createOptionsScreen(): Screen {
         return inp.labelMode === 'auto' ? 'AUTO' : inp.labelMode.toUpperCase();
       case 'confirm':
         return inp.confirmMode === 'label' ? 'LABEL (A / CROSS)' : 'POSITION (BOTTOM)';
+      case 'shake':
+        return `${ctx.settings.shake * 25}%`;
+      case 'flash':
+        return `${ctx.settings.flash * 25}%`;
+      case 'reduced':
+        return ctx.settings.shake === 1 && ctx.settings.flash === 1 ? 'ON' : 'PRESS';
       case 'quality':
         return QUALITY[ctx.settings.quality]!;
       default:
@@ -134,6 +155,10 @@ export function createOptionsScreen(): Screen {
         return (ctx.input.settings.deadzone - 0.05) / 0.4;
       case 'rumble':
         return ctx.input.settings.rumble;
+      case 'shake':
+        return ctx.settings.shake / 4;
+      case 'flash':
+        return ctx.settings.flash / 4;
       default:
         return null;
     }
@@ -156,6 +181,13 @@ export function createOptionsScreen(): Screen {
         if (row.kind === 'link') {
           ctx.sound('confirm');
           ctx.push('controller', { tab: 'remap' });
+        } else if (row.kind === 'preset') {
+          // one press: both comfort effects to a quarter of full (never fully off: hits still read)
+          ctx.settings.shake = 1;
+          ctx.settings.flash = 1;
+          emitComfort(ctx);
+          ctx.saveSettings();
+          ctx.sound('confirm');
         } else if (row.kind === 'enum') adjust(ctx, row, 1);
       }
     },
@@ -168,14 +200,14 @@ export function createOptionsScreen(): Screen {
       header(ctx, 'OPTIONS', '설정');
       const x0 = 110;
       const w = LOGICAL_W - 220;
-      panel(cv, x0 - 16, 48, w + 32, 262, { accent: ACCENT.dim });
+      panel(cv, x0 - 16, 44, w + 32, 284, { accent: ACCENT.dim });
       rows.forEach((row, i) => {
-        const y = 60 + i * 27;
+        const y = 54 + i * 22;
         const focus = i === menu.index;
         if (focus) {
-          cv.rect(x0 - 10, y - 5, w + 20, 23, alpha(C.ink3, 0.9));
-          cv.frame(x0 - 10, y - 5, w + 20, 23, ACCENT.dim);
-          drawIcon(cv, 'chevron', x0 - 3, y + 3, ACCENT.base);
+          cv.rect(x0 - 10, y - 5, w + 20, 19, alpha(C.ink3, 0.9));
+          cv.frame(x0 - 10, y - 5, w + 20, 19, ACCENT.dim);
+          drawIcon(cv, 'chevron', x0 - 3, y + 2, ACCENT.base);
         }
         drawText(cv, row.en, x0 + 8, y, { color: focus ? C.white : C.soft, tracking: 1 });
         drawText(cv, row.ko ?? '', x0 + 8 + measureText(row.en, { tracking: 1 }) + 10, y, {
@@ -186,7 +218,7 @@ export function createOptionsScreen(): Screen {
         if (f !== null) {
           slider(ctx, x0 + w - 190, y + 4, 130, f, ACCENT, focus);
           drawText(cv, vt, x0 + w - 4, y, { color: focus ? C.white : C.mid, align: 'right', tracking: 1 });
-        } else if (row.kind === 'enum') {
+        } else if (row.kind === 'enum' || row.kind === 'preset') {
           drawText(cv, vt, x0 + w - 24, y, { color: focus ? C.white : C.mid, align: 'right', tracking: 1 });
           if (focus) {
             drawIcon(cv, 'arrowL', x0 + w - 24 - measureText(vt, { tracking: 1 }) - 10, y + 2, ACCENT.base);
