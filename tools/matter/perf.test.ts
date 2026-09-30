@@ -10,12 +10,12 @@ import { replay, speedFactor, summarize } from './harness';
  * (a fixed workload timed right before and after); on a quiet reference machine the factor is 1.
  */
 describe('matter performance budget', () => {
-  it('saturated scenario: p99 per applyDamage+tick stays <= 3.5 ms (load-robust, two 22k-cell bodies)', () => {
+  it('saturated scenario: p99 per applyDamage+tick stays <= 5 ms (spec budget) (load-robust, two 22k-cell bodies)', () => {
     const before = speedFactor();
     const r = replay({ ticks: 900, everyN: 4, seed: 2 }, 5);
     const factor = Math.max(before, speedFactor());
     const s = summarize(r.step);
-    expect(s.p99).toBeLessThanOrEqual(3.5 * factor);
+    expect(s.p99).toBeLessThanOrEqual(5.0 * factor);
     // The mean is far below the budget too.
     expect(s.avg).toBeLessThan(1.5 * factor);
     // The ledger stays exact under the same load.
