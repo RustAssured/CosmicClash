@@ -4,6 +4,8 @@ import {
   type AudioScene,
   type FrameFx,
   type LensFx,
+  type LightFx,
+  type TitanId,
   type MatchApi,
   type ShockwaveFx,
   type SimEvent,
@@ -26,7 +28,18 @@ interface Ring {
   scenery: boolean;
 }
 
+/** Per-titan light: [r,g,b] 0..1, falloff radius px, base intensity. Bright bodies light the scenery and the other sprite. */
+const TITAN_LIGHT: Record<TitanId, { c: [number, number, number]; radius: number; base: number }> = {
+  supernova: { c: [1, 0.72, 0.38], radius: 280, base: 0.95 },
+  blackhole: { c: [1, 0.6, 0.32], radius: 210, base: 0.5 },
+  lastone: { c: [0.62, 0.95, 0.88], radius: 120, base: 0.28 },
+  nexus: { c: [1, 0.3, 0.42], radius: 130, base: 0.3 },
+  planet: { c: [0.55, 0.72, 1], radius: 150, base: 0.16 },
+  asteroid: { c: [0.75, 0.9, 1], radius: 70, base: 0.08 },
+};
 const MAX_RINGS = 10;
+const WAKE_SPEED = 150;
+/** Bodies moving faster than this (px/s) push the stage dust. */
 const RING_LIFE = 54;
 const IMPULSE_LIFE = 130;
 
@@ -48,6 +61,14 @@ export class FxState {
     intensity: 0,
     timeScale: 1,
   };
+  private readonly lightPool: LightFx[] = [
+    { x: 0, y: 0, radius: 1, r: 1, g: 1, b: 1, intensity: 0, slot: 0 },
+    { x: 0, y: 0, radius: 1, r: 1, g: 1, b: 1, intensity: 0, slot: 1 },
+  ];
+  private readonly lightSrc: { titan: TitanId; x: number; y: number; k: number }[] = [
+    { titan: 'lastone', x: 0, y: 0, k: 0 },
+    { titan: 'lastone', x: 0, y: 0, k: 0 },
+  ];
   private readonly lensPool: LensFx[] = [
     { x: 0, y: 0, horizonR: 0, strength: 0 },
     { x: 0, y: 0, horizonR: 0, strength: 0 },
@@ -142,6 +163,29 @@ export class FxState {
     this.timeScale = match.timeScale;
     this.lensSrc[0] = { x: v0.x, y: v0.y, r: v0.lensRadius, s: v0.lensStrength };
     this.lensSrc[1] = { x: v1.x, y: v1.y, r: v1.lensRadius, s: v1.lensStrength };
+    for (let i = 0; i < 2; i++) {
+      const v = i === 0 ? v0 : v1;
+      const src = this.lightSrc[i]!;
+      src.titan = v.titan;
+      src.x = v.x;
+      src.y = v.y;
+      // brighter while charging or striking, dimmer as its matter/fuel is spent
+      const body = clamp(v.bodyStats.massFrac, 0.3, 1.2);
+      const burst = (v.phase === 'active' ? 0.7 : 0) + v.chargeFrac * 0.8;
+      src.k = clamp(
+        body *
+          (0.55 + 0.45 * (v.resourceMax > 0 && v.titan === 'supernova' ? v.resource / v.resourceMax : 1)) +
+          burst,
+        0,
+        2,
+      );
+      // a heavy body moving through dust drags it along: gentle scenery wakes, rate-limited so shockwaves keep their slots
+      const speed = Math.hypot(v.vx, v.vy);
+      if (speed > WAKE_SPEED && (match.tick + i * 3) % 7 === 0 && this.rings.length < MAX_RINGS - 4) {
+        const w = clamp((speed - WAKE_SPEED) / 260, 0, 1) * clamp(v.stats.mass / 8, 0.4, 1.3);
+        this.addRing(v.x - Math.sign(v.vx || 1) * 30, v.y, 70 + w * 90, 0.08 + w * 0.22, -1, true);
+      }
+    }
   }
   private readonly lensSrc: { x: number; y: number; r: number; s: number }[] = [
     { x: 0, y: 0, r: 0, s: 0 },
@@ -183,6 +227,21 @@ export class FxState {
         sw.strength = r.strength * Math.pow(1 - age, 1.6);
         o.shockwaves.push(sw);
       }
+    }
+    o.lights = [];
+    for (let i = 0; i < 2; i++) {
+      const src = this.lightSrc[i]!;
+      const t = TITAN_LIGHT[src.titan];
+      const lf = this.lightPool[i]!;
+      lf.x = src.x;
+      lf.y = src.y;
+      lf.radius = t.radius * (0.85 + 0.15 * src.k);
+      lf.r = t.c[0];
+      lf.g = t.c[1];
+      lf.b = t.c[2];
+      lf.intensity = t.base * src.k;
+      lf.slot = i;
+      if (lf.intensity > 0.02) o.lights.push(lf);
     }
     let l = 0;
     for (let i = 0; i < 2; i++) {

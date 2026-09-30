@@ -219,7 +219,27 @@ export interface StageImpulseFx {
   hue: number;
 }
 
+/**
+ * A light cast by a bright body (Supernova core, Black Hole disk, the Last One's eye…). World position; colour 0..1 linear-ish RGB.
+ * The renderer lights the scenery AND the other sprites from it (facing-aware falloff), which is what makes the titans feel *in* the
+ * scene instead of pasted on top of it.
+ */
+export interface LightFx {
+  x: number;
+  y: number;
+  /** Falloff radius in px. */
+  radius: number;
+  r: number;
+  g: number;
+  b: number;
+  /** 0..~2. Rises during charges/active frames. */
+  intensity: number;
+  /** Slot of the emitting fighter (its own sprite is not relit by it), or -1. */
+  slot: number;
+}
+
 export interface FrameFx {
+  lights?: LightFx[];
   shockwaves: ShockwaveFx[];
   lenses: LensFx[];
   impulses: StageImpulseFx[];
