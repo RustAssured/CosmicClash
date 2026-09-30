@@ -1,3 +1,4 @@
+import { getTitanDef } from '@/titans';
 import { describe, expect, it } from 'vitest';
 import {
   Btn,
@@ -132,7 +133,8 @@ describe('pixel-accurate hit resolution', () => {
     expect(hit.titan).toBe('asteroid');
     expect(hit.type).toBe('FRACTURE');
     expect(hit.heavy).toBe(true);
-    expect(hit.energy).toBeCloseTo(1100, 0);
+    const power = (getTitanDef('lastone') as unknown as { balance?: { power?: number } }).balance?.power ?? 1;
+    expect(hit.energy).toBeCloseTo(1100 * power, 0);
     expect(hit.cellsRemoved).toBeGreaterThan(200);
     expect(hit.massRemoved).toBeGreaterThan(0);
     expect(Number.isFinite(hit.x)).toBe(true);

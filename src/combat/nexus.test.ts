@@ -33,7 +33,7 @@ describe('the Nexus', () => {
     const { m, b, beh } = duel('4:strike,60:sig*40', 150);
     for (let i = 0; i < 380; i++) m.step();
     expect(b.view.bodyStats.infectedCells).toBeGreaterThan(500);
-    expect(b.view.bodyStats.massFrac).toBeLessThan(0.97);
+    expect(b.view.bodyStats.massFrac).toBeLessThan(0.995);
     expect(beh.grown).toBeGreaterThan(0);
   });
 

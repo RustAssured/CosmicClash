@@ -21,7 +21,8 @@
     "capture": "tsx tools/lead/capture.ts",
     "balance": "tsx tools/ai/balance.ts",
     "audio:verify": "tsx tools/ui/audio-verify.ts",
-    "ui:sheet": "tsx tools/ui/sheet.ts"
+    "ui:sheet": "tsx tools/ui/sheet.ts",
+    "autotune": "tsx tools/ai/autotune.ts"
   },
   "dependencies": {
     "three": "^0.186.1"
