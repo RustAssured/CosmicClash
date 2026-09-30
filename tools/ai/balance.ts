@@ -21,7 +21,7 @@ import type { playMatch as import_playMatch } from './duel';
 
 type PlayMatch = typeof import_playMatch;
 
-interface Job {
+export interface Job {
   key: string;
   a: TitanId;
   b: TitanId;
@@ -30,9 +30,11 @@ interface Job {
   seed: number;
   swapped: boolean;
   index: number;
+  /** Per-titan balance knob overrides applied inside the worker before the fight (autotune). */
+  knobs?: Partial<Record<TitanId, { power: number; durability: number }>>;
 }
 
-interface Result {
+export interface Result {
   key: string;
   a: TitanId;
   b: TitanId;
@@ -60,12 +62,16 @@ async function workerMain(): Promise<void> {
   const { register } = await import('tsx/esm/api');
   register({ tsconfig: 'tsconfig.json' });
   const duelPath = './duel.ts';
+  const { getTitanDef } = await import('@/titans');
   const { playMatch } = (await import(duelPath)) as { playMatch: PlayMatch };
   const port = parentPort!;
   port.on('message', (job: Job) => {
     const t0 = performance.now();
     let out: Result;
     try {
+      if (job.knobs)
+        for (const [id, k] of Object.entries(job.knobs))
+          (getTitanDef(id as TitanId) as unknown as { balance?: unknown }).balance = k;
       const ta = job.swapped ? job.b : job.a;
       const tb = job.swapped ? job.a : job.b;
       const l1 = job.swapped ? job.lb : job.la;
@@ -349,6 +355,96 @@ async function writeDocs(
   writeFileSync(jsonPath, json);
 }
 
+/**
+ * Play `queue` on a pool of worker threads; `onResult` is called for every finished fight (a crashed or stalled one arrives as a draw).
+ * Exported so `autotune.ts` shares the same machinery. Workers are replaced when they die; too many failures abort the process.
+ */
+export function runPool(
+  queue: Job[],
+  workers: number,
+  timeoutMs: number,
+  onResult: (r: Result) => void,
+  onAbort: () => void = () => undefined,
+): Promise<void> {
+  const total = queue.length;
+  let replacements = 0;
+  return new Promise<void>((resolve) => {
+    if (queue.length === 0) {
+      resolve();
+      return;
+    }
+    let active = 0;
+    const spawn = (): void => {
+      const w = new Worker(SELF, { workerData: { role: 'worker' }, execArgv: process.execArgv });
+      let job: Job | null = null;
+      let timer: NodeJS.Timeout | null = null;
+      const next = (): void => {
+        if (timer) clearTimeout(timer);
+        job = queue.shift() ?? null;
+        if (!job) {
+          active--;
+          void w.terminate();
+          if (active === 0) resolve();
+          return;
+        }
+        const j = job;
+        timer = setTimeout(() => fail(`timeout after ${timeoutMs / 1000} s`), timeoutMs);
+        w.postMessage(j);
+      };
+      const fail = (why: string): void => {
+        const j = job;
+        job = null;
+        if (timer) clearTimeout(timer);
+        void w.terminate();
+        if (j)
+          onResult({
+            key: j.key,
+            a: j.a,
+            b: j.b,
+            index: j.index,
+            swapped: j.swapped,
+            winner: 'draw',
+            roundsA: 0,
+            roundsB: 0,
+            rounds: [],
+            timeouts: 0,
+            ticks: 0,
+            error: why,
+            wallMs: 0,
+          });
+        replacements++;
+        if (replacements > 40 + total / 10) {
+          onAbort();
+          console.log('balance: too many worker failures, giving up (partial results kept)');
+          process.exit(1);
+        }
+        console.log(`  worker replaced (${why}${j ? ` at ${j.key}` : ''})`);
+        active--;
+        if (queue.length > 0) {
+          active++;
+          spawn();
+        } else if (active === 0) resolve();
+      };
+      w.on('message', (m: Result | { ready: true }) => {
+        if ('ready' in m) {
+          next();
+          return;
+        }
+        onResult(m);
+        next();
+      });
+      w.on('error', (e) => fail(`worker error: ${e.message}`));
+      w.on('exit', (code) => {
+        if (job && code !== 0) fail(`worker exit ${code}`);
+      });
+    };
+    for (let i = 0; i < workers; i++) {
+      active++;
+      spawn();
+    }
+  });
+}
+
 /* ------------------------------------------------------------------------------------------------ *
  *  main thread
  * ------------------------------------------------------------------------------------------------ */
@@ -438,97 +534,27 @@ async function mainThread(): Promise<void> {
   let finished = 0;
   let failed = 0;
   let lastWrite = 0;
-  let replacements = 0;
-  await new Promise<void>((resolve) => {
-    if (queue.length === 0) {
-      resolve();
-      return;
-    }
-    let active = 0;
-    const spawn = (): void => {
-      const w = new Worker(SELF, { workerData: { role: 'worker' }, execArgv: process.execArgv });
-      let job: Job | null = null;
-      let timer: NodeJS.Timeout | null = null;
-      const next = (): void => {
-        if (timer) clearTimeout(timer);
-        job = queue.shift() ?? null;
-        if (!job) {
-          active--;
-          void w.terminate();
-          if (active === 0) resolve();
-          return;
-        }
-        const j = job;
-        timer = setTimeout(() => fail(`timeout after ${timeoutMs / 1000} s`), timeoutMs);
-        w.postMessage(j);
-      };
-      const record = (r: Result): void => {
-        results.push(r);
-        finished++;
-        if (r.error) failed++;
-        const now = performance.now();
-        if (now - lastWrite > 10000) {
-          lastWrite = now;
-          persist();
-          const rate = finished / ((now - t0) / 1000);
-          const eta = (queue.length + active) / Math.max(1e-6, rate);
-          console.log(
-            `  ${results.length}/${total} done (${finished} this run, ${failed} failed), ${rate.toFixed(2)} fights/s, eta ${(eta / 60).toFixed(1)} min`,
-          );
-        }
-      };
-      const fail = (why: string): void => {
-        const j = job;
-        job = null;
-        if (timer) clearTimeout(timer);
-        void w.terminate();
-        if (j)
-          record({
-            key: j.key,
-            a: j.a,
-            b: j.b,
-            index: j.index,
-            swapped: j.swapped,
-            winner: 'draw',
-            roundsA: 0,
-            roundsB: 0,
-            rounds: [],
-            timeouts: 0,
-            ticks: 0,
-            error: why,
-            wallMs: 0,
-          });
-        replacements++;
-        if (replacements > 40 + total / 10) {
-          persist();
-          console.log('balance: too many worker failures, giving up (partial results kept)');
-          process.exit(1);
-        }
-        console.log(`  worker replaced (${why}${j ? ` at ${j.key}` : ''})`);
-        active--;
-        if (queue.length > 0) {
-          active++;
-          spawn();
-        } else if (active === 0) resolve();
-      };
-      w.on('message', (m: Result | { ready: true }) => {
-        if ('ready' in m) {
-          next();
-          return;
-        }
-        record(m);
-        next();
-      });
-      w.on('error', (e) => fail(`worker error: ${e.message}`));
-      w.on('exit', (code) => {
-        if (job && code !== 0) fail(`worker exit ${code}`);
-      });
-    };
-    for (let i = 0; i < workers; i++) {
-      active++;
-      spawn();
-    }
-  });
+  await runPool(
+    queue,
+    workers,
+    timeoutMs,
+    (r) => {
+      results.push(r);
+      finished++;
+      if (r.error) failed++;
+      const now = performance.now();
+      if (now - lastWrite > 10000) {
+        lastWrite = now;
+        persist();
+        const rate = finished / ((now - t0) / 1000);
+        const eta = (total - results.length) / Math.max(1e-6, rate);
+        console.log(
+          `  ${results.length}/${total} done (${finished} this run, ${failed} failed), ${rate.toFixed(2)} fights/s, eta ${(eta / 60).toFixed(1)} min`,
+        );
+      }
+    },
+    persist,
+  );
   persist();
   await emit();
   console.log(

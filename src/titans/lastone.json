@@ -175,17 +175,8 @@
         "belly": -4,
         "hemScallops": 6
       },
-      "eye": {
-        "x": 17,
-        "y": -14,
-        "r": 20,
-        "socketR": 27
-      },
-      "core": {
-        "x": -7,
-        "y": 25,
-        "r": 10
-      },
+      "eye": { "x": 17, "y": -14, "r": 20, "socketR": 27 },
+      "core": { "x": -7, "y": 25, "r": 10 },
       "halo": {
         "cx": -9,
         "cy": -14,
@@ -197,11 +188,7 @@
         "ticks": 22
       },
       "seams": 9,
-      "tendrils": {
-        "count": 24,
-        "minLen": 20,
-        "maxLen": 40
-      }
+      "tendrils": { "count": 24, "minLen": 20, "maxLen": 40 }
     }
   },
   "ai": {
@@ -255,15 +242,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -291,15 +272,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -327,15 +302,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -363,15 +332,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -384,18 +347,8 @@
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -30,
-              "iy": 0,
-              "damp": 0.35
-            },
-            {
-              "at": 10,
-              "ix": 95,
-              "iy": 0,
-              "damp": 0.25
-            }
+            { "at": 0, "ix": -30, "iy": 0, "damp": 0.35 },
+            { "at": 10, "ix": 95, "iy": 0, "damp": 0.25 }
           ]
         },
         "forward": {
@@ -417,15 +370,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -453,15 +400,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -489,15 +430,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -525,15 +460,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -546,18 +475,8 @@
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -30,
-              "iy": 0,
-              "damp": 0.35
-            },
-            {
-              "at": 10,
-              "ix": 95,
-              "iy": 0,
-              "damp": 0.25
-            }
+            { "at": 0, "ix": -30, "iy": 0, "damp": 0.35 },
+            { "at": 10, "ix": 95, "iy": 0, "damp": 0.25 }
           ]
         },
         "down": {
@@ -579,15 +498,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -615,15 +528,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -651,15 +558,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -687,15 +588,9 @@
                 "energy": 85,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 5,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 5, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 45,
-                "y": -6
-              },
+              "knockback": { "x": 45, "y": -6 },
               "guardPressure": 0.12,
               "sweepTo": {
                 "kind": "line",
@@ -708,18 +603,8 @@
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -30,
-              "iy": 0,
-              "damp": 0.35
-            },
-            {
-              "at": 10,
-              "ix": 95,
-              "iy": 0,
-              "damp": 0.25
-            }
+            { "at": 0, "ix": -30, "iy": 0, "damp": 0.35 },
+            { "at": 10, "ix": 95, "iy": 0, "damp": 0.25 }
           ]
         }
       },
@@ -727,14 +612,7 @@
       "meterCost": 0,
       "tags": ["multi"],
       "extra": {
-        "pose": {
-          "startup": {
-            "lean": -4
-          },
-          "active": {
-            "lean": 6
-          }
-        }
+        "pose": { "startup": { "lean": -4 }, "active": { "lean": 6 } }
       }
     },
     {
@@ -770,14 +648,9 @@
                 "energy": 130,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 8
-                }
+                "params": { "penetration": 8 }
               },
-              "knockback": {
-                "x": 90,
-                "y": -10
-              },
+              "knockback": { "x": 90, "y": -10 },
               "guardPressure": 0.2
             },
             {
@@ -797,26 +670,13 @@
                 "energy": 130,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 10,
-                  "scatter": 1.1
-                }
+                "params": { "penetration": 10, "scatter": 1.1 }
               },
-              "knockback": {
-                "x": 110,
-                "y": -12
-              },
+              "knockback": { "x": 110, "y": -12 },
               "guardPressure": 0.2
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 610,
-              "iy": 0,
-              "damp": 0.05
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 610, "iy": 0, "damp": 0.05 }]
         },
         "forward": {
           "hitboxes": [
@@ -837,14 +697,9 @@
                 "energy": 130,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 8
-                }
+                "params": { "penetration": 8 }
               },
-              "knockback": {
-                "x": 90,
-                "y": -10
-              },
+              "knockback": { "x": 90, "y": -10 },
               "guardPressure": 0.2
             },
             {
@@ -864,26 +719,13 @@
                 "energy": 130,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 10,
-                  "scatter": 1.1
-                }
+                "params": { "penetration": 10, "scatter": 1.1 }
               },
-              "knockback": {
-                "x": 110,
-                "y": -12
-              },
+              "knockback": { "x": 110, "y": -12 },
               "guardPressure": 0.2
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 610,
-              "iy": 0,
-              "damp": 0.05
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 610, "iy": 0, "damp": 0.05 }]
         },
         "down": {
           "hitboxes": [
@@ -904,14 +746,9 @@
                 "energy": 130,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 8
-                }
+                "params": { "penetration": 8 }
               },
-              "knockback": {
-                "x": 90,
-                "y": -10
-              },
+              "knockback": { "x": 90, "y": -10 },
               "guardPressure": 0.2
             },
             {
@@ -931,26 +768,13 @@
                 "energy": 130,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "penetration": 10,
-                  "scatter": 1.1
-                }
+                "params": { "penetration": 10, "scatter": 1.1 }
               },
-              "knockback": {
-                "x": 110,
-                "y": -12
-              },
+              "knockback": { "x": 110, "y": -12 },
               "guardPressure": 0.2
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 610,
-              "iy": 0,
-              "damp": 0.05
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 610, "iy": 0, "damp": 0.05 }]
         }
       },
       "resourceCost": 0,
@@ -958,14 +782,7 @@
       "tags": ["lunge"],
       "extra": {
         "followUpOnly": true,
-        "pose": {
-          "startup": {
-            "lean": -3
-          },
-          "active": {
-            "lean": 9
-          }
-        }
+        "pose": { "startup": { "lean": -3 }, "active": { "lean": 9 } }
       }
     },
     {
@@ -1008,26 +825,13 @@
                   "scatter": 1.2
                 }
               },
-              "knockback": {
-                "x": 720,
-                "y": -140
-              },
+              "knockback": { "x": 720, "y": -140 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -80,
-              "iy": 0,
-              "damp": 0.3
-            },
-            {
-              "at": 30,
-              "ix": 560,
-              "iy": 0,
-              "damp": 0.04
-            }
+            { "at": 0, "ix": -80, "iy": 0, "damp": 0.3 },
+            { "at": 30, "ix": 560, "iy": 0, "damp": 0.04 }
           ]
         },
         "forward": {
@@ -1056,26 +860,13 @@
                   "scatter": 1.2
                 }
               },
-              "knockback": {
-                "x": 720,
-                "y": -140
-              },
+              "knockback": { "x": 720, "y": -140 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -80,
-              "iy": 0,
-              "damp": 0.3
-            },
-            {
-              "at": 30,
-              "ix": 560,
-              "iy": 0,
-              "damp": 0.04
-            }
+            { "at": 0, "ix": -80, "iy": 0, "damp": 0.3 },
+            { "at": 30, "ix": 560, "iy": 0, "damp": 0.04 }
           ]
         },
         "down": {
@@ -1104,26 +895,13 @@
                   "scatter": 1.2
                 }
               },
-              "knockback": {
-                "x": 720,
-                "y": -140
-              },
+              "knockback": { "x": 720, "y": -140 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -80,
-              "iy": 0,
-              "damp": 0.3
-            },
-            {
-              "at": 30,
-              "ix": 560,
-              "iy": 0,
-              "damp": 0.04
-            }
+            { "at": 0, "ix": -80, "iy": 0, "damp": 0.3 },
+            { "at": 30, "ix": 560, "iy": 0, "damp": 0.04 }
           ]
         }
       },
@@ -1132,15 +910,9 @@
       "tags": ["crack", "heavy"],
       "extra": {
         "pose": {
-          "startup": {
-            "lean": -8
-          },
-          "active": {
-            "lean": 11
-          },
-          "recovery": {
-            "lean": 3
-          }
+          "startup": { "lean": -8 },
+          "active": { "lean": 11 },
+          "recovery": { "lean": 3 }
         },
         "eyeFlare": true
       }
@@ -1161,36 +933,15 @@
       "variants": {
         "up": {
           "hitboxes": [],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 760,
-              "iy": 0,
-              "damp": 0.02
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 760, "iy": 0, "damp": 0.02 }]
         },
         "forward": {
           "hitboxes": [],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 760,
-              "iy": 0,
-              "damp": 0.02
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 760, "iy": 0, "damp": 0.02 }]
         },
         "down": {
           "hitboxes": [],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 760,
-              "iy": 0,
-              "damp": 0.02
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 760, "iy": 0, "damp": 0.02 }]
         }
       },
       "resourceCost": 0,
@@ -1236,31 +987,18 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 24.0,
+                "energy": 24,
                 "duration": 1,
                 "flags": 17,
-                "params": {
-                  "penetration": 40,
-                  "scatter": 0.5
-                }
+                "params": { "penetration": 40, "scatter": 0.5 }
               },
-              "knockback": {
-                "x": 8,
-                "y": 0
-              },
+              "knockback": { "x": 8, "y": 0 },
               "guardPressure": 0.05,
               "reachScale": 0.4,
               "rehit": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": -20,
-              "iy": 0,
-              "damp": 0.25
-            }
-          ]
+          "movement": [{ "at": 0, "ix": -20, "iy": 0, "damp": 0.25 }]
         },
         "forward": {
           "hitboxes": [
@@ -1278,31 +1016,18 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 24.0,
+                "energy": 24,
                 "duration": 1,
                 "flags": 17,
-                "params": {
-                  "penetration": 40,
-                  "scatter": 0.5
-                }
+                "params": { "penetration": 40, "scatter": 0.5 }
               },
-              "knockback": {
-                "x": 8,
-                "y": 0
-              },
+              "knockback": { "x": 8, "y": 0 },
               "guardPressure": 0.05,
               "reachScale": 0.4,
               "rehit": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": -20,
-              "iy": 0,
-              "damp": 0.25
-            }
-          ]
+          "movement": [{ "at": 0, "ix": -20, "iy": 0, "damp": 0.25 }]
         },
         "down": {
           "hitboxes": [
@@ -1320,31 +1045,18 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 24.0,
+                "energy": 24,
                 "duration": 1,
                 "flags": 17,
-                "params": {
-                  "penetration": 40,
-                  "scatter": 0.5
-                }
+                "params": { "penetration": 40, "scatter": 0.5 }
               },
-              "knockback": {
-                "x": 8,
-                "y": 0
-              },
+              "knockback": { "x": 8, "y": 0 },
               "guardPressure": 0.05,
               "reachScale": 0.4,
               "rehit": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": -20,
-              "iy": 0,
-              "damp": 0.25
-            }
-          ]
+          "movement": [{ "at": 0, "ix": -20, "iy": 0, "damp": 0.25 }]
         }
       },
       "resourceCost": 0,
@@ -1354,15 +1066,9 @@
         "chargePower": 1,
         "chargeReach": [0.8, 1.2],
         "pose": {
-          "startup": {
-            "lean": -3
-          },
-          "charge": {
-            "lean": -5
-          },
-          "active": {
-            "lean": 2
-          }
+          "startup": { "lean": -3 },
+          "charge": { "lean": -5 },
+          "active": { "lean": 2 }
         }
       }
     },
@@ -1396,18 +1102,12 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 92.0,
+                "energy": 92,
                 "duration": 1,
                 "flags": 17,
-                "params": {
-                  "penetration": 30,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 30, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 8,
-                "y": 0
-              },
+              "knockback": { "x": 8, "y": 0 },
               "guardPressure": 0.1,
               "sweepTo": {
                 "kind": "line",
@@ -1434,7 +1134,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 2530.0,
+                "energy": 2530,
                 "duration": 1,
                 "flags": 35,
                 "params": {
@@ -1444,21 +1144,11 @@
                   "scatter": 1.6
                 }
               },
-              "knockback": {
-                "x": 520,
-                "y": -80
-              },
+              "knockback": { "x": 520, "y": -80 },
               "guardPressure": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.04
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.04 }]
         },
         "forward": {
           "hitboxes": [
@@ -1476,18 +1166,12 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 92.0,
+                "energy": 92,
                 "duration": 1,
                 "flags": 17,
-                "params": {
-                  "penetration": 30,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 30, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 8,
-                "y": 0
-              },
+              "knockback": { "x": 8, "y": 0 },
               "guardPressure": 0.1,
               "sweepTo": {
                 "kind": "line",
@@ -1514,7 +1198,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 2530.0,
+                "energy": 2530,
                 "duration": 1,
                 "flags": 35,
                 "params": {
@@ -1524,21 +1208,11 @@
                   "scatter": 1.6
                 }
               },
-              "knockback": {
-                "x": 520,
-                "y": -80
-              },
+              "knockback": { "x": 520, "y": -80 },
               "guardPressure": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.04
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.04 }]
         },
         "down": {
           "hitboxes": [
@@ -1556,18 +1230,12 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 92.0,
+                "energy": 92,
                 "duration": 1,
                 "flags": 17,
-                "params": {
-                  "penetration": 30,
-                  "scatter": 0.8
-                }
+                "params": { "penetration": 30, "scatter": 0.8 }
               },
-              "knockback": {
-                "x": 8,
-                "y": 0
-              },
+              "knockback": { "x": 8, "y": 0 },
               "guardPressure": 0.1,
               "sweepTo": {
                 "kind": "line",
@@ -1594,7 +1262,7 @@
               },
               "damage": {
                 "type": "FRACTURE",
-                "energy": 2530.0,
+                "energy": 2530,
                 "duration": 1,
                 "flags": 35,
                 "params": {
@@ -1604,21 +1272,11 @@
                   "scatter": 1.6
                 }
               },
-              "knockback": {
-                "x": 520,
-                "y": -80
-              },
+              "knockback": { "x": 520, "y": -80 },
               "guardPressure": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.04
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.04 }]
         }
       },
       "resourceCost": 0,
@@ -1626,22 +1284,12 @@
       "tags": ["ultimate", "beam", "armor", "pierce"],
       "extra": {
         "pose": {
-          "startup": {
-            "lean": -6
-          },
-          "active": {
-            "lean": 4
-          },
-          "recovery": {
-            "lean": 0
-          }
+          "startup": { "lean": -6 },
+          "active": { "lean": 4 },
+          "recovery": { "lean": 0 }
         },
         "halo": true,
-        "ctl": {
-          "startup": 0.1,
-          "active": 0.06,
-          "recovery": 0.3
-        }
+        "ctl": { "startup": 0.1, "active": 0.06, "recovery": 0.3 }
       }
     },
     {
@@ -1658,18 +1306,9 @@
         "hitstop": 0
       },
       "variants": {
-        "up": {
-          "hitboxes": [],
-          "movement": []
-        },
-        "forward": {
-          "hitboxes": [],
-          "movement": []
-        },
-        "down": {
-          "hitboxes": [],
-          "movement": []
-        }
+        "up": { "hitboxes": [], "movement": [] },
+        "forward": { "hitboxes": [], "movement": [] },
+        "down": { "hitboxes": [], "movement": [] }
       },
       "resourceCost": 0,
       "meterCost": 0,
@@ -1689,14 +1328,8 @@
     }
   ],
   "feel": {
-    "bob": {
-      "amp": 1.6,
-      "period": 3.4
-    },
-    "sway": {
-      "amp": 1.2,
-      "period": 5.0
-    },
+    "bob": { "amp": 1.6, "period": 3.4 },
+    "sway": { "amp": 1.2, "period": 5 },
     "fx": {
       "kind": "glint",
       "ramp": ["#ffffff", "#bfe8e0", "#6fb0a8"],
@@ -1709,5 +1342,6 @@
       "rise": -12,
       "idleRate": 2
     }
-  }
+  },
+  "balance": { "power": 0.752, "durability": 1.33 }
 }

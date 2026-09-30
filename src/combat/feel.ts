@@ -45,6 +45,9 @@ export interface Feel {
   /** Multiplier on the low-frequency thud shake of a heavy release. */
   thud: number;
   fx: FeelFx | null;
+  /** Global balance knobs from the JSON `balance` block (default 1, valid 0.3 to 3): outgoing energy multiplier and incoming energy divisor. */
+  power: number;
+  durability: number;
 }
 
 const FX_KINDS: readonly ParticleKind[] = [
@@ -58,6 +61,10 @@ const FX_KINDS: readonly ParticleKind[] = [
   'shard',
   'mote',
 ];
+
+/** Valid range of the `balance` knobs (the titan test asserts the JSON stays inside it). */
+export const BALANCE_MIN = 0.3;
+export const BALANCE_MAX = 3;
 
 interface FeelJson extends Partial<Omit<Feel, 'fx'>> {
   bob?: { amp?: number; period?: number };
@@ -81,6 +88,7 @@ export function resolveFeel(def: TitanDef): Feel {
   const mass = def.attributes.mass;
   const m = mass / 5;
   const j = (def as unknown as { feel?: FeelJson }).feel ?? {};
+  const bal = (def as unknown as { balance?: { power?: number; durability?: number } }).balance ?? {};
   let fx: FeelFx | null = null;
   const jf = j.fx;
   if (jf) {
@@ -111,5 +119,7 @@ export function resolveFeel(def: TitanDef): Feel {
     shudder: j.shudder ?? 1,
     thud: j.thud ?? 1,
     fx,
+    power: clamp(bal.power ?? 1, BALANCE_MIN, BALANCE_MAX),
+    durability: clamp(bal.durability ?? 1, BALANCE_MIN, BALANCE_MAX),
   };
 }

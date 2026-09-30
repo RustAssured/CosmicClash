@@ -91,6 +91,17 @@ describe('titan definitions', () => {
     expect(ast.moves.find((m) => m.slot === 'signature')!.resourceCost).toBeGreaterThan(0);
   });
 
+  it('the optional balance knobs stay inside their valid range', () => {
+    for (const id of IMPLEMENTED_TITANS) {
+      const b =
+        (getTitanDef(id) as unknown as { balance?: { power?: number; durability?: number } }).balance ?? {};
+      for (const v of [b.power ?? 1, b.durability ?? 1]) {
+        expect(v).toBeGreaterThanOrEqual(0.3);
+        expect(v).toBeLessThanOrEqual(3);
+      }
+    }
+  });
+
   it('titans not implemented yet are absent (no stubs)', () => {
     for (const id of TITAN_IDS) expect(id in TITAN_DEFS).toBe(IMPLEMENTED_TITANS.includes(id));
   });

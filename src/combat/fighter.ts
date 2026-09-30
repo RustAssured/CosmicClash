@@ -1,4 +1,5 @@
 import {
+  type DamageParams,
   Btn,
   DamageFlag,
   EMPTY_DAMAGE_RESULT,
@@ -1527,7 +1528,7 @@ export class FighterImpl implements Fighter {
     copyShape(this.evShape, asShape(shape));
     const e = this.ev;
     e.type = dmg.type;
-    e.energy = dmg.energy * this.stats.damageMul * this.mv.power * energyMul;
+    e.energy = dmg.energy * this.stats.damageMul * this.mv.power * energyMul * this.feel.power;
     const t = this.body.transform;
     let dx = kbx * this.facing;
     let dy = kby;
@@ -1547,7 +1548,7 @@ export class FighterImpl implements Fighter {
     e.originY = t.y;
     const fv = foe.view;
     e.flags = dmg.flags | (fv.integrityPct < 24 ? DamageFlag.FINISHER : 0);
-    e.params = dmg.params;
+    e.params = this.feel.power === 1 ? dmg.params : this.scaleParams(dmg.params, this.feel.power);
     e.shape = asShape(this.evShape);
 
     const info = this.hitInfo;
@@ -1725,7 +1726,7 @@ export class FighterImpl implements Fighter {
     const e = this.evIn;
     e.type = evIn.type;
     e.shape = evIn.shape;
-    e.energy = evIn.energy;
+    e.energy = evIn.energy / this.feel.durability;
     e.dirX = evIn.dirX;
     e.dirY = evIn.dirY;
     e.duration = evIn.duration;
@@ -1734,7 +1735,8 @@ export class FighterImpl implements Fighter {
     e.originX = evIn.originX;
     e.originY = evIn.originY;
     e.flags = evIn.flags;
-    e.params = evIn.params;
+    e.params =
+      this.feel.durability === 1 ? evIn.params : this.scaleParams(evIn.params, 1 / this.feel.durability);
     const rawEnergy = e.energy;
 
     // 1. guard shell
@@ -1912,6 +1914,22 @@ export class FighterImpl implements Fighter {
     s.size = 1;
     s.drag = 1.5;
     s.fieldScale = 0.2;
+  }
+
+  private readonly scaledParams: DamageParams = {};
+
+  /** The params with the effects that do not follow energy (infection, harvest, pull, compression, heat, shock) scaled by k (`balance.power` out, 1/`balance.durability` in). */
+  private scaleParams(p: DamageParams, k: number): DamageParams {
+    const o = this.scaledParams;
+    for (const key of Object.keys(o) as (keyof DamageParams)[]) delete o[key];
+    Object.assign(o, p);
+    if (p.latch !== undefined) o.latch = Math.min(255, p.latch * k);
+    if (p.harvest !== undefined) o.harvest = Math.min(1, p.harvest * k);
+    if (p.pull !== undefined) o.pull = p.pull * k;
+    if (p.compress !== undefined) o.compress = p.compress * k;
+    if (p.heat !== undefined) o.heat = p.heat * k;
+    if (p.shock !== undefined) o.shock = p.shock * k;
+    return o;
   }
 
   /** Displace the transform by the first vibration sample now (the hit-stop frames are drawn before the next tick). */

@@ -39,11 +39,7 @@
         "crack": "#0f0b12",
         "debris": "#8a7459"
       },
-      "physics": {
-        "resist": {
-          "TIDAL": 0.5
-        }
-      }
+      "physics": { "resist": { "TIDAL": 0.5 } }
     },
     {
       "key": "kamacite",
@@ -55,21 +51,12 @@
         "crack": "#0a0e18",
         "debris": "#6b7f9b"
       },
-      "physics": {
-        "resist": {
-          "TIDAL": 0.5
-        }
-      }
+      "physics": { "resist": { "TIDAL": 0.5 } }
     },
     {
       "key": "taenite",
       "base": "ironNickel",
-      "physics": {
-        "toughness": 0.85,
-        "resist": {
-          "TIDAL": 0.5
-        }
-      },
+      "physics": { "toughness": 0.85, "resist": { "TIDAL": 0.5 } },
       "visual": {
         "ramp": ["#1c1720", "#332a33", "#54444a", "#7a665f", "#a38d79", "#c9b399", "#e8d9bd"],
         "emissive": 0,
@@ -88,11 +75,7 @@
         "crack": "#0a2a44",
         "debris": "#a2ecef"
       },
-      "physics": {
-        "resist": {
-          "TIDAL": 0.5
-        }
-      }
+      "physics": { "resist": { "TIDAL": 0.5 } }
     },
     {
       "key": "olivine",
@@ -104,11 +87,7 @@
         "crack": "#171d08",
         "debris": "#bccb38"
       },
-      "physics": {
-        "resist": {
-          "TIDAL": 0.5
-        }
-      }
+      "physics": { "resist": { "TIDAL": 0.5 } }
     },
     {
       "key": "dense",
@@ -116,9 +95,7 @@
       "physics": {
         "density": 3.2,
         "toughness": 0.9,
-        "resist": {
-          "TIDAL": 0.5
-        }
+        "resist": { "TIDAL": 0.5 }
       },
       "visual": {
         "ramp": ["#2a1416", "#552620", "#8a432b", "#bf7239", "#e8ad5a", "#fbe0a0"],
@@ -137,54 +114,19 @@
     "coreRadius": 9,
     "params": {
       "centre": [68, 62],
-      "body": {
-        "rx": 45,
-        "ry": 41
-      },
+      "body": { "rx": 45, "ry": 41 },
       "facets": 8,
       "crags": [
-        {
-          "ax": 20,
-          "ay": -2,
-          "ra": 22,
-          "bx": 47,
-          "by": -9,
-          "rb": 12
-        },
-        {
-          "ax": -26,
-          "ay": 14,
-          "ra": 18,
-          "bx": -47,
-          "by": 30,
-          "rb": 9
-        },
-        {
-          "ax": -4,
-          "ay": -28,
-          "ra": 15,
-          "bx": -13,
-          "by": -46,
-          "rb": 8
-        },
-        {
-          "ax": 22,
-          "ay": 24,
-          "ra": 12,
-          "bx": 33,
-          "by": 40,
-          "rb": 7
-        }
+        { "ax": 20, "ay": -2, "ra": 22, "bx": 47, "by": -9, "rb": 12 },
+        { "ax": -26, "ay": 14, "ra": 18, "bx": -47, "by": 30, "rb": 9 },
+        { "ax": -4, "ay": -28, "ra": 15, "bx": -13, "by": -46, "rb": 8 },
+        { "ax": 22, "ay": 24, "ra": 12, "bx": 33, "by": 40, "rb": 7 }
       ],
       "craters": 6,
       "bites": 5,
       "veins": 3,
       "olivine": 8,
-      "core": {
-        "x": -3,
-        "y": 3,
-        "r": 9
-      },
+      "core": { "x": -3, "y": 3, "r": 9 },
       "pebbles": 5
     }
   },
@@ -226,38 +168,19 @@
               "id": "check",
               "from": 0,
               "to": 8,
-              "shape": {
-                "kind": "point",
-                "ox": 60,
-                "oy": -40,
-                "r": 27
-              },
+              "shape": { "kind": "point", "ox": 60, "oy": -40, "r": 27 },
               "damage": {
                 "type": "KINETIC",
                 "energy": 260,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "crater": 6,
-                  "penetration": 6,
-                  "scatter": 1
-                }
+                "params": { "crater": 6, "penetration": 6, "scatter": 1 }
               },
-              "knockback": {
-                "x": 260,
-                "y": -40
-              },
+              "knockback": { "x": 260, "y": -40 },
               "guardPressure": 0.25
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 380,
-              "iy": -60,
-              "damp": 0.12
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 380, "iy": -60, "damp": 0.12 }]
         },
         "forward": {
           "hitboxes": [
@@ -265,38 +188,19 @@
               "id": "check",
               "from": 0,
               "to": 8,
-              "shape": {
-                "kind": "point",
-                "ox": 60,
-                "oy": -6,
-                "r": 27
-              },
+              "shape": { "kind": "point", "ox": 60, "oy": -6, "r": 27 },
               "damage": {
                 "type": "KINETIC",
                 "energy": 260,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "crater": 6,
-                  "penetration": 6,
-                  "scatter": 1
-                }
+                "params": { "crater": 6, "penetration": 6, "scatter": 1 }
               },
-              "knockback": {
-                "x": 260,
-                "y": -40
-              },
+              "knockback": { "x": 260, "y": -40 },
               "guardPressure": 0.25
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 380,
-              "iy": 0,
-              "damp": 0.12
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 380, "iy": 0, "damp": 0.12 }]
         },
         "down": {
           "hitboxes": [
@@ -304,38 +208,19 @@
               "id": "check",
               "from": 0,
               "to": 8,
-              "shape": {
-                "kind": "point",
-                "ox": 60,
-                "oy": 28,
-                "r": 27
-              },
+              "shape": { "kind": "point", "ox": 60, "oy": 28, "r": 27 },
               "damage": {
                 "type": "KINETIC",
                 "energy": 260,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "crater": 6,
-                  "penetration": 6,
-                  "scatter": 1
-                }
+                "params": { "crater": 6, "penetration": 6, "scatter": 1 }
               },
-              "knockback": {
-                "x": 260,
-                "y": -40
-              },
+              "knockback": { "x": 260, "y": -40 },
               "guardPressure": 0.25
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 380,
-              "iy": 60,
-              "damp": 0.12
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 380, "iy": 60, "damp": 0.12 }]
         }
       },
       "resourceCost": 0,
@@ -343,14 +228,7 @@
       "tags": ["hop"],
       "extra": {
         "recoil": 0.55,
-        "pose": {
-          "startup": {
-            "lean": -5
-          },
-          "active": {
-            "lean": 8
-          }
-        }
+        "pose": { "startup": { "lean": -5 }, "active": { "lean": 8 } }
       }
     },
     {
@@ -373,12 +251,7 @@
               "id": "ram",
               "from": 0,
               "to": 10,
-              "shape": {
-                "kind": "point",
-                "ox": 58,
-                "oy": -34,
-                "r": 36
-              },
+              "shape": { "kind": "point", "ox": 58, "oy": -34, "r": 36 },
               "damage": {
                 "type": "KINETIC",
                 "energy": 1147.5,
@@ -392,26 +265,13 @@
                   "scatter": 1.3
                 }
               },
-              "knockback": {
-                "x": 820,
-                "y": -120
-              },
+              "knockback": { "x": 820, "y": -120 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -140,
-              "iy": 0,
-              "damp": 0.3
-            },
-            {
-              "at": 26,
-              "ix": 700,
-              "iy": -110,
-              "damp": 0.05
-            }
+            { "at": 0, "ix": -140, "iy": 0, "damp": 0.3 },
+            { "at": 26, "ix": 700, "iy": -110, "damp": 0.05 }
           ]
         },
         "forward": {
@@ -420,12 +280,7 @@
               "id": "ram",
               "from": 0,
               "to": 10,
-              "shape": {
-                "kind": "point",
-                "ox": 58,
-                "oy": -4,
-                "r": 36
-              },
+              "shape": { "kind": "point", "ox": 58, "oy": -4, "r": 36 },
               "damage": {
                 "type": "KINETIC",
                 "energy": 1147.5,
@@ -439,26 +294,13 @@
                   "scatter": 1.3
                 }
               },
-              "knockback": {
-                "x": 820,
-                "y": -120
-              },
+              "knockback": { "x": 820, "y": -120 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -140,
-              "iy": 0,
-              "damp": 0.3
-            },
-            {
-              "at": 26,
-              "ix": 700,
-              "iy": 0,
-              "damp": 0.05
-            }
+            { "at": 0, "ix": -140, "iy": 0, "damp": 0.3 },
+            { "at": 26, "ix": 700, "iy": 0, "damp": 0.05 }
           ]
         },
         "down": {
@@ -467,12 +309,7 @@
               "id": "ram",
               "from": 0,
               "to": 10,
-              "shape": {
-                "kind": "point",
-                "ox": 58,
-                "oy": 26,
-                "r": 36
-              },
+              "shape": { "kind": "point", "ox": 58, "oy": 26, "r": 36 },
               "damage": {
                 "type": "KINETIC",
                 "energy": 1147.5,
@@ -486,26 +323,13 @@
                   "scatter": 1.3
                 }
               },
-              "knockback": {
-                "x": 820,
-                "y": -120
-              },
+              "knockback": { "x": 820, "y": -120 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": -140,
-              "iy": 0,
-              "damp": 0.3
-            },
-            {
-              "at": 26,
-              "ix": 700,
-              "iy": 110,
-              "damp": 0.05
-            }
+            { "at": 0, "ix": -140, "iy": 0, "damp": 0.3 },
+            { "at": 26, "ix": 700, "iy": 110, "damp": 0.05 }
           ]
         }
       },
@@ -515,15 +339,9 @@
       "extra": {
         "recoil": 0.9,
         "pose": {
-          "startup": {
-            "lean": -9
-          },
-          "active": {
-            "lean": 13
-          },
-          "recovery": {
-            "lean": 4
-          }
+          "startup": { "lean": -9 },
+          "active": { "lean": 13 },
+          "recovery": { "lean": 4 }
         }
       }
     },
@@ -543,45 +361,22 @@
       "variants": {
         "up": {
           "hitboxes": [],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 860,
-              "iy": 0,
-              "damp": 0.02
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 860, "iy": 0, "damp": 0.02 }]
         },
         "forward": {
           "hitboxes": [],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 860,
-              "iy": 0,
-              "damp": 0.02
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 860, "iy": 0, "damp": 0.02 }]
         },
         "down": {
           "hitboxes": [],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 860,
-              "iy": 0,
-              "damp": 0.02
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 860, "iy": 0, "damp": 0.02 }]
         }
       },
       "resourceCost": 0,
       "meterCost": 0,
       "intangible": [1, 9],
       "tags": ["dash", "roll"],
-      "extra": {
-        "spin": true
-      }
+      "extra": { "spin": true }
     },
     {
       "id": "asteroid.swarm",
@@ -603,38 +398,19 @@
               "id": "burst",
               "from": 0,
               "to": 3,
-              "shape": {
-                "kind": "ring",
-                "ox": 0,
-                "oy": 0,
-                "r0": 18,
-                "r1": 58
-              },
+              "shape": { "kind": "ring", "ox": 0, "oy": 0, "r0": 18, "r1": 58 },
               "damage": {
                 "type": "KINETIC",
                 "energy": 140,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "scatter": 1.5,
-                  "crater": 4
-                }
+                "params": { "scatter": 1.5, "crater": 4 }
               },
-              "knockback": {
-                "x": 90,
-                "y": -20
-              },
+              "knockback": { "x": 90, "y": -20 },
               "guardPressure": 0.3
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.1
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.1 }]
         },
         "forward": {
           "hitboxes": [
@@ -642,38 +418,19 @@
               "id": "burst",
               "from": 0,
               "to": 3,
-              "shape": {
-                "kind": "ring",
-                "ox": 0,
-                "oy": 0,
-                "r0": 18,
-                "r1": 58
-              },
+              "shape": { "kind": "ring", "ox": 0, "oy": 0, "r0": 18, "r1": 58 },
               "damage": {
                 "type": "KINETIC",
                 "energy": 140,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "scatter": 1.5,
-                  "crater": 4
-                }
+                "params": { "scatter": 1.5, "crater": 4 }
               },
-              "knockback": {
-                "x": 90,
-                "y": -20
-              },
+              "knockback": { "x": 90, "y": -20 },
               "guardPressure": 0.3
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.1
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.1 }]
         },
         "down": {
           "hitboxes": [
@@ -681,52 +438,26 @@
               "id": "burst",
               "from": 0,
               "to": 3,
-              "shape": {
-                "kind": "ring",
-                "ox": 0,
-                "oy": 0,
-                "r0": 18,
-                "r1": 58
-              },
+              "shape": { "kind": "ring", "ox": 0, "oy": 0, "r0": 18, "r1": 58 },
               "damage": {
                 "type": "KINETIC",
                 "energy": 140,
                 "duration": 1,
                 "flags": 0,
-                "params": {
-                  "scatter": 1.5,
-                  "crater": 4
-                }
+                "params": { "scatter": 1.5, "crater": 4 }
               },
-              "knockback": {
-                "x": 90,
-                "y": -20
-              },
+              "knockback": { "x": 90, "y": -20 },
               "guardPressure": 0.3
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.1
-            }
-          ]
+          "movement": [{ "at": 0, "ix": 0, "iy": 0, "damp": 0.1 }]
         }
       },
       "resourceCost": 8,
       "meterCost": 0,
       "tags": ["projectile", "swarm"],
       "extra": {
-        "pose": {
-          "startup": {
-            "lean": -4
-          },
-          "active": {
-            "lean": 0
-          }
-        },
+        "pose": { "startup": { "lean": -4 }, "active": { "lean": 0 } },
         "swarm": {
           "count": 8,
           "speed": 300,
@@ -737,10 +468,7 @@
           "life": 120,
           "orbit": 46
         },
-        "ctl": {
-          "active": 0.03,
-          "recovery": 0.4
-        }
+        "ctl": { "active": 0.03, "recovery": 0.4 }
       }
     },
     {
@@ -773,19 +501,12 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 70.0,
+                "energy": 70,
                 "duration": 1,
                 "flags": 1,
-                "params": {
-                  "scatter": 1.2,
-                  "crater": 5,
-                  "penetration": 8
-                }
+                "params": { "scatter": 1.2, "crater": 5, "penetration": 8 }
               },
-              "knockback": {
-                "x": -35,
-                "y": -6
-              },
+              "knockback": { "x": -35, "y": -6 },
               "guardPressure": 0.3,
               "rehit": 6
             },
@@ -793,15 +514,10 @@
               "id": "slam",
               "from": 64,
               "to": 74,
-              "shape": {
-                "kind": "point",
-                "ox": 62,
-                "oy": -4,
-                "r": 46
-              },
+              "shape": { "kind": "point", "ox": 62, "oy": -4, "r": 46 },
               "damage": {
                 "type": "KINETIC",
-                "energy": 1650.0,
+                "energy": 1650,
                 "duration": 1,
                 "flags": 40,
                 "params": {
@@ -812,26 +528,13 @@
                   "scatter": 1.6
                 }
               },
-              "knockback": {
-                "x": 900,
-                "y": -160
-              },
+              "knockback": { "x": 900, "y": -160 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.05
-            },
-            {
-              "at": 64,
-              "ix": 620,
-              "iy": 0,
-              "damp": 0.04
-            }
+            { "at": 0, "ix": 0, "iy": 0, "damp": 0.05 },
+            { "at": 64, "ix": 620, "iy": 0, "damp": 0.04 }
           ]
         },
         "forward": {
@@ -850,19 +553,12 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 70.0,
+                "energy": 70,
                 "duration": 1,
                 "flags": 1,
-                "params": {
-                  "scatter": 1.2,
-                  "crater": 5,
-                  "penetration": 8
-                }
+                "params": { "scatter": 1.2, "crater": 5, "penetration": 8 }
               },
-              "knockback": {
-                "x": -35,
-                "y": -6
-              },
+              "knockback": { "x": -35, "y": -6 },
               "guardPressure": 0.3,
               "rehit": 6
             },
@@ -870,15 +566,10 @@
               "id": "slam",
               "from": 64,
               "to": 74,
-              "shape": {
-                "kind": "point",
-                "ox": 62,
-                "oy": -4,
-                "r": 46
-              },
+              "shape": { "kind": "point", "ox": 62, "oy": -4, "r": 46 },
               "damage": {
                 "type": "KINETIC",
-                "energy": 1650.0,
+                "energy": 1650,
                 "duration": 1,
                 "flags": 40,
                 "params": {
@@ -889,26 +580,13 @@
                   "scatter": 1.6
                 }
               },
-              "knockback": {
-                "x": 900,
-                "y": -160
-              },
+              "knockback": { "x": 900, "y": -160 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.05
-            },
-            {
-              "at": 64,
-              "ix": 620,
-              "iy": 0,
-              "damp": 0.04
-            }
+            { "at": 0, "ix": 0, "iy": 0, "damp": 0.05 },
+            { "at": 64, "ix": 620, "iy": 0, "damp": 0.04 }
           ]
         },
         "down": {
@@ -927,19 +605,12 @@
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 70.0,
+                "energy": 70,
                 "duration": 1,
                 "flags": 1,
-                "params": {
-                  "scatter": 1.2,
-                  "crater": 5,
-                  "penetration": 8
-                }
+                "params": { "scatter": 1.2, "crater": 5, "penetration": 8 }
               },
-              "knockback": {
-                "x": -35,
-                "y": -6
-              },
+              "knockback": { "x": -35, "y": -6 },
               "guardPressure": 0.3,
               "rehit": 6
             },
@@ -947,15 +618,10 @@
               "id": "slam",
               "from": 64,
               "to": 74,
-              "shape": {
-                "kind": "point",
-                "ox": 62,
-                "oy": -4,
-                "r": 46
-              },
+              "shape": { "kind": "point", "ox": 62, "oy": -4, "r": 46 },
               "damage": {
                 "type": "KINETIC",
-                "energy": 1650.0,
+                "energy": 1650,
                 "duration": 1,
                 "flags": 40,
                 "params": {
@@ -966,26 +632,13 @@
                   "scatter": 1.6
                 }
               },
-              "knockback": {
-                "x": 900,
-                "y": -160
-              },
+              "knockback": { "x": 900, "y": -160 },
               "guardPressure": 1
             }
           ],
           "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.05
-            },
-            {
-              "at": 64,
-              "ix": 620,
-              "iy": 0,
-              "damp": 0.04
-            }
+            { "at": 0, "ix": 0, "iy": 0, "damp": 0.05 },
+            { "at": 64, "ix": 620, "iy": 0, "damp": 0.04 }
           ]
         }
       },
@@ -993,14 +646,7 @@
       "meterCost": 1,
       "tags": ["ultimate", "projectile", "armor", "storm"],
       "extra": {
-        "pose": {
-          "startup": {
-            "lean": -6
-          },
-          "active": {
-            "lean": 6
-          }
-        },
+        "pose": { "startup": { "lean": -6 }, "active": { "lean": 6 } },
         "cascade": {
           "count": 40,
           "energy": 0,
@@ -1008,11 +654,7 @@
           "sweepFrom": 8,
           "sweepTo": 64
         },
-        "ctl": {
-          "startup": 0.1,
-          "active": 0.1,
-          "recovery": 0.3
-        }
+        "ctl": { "startup": 0.1, "active": 0.1, "recovery": 0.3 }
       }
     },
     {
@@ -1029,18 +671,9 @@
         "hitstop": 0
       },
       "variants": {
-        "up": {
-          "hitboxes": [],
-          "movement": []
-        },
-        "forward": {
-          "hitboxes": [],
-          "movement": []
-        },
-        "down": {
-          "hitboxes": [],
-          "movement": []
-        }
+        "up": { "hitboxes": [], "movement": [] },
+        "forward": { "hitboxes": [], "movement": [] },
+        "down": { "hitboxes": [], "movement": [] }
       },
       "resourceCost": 0,
       "meterCost": 0,
@@ -1060,14 +693,8 @@
     }
   ],
   "feel": {
-    "bob": {
-      "amp": 0.5,
-      "period": 2.2
-    },
-    "sway": {
-      "amp": 0.3,
-      "period": 3.1
-    },
+    "bob": { "amp": 0.5, "period": 2.2 },
+    "sway": { "amp": 0.3, "period": 3.1 },
     "fx": {
       "kind": "dust",
       "ramp": ["#c9b8a0", "#8a7a68", "#4a4038"],
@@ -1078,5 +705,6 @@
       "behind": 24,
       "rise": 10
     }
-  }
+  },
+  "balance": { "power": 1.153, "durability": 0.868 }
 }

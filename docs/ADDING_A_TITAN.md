@@ -49,6 +49,10 @@ resource it manages, and the one thing it does that no other titan does. `docs/D
   `chargeReach`, `recoil`, `noCredit`, `root`, `cage`, `well`; see `src/titans/README.md`).
 * `ai.weights`: `aggression, patience, zoning, retreat, trap, punish, gaze` (0 to 1). These swing balance results more than an AI level does.
 * `ui`: accent colours and tagline.
+* `balance` (optional): `{ "power": 1, "durability": 1 }`, each valid 0.3 to 3 (keep them within 0.5 to 2 in practice; a test asserts the range). `power` multiplies the
+  energy of every outgoing damage event, `durability` divides the energy of every incoming one before Guard, parts and the matter world see it. These are the
+  ONE obvious tuning handle for a titan's overall strength; `npm run autotune` (or `npx tsx tools/ai/autotune.ts`) sets them automatically from tournament results.
+  Effects that are driven by move `params` (a crater size, an infection amount) do not scale with them, so they move rates less than energy-driven ones.
 * `feel` (optional, all fields optional; defaults are derived from `mass`): see next section.
 
 ## 4. The `feel` block (body weight and scene presence)
@@ -124,6 +128,7 @@ and the wake.
   Targets, as a share of an idle opposing body: Strike about 2 to 5 %, Crush 6 to 15 %, Ultimate 25 to 45 %.
 * **Duels**: `npx tsx tools/ai/duel.ts --a=<id> --b=<other> --la=3 --lb=3 --n=20 --seed=200 --swap` (real matter world, sides alternated). Read
   wins with a standard error of about 11 points at n = 20; use n >= 50 for decisions. Round length target: average 30 to 50 s.
+* **Autotune** (finds `balance.power` / `balance.durability` for every titan so each wins about half of an all-pairs tournament; writes them into the JSON and a history into `docs/BALANCE.md`): `npx tsx tools/ai/autotune.ts --n=24 --iters=12`. Use it after adding a titan, then fix the pair extremes it leaves with material and move changes.
 * **Tournament** (unattended, resumable, all pairs, writes `docs/BALANCE.md` and `docs/balance-results.json`): `npm run balance -- --n=100 --level=3`.
   **Ladder** (does a higher AI level win, per titan): `npm run balance -- --ladder --n=50`.
 * **Levers, in the order to try them**: move energies (`hitboxes[].damage.energy`), material `resist` overrides per attacker damage type,
