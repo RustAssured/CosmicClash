@@ -524,9 +524,8 @@ describe('debris depth classes', () => {
     fresh.age = 20;
     expect(chunkDepth(fresh)).toBe(2);
     fresh.age = 200;
-    expect(chunkDepth(fresh)).toBe(
-      ((8 * 2654435761) >>> 0) % 8 < 4 ? 0 : ((8 * 2654435761) >>> 0) % 8 < 7 ? 1 : 2,
-    );
+    const slot = ((fresh.id * 2654435761) >>> 0) % 8;
+    expect(chunkDepth(fresh)).toBe(slot < 4 ? 0 : slot < 7 ? 1 : 2);
   });
 
   it('a long barrage renders all three layers without touching the hash (twice: same hash)', () => {
