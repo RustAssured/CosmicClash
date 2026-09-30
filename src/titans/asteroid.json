@@ -38,6 +38,11 @@
         "char": "#231c1a",
         "crack": "#0f0b12",
         "debris": "#8a7459"
+      },
+      "physics": {
+        "resist": {
+          "TIDAL": 0.5
+        }
       }
     },
     {
@@ -49,13 +54,21 @@
         "char": "#1a1d26",
         "crack": "#0a0e18",
         "debris": "#6b7f9b"
+      },
+      "physics": {
+        "resist": {
+          "TIDAL": 0.5
+        }
       }
     },
     {
       "key": "taenite",
       "base": "ironNickel",
       "physics": {
-        "toughness": 0.85
+        "toughness": 0.85,
+        "resist": {
+          "TIDAL": 0.5
+        }
       },
       "visual": {
         "ramp": ["#1c1720", "#332a33", "#54444a", "#7a665f", "#a38d79", "#c9b399", "#e8d9bd"],
@@ -74,6 +87,11 @@
         "char": "#123a52",
         "crack": "#0a2a44",
         "debris": "#a2ecef"
+      },
+      "physics": {
+        "resist": {
+          "TIDAL": 0.5
+        }
       }
     },
     {
@@ -85,6 +103,11 @@
         "char": "#2a2c12",
         "crack": "#171d08",
         "debris": "#bccb38"
+      },
+      "physics": {
+        "resist": {
+          "TIDAL": 0.5
+        }
       }
     },
     {
@@ -92,7 +115,10 @@
       "base": "ironNickel",
       "physics": {
         "density": 3.2,
-        "toughness": 0.9
+        "toughness": 0.9,
+        "resist": {
+          "TIDAL": 0.5
+        }
       },
       "visual": {
         "ramp": ["#2a1416", "#552620", "#8a432b", "#bf7239", "#e8ad5a", "#fbe0a0"],

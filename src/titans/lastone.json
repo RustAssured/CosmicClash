@@ -45,7 +45,7 @@
           "KINETIC": 1.0,
           "CRUSH": 0.9,
           "THERMAL": 0.5,
-          "ASSIMILATION": 0.7,
+          "ASSIMILATION": 0.4,
           "TIDAL": 0.8
         }
       }
@@ -61,7 +61,7 @@
           "KINETIC": 1.0,
           "CRUSH": 0.9,
           "THERMAL": 0.5,
-          "ASSIMILATION": 0.7,
+          "ASSIMILATION": 0.4,
           "TIDAL": 0.8
         }
       },
@@ -89,7 +89,7 @@
           "KINETIC": 1.0,
           "CRUSH": 0.9,
           "THERMAL": 0.5,
-          "ASSIMILATION": 0.7,
+          "ASSIMILATION": 0.4,
           "TIDAL": 0.8
         }
       }

@@ -44,7 +44,8 @@
           "FRACTURE": 1.4,
           "KINETIC": 1.4,
           "CRUSH": 0.9,
-          "THERMAL": 0.7
+          "THERMAL": 0.7,
+          "ASSIMILATION": 0.5
         }
       }
     },
@@ -63,7 +64,8 @@
           "FRACTURE": 1.4,
           "KINETIC": 1.4,
           "CRUSH": 0.9,
-          "THERMAL": 0.7
+          "THERMAL": 0.7,
+          "ASSIMILATION": 0.5
         }
       }
     },
@@ -82,7 +84,8 @@
           "FRACTURE": 1.4,
           "KINETIC": 1.4,
           "CRUSH": 0.9,
-          "THERMAL": 0.7
+          "THERMAL": 0.7,
+          "ASSIMILATION": 0.5
         }
       }
     },
@@ -101,7 +104,8 @@
           "FRACTURE": 1.5,
           "KINETIC": 1.5,
           "CRUSH": 0.9,
-          "THERMAL": 0.8
+          "THERMAL": 0.8,
+          "ASSIMILATION": 0.5
         }
       }
     },
@@ -120,7 +124,8 @@
           "FRACTURE": 1.5,
           "KINETIC": 1.5,
           "CRUSH": 0.9,
-          "THERMAL": 0.8
+          "THERMAL": 0.8,
+          "ASSIMILATION": 0.5
         }
       }
     },
@@ -136,7 +141,8 @@
       },
       "physics": {
         "resist": {
-          "THERMAL": 1.0
+          "THERMAL": 1.0,
+          "ASSIMILATION": 0.5
         }
       }
     },
@@ -155,7 +161,8 @@
           "FRACTURE": 1.5,
           "KINETIC": 1.5,
           "CRUSH": 0.9,
-          "THERMAL": 0.8
+          "THERMAL": 0.8,
+          "ASSIMILATION": 0.5
         }
       }
     }

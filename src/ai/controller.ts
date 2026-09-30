@@ -778,14 +778,16 @@ export class UtilityAI implements AIController {
       // burnt low: back away and go quiet so the stock recovers, rather than idling at empty inside the foe's reach
       const fuel = S.resource / Math.max(1, this.def.resource.max);
       if (fuel < 0.4 && vuln <= 6) {
+        // close to the foe: back away; well out of reach: simply stand quiet (moving on only wastes the recovery)
+        const near = dist < 260;
         const cool = this.add(
           'cool off',
           'space',
-          'retreat',
+          near ? 'retreat' : 'wait',
           pers.fuelCare * 1.3 * (1 - fuel / 0.4) + 0.1,
           `fuel ${(fuel * 100).toFixed(0)}%`,
         );
-        cool.ticks = dist < 260 ? 30 : 12;
+        cool.ticks = near ? 30 : 20;
         cool.delay = this.jitter();
       }
     }
@@ -957,6 +959,8 @@ export class UtilityAI implements AIController {
         if (pers.fuelCare > 0 && !punish) {
           // a burning stock: the lower it runs, the less a poke is worth (it must be spent on the blow that matters)
           const fuel = S.resource / Math.max(1, this.def.resource.max);
+          // running on fumes: a poke does almost nothing and only resets the recovery clock, so stand down until it has refilled
+          if (fuel < 0.12 || S.resource < ((mi.def.extra?.['fuel'] as number | undefined) ?? 0)) continue;
           score *= 1 - pers.fuelCare * (1 - clamp(fuel / 0.4, 0.15, 1));
         }
         if (pers.reserve > 0 && mi.resourceCost > 0) {

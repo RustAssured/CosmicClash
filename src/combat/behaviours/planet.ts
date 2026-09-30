@@ -33,8 +33,8 @@ const DRIFT = 3;
 const GONE = 4;
 
 /** Share of a blow a moon in its way takes for the planet, and the most all moons together can soak. */
-const MOON_SHARE = 0.3;
-const SOAK_MAX = 0.4;
+const MOON_SHARE = 0.22;
+const SOAK_MAX = 0.3;
 /** A moon shoved harder than this (impulse per unit of its remaining mass) is knocked out of orbit; below this mass fraction it breaks up. */
 const KNOCK_LIMIT = 170;
 const BREAK_FRAC = 0.28;

@@ -148,7 +148,7 @@ for (const mat of MATERIALS)
     mat.physics = {
       ...mat.physics,
       ...(['ocean', 'atmosphere', 'cloud'].includes(mat.key) ? { heatAbsorb: 0.08 } : {}),
-      resist: { CRUSH: 3.4, KINETIC: 3.4, FRACTURE: 3.4, THERMAL: 3.2 },
+      resist: { CRUSH: 4, KINETIC: 4, FRACTURE: 4, THERMAL: 3.2 },
     };
 
 const moonMats = (rock: string[], dust: string[], dark: string[]): MaterialSpec[] => [
@@ -365,7 +365,7 @@ export const planet: TitanDef = {
     coreY: 104,
     coreRadius: 13,
     params: {
-      radius: 60,
+      radius: 54,
       atmo: 8,
       surface: 5.5,
       crust: 11,

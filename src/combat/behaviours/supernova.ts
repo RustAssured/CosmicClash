@@ -33,8 +33,10 @@ const SHED_FLOOR = 0.6;
 /** The debt of burnt mass is paid to the matter world in lumps: `world.shed` scans the whole map. */
 const SHED_LUMP = 0.012;
 /** Quiet ticks (no move started, nothing landed, nothing taken) before the star cools and regains fuel, and the rate. */
+/** A collapsed remnant burns away this fraction of the star's initial mass per tick (about 22 s from 0.3 to the knock-out line). */
+const EMBER_PER_TICK = 0.00006;
 const COOL_AFTER = 100;
-const COOL_PER_TICK = 1.6 / 60;
+const COOL_PER_TICK = 2.4 / 60;
 /** Fuel regained per unit of THERMAL/KINETIC energy the star absorbs, and the most one blow can give. */
 const ABSORB_GAIN = 0.006;
 const ABSORB_MAX = 4;
@@ -101,6 +103,8 @@ export class SupernovaBehaviour extends Behaviour {
   private blows = 0;
   private collapsed = false;
   private remnant = false;
+  /** Mass fraction a collapsed remnant has yet to burn away: it is a dying star, so a round cannot stall on two embers. */
+  private emberDebt = 0;
   private novaDone = false;
   /* wall of fire */
   private wallLife = 0;
@@ -202,6 +206,7 @@ export class SupernovaBehaviour extends Behaviour {
     this.blows = 0;
     this.collapsed = false;
     this.remnant = false;
+    this.emberDebt = 0;
     this.novaDone = false;
     this.wallLife = 0;
     this.fbLive = false;
@@ -566,11 +571,19 @@ export class SupernovaBehaviour extends Behaviour {
         tick - this.lastAct > COOL_AFTER &&
         m.def === null &&
         f.state !== 'hitstun' &&
-        f.resource < f.resourceMax &&
-        !this.remnant
+        f.resource < f.resourceMax
       )
-        f.resource = Math.min(f.resourceMax, f.resource + COOL_PER_TICK);
+        // a collapsed remnant is a dim ember: it recovers, but slower, so the round still ends by a knock-out
+        f.resource = Math.min(f.resourceMax, f.resource + COOL_PER_TICK * (this.remnant ? 0.5 : 1));
       this.payDebt(tick - this.lastAct > 30);
+      if (this.remnant) {
+        this.emberDebt += EMBER_PER_TICK;
+        if (this.emberDebt >= 0.006) {
+          const bs = f.view.bodyStats;
+          f.world.shed(f.body.id, this.emberDebt * bs.initialMass, 'burn');
+          this.emberDebt = 0;
+        }
+      }
       this.layerBlowCheck();
       this.maybeCollapse();
     }
