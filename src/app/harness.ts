@@ -218,7 +218,7 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
       if (params.t > 0) app.loop.stepTicks(params.t, false);
       if (params.freeze) app.loop.pause();
       app.hideUi = !params.hud;
-      if (params.tele) app.enableTelemetry(params.tele === 1).flashMeter = params.lum;
+      if (params.tele) app.enableTelemetry(params.tele === 1).collectLuma = params.lum;
     } else {
       const screen =
         { title: 'title', menu: 'mode', select: 'select', controller: 'controller' }[params.mode as string] ??

@@ -316,7 +316,11 @@ export class App {
         s.taps[slot] = t;
         srcs[slot] = t;
       } else if (c === 'ai') {
-        srcs[slot] = createAiSource(s.match, slot, createAI(level, defs[slot], s.config.seed * 7 + slot));
+        srcs[slot] = createAiSource(
+          s.match,
+          slot,
+          createAI(level, defs[slot], s.config.seed * 7 + slot, { footwork: s.config.footwork ?? 'classic' }),
+        );
       }
     }
     s.srcs = srcs;
@@ -346,7 +350,13 @@ export class App {
       mode === 'guard'
         ? createGuardDummy()
         : mode === 'ai'
-          ? createAiSource(s.match, 1, createAI(3, getTitanDef(s.config.slots[1].titan), 5))
+          ? createAiSource(
+              s.match,
+              1,
+              createAI(3, getTitanDef(s.config.slots[1].titan), 5, {
+                footwork: s.config.footwork ?? 'classic',
+              }),
+            )
           : null;
     this.replaceSource(1, src);
   }
@@ -502,6 +512,7 @@ export class App {
     if (s && (this.telemetry || this.strips)) {
       const done = performance.now();
       this.telemetry?.afterDraw(done, this.layers, f.fx, f.view, f.alpha, this.canvas);
+      if (this.telemetry) for (const l of this.renderer.drainLuma()) this.telemetry.pushLuma(l.mean);
       this.strips?.onFrame(f.tick, done, this.canvas);
     }
 
@@ -559,7 +570,7 @@ export class App {
     if (!this.telemetry) {
       this.telemetry = new Telemetry();
       this.telemetry.attach(window);
-      this.telemetry.flashMeter = true;
+      // flash metrics come from the renderer's async GPU luminance read-back (pushLuma), not a canvas snapshot
     }
     this.teleOverlay = overlay;
     const s = this.session;
@@ -637,6 +648,8 @@ export class App {
       case 'setAccessibility':
         this.shakeScale = Math.min(1, Math.max(0, a.shake));
         this.fx.flashScale = Math.min(1, Math.max(0, a.flash));
+        // the renderer's own comfort-scaled effects: impulse glow, bloom gain, luminance-governor cap
+        this.renderer.setComfort(this.fx.flashScale);
         break;
       case 'setQuality':
         this.renderer.debugSetTier(a.quality);

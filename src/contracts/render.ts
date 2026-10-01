@@ -253,9 +253,9 @@ export interface FrameFx {
   shockwaves: ShockwaveFx[];
   lenses: LensFx[];
   impulses: StageImpulseFx[];
-  /** 0..1 white flash (KO blow, ultimate). */
+  /** 0..1 envelope of the newest impact light (informational only: nothing whitens the frame since D5/D27). */
   flash: number;
-  /** 0..1 extra chromatic aberration. */
+  /** 0..1 LOCAL wound-refraction strength, applied around the impact lights (shared by intensity); never screen-edge. */
   aberration: number;
   /** 0..1 how hot the fight is: drives nebula swirl speed and stage brightness. */
   intensity: number;

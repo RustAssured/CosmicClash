@@ -213,7 +213,13 @@ if (!base) {
 const tele = overlay ? 1 : 2;
 const lum = opt('lum', '1') === '1';
 const quality = opt('q', 'auto');
-const url = `${base}/?${sc.params}&freeze=1&tele=${tele}&q=${quality}${lum ? '' : '&lum=0'}`;
+// --flags=orbit=1,zdepth=1,push=1 → extra URL params for prototype A/B runs
+const extra = opt('flags', '')
+  .split(',')
+  .filter(Boolean)
+  .map((f) => `&${f}`)
+  .join('');
+const url = `${base}/?${sc.params}&freeze=1&tele=${tele}&q=${quality}${lum ? '' : '&lum=0'}${extra}`;
 console.log(`${name}: ${url}`);
 const browser = await launchRealtime();
 const { page, errors } = await openGame(browser, url, null);

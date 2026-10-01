@@ -128,8 +128,13 @@ const srgbToLin = (c: number): number => {
 export class Telemetry {
   /** Slots driven by a human (input latency / settle are only meaningful for them). */
   humanSlots: [boolean, boolean] = [false, false];
-  /** Read back a 32×18 thumbnail of the final frame every frame for the flash metrics (costs a GPU sync). */
+  /**
+   * Fallback flash metering: a 32×18 canvas snapshot per frame (≈ −12 fps on WJ's iGPU, D24). Off by default: the
+   * renderer's luminance governor reads its own mean back asynchronously and the app feeds it in through `pushLuma`.
+   */
   flashMeter = false;
+  /** Accept the renderer's GPU luminance samples (`pushLuma`); `lum=0` turns flash metering off entirely. */
+  collectLuma = true;
   master: AudioMeter | null = null;
   bed: AudioMeter | null = null;
 
@@ -445,6 +450,11 @@ export class Telemetry {
         this.lum[idx] = y / (d.length / 4);
       })
       .finally(() => this.lumBusy--);
+  }
+
+  /** One frame's mean relative luminance (UI excluded) from the renderer's async GPU read-back, in frame order. */
+  pushLuma(mean: number): void {
+    if (this.collectLuma && Number.isFinite(mean)) this.lum.push(mean);
   }
 
   /** Keep the per-frame luminance series in the report (for plots in gate docs). */

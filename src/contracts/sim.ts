@@ -67,7 +67,7 @@ export type SimEvent =
   | { t: 'guard'; slot: 0 | 1; x: number; y: number; type: DamageType; broke: boolean }
   /** Expanding ring: renderer refraction + stage dust ripple. strength 0..1, radius = final radius px. */
   | { t: 'shockwave'; x: number; y: number; strength: number; radius: number; hue: number }
-  /** Freeze sim for `ticks` (Match applies; clamped 60–220 ms) and calls `freeze(ticks)` on BOTH fighters once per event; frozen fighters keep buffering input. */
+  /** Freeze sim for `ticks` (Match applies; clamped 60–135 ms since D27) and calls `freeze(ticks)` on BOTH fighters once per event; frozen fighters keep buffering input. */
   | { t: 'hitstop'; ticks: number }
   /** Camera shake impulse toward (dirX,dirY), amplitude px, low-frequency damped. */
   | { t: 'shake'; dirX: number; dirY: number; amp: number }

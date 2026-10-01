@@ -47,7 +47,7 @@ export interface HarnessParams {
   freeze: boolean;
   /** Evidence telemetry: 0 off, 1 collect + overlay, 2 collect only. Never affects the simulation. */
   tele: 0 | 1 | 2;
-  /** Telemetry's full-frame luminance meter (a 32×18 GPU-side snapshot per frame); `lum=0` turns it off. */
+  /** Telemetry's full-frame luminance metering (the renderer's async GPU read-back); `lum=0` turns it off. */
   lum: boolean;
   /** `orbit=1`: planar orbital footwork; `zdepth=1`: the depth-offset prototype (MatchConfig.footwork / zdepth). */
   orbit: boolean;

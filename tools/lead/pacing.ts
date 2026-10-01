@@ -37,6 +37,9 @@ const SEED = +opt('seed', '1');
 const LA = +opt('la', '3') as Difficulty;
 const LB = +opt('lb', '3') as Difficulty;
 const OUT = opt('out', '');
+/** `--orbit` / `--zdepth`: the Phase 1 locomotion prototypes (MatchConfig.footwork / zdepth). */
+const FOOTWORK: 'classic' | 'orbit' = args.includes('--orbit') ? 'orbit' : 'classic';
+const ZDEPTH = args.includes('--zdepth');
 
 interface RoundRec {
   fight: number;
@@ -77,6 +80,8 @@ for (let i = 0; i < N; i++) {
     seed: SEED + i,
     stage: 'nursery',
     mode: 'aivai',
+    footwork: FOOTWORK,
+    zdepth: ZDEPTH,
     slots: [
       { titan: ta, controller: 'ai', aiLevel: swapped ? LB : LA },
       { titan: tb, controller: 'ai', aiLevel: swapped ? LA : LB },
@@ -90,8 +95,16 @@ for (let i = 0; i < N; i++) {
     lighting: DEFAULT_LIGHTING,
   });
   m.setSources(
-    createAiSource(m, 0, createAI(cfg.slots[0].aiLevel!, getTitanDef(ta), cfg.seed * 7 + 1)),
-    createAiSource(m, 1, createAI(cfg.slots[1].aiLevel!, getTitanDef(tb), cfg.seed * 7 + 2)),
+    createAiSource(
+      m,
+      0,
+      createAI(cfg.slots[0].aiLevel!, getTitanDef(ta), cfg.seed * 7 + 1, { footwork: FOOTWORK }),
+    ),
+    createAiSource(
+      m,
+      1,
+      createAI(cfg.slots[1].aiLevel!, getTitanDef(tb), cfg.seed * 7 + 2, { footwork: FOOTWORK }),
+    ),
   );
   const titans = [ta, tb] as const;
   const moveOf: [string, string] = ['', ''];
