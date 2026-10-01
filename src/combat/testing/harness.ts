@@ -24,6 +24,9 @@ export interface HarnessOptions {
   createWorld?: (seed: number) => MatterWorld;
   infinite?: boolean;
   startState?: MatchConfig['startState'];
+  startGap?: number;
+  footwork?: MatchConfig['footwork'];
+  zdepth?: boolean;
 }
 
 /** A real Match driving real Fighters against a world (the real matter world unless another is supplied). */
@@ -38,6 +41,9 @@ export function makeMatch(o: HarnessOptions = {}): Match {
     ],
     infinite: o.infinite,
     startState: o.startState,
+    startGap: o.startGap,
+    footwork: o.footwork,
+    zdepth: o.zdepth,
   };
   return createMatch(cfg, {
     createWorld: o.createWorld ?? ((seed) => createMatterWorld(seed)),

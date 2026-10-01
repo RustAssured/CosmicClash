@@ -234,9 +234,25 @@ export interface TemplatePlacement {
   facing: 1 | -1;
   /** Multiplier applied to lengths (reach scaling × charge scaling). */
   scale: number;
+  /**
+   * Optional aim rotation (cos, sin) applied AFTER the facing mirror, about the anchor: it turns the template's forward axis
+   * (facing, 0) onto the attack axis. Absent = (1, 0): the classic side view, where forward is always horizontal.
+   */
+  rotC?: number;
+  rotS?: number;
 }
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+/**
+ * Aim rotation that maps the mirrored forward axis (facing, 0) onto the unit attack axis (ux, uy). Writes (cos, sin) into `out`.
+ * For a horizontal axis on the facing side this is the identity, so classic play is unchanged.
+ */
+export function aimRotation(facing: 1 | -1, ux: number, uy: number, out: { c: number; s: number }): void {
+  // forward f = (facing, 0); rotation R with R·f = u: cos = u·f, sin = f × u (2-D cross, +y down = clockwise positive)
+  out.c = ux * facing;
+  out.s = uy * facing;
+}
 
 /**
  * Instantiate a ShapeTemplate (attacker-relative, +x forward, +y down) in WORLD space into `out`. When `sweep` is given the
@@ -251,49 +267,68 @@ export function instantiateTemplate(
 ): void {
   const f = pl.facing;
   const s = pl.scale;
+  const rc = pl.rotC ?? 1;
+  const rs = pl.rotS ?? 0;
   const sw = sweep && sweep.kind === tpl.kind ? sweep : undefined;
   const L = (a: number, b: number | undefined): number => (sw && b !== undefined ? lerp(a, b, u) : a);
+  // mirrored, scaled offset (lx, ly) → rotated world offset
+  const wx = (lx: number, ly: number): number => pl.x + rc * lx - rs * ly;
+  const wy = (lx: number, ly: number): number => pl.y + rs * lx + rc * ly;
   out.kind = tpl.kind;
   switch (tpl.kind) {
     case 'point': {
       const t2 = sw as Extract<ShapeTemplate, { kind: 'point' }> | undefined;
-      out.x = pl.x + L(tpl.ox, t2?.ox) * f * s;
-      out.y = pl.y + L(tpl.oy, t2?.oy) * s;
+      const lx = L(tpl.ox, t2?.ox) * f * s;
+      const ly = L(tpl.oy, t2?.oy) * s;
+      out.x = wx(lx, ly);
+      out.y = wy(lx, ly);
       out.r = L(tpl.r, t2?.r) * s;
       break;
     }
     case 'line': {
       const t2 = sw as Extract<ShapeTemplate, { kind: 'line' }> | undefined;
-      out.x0 = pl.x + L(tpl.ox0, t2?.ox0) * f * s;
-      out.y0 = pl.y + L(tpl.oy0, t2?.oy0) * s;
-      out.x1 = pl.x + L(tpl.ox1, t2?.ox1) * f * s;
-      out.y1 = pl.y + L(tpl.oy1, t2?.oy1) * s;
+      const ax = L(tpl.ox0, t2?.ox0) * f * s;
+      const ay = L(tpl.oy0, t2?.oy0) * s;
+      const bx = L(tpl.ox1, t2?.ox1) * f * s;
+      const by = L(tpl.oy1, t2?.oy1) * s;
+      out.x0 = wx(ax, ay);
+      out.y0 = wy(ax, ay);
+      out.x1 = wx(bx, by);
+      out.y1 = wy(bx, by);
       out.width = L(tpl.width, t2?.width);
       break;
     }
     case 'cone': {
       const t2 = sw as Extract<ShapeTemplate, { kind: 'cone' }> | undefined;
-      out.x = pl.x + L(tpl.ox, t2?.ox) * f * s;
-      out.y = pl.y + L(tpl.oy, t2?.oy) * s;
+      const lx = L(tpl.ox, t2?.ox) * f * s;
+      const ly = L(tpl.oy, t2?.oy) * s;
+      out.x = wx(lx, ly);
+      out.y = wy(lx, ly);
       const ang = L(tpl.angle, t2?.angle);
-      out.dirX = Math.cos(ang) * f;
-      out.dirY = Math.sin(ang);
+      const dx = Math.cos(ang) * f;
+      const dy = Math.sin(ang);
+      out.dirX = rc * dx - rs * dy;
+      out.dirY = rs * dx + rc * dy;
       out.range = L(tpl.range, t2?.range) * s;
       out.halfAngle = L(tpl.halfAngle, t2?.halfAngle);
       break;
     }
     case 'ring': {
       const t2 = sw as Extract<ShapeTemplate, { kind: 'ring' }> | undefined;
-      out.x = pl.x + L(tpl.ox, t2?.ox) * f * s;
-      out.y = pl.y + L(tpl.oy, t2?.oy) * s;
+      const lx = L(tpl.ox, t2?.ox) * f * s;
+      const ly = L(tpl.oy, t2?.oy) * s;
+      out.x = wx(lx, ly);
+      out.y = wy(lx, ly);
       out.r0 = L(tpl.r0, t2?.r0) * s;
       out.r1 = L(tpl.r1, t2?.r1) * s;
       break;
     }
     case 'field': {
       const t2 = sw as Extract<ShapeTemplate, { kind: 'field' }> | undefined;
-      out.x = pl.x + L(tpl.ox, t2?.ox) * f * s;
-      out.y = pl.y + L(tpl.oy, t2?.oy) * s;
+      const lx = L(tpl.ox, t2?.ox) * f * s;
+      const ly = L(tpl.oy, t2?.oy) * s;
+      out.x = wx(lx, ly);
+      out.y = wy(lx, ly);
       out.r = L(tpl.r, t2?.r) * s;
       out.falloff = L(tpl.falloff, t2?.falloff);
       break;

@@ -9,6 +9,8 @@ export const enum Steer {
   Away = 2,
   /** Fixed world direction (`sx`,`sy`). */
   Fixed = 3,
+  /** Orbit footwork: around the foe along the tangent, `sx` = ±1 picks the sense. */
+  Circle = 4,
 }
 
 export interface Step {
@@ -80,9 +82,11 @@ export class Plan {
   }
 
   /**
-   * Write this tick's input. `dx,dy` = foe − self (world) as the AI perceives it. Returns false when the plan has finished.
+   * Write this tick's input. `dx,dy` = foe − self (world) as the AI perceives it. With `orbit` (planar orbital footwork) the
+   * stick is a 2-D thrust: Toward/Away point straight at/away from the foe and Circle pushes along the tangent around it.
+   * Returns false when the plan has finished.
    */
-  run(out: InputFrame, dx: number, dy: number): boolean {
+  run(out: InputFrame, dx: number, dy: number, orbit = false): boolean {
     if (this.delay > 0) {
       this.delay--;
       out.moveX = 0;
@@ -94,14 +98,29 @@ export class Plan {
     const s = this.steps[this.index]!;
     let mx = 0;
     let my = 0;
+    const l = Math.hypot(dx, dy) || 1;
     switch (s.steer) {
       case Steer.Toward:
+        if (orbit) {
+          mx = dx / l;
+          my = dy / l;
+          break;
+        }
         mx = dx === 0 ? 0 : Math.sign(dx);
         my = s.align > 0 ? Math.max(-1, Math.min(1, (dy / 70) * s.align)) : 0;
         break;
       case Steer.Away:
+        if (orbit) {
+          mx = -dx / l;
+          my = -dy / l;
+          break;
+        }
         mx = dx === 0 ? -1 : -Math.sign(dx);
         my = 0;
+        break;
+      case Steer.Circle:
+        mx = (-dy / l) * (s.sx || 1);
+        my = (dx / l) * (s.sx || 1);
         break;
       case Steer.Fixed:
         mx = s.sx;

@@ -152,6 +152,36 @@ export class Overlay {
     this.mark(x, y);
   }
 
+  /**
+   * Direct access for pens that clip themselves (proposal 121): the layer-local pixel array (index = ly · w + lx, with
+   * lx = worldX − ox, ly = worldY − oy). A pen that writes here must call `markRect` once per stroke.
+   */
+  get pixels(): Uint32Array {
+    return this.px;
+  }
+
+  /** The layer-local emissive array, when the overlay was created emissive. */
+  get emissiveBuf(): Uint8Array | undefined {
+    return this.layer.emissive;
+  }
+
+  /**
+   * Grow the drawn box by a layer-local rect (half-open, clipped to the layer) and mark the frame as drawn: the bulk
+   * counterpart of the per-pixel bookkeeping in `set`. `begin`, `end`, the dirty rect, clearing and hiding are unchanged.
+   */
+  markRect(x0: number, y0: number, x1: number, y1: number): void {
+    const a = x0 < 0 ? 0 : x0;
+    const b = y0 < 0 ? 0 : y0;
+    const c = x1 > this.w ? this.w : x1;
+    const d = y1 > this.h ? this.h : y1;
+    if (c <= a || d <= b) return;
+    if (a < this.bx0) this.bx0 = a;
+    if (b < this.by0) this.by0 = b;
+    if (c > this.bx1) this.bx1 = c;
+    if (d > this.by1) this.by1 = d;
+    this.drawn = true;
+  }
+
   get(wx: number, wy: number): number {
     const x = wx - this.ox;
     const y = wy - this.oy;

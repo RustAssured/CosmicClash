@@ -7,9 +7,14 @@ input buffer, the move state machine, hit resolution against the foe's matter, G
 ```
 tick(ctx) ─ note presses in the 9-tick buffer ─ refreshStats (world.stats → live stats → KO check)
           ─ state machine: free / guard / move(startup→charge→active→recovery) / hitstun / guardbreak / ko / victory
-          ─ integrate (steering, glide, altitude spring, soft walls) ─ face foe ─ tether + pixel-mask body separation
-          ─ applyTransform (integer pixels, idle bob, lean spring) ─ resolveMoveHits (probe → DamageEvent → foe.receive)
-          ─ behaviour.resolveVolumes / update (tendrils, fragments, overlays) ─ threats ─ syncView
+          ─ steer command detection (a fresh stick push is a command: 1-px root step + counter-lean on its accept tick)
+          ─ integrate (classic: steering force, glide, altitude spring | orbit: 2-D thrust, gravity, drag) ─ soft walls
+          ─ face foe (a turn keeps the world lean: counter-rotation) ─ tether (classic box | orbit radial ellipse)
+          ─ stepAngular (move spinKeys, torsion spring or free spin) ─ depth spring (zdepth)
+          ─ applyTransform (integer pixels, idle bob, lean spring + torsion) ─ accept-tick pixel guarantee
+          ─ resolveMoveHits (probe → DamageEvent → foe.receive → impact model) ─ behaviour.resolveVolumes / update ─ threats
+          ─ syncView ─ feel instrumentation (accept / respond / settle events)
+Match, after both fighters: fighter0.resolvePair(fighter1) — symmetric separation + momentum exchange (D17-safe)
 ```
 
 ## Files
@@ -21,13 +26,18 @@ tick(ctx) ─ note presses in the 9-tick buffer ─ refreshStats (world.stats �
 | `move.ts` | `ActiveMove` (preallocated runtime of the move in progress), frame resolution, aim from stick, displacement prediction |
 | `shapes.ts` | `FatShape` (one mutable object that can play any `DamageShape`), template → world instantiation with sweeps, containment/intersection tests |
 | `inputBuffer.ts`, `stats.ts`, `tuning.ts` | 9-tick buffer; live stats from mass; **every feel knob in one place** |
+| `pose.ts` | move lean targets (load → commit → recover), the anticipation kick, `Angular` (torsion spring or free spin), `extra.spinKeys` |
+| `impact.ts` | the impact model: mass properties from the live cells, centre/edge/glancing/low classification, Δv = J/m and Δω = r×J/I |
+| `orbit.ts` | planar orbital footwork constants, the scaled-plane frame, the orbital-state classifier, depth-offset constants and render hints |
+| `feelTrack.ts` | `FeelTracker`: `feel` accept / respond (root, pose, light, fx) / settle events |
+| `testing/feelLab.ts` | scripted feel laboratory shared by the tests and `tools/feel/measure.ts` |
 | `fx/overlay.ts`, `fx/chain.ts` | tiny software-rasterised world-space layer (dirty-box tracked, closure-free capsules, additive glow); `chain.ts` draws chain links along a sagging path |
 | `testing/fakeWorld.ts`, `testing/harness.ts` | `MatterWorld` test double; Match/duel helpers used by tests and tools |
 
 ## Public API
 
-* `createFighter(opts)`, `FighterImpl` (extra public fields for behaviours/tests: `px,py,vx,vy,mv,meter,resource,stats,behaviour,rig,liveHitShape(),strike(),addThreat(),guardStrength()`).
-* `Behaviour` — hooks: `attach, reset, update, adjustStats, onMoveStart/Release/End, onKo, onDealt, onDamaged, resolveVolumes, probeParts, intercept, guardMultiplier, leanBias, renderLayers, debugShapes, onFreeze, setVictory`.
+* `createFighter(opts)`, `FighterImpl` (extra public fields for behaviours/tests: `px,py,vx,vy,mv,meter,resource,stats,behaviour,rig,ang,z,aimUx,aimUy,lastDeltaW,lastHitClass,feelTrack,liveHitShape(),strike(),addThreat(),guardStrength(),resolvePair()`).
+* `Behaviour` — hooks: `attach, reset, update, adjustStats, onMoveStart/Release/End, onKo, onDealt, onDamaged, resolveVolumes, probeParts, intercept, guardMultiplier, leanBias, renderLayers, debugShapes, onFreeze, setVictory, feelRespond`.
 * `TUNING`, `computeStats`, `topSpeed`.
 
 ### Contract details worth knowing (integration notes)
@@ -40,15 +50,24 @@ tick(ctx) ─ note presses in the 9-tick buffer ─ refreshStats (world.stats �
 * **`FighterView.bounds*` come from `world.liveBounds()`** (which scans the whole map), cached in the fighter: refreshed when the map's `version` changes, the body flips, or every 8 ticks, otherwise shifted by the transform delta. Body separation uses the same bounds plus a per-row cell-edge probe.
 * **Layers** — the body layer wraps `map.pixels/emissive/version` and follows the render dirty protocol: each `renderLayers()` copies `map.dirty` into the layer's own rect (union with any rect the renderer has not consumed yet) and sets `map.dirty = null`; Last One: `lastone-tendrils-back` (z −1), `-front` (z +1), `lastone-eye` (z 0.5, moving pupil + blink), `lastone-fx` (z 20, 768×560, additive beams/glows/halo: large enough for a full-charge Gaze and the Last Light sweep);
   Asteroid: `asteroid-orbit-back/front` (pebbles, swarm), `asteroid-fx` (800×384, additive ram flare, storm haze and streaks). Overlays are world-space, facing 1, integer-anchored, and accumulate their own dirty rect until the renderer consumes it.
-* **Move data conventions** (`MoveDef.extra`, see `src/titans/README.md`): `shell`, `followUp`, `followUpOnly`, `pose`, `chargePower`, `chargeReach`, `ctl`, `swarm`, `cascade`, `spin`, `eyeFlare`, `recoil` (AI only).
-  Surge: the first movement key's magnitude is the dash speed and its direction is the stick (8-way, neutral = toward the foe); other moves' keys are facing-relative impulses added to velocity; `damp` = velocity retention per second.
+* **Move data conventions** (`MoveDef.extra`, see `src/titans/README.md`): `shell`, `followUp`, `followUpOnly`, `pose`, `spinKeys` (`[{ at, w }]`: facing-relative angular impulses, rad/s, on the choreography clock), `chargePower`, `chargeReach`, `ctl`, `swarm`, `cascade`, `spin`, `eyeFlare`, `recoil` (AI only).
+  Surge: the first movement key's magnitude is the dash speed and its direction is the stick (8-way, neutral = toward the foe); other moves' keys are impulses along the attack axis (`ix`) and across it (`iy`, screen-down for a horizontal axis), added to velocity; `damp` = velocity retention per second.
   Hitbox `reachScale` defaults to 1 (lengths authored at REACH 5). Tags: `armor` = hits do not interrupt the move.
 
-## Feel (measured in `feel.test.ts`)
+## Feel (measured in `feel.test.ts`, `choreo.test.ts`, `impact.test.ts`, `orbit.test.ts`; numbers by `tools/feel/measure.ts`)
 
-Input → visible response on the **same tick** (state change + `move` event + first movement key) · ~70% of top speed at 0.2 s (τ = 0.166 s) · glide half-life 0.35 s · 9-tick buffer (a press 9 ticks early fires, 11 does not) ·
-Guard/Surge cancels in the first 40% of startup, FEINT cancels any windup/charge (10-tick stumble) · hit-stop 4–13 ticks scaled by energy and both masses · hit-stun short for heavy titans, combo-scaled inside a 40-tick grace window, **Surge breaks stun after 9 ticks**
-(cooldown 90) · tether never exceeds `MAX_FIGHTER_DX/DY` · cores never pass through each other · soft altitude spring.
+**Every accepted command changes a drawn pixel on its accept tick** (integer root or lean; a behaviour may answer with its own
+light/fx through `Behaviour.feelRespond`) and reports `feel` accept/respond/settle · settle 0.35–1.2 s with a visible overshoot ·
+a turn keeps the world lean across the mirror (counter-rotation) · ~70% of top speed at 0.2 s · glide half-life 0.35 s · 9-tick buffer ·
+Guard/Surge cancels in the first 40% of startup, FEINT cancels any windup/charge · **hit-stop 4–8 ticks** (D27: a beat, not the weight) ·
+**knockback is momentum** (Δv = J/m into the one velocity; a stunned body brakes it over ≤ 0.4 s) and **a blow at a point spins the body**
+by its lever arm (centre / edge / glancing / low, `cue hit-*`) · bodies in contact exchange momentum (a lunge shoves) ·
+heavy moves load → commit → recover (2-D root motion along the attack axis, `spinKeys` torsion, re-balance) · hit-stun, escape, tether, walls as before.
+
+**Orbit footwork** (`footwork: 'orbit'`): the stick is thrust in a plane scaled by EY = 1.6 (flattened orbits), mostly tangential,
+with an orbit assist, gentle mutual gravity, drag and a radial tether; `view.orbit` = orbit / closing / widening / collision /
+slingshot / neutral; attacks, lunges and telegraphs aim straight at the foe. **Depth prototype** (`zdepth`): a Surge dives off the plane
+(|z| ≤ 36), a spring brings it back, and |Δz| > 18 suppresses contact and hits.
 
 ## Failure modes
 

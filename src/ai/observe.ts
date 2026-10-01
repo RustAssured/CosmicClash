@@ -69,6 +69,44 @@ export class Snapshot {
     detached: false,
   }));
 
+  /** Copy another snapshot (the orbit AI re-expresses the foe in its own attack frame on a private copy). */
+  copyFrom(o: Snapshot): void {
+    this.tick = o.tick;
+    this.x = o.x;
+    this.y = o.y;
+    this.vx = o.vx;
+    this.vy = o.vy;
+    this.facing = o.facing;
+    this.state = o.state;
+    this.moveSlot = o.moveSlot;
+    this.moveId = o.moveId;
+    this.phase = o.phase;
+    this.moveTick = o.moveTick;
+    this.phaseTick = o.phaseTick;
+    this.moveTotal = o.moveTotal;
+    this.chargeFrac = o.chargeFrac;
+    this.cancellable = o.cancellable;
+    this.hitstunTicks = o.hitstunTicks;
+    this.guardUp = o.guardUp;
+    this.guardHealth = o.guardHealth;
+    this.intangible = o.intangible;
+    this.bx0 = o.bx0;
+    this.by0 = o.by0;
+    this.bx1 = o.bx1;
+    this.by1 = o.by1;
+    this.integrityPct = o.integrityPct;
+    this.massFrac = o.massFrac;
+    this.infectFrac = o.infectFrac;
+    this.meter = o.meter;
+    this.parts = o.parts;
+    this.ko = o.ko;
+    this.mass = o.mass;
+    this.reachMul = o.reachMul;
+    this.region.set(o.region);
+    this.threatCount = o.threatCount;
+    for (let i = 0; i < o.threatCount; i++) Object.assign(this.threats[i]!, o.threats[i]!);
+  }
+
   /** Copy the public view. `withRegions` refreshes the 8×8 integrity grid too (it changes slowly). */
   copy(v: FighterView, tick: number, withRegions: boolean): void {
     this.tick = tick;

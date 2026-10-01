@@ -16,8 +16,7 @@ import {
 import { levelParams, type LevelParams } from './levels';
 import { buildMoveInfos, surgeDistance, type MoveInfo } from './moves';
 import { NGram, type Token } from './predict';
-import type { Snapshot } from './observe';
-import { ObservationRing } from './observe';
+import { ObservationRing, Snapshot } from './observe';
 import { Plan, Steer } from './plan';
 
 const TYPES: DamageType[] = ['FRACTURE', 'ASSIMILATION', 'TIDAL', 'THERMAL', 'CRUSH', 'KINETIC'];
@@ -169,7 +168,19 @@ export class UtilityAI implements AIController {
   private lastSurgeTick = -1e9;
   private stunAge = 0;
 
-  constructor(level: Difficulty, def: TitanDef, seed: number) {
+  /**
+   * Planar orbital footwork (SLICE_PLAN §6): the stick is 2-D thrust and attacks aim straight at the foe. Set by the option, or
+   * latched the first time the AI's OWN view reports an orbital state (proprioception; the foe's view is never consulted).
+   */
+  private orbit: boolean;
+  /** The foe re-expressed in the attack frame (orbit): straight ahead along +x at its true distance. */
+  private readonly aimSnap = new Snapshot();
+  /** Real world offset to the (delayed, noisy) foe, for steering and dashes when the attack frame is rotated. */
+  private realDx = 0;
+  private realDy = 0;
+
+  constructor(level: Difficulty, def: TitanDef, seed: number, opts: { footwork?: 'classic' | 'orbit' } = {}) {
+    this.orbit = opts.footwork === 'orbit';
     this.level = level;
     this.def = def;
     this.P = levelParams(level);
@@ -231,15 +242,19 @@ export class UtilityAI implements AIController {
     out.held = 0;
     this.nowTick = ctx.tick;
     const S = ctx.self;
+    if (S.orbit !== 'neutral') this.orbit = true;
     this.ring.push(ctx.foe, ctx.tick);
-    const F = this.ring.delayed(ctx.tick, this.P.reactionTicks);
-    const age = ctx.tick - F.tick;
+    const Fw = this.ring.delayed(ctx.tick, this.P.reactionTicks);
+    const age = ctx.tick - Fw.tick;
     this.lastAge = age;
 
-    if (F.tick !== this.prevProcessedTick) {
-      this.observeFoe(F);
-      this.prevProcessedTick = F.tick;
+    if (Fw.tick !== this.prevProcessedTick) {
+      this.observeFoe(Fw);
+      this.prevProcessedTick = Fw.tick;
     }
+    this.realDx = Fw.x - S.x;
+    this.realDy = Fw.y - S.y;
+    const F = this.orbit ? this.toAimFrame(S, Fw) : Fw;
     if (S.state === 'ko' || S.state === 'victory' || S.state === 'intro' || ctx.roundTick <= 0) {
       this.plan.cancel();
       this.pendIdx = -1;
@@ -253,18 +268,29 @@ export class UtilityAI implements AIController {
       return;
     }
 
-    const dx = F.x - S.x + this.noiseX;
-    const dy = F.y - S.y + this.noiseY;
+    // steering always works in the real world (the attack frame only re-expresses the foe for the move model)
+    const dx = this.realDx + this.noiseX;
+    const dy = this.realDy + this.noiseY;
 
     // urgent defence may pre-empt whatever is running, at any tick
+    let urgent = false;
     if (this.plan.kind !== 'defend' || !this.plan.active) {
-      const urgent = this.scanThreats(S, F, age, true);
+      urgent = this.scanThreats(S, F, age, true);
       if (urgent) {
         this.plan.cancel();
         this.lastThink = -1e9;
       }
     }
     const busy = S.moveId !== null && S.state !== 'guard';
+    // our own windup is still feintable (its first 40 %): a telegraph that lands first is answered by cancelling into the Surge
+    if (busy && urgent && S.cancellable && ctx.tick - this.lastSurgeTick > 40) {
+      const dir = this.bestSidestepDir(S, this.bestThreat);
+      this.lastSurgeTick = ctx.tick;
+      this.plan
+        .begin('cancel into sidestep', 'defend', ctx.tick, 0)
+        .add(Btn.SURGE, Steer.Fixed, 2, dir[0], dir[1]);
+      this.pushLog(ctx.tick, `cancel windup into sidestep: threat in ${this.bestThreat.until.toFixed(0)}t`);
+    }
     // an opening (foe recovering / stunned) pre-empts walking, waiting and guarding: seize it (once per window)
     if (this.plan.active && this.plan.kind !== 'attack' && !busy) {
       const vuln = this.vulnerableTicks(F, age);
@@ -278,7 +304,34 @@ export class UtilityAI implements AIController {
       this.think(ctx, S, F, age);
     else if (busy && this.plan.kind === 'attack' && !this.plan.active) this.considerFeint(ctx, S, F, age);
 
-    this.plan.run(out, dx, dy);
+    this.plan.run(out, dx, dy, this.orbit);
+  }
+
+  /**
+   * Orbit footwork: attacks aim straight at the foe, so the move model (built for a horizontal side view) applies unchanged
+   * once the foe is re-expressed in the attack frame — straight ahead at its true distance, its velocity split along and
+   * across the axis, its silhouette as the disc that fits its bounds. Threat boxes stay in world space (they are compared
+   * with our own world bounds).
+   */
+  private toAimFrame(S: FighterView, F: Snapshot): Snapshot {
+    const A = this.aimSnap;
+    A.copyFrom(F);
+    const dx = F.x - S.x;
+    const dy = F.y - S.y;
+    const d = Math.hypot(dx, dy);
+    const ux = d > 1e-6 ? dx / d : S.facing;
+    const uy = d > 1e-6 ? dy / d : 0;
+    const f: 1 | -1 = dx > 0 || (dx === 0 && S.facing > 0) ? 1 : -1;
+    A.x = S.x + f * d;
+    A.y = S.y;
+    A.vx = f * (F.vx * ux + F.vy * uy);
+    A.vy = -F.vx * uy + F.vy * ux;
+    const r = 0.25 * (F.bx1 - F.bx0 + (F.by1 - F.by0));
+    A.bx0 = A.x - r;
+    A.bx1 = A.x + r;
+    A.by0 = A.y - r;
+    A.by1 = A.y + r;
+    return A;
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -757,8 +810,15 @@ export class UtilityAI implements AIController {
         0.3 + 0.35 * approachNeed * pers.aggression,
         'gap-close surge',
       );
-      dash.dirX = Math.sign(dx) || S.facing;
-      dash.dirY = clamp(dy / 120, -0.5, 0.5);
+      if (this.orbit) {
+        // straight at the foe in the plane
+        const l = Math.hypot(this.realDx, this.realDy) || 1;
+        dash.dirX = this.realDx / l;
+        dash.dirY = this.realDy / l;
+      } else {
+        dash.dirX = Math.sign(dx) || S.facing;
+        dash.dirY = clamp(dy / 120, -0.5, 0.5);
+      }
       dash.delay = this.jitter();
     }
     const r = this.add(
@@ -791,9 +851,25 @@ export class UtilityAI implements AIController {
         cool.delay = this.jitter();
       }
     }
-    const st = this.add('strafe', 'space', 'strafe', 0.16 + (Math.abs(dy) / 260) * 0.4, 'line up height');
-    st.dirY = Math.sign(dy) || (this.rng.chance(0.5) ? 1 : -1);
-    st.ticks = 10;
+    if (this.orbit) {
+      // orbit footwork: circle the foe (keep the sense we are already turning in); a zoner circles at range, and circling
+      // out of the line of a windup is the cheapest dodge
+      const l = Math.hypot(this.realDx, this.realDy) || 1;
+      const vt = (-S.vx * this.realDy + S.vy * this.realDx) / l;
+      const ci = this.add(
+        'circle',
+        'space',
+        'strafe',
+        0.16 + 0.25 * pers.zoning + (F.phase === 'startup' || F.phase === 'charge' ? 0.12 : 0),
+        'circle the foe',
+      );
+      ci.dirY = Math.sign(vt) || (this.rng.chance(0.5) ? 1 : -1);
+      ci.ticks = 12 + Math.round(this.rng.next() * 12);
+    } else {
+      const st = this.add('strafe', 'space', 'strafe', 0.16 + (Math.abs(dy) / 260) * 0.4, 'line up height');
+      st.dirY = Math.sign(dy) || (this.rng.chance(0.5) ? 1 : -1);
+      st.ticks = 10;
+    }
     const w = this.add(
       'wait',
       'wait',
@@ -1040,7 +1116,8 @@ export class UtilityAI implements AIController {
         p.add(0, Steer.Away, Math.max(6, c.ticks));
         break;
       case 'strafe':
-        p.add(0, Steer.Fixed, Math.max(6, c.ticks), 0, c.dirY);
+        if (this.orbit) p.add(0, Steer.Circle, Math.max(6, c.ticks), c.dirY);
+        else p.add(0, Steer.Fixed, Math.max(6, c.ticks), 0, c.dirY);
         break;
       case 'guard':
         p.add(Btn.GUARD, Steer.Neutral, Math.max(6, c.ticks));

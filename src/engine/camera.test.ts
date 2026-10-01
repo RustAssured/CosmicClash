@@ -423,3 +423,119 @@ describe('camera ultimate and KO choreography', () => {
     expect(cam.sample(1).state.zoom).toBeLessThan(1.005);
   });
 });
+
+describe('scenery push-in, impact kick and wound framing (D27: sprites stay 1:1)', () => {
+  const move = (slot: 0 | 1, moveSlot: 'crush' | 'strike' | 'ultimate'): SimEvent => ({
+    t: 'move',
+    slot,
+    titan: 'lastone',
+    moveId: 'm',
+    moveSlot,
+    aim: 'forward',
+    x: 700,
+    y: 290,
+  });
+  const release = (slot: 0 | 1): SimEvent => ({
+    t: 'release',
+    slot,
+    titan: 'lastone',
+    moveId: 'm',
+    moveSlot: 'crush',
+    x: 700,
+    y: 290,
+    power: 1,
+  });
+  const heavyHit = (x: number, y: number): SimEvent => ({
+    t: 'hit',
+    attacker: 0,
+    target: 1,
+    titan: 'planet',
+    x,
+    y,
+    dirX: 1,
+    dirY: 0,
+    type: 'FRACTURE',
+    energy: 1200,
+    cellsRemoved: 40,
+    massRemoved: 30,
+    blocked: 0,
+    heavy: true,
+    onDamaged: 0,
+  });
+
+  it('a heavy windup pushes in slowly, the blow holds it, then it pulls back late; a strike does not push', () => {
+    const cam = createCamera();
+    const t = targets(700, 900);
+    cam.reset(800, 290);
+    run(cam, t, 30);
+    cam.tick(t, [move(0, 'strike')]);
+    run(cam, t, 20);
+    expect(cam.sample(1).state.dolly).toBe(0);
+    cam.tick(t, [move(0, 'crush')]);
+    run(cam, t, 6);
+    const early = cam.sample(1).state.dolly;
+    run(cam, t, 24);
+    const atRelease = cam.sample(1).state.dolly;
+    expect(early).toBeGreaterThan(0);
+    expect(early).toBeLessThan(atRelease * 0.5); // slow: not a cut
+    expect(atRelease).toBeGreaterThan(0.3);
+    cam.tick(t, [release(0), heavyHit(880, 280)]);
+    const peak = cam.sample(1).state.dolly;
+    expect(peak).toBeGreaterThan(atRelease);
+    run(cam, t, 6);
+    expect(cam.sample(1).state.dolly).toBeCloseTo(peak, 5); // held a beat
+    run(cam, t, 30);
+    const half = cam.sample(1).state.dolly;
+    expect(half).toBeLessThan(peak * 0.7);
+    expect(half).toBeGreaterThan(peak * 0.2); // late, not snapped
+    run(cam, t, 240);
+    expect(cam.sample(1).state.dolly).toBe(0);
+  });
+
+  it('a feint releases the push at once', () => {
+    const cam = createCamera();
+    const t = targets(700, 900);
+    cam.reset(800, 290);
+    cam.tick(t, [move(0, 'crush')]);
+    run(cam, t, 20);
+    const d = cam.sample(1).state.dolly;
+    cam.tick(t, [{ t: 'feel', slot: 0, kind: 'accept', cmd: 'feint', ticks: 0 }]);
+    run(cam, t, 40);
+    expect(cam.sample(1).state.dolly).toBeLessThan(d * 0.4);
+  });
+
+  it('a heavy hit kicks the scenery along the blow, the kick swings back past rest and dies', () => {
+    const cam = createCamera();
+    const t = targets(700, 900);
+    cam.reset(800, 290);
+    cam.tick(t, [heavyHit(880, 280)]);
+    let max = 0;
+    let min = 0;
+    for (let i = 0; i < 60; i++) {
+      cam.tick(t, []);
+      const k = cam.sample(1).state.kickX;
+      max = Math.max(max, k);
+      min = Math.min(min, k);
+    }
+    expect(max).toBeGreaterThan(3);
+    expect(max).toBeLessThanOrEqual(10);
+    expect(min).toBeLessThan(0);
+    run(cam, t, 60);
+    expect(Math.abs(cam.sample(1).state.kickX)).toBeLessThan(0.01);
+  });
+
+  it('after a heavy hit the framing leans toward the wound, inside the both-in-frame constraint', () => {
+    const settle = (events: SimEvent[]): number => {
+      const cam = createCamera();
+      const t = targets(700, 900);
+      cam.reset(800, 290);
+      run(cam, t, 120);
+      cam.tick(t, events);
+      run(cam, t, 30);
+      return cam.sample(1).state.y;
+    };
+    const plain = settle([]);
+    const wound = settle([heavyHit(880, 200)]);
+    expect(wound).toBeLessThan(plain - 3);
+  });
+});

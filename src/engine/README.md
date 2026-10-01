@@ -49,16 +49,24 @@ const { state, view } = cam.sample(alpha);   // per rendered frame; the SAME obj
   union is centred so both clip equally). No zoom-out (D5). Clamped inside the arena.
 - **Motion.** Critically damped springs with half-lives 0.42 s (x) and 0.72 s (y): the camera *arrives late* and the universe moves with it.
 - **Impulses.** `shake` → 5–9 Hz damped oscillation biased along the blow, ~0.4 s tail; `zoom` → micro-zoom pulse (peak ≤ 1.06, eased back in
-  ~0.25 s); `roll` → |roll| ≤ 1.5°. `hit` events with high energy / `heavy` add shake (and zoom/roll for heavy blows) **only when the batch
-  carried no shake/zoom/roll of its own** (defensive), and `ko` kicks all three. `focus` (ultimate choreography) pulls the framing toward a
-  point with a zoom bias, still capped at 1.06.
+  ~0.25 s); `roll` → |roll| ≤ 1.5° (the fighters emit roll from the SPIN a blow put into the target, so a centre hit does not roll the view).
+  `hit` events with high energy / `heavy` add shake (and zoom for heavy blows) **only when the batch carried none of its own** (defensive),
+  and `ko` kicks shake, zoom and roll. `focus` (ultimate choreography) pulls the framing toward a point with a zoom bias, still capped at 1.06.
+- **Scenery push-in (D27, sprites stay 1:1).** `state.dolly` 0..1: a heavy windup (`move` of a Crush/Ultimate) pushes in slowly toward 0.55
+  (0.9 for an ultimate, τ 0.4 s); `release` / a heavy `hit` holds it 8 ticks (a heavy hit also punches +0.15), then it pulls back late
+  (half-life 0.55 s); a feint/guard/surge accept or the windup being struck releases it. `state.kickX/Y`: the impact parallax kick, an
+  underdamped spring (ω 11 rad/s, ζ 0.55) shoved along a heavy blow (6 px per 1000 energy, ≤ 10 px at depth 1). The renderer moves scenery
+  layers by `kick × (parallax − 1)` and dollies the 3-D scenery by `dolly`.
+- **The wound is the star.** For ~1.2 s after a heavy hit the framing leans 30 % (fading) toward where it landed, inside the both-in-frame
+  constraint.
 - **Integer snapping.** `sample()` snaps the shake and the view rect to integers: `state.shakeX/Y` and `view.x0/y0` are integers (so
   pixels never shimmer), `state.x/y` stay float. `view` is `{x0,y0,w:640,h:360}` clamped inside the arena.
 - Tuning knobs: `DEFAULT_CAMERA_TUNING` (`halfLifeX/Y`, `lookaheadSec/Max`, `marginX/Y`, `shakeTau`, `shakeHzMin/Max`, `zoomTau`, `maxZoom`,
-  `rollHalfLife`, `maxRoll`); pass a `Partial<CameraTuning>` to `createCamera`.
+  `rollHalfLife`, `maxRoll`, `dolly*`, `kick*`, `wound*`); pass a `Partial<CameraTuning>` to `createCamera`.
 
 ## Testing
 
-`npx vitest run src/engine` — 29 tests: tick cadence, catch-up cap, time scale, pause/hidden-tab behaviour, stepTicks, spring convergence
+`npx vitest run src/engine` — tick cadence, catch-up cap, time scale, pause/hidden-tab behaviour, stepTicks, spring convergence
 and "arrives late", arena clamping, tethered fighters stay in frame, shake integer snapping / directionality / decay, zoom cap 1.06,
-roll cap 1.5°, defensive hit shake, determinism (bit-identical output for identical inputs), NaN safety, interpolation, reset.
+roll cap 1.5°, defensive hit shake, windup push-in / lagged pull-back, impact kick, wound framing, determinism (bit-identical output for
+identical inputs), NaN safety, interpolation, reset.

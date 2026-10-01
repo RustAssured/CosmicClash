@@ -12,6 +12,7 @@ import {
 import type { Match } from '@/sim';
 import type { FighterImpl } from './fighter';
 import { topSpeed } from './stats';
+import { makeLab, measureCommand } from './testing/feelLab';
 import { ManualSource, createFakeWorld, makeMatch, skipIntro } from './testing/harness';
 
 /** A live fight against the fake world with hand-driven inputs. */
@@ -52,34 +53,103 @@ function tap(src: ManualSource, btn: number, step: () => void): void {
   src.held &= ~btn;
 }
 
-describe('input → response', () => {
-  it('shows the anticipation state and fires the move event on the very tick of the press (≤ 1 frame)', () => {
-    const { a, f0, events, step } = duel({ gap: 420 });
-    step(3);
-    events.length = 0;
-    tap(a, Btn.STRIKE, step);
-    expect(f0.view.state).toBe('startup');
-    expect(f0.view.phase).toBe('startup');
-    expect(f0.view.moveTick).toBe(1);
-    expect(f0.view.moveId).toBe('lastone.lash');
-    expect(events.filter((e) => e.t === 'move')).toHaveLength(1);
-    // the pull-back impulse is already moving the anchor on tick 1 (visible pose response)
-    expect(f0.vx).toBeLessThan(0);
+/** What the player sees of a fighter: its integer root and its integer row-shear lean. */
+const drawn = (f: FighterImpl): [number, number, number] => [
+  Math.round(f.px),
+  Math.round(f.py),
+  f.body.transform.lean,
+];
+
+describe('input → response (pixels, not state)', () => {
+  it('every command changes a drawn pixel on its accept tick, and says so in its feel events', () => {
+    const cases: [string, (s: ManualSource) => void, string][] = [
+      ['strike', (s) => (s.held = Btn.STRIKE), 'strike'],
+      ['crush', (s) => (s.held = Btn.CRUSH), 'crush'],
+      ['surge', (s) => (s.held = Btn.SURGE), 'surge'],
+      ['signature', (s) => (s.held = Btn.SIGNATURE), 'signature'],
+      ['guard', (s) => (s.held = Btn.GUARD), 'guard'],
+      ['stick forward', (s) => (s.moveX = 1), 'steer'],
+      ['stick back', (s) => (s.moveX = -1), 'steer'],
+      ['stick up', (s) => (s.moveY = -1), 'steer'],
+    ];
+    for (const [name, press, cmd] of cases) {
+      const { a, f0, events, step } = duel({ gap: 300 });
+      step(6);
+      const before = drawn(f0);
+      events.length = 0;
+      press(a);
+      step();
+      const after = drawn(f0);
+      expect(after, `${name}: a pixel moved on the accept tick`).not.toEqual(before);
+      const feel = events.filter(
+        (e): e is Extract<SimEvent, { t: 'feel' }> => e.t === 'feel' && e.slot === 0,
+      );
+      expect(feel.find((e) => e.kind === 'accept')?.cmd, name).toBe(cmd);
+      const resp = feel.find((e) => e.kind === 'respond');
+      expect(resp?.ticks, `${name}: respond ≤ 1 tick`).toBe(0);
+      expect(['root', 'pose']).toContain(resp?.channel);
+    }
   });
 
-  it('every slot responds the same tick: crush, surge, signature, and guard', () => {
-    for (const [btn, state] of [
-      [Btn.CRUSH, 'startup'],
-      [Btn.SURGE, 'surge'],
-      [Btn.SIGNATURE, 'startup'],
-      [Btn.GUARD, 'guard'],
-    ] as const) {
-      const { a, f0, step } = duel({ gap: 420 });
-      step(3);
-      a.held = btn;
-      step();
-      expect(f0.view.state, `button ${btn}`).toBe(state);
+  it('a feint changes a pixel on its own accept tick', () => {
+    const { a, f0, events, step } = duel({ gap: 300 });
+    step(3);
+    tap(a, Btn.CRUSH, step);
+    step(4);
+    const before = drawn(f0);
+    events.length = 0;
+    tap(a, Btn.FEINT, step);
+    expect(drawn(f0)).not.toEqual(before);
+    const resp = events.find((e) => e.t === 'feel' && e.kind === 'respond');
+    expect(resp && resp.t === 'feel' ? resp.cmd : '').toBe('feint');
+    expect(resp && resp.t === 'feel' ? resp.ticks : -1).toBe(0);
+  });
+
+  it('a stick push steps the root a whole pixel at once while the top lags behind (counter-rotation)', () => {
+    const { a, f0, step } = duel({ gap: 300 });
+    step(6);
+    const x0 = Math.round(f0.px);
+    const lean0 = f0.body.transform.lean;
+    a.moveX = 1;
+    step();
+    expect(Math.round(f0.px)).toBeGreaterThan(x0);
+    // the top leans BACK against the push first (world lean toward −x), then follows the motion
+    expect(f0.body.transform.lean).toBeLessThan(lean0 + 1e-9);
+    step(40);
+    expect(f0.body.transform.lean).toBeGreaterThan(0);
+  });
+
+  it('settles within 0.35–1.2 s with a visible overshoot (stick, strike, guard)', () => {
+    for (const cmd of ['steer-fwd', 'strike', 'guard'] as const) {
+      const lab = makeLab({ gap: 300 });
+      const r = measureCommand(lab, cmd, 120);
+      expect(r.settle, cmd).not.toBeNull();
+      expect(r.settle!, cmd).toBeGreaterThanOrEqual(21);
+      expect(r.settle!, cmd).toBeLessThanOrEqual(72);
+      expect(r.overshoot, `${cmd}: the lean swings past where it rests`).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it('turning round shows counter-rotation: the world lean carries over the mirror and the top lags behind the new forward', () => {
+    // the foe sits above and just to the right: walking right passes under it and the fighter turns round
+    const { a, b, f0, f1, step } = duel({ gap: 40 });
+    f1.py = f0.py - 185;
+    b.moveY = -1; // the foe holds its height (the altitude spring would bring it back down into the way)
+    step(4);
+    a.moveX = 1;
+    let flipped = -1;
+    let leanAfter = 0;
+    for (let i = 0; i < 90 && flipped < 0; i++) {
+      const before = f0.facing;
+      step();
+      if (f0.facing !== before) {
+        flipped = i;
+        leanAfter = f0.body.transform.lean * f0.facing;
+      }
+    }
+    expect(flipped).toBeGreaterThan(0);
+    // right after the turn the top still points the old way: backward relative to the new facing
+    expect(leanAfter).toBeLessThan(0);
   });
 
   it('reaches ~70% of top speed within 0.2 s and then keeps accelerating toward top speed', () => {
@@ -233,7 +303,7 @@ describe('cancels: feint, guard, surge', () => {
 });
 
 describe('hit-stun, hit-stop and the escape route', () => {
-  it('hit-stop is clamped to 60–220 ms and scales with energy', () => {
+  it('hit-stop is clamped to 60–135 ms (heavy cap 8 ticks, D27) and scales with energy', () => {
     const { a, events, step } = duel({ gap: 150 });
     step(3);
     tap(a, Btn.STRIKE, step);

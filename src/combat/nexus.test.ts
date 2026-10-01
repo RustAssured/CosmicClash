@@ -69,6 +69,10 @@ describe('the Nexus', () => {
       m.world.applyDamage(a.body.id, ev);
       (a as unknown as { behaviour: NexusBehaviour }).behaviour.onDamaged(900, 1, 0);
     }
+    // since D1 (slice Phase 1) a blow's matter separates as slabs after the impact, not on the impact tick, and five
+    // overlapping wounds on one body shed one after another (measured: the last chain goes at ~120 ticks):
+    // let them shear before reading the graph
+    for (let i = 0; i < 150; i++) m.step();
     expect(beh.nodeLit(1)).toBe(false);
     expect(beh.litNodes).toBeLessThan(12);
     expect(a.view.parts).toBeLessThan(12);

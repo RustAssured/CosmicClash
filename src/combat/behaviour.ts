@@ -91,6 +91,15 @@ export abstract class Behaviour {
   }
   /** Hit-stop began (visual freeze). */
   onFreeze(_ticks: number): void {}
+  /**
+   * The channel through which this behaviour answers `cmd` (a move slot, 'guard', 'feint', 'steer') on THIS tick, or null.
+   * Called on the accept tick, after the command took effect (a move's telegraph is armed in onMoveStart; a raised Guard is
+   * `guardUp`). A non-null answer is that command's accept-tick pixel: the fighter reports `respond` through it and adds no
+   * root/lean nudge of its own (a world answers with light and fx, not by shuffling).
+   */
+  feelRespond(_cmd: string): 'light' | 'fx' | null {
+    return null;
+  }
   setVictory(): void {}
 }
 

@@ -1,4 +1,6 @@
 import { clamp } from '@/contracts';
+import type { AngularParams } from './pose';
+import { TUNING } from './tuning';
 import type { ParticleKind, TitanDef } from '@/contracts';
 import { hex } from '@/contracts';
 
@@ -44,6 +46,13 @@ export interface Feel {
   shudder: number;
   /** Multiplier on the low-frequency thud shake of a heavy release. */
   thud: number;
+  /** Multiplier on every row-shear lean (velocity, pose, torsion): 0 for a body that must never shear (a world). */
+  shear: number;
+  /**
+   * Angular model: a body with `omega` > 0 springs back upright (torsion, drawn as whole-body lean); `omega` = 0 spins
+   * freely (a world: the spin is its surface phase). JSON: `feel.angular { omega, zeta, dragTau }`.
+   */
+  angular: AngularParams;
   fx: FeelFx | null;
   /** Global balance knobs from the JSON `balance` block (default 1, valid 0.3 to 3): outgoing energy multiplier and incoming energy divisor. */
   power: number;
@@ -66,7 +75,8 @@ const FX_KINDS: readonly ParticleKind[] = [
 export const BALANCE_MIN = 0.3;
 export const BALANCE_MAX = 3;
 
-interface FeelJson extends Partial<Omit<Feel, 'fx'>> {
+interface FeelJson extends Partial<Omit<Feel, 'fx' | 'angular'>> {
+  angular?: Partial<AngularParams>;
   bob?: { amp?: number; period?: number };
   sway?: { amp?: number; period?: number };
   fx?: {
@@ -118,6 +128,16 @@ export function resolveFeel(def: TitanDef): Feel {
     recoil: j.recoil ?? 1,
     shudder: j.shudder ?? 1,
     thud: j.thud ?? 1,
+    shear: clamp(j.shear ?? 1, 0, 2),
+    angular: {
+      omega: j.angular?.omega ?? TUNING.torsionOmega,
+      zeta: j.angular?.zeta ?? TUNING.torsionZeta,
+      dragTau:
+        j.angular?.dragTau ??
+        ((j.angular?.omega ?? TUNING.torsionOmega) > 0 ? TUNING.torsionDragTau : TUNING.spinDragTau),
+      maxSpin: j.angular?.maxSpin ?? TUNING.maxSpin,
+      maxAngle: j.angular?.maxAngle ?? TUNING.maxTorsion,
+    },
     fx,
     power: clamp(bal.power ?? 1, BALANCE_MIN, BALANCE_MAX),
     durability: clamp(bal.durability ?? 1, BALANCE_MIN, BALANCE_MAX),

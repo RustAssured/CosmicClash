@@ -21,7 +21,7 @@ function knock(a: TitanId, b: TitanId, script: string): { peak: number; travel: 
     m.step();
     if (Number.isNaN(x0) && B.lastHitTick > 0) x0 = B.px;
     if (!Number.isNaN(x0)) {
-      peak = Math.max(peak, Math.abs(B.vx + B.kvx) / 60);
+      peak = Math.max(peak, Math.abs(B.vx) / 60);
       lean = Math.max(lean, Math.abs(B.body.transform.lean));
     }
   }
@@ -29,20 +29,24 @@ function knock(a: TitanId, b: TitanId, script: string): { peak: number; travel: 
 }
 
 describe('body weight and presence', () => {
-  it('a landed Crush is an eased shove: 5 to 11 px/tick at the start, 150 to 260 px in total for a lighter defender', () => {
+  // Phase 1 (D27): knockback is real momentum — the blow's impulse plus the attacker's committed lunge exchanged on contact —
+  // so a landed Shatter Blow shoves harder than the old eased knock (5–11 px/tick, 150–260 px) but still brakes within ~0.5 s.
+  it('a landed Crush is a hard shove that brakes: 5 to 16 px/tick at the start, 150 to 340 px in total for a lighter defender', () => {
     const r = knock('lastone', 'asteroid', '4:crush');
     expect(r.peak).toBeGreaterThan(5);
-    expect(r.peak).toBeLessThan(11);
+    expect(r.peak).toBeLessThan(16);
     expect(r.travel).toBeGreaterThan(150);
-    expect(r.travel).toBeLessThan(260);
+    expect(r.travel).toBeLessThan(340);
   });
 
-  it('heavier defenders barely move but recoil (a lean kick); a Strike is a nudge', () => {
+  it('heavier defenders move less (mass ratio of the exchange) but recoil; a Strike is a nudge', () => {
     const light = knock('lastone', 'asteroid', '4:crush');
     const heavy = knock('lastone', 'planet', '4:crush');
     const nudge = knock('lastone', 'asteroid', '4:strike');
-    expect(heavy.travel).toBeLessThan(light.travel * 0.6);
-    expect(heavy.lean).toBeGreaterThan(2);
+    expect(heavy.travel).toBeLessThan(light.travel * 0.75);
+    expect(heavy.peak).toBeLessThan(light.peak * 0.8);
+    // a heavier body that shears shows the blow as a bend (the Planet never shears: its feel sets shear 0, S3)
+    expect(knock('lastone', 'nexus', '4:crush').lean).toBeGreaterThan(2);
     expect(nudge.travel).toBeLessThan(60);
   });
 

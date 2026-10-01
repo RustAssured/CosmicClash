@@ -42,9 +42,12 @@ export const ROUND_TIME_TICKS = 90 * TICK_HZ;
 export const ROUND_INTRO_TICKS = 2 * TICK_HZ;
 export const ROUND_OUTRO_TICKS = 3 * TICK_HZ;
 
-/** Hit-stop clamp in ticks (spec: 60–220 ms). */
+/**
+ * Hit-stop clamp in ticks: 60–135 ms (4–8 ticks). D27 rebudget: hit-stop is a beat, not the carrier of weight (that is the
+ * blow's momentum and torque), so the heavy cap dropped from 220 ms (13 ticks) to 8 ticks.
+ */
 export const HITSTOP_MIN_TICKS = msToTicks(60);
-export const HITSTOP_MAX_TICKS = msToTicks(220);
+export const HITSTOP_MAX_TICKS = msToTicks(135);
 /** Time dilation on KO blows (spec: 0.3x). */
 export const KO_TIME_SCALE = 0.3;
 

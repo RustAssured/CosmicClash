@@ -34,25 +34,69 @@ export const TUNING = {
   steerOmega: 8.6,
   /** Bob (px) of the idle breathing offset applied to the body transform (only when a titan's feel does not set one). */
   idleBob: 1.4,
+  /**
+   * Steering is a bounded FORCE, not a velocity override: the stick filter's acceleration is capped at this (px/s², mass-5
+   * body, divided by the titan's accelMul), so momentum from a blow or a collision has to be fought off, not deleted.
+   */
+  steerAccelMax: 1500,
+  /** Velocity time constant (s) of a KO'd body's long tumble. */
+  koGlideTau: 0.95,
+  /** Velocity time constant (s) while stunned: the struck body brakes its slide over ~0.4 s (a 450 px/s shove ≈ 180 px). */
+  stunDragTau: 0.4,
+
+  /* ---- pixel-first response (every accepted command changes a drawn pixel on its accept tick) ---- */
+  /** A new stick direction: the root steps this many px at once and the top lags (counter-lean, px). */
+  steerNudgePx: 1,
+  steerCounterLean: 1.6,
+  /** Ticks the stick must stay neutral before a new push counts as a new command, and the direction change that counts as one. */
+  steerRearmTicks: 4,
+  steerTurnCos: 0.7,
+  /** A facing flip keeps the world lean and adds this counter-rotation (px, the top lags behind the new forward). */
+  turnCounterLean: 2.4,
+  /** Guard raise: the body braces back (lean px); feint: a jolt (lean px toward upright and beyond). */
+  guardBrace: -1.6,
+  feintJolt: 2,
+  /** Whole-body torsion kick (rad/s) of a guard, feint or stick command: the mass rocks and settles with overshoot. */
+  commandTorsion: 0.5,
+  /** Settle: lean within this of its target, lean speed and spin under these, for 3 ticks. */
+  settleLean: 0.6,
+  settleLeanV: 4,
+  settleSpin: 0.12,
+  settleSpeedFrac: 0.08,
 
   /* ---- lean (integer row shear; spring-damper so direction changes overshoot a little) ---- */
   leanPerSpeed: 7,
   leanOmega: 15,
   leanZeta: 0.5,
 
+  /* ---- lean limits and the angular state ---- */
+  /** |lean| cap in px (velocity lean + pose + torsion together). */
+  leanMax: 18,
+  /** Torsion (a body that springs back upright): natural frequency (rad/s), damping ratio, spin drag (s), caps. */
+  torsionOmega: 9,
+  torsionZeta: 0.4,
+  torsionDragTau: 1.2,
+  /** Free spin (a world): spin drag time constant (s). */
+  spinDragTau: 2.6,
+  maxSpin: 6,
+  maxTorsion: 0.2,
+
   /* ---- hits ---- */
-  /** Knockback = hitbox.knockback x knockScale x (attacker mass / defender mass)^knockMassExp, capped: px/s of decaying knock velocity. */
+  /**
+   * A blow's momentum J = hitbox.knockback × knockScale × attacker mass × (clamped mass-ratio correction), so the
+   * defender's Δv = J / its mass equals knockback × knockScale × (mA/mD)^knockMassExp, capped at knockMax. It goes into
+   * the body's ONE velocity (real momentum): drag and the defender's own thrust take it out, nothing else.
+   */
   massNeutral: 5,
   knockScale: 0.62,
   knockMassExp: 1,
   knockRatioMin: 0.22,
   knockRatioMax: 1.9,
   knockMax: 580,
-  /** Time constant (s) of the knock velocity's exponential ease-out (a 450 px/s knock travels about 180 px in about 0.9 s). */
-  knockTau: 0.4,
-  /** A blow that KOs launches this much harder and slower (long ease-out under the slow-motion time scale). */
-  koKnockMul: 1.7,
-  koKnockTau: 0.95,
+  /** A blow that KOs launches this much harder (a long tumble under the slow-motion time scale). */
+  koKnockMul: 1.4,
+  /** Bodies in contact exchange momentum along the contact normal with this restitution (heavy, nearly inelastic). */
+  restitution: 0.1,
   /** Recoil: lean velocity kick per unit of raw knockback, capped (px/s of shear velocity). */
   recoilGain: 0.16,
   recoilMax: 150,
@@ -115,6 +159,12 @@ export const TUNING = {
   lightReachLoss: 0.15,
 
   /* ---- presentation ---- */
-  /** Hit-stop ticks = frame.hitstop × (0.7 + energy/900) × sqrt((mA + mB)/10). */
-  hitstopEnergyRef: 900,
+  /**
+   * Hit-stop is a beat, not the carrier of weight (D27): ticks = MIN + (MAX − MIN) × clamp01(frame.hitstop / hitstopBaseRef ×
+   * energy / hitstopEnergyRef × sqrt((mA + mB)/10) × (1 − 0.4 blocked)). A heavy blow reaches the 8-tick cap; a Strike sits near 5.
+   */
+  hitstopEnergyRef: 1000,
+  hitstopBaseRef: 12,
+  /** Camera roll (rad) per rad/s of spin a blow puts into the target (ω-driven roll; the camera caps it at 1.5°). */
+  rollPerSpin: 0.006,
 } as const;

@@ -52,6 +52,25 @@ export interface CameraTuning {
   hardMarginX: number;
   hardMarginY: number;
   safeLeadSec: number;
+  /**
+   * Scenery push-in (CameraState.dolly, D27: sprites stay 1:1): the level a heavy windup pushes toward (Crush / Ultimate), the
+   * time constant of the slow push, the ticks it holds after the blow, the half-life of the lagged pull-back, and the punch a
+   * heavy hit adds on the impact frame.
+   */
+  dollyCrush: number;
+  dollyUltimate: number;
+  dollyInTau: number;
+  dollyHoldTicks: number;
+  dollyOutHalfLife: number;
+  dollyPunch: number;
+  /** Impact parallax kick: px at depth 1 per 1000 energy (capped), and its spring (natural frequency rad/s, damping ratio). */
+  kickPer1000: number;
+  kickMax: number;
+  kickOmega: number;
+  kickZeta: number;
+  /** Wound framing: share of the framing pulled toward the last heavy hit point, and how long it fades (ticks). */
+  woundWeight: number;
+  woundTicks: number;
 }
 
 export const DEFAULT_CAMERA_TUNING: Readonly<CameraTuning> = {
@@ -73,6 +92,18 @@ export const DEFAULT_CAMERA_TUNING: Readonly<CameraTuning> = {
   hardMarginX: 10,
   hardMarginY: 8,
   safeLeadSec: 0.12,
+  dollyCrush: 0.55,
+  dollyUltimate: 0.9,
+  dollyInTau: 0.4,
+  dollyHoldTicks: 8,
+  dollyOutHalfLife: 0.55,
+  dollyPunch: 0.15,
+  kickPer1000: 6,
+  kickMax: 10,
+  kickOmega: 11,
+  kickZeta: 0.55,
+  woundWeight: 0.3,
+  woundTicks: 72,
 };
 
 const DT = 1 / 60;
@@ -111,6 +142,9 @@ interface Pose {
   shakeY: number;
   zoom: number;
   roll: number;
+  dolly: number;
+  kickX: number;
+  kickY: number;
 }
 
 const copyPose = (dst: Pose, src: Pose): void => {
@@ -120,7 +154,22 @@ const copyPose = (dst: Pose, src: Pose): void => {
   dst.shakeY = src.shakeY;
   dst.zoom = src.zoom;
   dst.roll = src.roll;
+  dst.dolly = src.dolly;
+  dst.kickX = src.kickX;
+  dst.kickY = src.kickY;
 };
+
+const restPose = (x: number, y: number): Pose => ({
+  x,
+  y,
+  shakeX: 0,
+  shakeY: 0,
+  zoom: 1,
+  roll: 0,
+  dolly: 0,
+  kickX: 0,
+  kickY: 0,
+});
 
 export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
   const T: CameraTuning = { ...DEFAULT_CAMERA_TUNING, ...tuning };
@@ -166,9 +215,24 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
   let dirAge = 0; // ticks since the ultimate started
   let dirRelease = 0; // 1 → 0 fade after 'end'
   let koHold = 0; // ticks of KO zoom-hold remaining
+  // Heavy windups push the scenery in (dolly); the blow holds it a beat, then it pulls back late.
+  const windup = [0, 0]; // ticks each slot has been winding up a heavy move (0 = not)
+  const windupLevel = [0, 0];
+  let dolly = 0;
+  let dollyHold = 0;
+  let dollyCancel = false;
+  // Impact parallax kick: a damped spring the scenery layers ride (px at depth 1).
+  let kx = 0;
+  let ky = 0;
+  let kvx = 0;
+  let kvy = 0;
+  // Wound framing: the last heavy hit point and its fading weight.
+  let woundX = 0;
+  let woundY = 0;
+  let woundT = 0;
 
-  const prev: Pose = { x: sx.x, y: sy.x, shakeX: 0, shakeY: 0, zoom: 1, roll: 0 };
-  const cur: Pose = { x: sx.x, y: sy.x, shakeX: 0, shakeY: 0, zoom: 1, roll: 0 };
+  const prev: Pose = restPose(sx.x, sy.x);
+  const cur: Pose = restPose(sx.x, sy.x);
   const outState: CameraState = {
     x: 0,
     y: 0,
@@ -228,6 +292,35 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
         }
       } else if (e.t === 'ko') {
         koHold = 100; // ~1.7 s of held push-in while the sim runs in slow motion
+      } else if (e.t === 'move') {
+        // a heavy windup starts: the scenery begins its slow push toward the fight
+        const heavy = e.moveSlot === 'crush' || e.moveSlot === 'ultimate';
+        windup[e.slot] = heavy ? 1 : 0;
+        windupLevel[e.slot] = e.moveSlot === 'ultimate' ? T.dollyUltimate : heavy ? T.dollyCrush : 0;
+      } else if (e.t === 'release') {
+        // the blow is thrown: hold the push a beat (the impact reads at full depth), then pull back late
+        if (windup[e.slot]! > 0) dollyHold = T.dollyHoldTicks;
+        windup[e.slot] = 0;
+      } else if (
+        e.t === 'feel' &&
+        e.kind === 'accept' &&
+        (e.cmd === 'feint' || e.cmd === 'guard' || e.cmd === 'surge')
+      ) {
+        // a windup thrown away releases the push quickly (no hold, no lag)
+        if (windup[e.slot]! > 0) dollyCancel = true;
+        windup[e.slot] = 0;
+      } else if (e.t === 'hit') {
+        windup[e.target] = 0; // a struck windup is over
+        if (e.heavy && e.blocked < 0.9) {
+          const heft = clamp((e.energy / 1000) * T.kickPer1000, 1, T.kickMax);
+          kvx += e.dirX * heft * T.kickOmega;
+          kvy += e.dirY * heft * T.kickOmega;
+          dolly = Math.min(1, dolly + T.dollyPunch);
+          dollyHold = T.dollyHoldTicks;
+          woundX = e.x;
+          woundY = e.y;
+          woundT = T.woundTicks;
+        }
       }
       if (e.t === 'shake') {
         hadShake = true;
@@ -240,13 +333,13 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
         addRoll(e.radians);
       }
     }
-    // Defensive: heavy blows still feel heavy if the fighter forgot to ask for it.
+    // Defensive: heavy blows still shake and pulse if the fighter forgot to ask for it. Roll is NOT defaulted: it follows the
+    // spin a blow put into the body (the fighter's ω-driven roll events), so a centre hit does not roll the view.
     for (const e of events) {
       if (e.t === 'hit') {
         const heft = clamp01(e.energy / 2200);
         if (!hadShake) addShake(e.dirX, e.dirY, (e.heavy ? 5 : 1.5) + heft * (e.heavy ? 9 : 4));
         if (!hadZoom && e.heavy) addZoom(0.012 + 0.03 * heft);
-        if (!hadRoll && e.heavy) addRoll((e.dirX >= 0 ? 1 : -1) * 0.004 * (0.5 + heft));
       } else if (e.t === 'ko') {
         addShake(1, -0.3, 16);
         addZoom(0.05);
@@ -337,6 +430,48 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
     }
   }
 
+  /**
+   * Scenery dolly: a heavy windup pushes in slowly toward its level (and an ultimate's director deeper still); the blow
+   * holds it a beat, then it pulls back LATE (half-life ≈ 0.55 s). Sprites never scale: the renderer moves scenery only.
+   */
+  function stepDolly(): void {
+    let target = 0;
+    for (let s = 0; s < 2; s++) {
+      if (windup[s]! <= 0) continue;
+      // a windup that never released (interrupted without an event) cannot hold the push forever
+      if (++windup[s]! > 150) windup[s] = 0;
+      else target = Math.max(target, windupLevel[s]!);
+    }
+    if (dirActive) target = Math.max(target, T.dollyUltimate * clamp01(dirAge / 40));
+    if (target > dolly) {
+      dollyCancel = false;
+      dolly += (target - dolly) * (1 - Math.exp(-DT / T.dollyInTau));
+      return;
+    }
+    if (dollyHold > 0 && !dollyCancel) {
+      dollyHold--;
+      return;
+    }
+    const hl = dollyCancel ? T.dollyOutHalfLife * 0.35 : T.dollyOutHalfLife;
+    dolly = target + (dolly - target) * Math.pow(0.5, DT / hl);
+    if (dolly - target < 0.002) {
+      dolly = target;
+      dollyCancel = false;
+    }
+  }
+
+  /** Impact parallax kick: an underdamped spring, so the scenery is shoved along the blow and swings back past rest. */
+  function stepKick(): void {
+    const w = T.kickOmega;
+    const z = T.kickZeta;
+    kvx += (-w * w * kx - 2 * z * w * kvx) * DT;
+    kvy += (-w * w * ky - 2 * z * w * kvy) * DT;
+    kx += kvx * DT;
+    ky += kvy * DT;
+    if (Math.abs(kx) < 1e-3 && Math.abs(kvx) < 1e-2) kx = kvx = 0;
+    if (Math.abs(ky) < 1e-3 && Math.abs(kvy) < 1e-2) ky = kvy = 0;
+  }
+
   const api: CameraApi = {
     reset(x, y) {
       clampCentre(x, y, arena, centreTmp);
@@ -357,12 +492,13 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
       lookY = 0;
       wa = 1;
       wb = 1;
-      cur.x = sx.x;
-      cur.y = sy.x;
-      cur.shakeX = 0;
-      cur.shakeY = 0;
-      cur.zoom = 1;
-      cur.roll = 0;
+      windup[0] = windup[1] = 0;
+      dolly = 0;
+      dollyHold = 0;
+      dollyCancel = false;
+      kx = ky = kvx = kvy = 0;
+      woundT = 0;
+      copyPose(cur, restPose(sx.x, sy.x));
       copyPose(prev, cur);
     },
 
@@ -401,6 +537,13 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
       let ty =
         (a.y * wa + b.y * wb) / wsum +
         clamp(lookY * T.lookaheadSec * 0.4, -T.lookaheadMax * 0.4, T.lookaheadMax * 0.4);
+      // ---- the wound is the star: after a heavy hit the framing leans toward where it landed, fading over ~1.2 s ----
+      if (woundT > 0) {
+        const w = T.woundWeight * (woundT / T.woundTicks);
+        tx = lerp(tx, woundX, w);
+        ty = lerp(ty, woundY, w);
+        woundT--;
+      }
 
       // ---- both fighters must stay on screen while the framing leans toward the active one ----
       const left = Math.min(a.x - a.hw, b.x - b.hw);
@@ -464,7 +607,12 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
       if (zoomPulse < 1e-4) zoomPulse = 0;
       roll *= Math.pow(0.5, DT / T.rollHalfLife);
       if (Math.abs(roll) < 1e-5) roll = 0;
+      stepDolly();
+      stepKick();
 
+      cur.dolly = dolly;
+      cur.kickX = kx;
+      cur.kickY = ky;
       cur.x = sx.x;
       cur.y = sy.x;
       cur.shakeX = shakeTmp.x;
@@ -486,6 +634,9 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
       outState.shakeY = shy;
       outState.zoom = lerp(prev.zoom, cur.zoom, t);
       outState.roll = lerp(prev.roll, cur.roll, t);
+      outState.dolly = lerp(prev.dolly, cur.dolly, t);
+      outState.kickX = lerp(prev.kickX, cur.kickX, t);
+      outState.kickY = lerp(prev.kickY, cur.kickY, t);
       const x0 = Math.round(x + shx - W / 2);
       const y0 = Math.round(y + shy - H / 2);
       const maxX0 = Math.round(arena.maxX - W);
