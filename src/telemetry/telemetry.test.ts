@@ -17,6 +17,22 @@ describe('telemetry FX coverage', () => {
     expect(coverage([fx, ui, titan], view, 200, 150, 10)).toBeCloseTo(0.5, 5);
     expect(coverage([ui, titan], view, 200, 150, 10)).toBe(0);
   });
+
+  it("a titan's own glow (z < 10, e.g. the Planet's atmosphere halo) is the body, its fx overlay (z 20) occludes", () => {
+    const halo = makeLayer('planet-halo', 'world', -0.5, 200, 200);
+    const fx = makeLayer('planet-fx', 'world', 20, 200, 200);
+    for (const L of [halo, fx]) {
+      L.visible = true;
+      L.blend = 'add';
+      L.x = 200;
+      L.y = 150;
+      L.anchorX = 100;
+      L.anchorY = 100;
+      L.pixels.fill(0xffffffff);
+    }
+    expect(coverage([halo], view, 200, 150, 10)).toBe(0);
+    expect(coverage([fx], view, 200, 150, 10)).toBeCloseTo(1, 5);
+  });
 });
 
 /** A two-fighter stand-in exposing just what Telemetry reads. */

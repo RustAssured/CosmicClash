@@ -60,6 +60,8 @@ export interface WoundRecord {
   fxPeakMs: number;
   fxPeak: number;
   fxClearMs: number;
+  /** Diagnostic: the top occluding layers (id:fraction of the box) on the first frame ≥ 400 ms after impact. */
+  occludersAt400?: string;
   /** ms from impact to the target's first detached slab (≥ 5 mass), its mass, and total detached in 1.5 s; -1 = none. */
   shearMs: number;
   firstSlabMass: number;
@@ -110,6 +112,9 @@ interface Wound {
   done: boolean;
   massBefore: number;
   massAtHit: number;
+  /** The target's anchor at the hit: the box follows the body's later motion. */
+  ax: number;
+  ay: number;
 }
 
 const HEAVY_ENERGY = 400;
@@ -143,6 +148,11 @@ export class Telemetry {
   private readonly latency: number[] = [];
   private readonly pixelLatency: number[] = [];
   private readonly feel: TelemetryReport['feel'] = [];
+  /** Latest anchor of each fighter (after the last tick), so wound boxes ride with their body. */
+  private readonly targetPos: [{ x: number; y: number }, { x: number; y: number }] = [
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+  ];
   /** Per slot: the drawn root transform of the previous frame, and a command waiting for its first visible pixel. */
   private readonly drawn: [{ x: number; y: number; lean: number }, { x: number; y: number; lean: number }] = [
     { x: 0, y: 0, lean: 0 },
@@ -241,6 +251,8 @@ export class Telemetry {
       hist.push(v.bodyStats.mass);
       if (hist.length > 4) hist.shift();
       if (this.humanSlots[s]) this.trackResponse(m, s, v, events);
+      this.targetPos[s].x = v.x;
+      this.targetPos[s].y = v.y;
       this.prevV[s].vx = v.vx;
       this.prevV[s].vy = v.vy;
     }
@@ -336,6 +348,8 @@ export class Telemetry {
       done: false,
       massBefore: hist.length > 1 ? hist[0]! : tv.bodyStats.mass,
       massAtHit: hist.length ? hist[hist.length - 1]! : tv.bodyStats.mass,
+      ax: tv.x,
+      ay: tv.y,
     };
     this.wounds.push(w);
     this.freshWounds.push(w);
@@ -414,16 +428,31 @@ export class Telemetry {
       // Only effect PIXELS occlude. Since D5 `fx.flash` is the informational envelope of a local impact light (it
       // whitens nothing), so it no longer counts; full-frame brightness is measured separately (flash stats).
       void fx;
-      const occ = coverage(layers, view, w.x, w.y, w.r);
+      // the wound travels with the body it is on (knockback moves it ~100 px): follow the target's anchor
+      const tv = this.targetPos[w.rec.target];
+      const wx = w.x + (tv.x - w.ax);
+      const wy = w.y + (tv.y - w.ay);
+      const probe = age >= 400 && !w.rec.occludersAt400 ? new Map<string, number>() : undefined;
+      const occ = coverage(layers, view, wx, wy, w.r, probe);
+      if (probe) {
+        const n = 4 * w.r * w.r;
+        w.rec.occludersAt400 =
+          [...probe.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([id, c]) => `${id}:${(c / n).toFixed(2)}`)
+            .join(' ') || 'none';
+      }
       if (occ > w.rec.fxPeak && age <= 1000) {
         w.rec.fxPeak = occ;
         w.rec.fxPeakMs = Math.round(age);
       }
-      if (occ < 0.1) {
-        if (++w.cleanFrames >= 3 && w.rec.fxClearMs < 0) w.rec.fxClearMs = Math.round(age - 2 * 16.7);
-      } else {
-        w.cleanFrames = 0;
-        w.rec.fxClearMs = -1;
+      // "cleared" = the FIRST time this impact's effects leave the box for 3 frames; later occluders in a live fight (the
+      // next blow, a passing beam) belong to other events and do not re-open it
+      if (w.rec.fxClearMs < 0) {
+        if (occ < 0.1) {
+          if (++w.cleanFrames >= 3) w.rec.fxClearMs = Math.round(age - 2 * 16.7);
+        } else w.cleanFrames = 0;
       }
       if (age > 2500) w.done = true;
     }
@@ -629,8 +658,9 @@ const KEY_DIRS: Record<string, [number, number]> = {
 };
 
 /**
- * Fraction of a world-space box (centre x,y, half-size r) covered by effect pixels in the rendered layers: screen-space
- * layers above the titans (z ≥ 10: front particles, flashes, plumes, near debris) and additive world-space glow sprites.
+ * Fraction of a world-space box (centre x,y, half-size r) covered by effect pixels in the rendered layers: every layer in
+ * the contract's effect band z ∈ [10, 100) — front particles, flashes, plumes, near debris (screen) and the titans' fx
+ * overlays (world). Fight-plane debris (z 9) and body glows (z < 10) are the wound and the body, not occluders.
  */
 export function coverage(
   layers: readonly RenderLayer[],
@@ -638,6 +668,7 @@ export function coverage(
   x: number,
   y: number,
   r: number,
+  byLayer?: Map<string, number>,
 ): number {
   const sx0 = Math.round(x - r - view.x0);
   const sy0 = Math.round(y - r - view.y0);
@@ -660,7 +691,9 @@ export function coverage(
           if (sx < 0 || sy < 0 || sx >= L.w || sy >= L.h) continue;
           px = L.pixels[sy * L.w + sx]!;
         } else {
-          if (L.blend !== 'add') continue;
+          // the contract reserves z ≥ 10 for effects (10 front debris/particles, 20 fx); a titan's own glows (atmosphere
+          // halo, shimmer, body glow) sit below 10 and are part of the body, not something hiding its wound
+          if (L.z < 10 || L.z >= 100) continue;
           const lx = Math.round(L.facing === 1 ? wx - L.x + L.anchorX : L.x - wx + L.anchorX);
           const ly = Math.round(wy - L.y + L.anchorY);
           if (lx < 0 || ly < 0 || lx >= L.w || ly >= L.h) continue;
@@ -668,6 +701,7 @@ export function coverage(
         }
         if (px >>> 24 > 24) {
           hit++;
+          if (byLayer) byLayer.set(L.id, (byLayer.get(L.id) ?? 0) + 1);
           break;
         }
       }
