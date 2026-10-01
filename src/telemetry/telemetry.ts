@@ -305,7 +305,9 @@ export class Telemetry {
   private onHit(m: MatchApi, e: Extract<SimEvent, { t: 'hit' }>): void {
     this.round.hits++;
     this.round.contacts.add(e.attacker * 1e7 + this.moveStart[e.attacker]);
-    if (e.energy < HEAVY_ENERGY && !e.heavy) return;
+    // a "major hit" (§4 wound sequence) is a discrete blow of real energy; the per-tick slices of continuous beams and
+    // fields are flagged heavy but carry ~10–100 energy each and would swamp the statistics
+    if (e.energy < HEAVY_ENERGY) return;
     this.round.heavy++;
     const tv = m.fighters[e.target].view;
     const hist = this.massHist[e.target];
@@ -409,7 +411,10 @@ export class Telemetry {
     for (const w of this.wounds) {
       if (w.done || w.hitWall < 0) continue;
       const age = now - w.hitWall;
-      const occ = Math.max(Math.min(1, fx.flash * 2), coverage(layers, view, w.x, w.y, w.r));
+      // Only effect PIXELS occlude. Since D5 `fx.flash` is the informational envelope of a local impact light (it
+      // whitens nothing), so it no longer counts; full-frame brightness is measured separately (flash stats).
+      void fx;
+      const occ = coverage(layers, view, w.x, w.y, w.r);
       if (occ > w.rec.fxPeak && age <= 1000) {
         w.rec.fxPeak = occ;
         w.rec.fxPeakMs = Math.round(age);

@@ -148,7 +148,8 @@ for (let i = 0; i < N; i++) {
       } else if (e.t === 'hit' && m.phase === 'fight') {
         cur.hits++;
         cur.contacts.add(e.attacker * 1e7 + moveStart[e.attacker]);
-        if (e.energy >= 400 || e.heavy) {
+        // discrete major blows only (continuous beam/field slices are flagged heavy but tiny; see telemetry.ts)
+        if (e.energy >= 400) {
           cur.heavy++;
           const rec: HeavyRec = {
             fight: i,
