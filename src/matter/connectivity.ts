@@ -2,6 +2,17 @@ import { CONN_EVT_CAP, type Body, type WorldPoint } from './body';
 import type { WorldCore } from './core';
 import { MODE_MECH, detachVelocity, endSpray, extractChunk, sprayCell, type Launch } from './debris';
 import { killCell } from './cells';
+import {
+  BIG_ISLAND,
+  STAGGER_MIN,
+  holdCells,
+  openDriftWound,
+  recentWound,
+  releasingWound,
+  seedHeld,
+  woundLaunch,
+  woundSpin,
+} from './wound';
 
 const MIN_CHUNK_CELLS = 5;
 const tmpPt: WorldPoint = { x: 0, y: 0 };
@@ -18,7 +29,15 @@ const launch: Launch = { vx: 0, vy: 0, spin: 0 };
 export function runConnectivity(core: WorldCore, body: Body): void {
   body.connDirty = 0;
   body.lastConnTick = core.tick;
-  if (!body.connFull && !body.hasFluid && !core.forceFullConn && localPass(core, body)) {
+  // (While a wound holds slabs the full flood runs: held matter anchors by its tag, not through bonds, which the local
+  // shortcut's proof does not cover.)
+  if (
+    !body.connFull &&
+    !body.hasFluid &&
+    !core.forceFullConn &&
+    body.wounds.held === 0 &&
+    localPass(core, body)
+  ) {
     // Handled from the changed spots alone (nothing cut off, or only small islands released): no full flood.
     body.anchoredFrac = 1;
     body.connFull = false;
@@ -43,11 +62,12 @@ export function runConnectivity(core: WorldCore, body: Body): void {
 
   const st = core.stack;
   st.clear();
-  // --- seeds: live cells of the core disc ---
+  // --- seeds: live cells of the core disc (a disc cell a wound is shedding no longer anchors anything) ---
   const disc = body.coreDiscIdx;
+  const det = map.detached;
   for (let k = 0; k < disc.length; k++) {
     const c = disc[k]!;
-    if (mat[c] !== 0 && stamp[c] !== gen) {
+    if (mat[c] !== 0 && det[c] === 0 && stamp[c] !== gen) {
       stamp[c] = gen;
       st.push(c);
     }
@@ -64,6 +84,8 @@ export function runConnectivity(core: WorldCore, body: Body): void {
     stamp[best] = gen;
     st.push(best);
   }
+  // Held wound slabs are anchored until they shear (their separation takes time).
+  if (body.wounds.held > 0) seedHeld(body, st, stamp, gen);
   floodAnchored(body, st, gen);
 
   // --- islands ---
@@ -478,16 +500,44 @@ function releaseIsland(
     cy /= mass;
   }
   const rad = Math.sqrt(count / Math.PI);
-  detachVelocity(core, body, cx, cy, mass, rad, launch);
+  // A shearing wound slab, or matter let go within a wound's window, carries that wound's momentum.
+  let w = releasingWound(body, cells, count);
+  const slab = w >= 0;
+  if (w < 0 && !core.woundsOff) w = recentWound(core, body);
+  if (w >= 0) woundLaunch(core, body, w, cx, cy, mass, launch);
+  else detachVelocity(core, body, cx, cy, mass, rad, launch);
+
+  // Separation takes time: matter a wound frees before its shear tick waits for it (held), and a big piece does not fall off
+  // in one tick either — it is split along its grain and let go a piece per tick.
+  const early = w >= 0 && !slab && core.tick < body.wounds.shear[w]!;
+  if (
+    !slab &&
+    !core.woundsOff &&
+    count >= MIN_CHUNK_CELLS &&
+    (early || (w >= 0 && count > STAGGER_MIN) || count > BIG_ISLAND || count > body.map.initialCells * 0.25)
+  ) {
+    const ww = w >= 0 ? w : openDriftWound(core, body, cx, cy);
+    // (fluid cells wait with their piece and disperse when it shears)
+    if (holdCells(core, body, ww, cells, count, early ? body.wounds.shear[ww]! : core.tick + 1)) return;
+  }
   core.emitMatter('detach', cx, cy, mass, body.ownerSlot);
 
+  // A wound's fluids leave with its slab's full momentum (they clear the wound instead of hanging over it).
+  const fk = w >= 0 ? 1 / 0.6 : 1;
   if (solid >= MIN_CHUNK_CELLS) {
     // Fluid cells first (before solids are extracted their indices are still valid).
-    for (let k = solid; k < count; k++) disperseCell(core, body, cells[k]!, launch.vx, launch.vy);
+    for (let k = solid; k < count; k++) disperseCell(core, body, cells[k]!, launch.vx * fk, launch.vy * fk);
     endSpray(core);
-    extractChunk(core, body, cells, solid, launch.vx, launch.vy, launch.spin);
+    const ch = extractChunk(core, body, cells, solid, launch.vx, launch.vy, launch.spin);
+    if (ch !== null && w >= 0) {
+      // Wound pieces tumble from the lever arm of their push, with the inertia of their own cells.
+      ch.spin = woundSpin(body, w, ch.x, ch.y, ch.vx, ch.vy, ch.mass, ch.radius, ch.inertia);
+      ch.fast = true;
+      // ... and stay in the fight plane: a slab is the wound's matter, not an occluder thrown across it at the viewer.
+      ch.launchNear = false;
+    }
   } else {
-    for (let k = 0; k < count; k++) disperseCell(core, body, cells[k]!, launch.vx, launch.vy);
+    for (let k = 0; k < count; k++) disperseCell(core, body, cells[k]!, launch.vx * fk, launch.vy * fk);
     endSpray(core);
   }
   body.touch(0, 0, 0, 0);

@@ -100,67 +100,98 @@ bond 205–235): cuts run out of energy and cracks arrest, so the blow is chewed
 CONTINUOUS over 30/60 ticks. Design targets (Lead, round 2): a Strike (~300 energy) removes **3-8%** for the matched type and **1-3%** for the worst-matched, never ~0; a Crush (~1500) **8-20%** / **3-8%**.
 Every row must stay above the floor; the *shape* of the table is the rock-paper-scissors (glass/celadon/crystal/eye shear under FRACTURE, iron/chain/core resist it but still get chewed; ice boils under THERMAL; lattice burns; gas/plasma are stripped by TIDAL and crushed).
 
+Re-measured in slice Phase 1 with wound sequencing (§ Round 8). In each cell: **before → after**. "Before" is the committed tree
+(`2f5d6bb`) measured on the same day; the tables that used to be here dated from round 2 and were stale (rounds 4–7 had already
+moved them, e.g. eye Lash 8.7 % → 3.8 %).
+
 **Strike, 300 energy**
 
 | archetype | FRACTURE lash | FRACTURE thrust | ASSIMILATION | TIDAL | THERMAL | CRUSH | KINETIC |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| rock | 1.8 | 2.6 | 8.3 | 3.3 | 1.7 | 1.9 | 3.0 |
-| regolith | 2.8 | 4.8 | 10.2 | 4.3 | 2.1 | 2.9 | 3.9 |
-| mantle | 1.9 | 2.7 | 8.3 | 3.0 | 1.0 | 1.5 | 2.3 |
-| ironNickel | 1.2 | 1.1 | 7.5 | 1.9 | 1.3 | 1.1 | 1.4 |
-| ice | 3.4 | 4.0 | 9.3 | 5.0 | 6.2 | 2.8 | 3.9 |
-| crystal | 3.1 | 1.6 | 6.9 | 3.0 | 2.4 | 2.2 | 3.2 |
-| glass | 5.2 | 4.9 | 6.1 | 3.2 | 2.4 | 3.5 | 3.7 |
-| celadon | 3.5 | 2.8 | 8.4 | 3.1 | 2.1 | 2.2 | 3.4 |
-| eye | 8.7 | 6.7 | 12.2 | 4.1 | 4.9 | 3.1 | 3.8 |
-| tendril | 2.4 | 2.8 | 12.2 | 5.4 | 4.3 | 1.6 | 3.1 |
-| lattice | 3.3 | 4.4 | 0.0 | 4.6 | 27.4 | 2.7 | 3.9 |
-| chain | 1.4 | 1.2 | 14.6 | 2.7 | 2.4 | 1.3 | 2.0 |
-| node | 1.7 | 1.1 | 11.3 | 2.4 | 2.4 | 1.8 | 3.5 |
-| plasma | 4.2 | 3.5 | 14.7 | 8.0 | 2.1 | 5.0 | 3.1 |
-| corona | 4.2 | 3.5 | 9.8 | 8.0 | 2.1 | 9.1 | 3.0 |
-| gas | 3.9 | 2.9 | 7.9 | 8.0 | 5.6 | 10.6 | 1.9 |
-| cloud | 4.5 | 3.7 | 8.2 | 8.0 | 3.5 | 9.9 | 2.3 |
-| fuelGas | 4.0 | 2.9 | 7.9 | 8.0 | 10.9 | 10.9 | 1.9 |
-| diskGas | 4.2 | 3.5 | 7.9 | 2.4 | 2.4 | 7.9 | 3.0 |
-| jet | 4.1 | 3.0 | 5.4 | 3.3 | 2.4 | 10.9 | 1.9 |
-| ocean | 3.6 | 3.5 | 8.3 | 5.3 | 1.0 | 6.3 | 1.3 |
-| magma | 2.3 | 3.7 | 10.1 | 2.9 | 1.0 | 1.7 | 2.1 |
-| core | 1.3 | 1.1 | 8.2 | 1.9 | 1.0 | 1.0 | 1.8 |
+| rock | 1.5 → 1.8 | 1.3 → 1.9 | 8.3 | 3.3 | 1.7 | 1.9 → 1.9 | 3.0 → 3.0 |
+| regolith | 2.4 → 2.7 | 3.2 → 2.5 | 10.2 | 4.3 | 2.1 | 3.2 → 2.9 | 3.9 → 3.9 |
+| mantle | 1.8 → 1.5 | 2.4 → 1.3 | 8.3 | 3.0 | 1.0 | 1.6 → 1.6 | 2.3 → 2.3 |
+| ironNickel | 1.2 → 1.2 | 1.1 → 1.0 | 7.5 | 1.9 | 1.3 | 1.1 → 1.1 | 1.4 → 1.4 |
+| ice | 3.1 → 2.8 | 4.1 → 2.6 | 9.3 | 5.0 | 6.2 | 2.9 → 2.8 | 3.9 → 3.9 |
+| crystal | 1.9 → 2.6 | 2.8 → 1.9 | 6.9 | 3.0 | 2.4 | 3.3 → 2.1 | 3.2 → 5.4 |
+| glass | 3.1 → 2.7 | 3.9 → 3.5 | 6.1 | 3.2 | 2.4 | 4.6 → 3.9 | 3.7 → 4.7 |
+| celadon | 2.9 → 3.3 | 3.8 → 2.9 | 8.4 | 3.1 | 2.1 | 2.1 → 2.2 | 3.4 → 3.4 |
+| eye | 3.8 → 3.1 | 4.9 → 4.3 | 12.2 | 4.1 | 4.9 | 3.0 → 3.0 | 3.8 → 3.8 |
+| tendril | 2.3 → 2.3 | 2.4 → 2.3 | 12.2 | 5.4 | 4.3 | 1.6 → 1.6 | 3.1 → 3.1 |
+| lattice | 2.6 → 2.5 | 4.2 → 3.4 | 0.0 | 4.6 | 27.4 | 2.8 → 2.7 | 3.9 → 3.9 |
+| chain | 1.3 → 1.3 | 1.3 → 1.7 | 14.6 | 2.7 | 2.4 | 1.2 → 1.2 | 2.0 → 2.0 |
+| node | 1.7 → 2.0 | 1.1 → 1.1 | 11.3 | 2.4 | 2.4 | 1.7 → 1.9 | 3.5 → 6.5 |
+| plasma | 2.7 → 2.6 | 3.1 → 3.2 | 14.7 | 8.0 | 2.1 | 4.7 → 4.0 | 3.1 → 3.1 |
+| corona | 2.7 → 3.0 | 3.0 → 3.1 | 9.8 | 8.0 | 2.1 | 9.9 → 8.7 | 3.0 → 3.0 |
+| gas | 2.2 → 3.0 | 2.4 → 2.5 | 7.9 | 8.0 | 5.6 | 10.5 → 9.8 | 1.9 → 1.9 |
+| cloud | 2.8 → 3.0 | 2.1 → 3.2 | 8.2 | 8.0 | 3.5 | 9.3 → 13.7 | 2.3 → 2.3 |
+| fuelGas | 2.3 → 2.8 | 2.5 → 2.6 | 7.9 | 8.0 | 10.9 | 12.3 → 10.9 | 1.9 → 1.9 |
+| diskGas | 2.8 → 3.0 | 3.0 → 3.1 | 7.9 | 2.4 | 2.4 | 10.8 → 9.1 | 3.0 → 3.0 |
+| jet | 2.4 → 2.9 | 2.5 → 2.7 | 5.4 | 3.3 | 2.4 | 12.3 → 10.9 | 1.9 → 1.9 |
+| ocean | 2.0 → 2.6 | 2.0 → 2.4 | 8.3 | 5.3 | 1.0 | 5.3 → 4.3 | 1.3 → 1.3 |
+| magma | 1.8 → 1.8 | 1.8 → 3.1 | 10.1 | 2.9 | 1.0 | 1.8 → 1.5 | 2.1 → 2.1 |
+| core | 1.3 → 1.3 | 1.1 → 1.1 | 8.2 | 1.9 | 1.0 | 1.0 → 1.0 | 1.8 → 1.8 |
 
 **Crush, 1500 energy**
 
 | archetype | FRACTURE | ASSIMILATION | TIDAL | THERMAL | CRUSH | KINETIC |
 |---|---:|---:|---:|---:|---:|---:|
-| rock | 11.6 | 13.8 | 16.5 | 8.6 | 10.1 | 20.8 |
-| regolith | 6.1 | 16.4 | 22.3 | 11.6 | 14.0 | 21.0 |
-| mantle | 13.4 | 13.8 | 14.7 | 5.5 | 8.0 | 15.6 |
-| ironNickel | 9.9 | 12.7 | 9.7 | 7.8 | 5.4 | 12.0 |
-| ice | 13.6 | 15.1 | 25.6 | 13.4 | 16.2 | 22.1 |
-| crystal | 13.3 | 12.0 | 14.7 | 12.3 | 10.6 | 21.1 |
-| glass | 10.8 | 11.2 | 16.0 | 13.0 | 12.2 | 20.6 |
-| celadon | 13.2 | 13.9 | 15.6 | 11.6 | 11.3 | 19.9 |
-| eye | 23.9 | 19.5 | 21.1 | 13.4 | 13.3 | 20.9 |
-| tendril | 5.7 | 19.5 | 27.6 | 13.4 | 8.2 | 20.5 |
-| lattice | 16.7 | 35.3 | 23.6 | 13.4 | 12.6 | 19.6 |
-| chain | 5.4 | 22.7 | 13.1 | 11.9 | 6.5 | 16.1 |
-| node | 13.2 | 18.8 | 12.4 | 12.3 | 8.8 | 21.4 |
-| plasma | 6.8 | 22.7 | 42.9 | 10.1 | 12.0 | 24.2 |
-| corona | 15.8 | 16.1 | 42.9 | 10.1 | 12.2 | 25.4 |
-| gas | 12.4 | 13.5 | 42.9 | 13.4 | 14.8 | 18.4 |
-| cloud | 17.9 | 13.6 | 42.9 | 13.4 | 13.3 | 20.4 |
-| fuelGas | 13.0 | 13.5 | 42.9 | 20.3 | 12.8 | 18.4 |
-| diskGas | 17.5 | 13.5 | 11.9 | 12.3 | 12.8 | 23.5 |
-| jet | 14.3 | 11.2 | 16.5 | 13.0 | 13.0 | 16.7 |
-| ocean | 13.0 | 13.6 | 26.9 | 5.5 | 27.1 | 11.6 |
-| magma | 11.8 | 16.3 | 14.4 | 4.7 | 7.4 | 15.3 |
-| core | 9.2 | 13.6 | 9.3 | 4.7 | 5.2 | 11.7 |
+| rock | 7.7 → 8.0 | 13.8 | 16.5 | 8.6 | 10.4 → 10.1 | 20.9 → 19.5 |
+| regolith | 13.5 → 16.9 | 16.4 | 22.3 | 11.6 | 13.7 → 12.4 | 18.9 → 22.0 |
+| mantle | 8.0 → 10.4 | 13.8 | 14.7 | 5.5 | 8.2 → 8.0 | 18.3 → 17.7 |
+| ironNickel | 6.3 → 10.0 | 12.7 | 9.7 | 7.8 | 5.3 → 7.7 | 12.6 → 11.8 |
+| ice | 10.5 → 10.9 | 15.1 | 25.6 | 13.4 | 15.9 → 12.6 | 21.2 → 20.1 |
+| crystal | 12.3 → 9.6 | 12.0 | 14.7 | 12.3 | 10.8 → 11.7 | 18.8 → 24.4 |
+| glass | 7.7 → 11.9 | 11.2 | 16.0 | 13.0 | 13.8 → 12.7 | 19.1 → 20.3 |
+| celadon | 11.0 → 9.2 | 13.9 | 15.6 | 11.6 | 12.0 → 10.2 | 20.2 → 22.3 |
+| eye | 13.3 → 12.6 | 19.5 | 21.1 | 13.4 | 13.5 → 12.5 | 19.9 → 22.0 |
+| tendril | 10.5 → 14.9 | 19.5 | 27.6 | 13.4 | 8.3 → 8.2 | 22.4 → 19.6 |
+| lattice | 9.8 → 8.5 | 35.3 | 23.6 | 13.4 | 12.6 → 12.5 | 20.5 → 20.8 |
+| chain | 6.4 → 10.0 | 22.7 | 13.1 | 11.9 | 6.5 → 6.6 | 14.8 → 17.9 |
+| node | 9.4 → 11.3 | 18.8 | 12.4 | 12.3 | 8.8 → 12.6 | 20.2 → 31.1 |
+| plasma | 14.0 → 17.2 | 22.7 | 42.9 | 10.1 | 13.3 → 11.0 | 19.7 → 21.7 |
+| corona | 13.5 → 16.9 | 16.1 | 42.9 | 10.1 | 12.8 → 12.3 | 19.7 → 19.0 |
+| gas | 10.6 → 12.8 | 13.5 | 42.9 | 13.4 | 15.9 → 19.0 | 14.2 → 15.1 |
+| cloud | 14.8 → 17.4 | 13.6 | 42.9 | 13.4 | 14.7 → 13.1 | 19.4 → 16.8 |
+| fuelGas | 10.7 → 12.9 | 13.5 | 42.9 | 20.3 | 14.4 → 14.8 | 14.2 → 15.1 |
+| diskGas | 13.7 → 16.6 | 13.5 | 11.9 | 12.3 | 12.5 → 12.4 | 19.8 → 18.0 |
+| jet | 11.1 → 13.2 | 11.2 | 16.5 | 13.0 | 14.4 → 15.7 | 14.6 → 14.8 |
+| ocean | 10.2 → 16.4 | 13.6 | 26.9 | 5.5 | 25.7 → 27.6 | 11.1 → 12.5 |
+| magma | 8.9 → 4.9 | 16.3 | 14.4 | 4.7 | 7.4 → 6.8 | 15.7 → 15.8 |
+| core | 7.5 → 10.6 | 13.6 | 9.3 | 4.7 | 5.2 → 5.2 | 14.1 → 17.1 |
 
-Reading it. *Floors:* the worst rows are ironNickel/chain/core/mantle at 1.0-1.4% for FRACTURE/CRUSH/THERMAL at Strike level and 5-10% at Crush level (iron under the Meteor 12%, under the Shatter Blow 9.9%): tough matter is chewed, not sheared. *Matched:* FRACTURE
+The wounds change *when and how* matter leaves, not what a blow pays for: ASSIMILATION/TIDAL/THERMAL are untouched, and the
+held models move by the noise of a re-seeded random stream (± ~1 point at Strike level, ± ~3 at Crush level) with three systematic
+effects: (1) the deferred chisel now bites fresh matter after the slab is gone instead of pulverising the slab (FRACTURE Crush up
+on most rows); (2) KINETIC on brittle node/crystal is up (3.5 → 6.5, 18.8 → 24.4): the calibration's tidal sink pulls the faster
+slabs back across the disc and they land as debris impacts (now capped per tick, see Round 8); (3) a held bowl's lip no longer dies
+outright (CRUSH slightly down). Every row stays above the floor. Matched FRACTURE Lash: glass 3.1 → 2.7 and eye 3.8 → 3.1
+(glass now 0.3 under the 3 % band edge, celadon/crystal went up); worth a look when the slice titans are recalibrated.
+
+Reading it (round-2 analysis, still the intent of the shape). *Floors:* the worst rows are ironNickel/chain/core/mantle at 1.0-1.4% for FRACTURE/CRUSH/THERMAL at Strike level and 5-10% at Crush level (iron under the Meteor 12%, under the Shatter Blow 9.9%): tough matter is chewed, not sheared. *Matched:* FRACTURE
 vs glass/eye/celadon/crystal 3-9% (Lash), KINETIC vs most solids 3-4%, THERMAL vs ice 6% and lattice 27% (fire spreads for seconds; the lattice is *meant* to burn), TIDAL vs gas/plasma/cloud 8% (capped by `TEAR_COST_FLOOR`) and 43% at Crush level, CRUSH vs gas/ocean 6-11% / 27%.
 Above the band by design: lattice under ASSIMILATION/THERMAL and TIDAL vs gas at Crush level (the counters); KINETIC at Crush level is 20-25% on soft matter (the Meteor is ~1350, so ~18%).
 
 **Real moves on the real generated titans** (`npx tsx tools/matter/moves.ts`: forward aim, each hitbox landing once, continuous ones swept every `rehit` ticks, raw matter result: no Guard shell, no part interception, no lunge movement; % of the target's mass 300 ticks later):
+
+Slice Phase 1 (wound sequencing in; titan data as the other specialists left it the same day — Witness, Planet and energies
+changed concurrently, so this is not a matter-only comparison):
+
+| attacker move | nominal energy | -> lastone | -> planet | -> asteroid |
+|---|---:|---:|---:|---:|
+| lastone.lash (strike) | 340 | 1.5% | 2.1% | 1.9% |
+| lastone.lunge (strike) | 260 | 2.0% | 2.5% | 1.9% |
+| lastone.shatter (crush) | 1100 | 6.3% | 8.1% | 7.2% |
+| lastone.gaze (signature) | 480 | 2.7% | 5.2% | 1.9% |
+| lastone.lastlight (ultimate) | 5382 | 68.8% | 23.3% | 25.8% |
+| planet.nudge (strike) | 252 | 1.0% | 0.9% | 1.4% |
+| planet.impact (crush) | 700 | 4.6% | 3.4% | 3.9% |
+| planet.moonslam (signature) | 84 | 0.4% | 1.3% | 0.5% |
+| planet.cataclysm (ultimate) | 1750 | 10.0% | 9.4% | 14.3% |
+| asteroid.meteor (crush) | 1147.5 | 12.1% | 9.7% | 12.3% |
+| asteroid.kessler (ultimate) | 1720 | 19.6% | 22.0% | 23.1% |
+
+Round 2 table (for reference):
 
 | attacker move | nominal energy | -> lastone | -> asteroid |
 |---|---:|---:|---:|
@@ -181,7 +212,7 @@ So a Last One vs Asteroid fight needs ~30 Lashes/Thrusts or ~5 Meteors to wear t
 Every model spends its whole energy budget; what its primary mechanism cannot use falls through to a cheaper fallback, and no cell costs more than a cap to remove:
 
 - **Single-resist accounting.** A cell's cost is `hardness · integrity/255 / resist[type]` (already divided by its own resistance), so budgets are RAW energy. (Before round 2 the budget was also multiplied by the mean resist, squaring the matchup: iron FRACTURE was 0.00.)
-- **FRACTURE** = cuts + grind + a **deferred chisel**: `Eraw · 0.5` (+ unspent cut energy) becomes a crater-engine bite (`chisel()`, cost capped at 1.8 energy/cell) that runs `CHISEL_DELAY` = 3 ticks after the blow, once connectivity has released the slabs the cuts isolated. Scaled by `1 - 0.95·brittleness`:
+- **FRACTURE** = cuts + grind + a **deferred chisel**: `Eraw · 0.5` (+ unspent cut energy) becomes a crater-engine bite (`chisel()`, cost capped at 1.8 energy/cell) that runs one tick after the blow's wound shears (`CHISEL_DELAY` = 3 ticks only when wounds are off: harness carving), once connectivity has released the slabs the cuts isolated; its pit sheds as that wound's slabs. Scaled by `1 - 0.95·brittleness`:
   brittle matter shears into slabs and wastes almost nothing, tough matter can only be chewed. A short stab (a line with `penetration < 24`, no PIERCE) shears like a blow (U-cuts sized by the energy), it does not cut along its own 5-cell axis.
 - **KINETIC / CRUSH** = the shared crater engine with RAW energy; `params.crater` is a **lower bound** on the bowl (the energy is always spent: `Rl = max(crater, 0.8 · energy-derived)`); lip share 14% / 26%, CRUSH compaction 25%.
 - **THERMAL** = 75% of the energy is a **focused core**: cells nearest the shape centre (descending shape weight) receive exactly the dose that vaporises them, until the energy or `1.6 cells/energy` is used; no cell costs more than **2.4 energy** to vaporise (so core/magma/ocean are not immune), and it ignores the
@@ -273,6 +304,12 @@ dither), and are weakened (bonds ×0.65, integrity ≤ 210). With `params.harves
 | infection spread rate, vein noise | `assimilation.ts` | see §3.6 | creep speed |
 | `body.cohesionScale`, `body.heatScale` (LIVE, fighter-owned) | `MatterBody` | 1 | scale every bond / thermal threshold at runtime |
 | `MAX_DEBRIS_CHUNKS`, `MAX_PARTICLES` | `contracts/constants.ts` | 400 / 6000 | pool caps |
+| `SHEAR_TARGET_MS` | `wound.ts` | 140 ms | when a wound's slabs begin to shear (wall time, hit-stop included) |
+| `SHED_PER_TICK`, grain per type | `wound.ts`, crater/fracture opts | 8 %; FRACTURE 8, KINETIC 20, CRUSH 18 | how a wound sheds: budget per tick, pieces per hold |
+| `CORE_FRAC`, `HOLD_MIN` | `crater.ts` | 0.2 of the bowl radius, 40 cells | pulverised-at-once core of a crater; smaller bowls go at once |
+| `STAGGER_MIN`, `BIG_ISLAND` | `wound.ts` | 40 cells; 1500 cells or 25 % | islands split and released a piece per tick |
+| `YOUNG_TICKS`, `FRESH_SLAB_TICKS` | `chunks.ts` | 240, 60 | never degraded to make room; no impact damage while fresh |
+| `DEBRIS_TICK_BUDGET` | `world.ts` | 60 | debris-impact energy a body takes per tick |
 
 ## 6. Dev tooling
 
@@ -322,3 +359,59 @@ Every path that removes matter routes it: to a **chunk** (`chunkMass`), to **par
 - **Impact presence** (`blowfx.ts`): heavy hits (energy >= 400) add dust that travels along the surface in both tangent directions and a plume of 3-8 large soft near-camera puffs (`PF_NEAR`, drawn 2x in the near layer, growing as they age, dithered fade, shaded underside); the flash/starburst/dust ring stays.
 - Tests: chunk depth is deterministic and covers the three classes, a fresh chunk is mid, launch boost only after age 6, layer set is now back/near/front, a barrage rendered at varying alpha hashes identically twice.
 - Perf note: the saturated-scenario p99 in `tools/matter/perf.test.ts` currently reads 3.6-4.3 ms on this (shared) machine although `speedFactor()` reports 1.0. The same replay on the round-2 commit (d76f41f) measures avg 0.88 / p50 0.66 / p99 3.55 ms today (PERF.md recorded 0.40 / 0.20 / 2.22 on a quiet machine), the current tree avg 0.97 / p50 0.75 / p99 3.6-3.7: the machine, not the code, is ~2x slower right now; the code is ~10% heavier than round 2 (slow cuts, blow FX).
+
+## Round 8 (slice Phase 1): wound sequencing — D1 "the instant cut"
+
+**Damage may count instantly; separation takes time.** A heavy blow used to delete its whole crater (and, for FRACTURE, the slab its
+deferred chisel pulverised) in ONE tick, ~98 % of it as particles: on the Planet (resist 4 shell, density 0.5-0.6) a single
+Impact or Shatter emptied a hemisphere into "small embers" between two frames. Now (`src/matter/wound.ts`):
+
+- **Wounds.** Every FRACTURE/KINETIC/CRUSH blow opens a wound (ring of 8 per body, hashed): contact (body-local, so it follows
+  the body through knockback), launch direction (the blow with its inward part removed, blended with the outward normal by the
+  type's radial share), energy, source mass, grain, and its **shear tick**: `SHEAR_TARGET_MS` (140) of wall time after the
+  impact frame **minus the blow's hit-stop** (`DamageEvent.hitstop`; the world is frozen during it), at least one tick. So a
+  heavy blow with an 8-13 tick hit-stop shears on its first world tick (150-233 ms wall), a blow without one 8 ticks later.
+- **Held slabs.** A crater (KINETIC, CRUSH, the FRACTURE chisel) pulverises only its core (`d <= 0.2·thr`, ~4 % of the bowl:
+  the punch) and HOLDS the rest: the bowl is partitioned along the weakest bonds (farthest-point seeds, bond-weighted region
+  growing so borders fall on grain seams, oversized pieces halved, crumbs merged) into ~`grain` pieces (FRACTURE 8, CRUSH 18,
+  KINETIC 20), every piece outlined with **hairline bonds** (bond byte 1: still connected, drawn as a fissure on the impact
+  frame) and tagged in `map.detached` with its slab slot. Held slabs are connectivity anchors. FRACTURE cut edges become
+  hairlines at the blow and are severed by a per-wound deadline (the wound's shear tick) instead of the old ~0.6-1.9 s queue.
+- **Shear.** On its tick a slab's boundary bonds are severed and the connectivity pass releases it. Pieces go nearest the contact
+  first, one tick at a time within the wound's budget (`SHED_PER_TICK` = 8 % of its held mass per tick; a bigger piece goes
+  alone). Islands that a wound frees before its shear wait for it; islands bigger than `STAGGER_MIN` (40 cells) in a wound's
+  window, or bigger than 1500 cells / 25 % of the body at any time, are split and released the same way. A held core-disc cell
+  stops anchoring and stops counting toward `coreIntegrity` at once (the KO counts now, the slab leaves later).
+- **Momentum and spin.** Every piece of a wound leaves at the wound's speed (`190·√(E/(M+25))·sm`, M = the first held mass)
+  along its direction, plus a lateral fan by its offset from the contact, so Σm·v·d̂ = P_w (measured 98-101 %). Spin is the lever
+  arm of that impulse on the piece's contact-facing side over its own moment of inertia (`Chunk.inertia`, from its cells):
+  ω = 0.06·((p − c) × m·v) / I, clamped ±8 rad/s; pieces either side of the blow line spin in opposite senses (100 % agree).
+  Wound pieces (`Chunk.fast`) skip the old 35 %→100 % heaviness ramp (the hold was the beat) and deal no impact damage for 60
+  ticks (they bounce); any body takes at most 60 energy of debris impacts per tick.
+- **Ledger.** Nothing leaves the cells before its shear; CRUSH compaction takes the packed share out of a held cell's density
+  at once and packs exactly that into the rim. Exact (tests assert < 1e-3 every tick).
+- **Determinism.** Wounds, slabs, the shear schedule, `map.detached`, slow-cut contents, waves, chunk heat/age/flags/inertia, the
+  last blow, debris budget and tidal cadence are all hashed now (closing the Phase 0 gaps). `forceFullConn` equivalence still holds
+  on the 16 scenarios. Harness carving (`carve`) runs with `core.woundsOff` (instant separation) and now never digs through the core.
+- **FX timing.** The flash disc lives 4 + 1.5k ticks; the near-camera plume and the crater dust plume start 40+ px / above the
+  bowl and are thrown clear; the dust ring is faster and shorter. Matter FX clear a 52 px wound box in 283-333 ms wall after
+  every slice heavy blow (`tools/matter/wounds.ts`; telemetry baseline ≈ 1.75 s with S5's washes).
+- **Pool policy.** The overflow victim is the smallest settled chunk (age ≥ 240 ticks, the oldest first); young chunks are only
+  degraded when every chunk is young. Near-class chunks over the 24/frame budget are drawn 1x in the fight plane (same parallax),
+  never dropped. Degrading uses the chunk's own interned material ramp (`Chunk.dustRamp`): the 512-entry ramp table is no
+  longer filled by debris.
+- **Measured** (`npx tsx tools/matter/wounds.ts`, real titans, authored hit-stop; `wound.test.ts` asserts all of it):
+
+| blow | 1.5 s loss | max 1-tick share | to chunks (solids) | shear ms | momentum | FX clear ms |
+|---|---:|---:|---:|---:|---:|---:|
+| planet.impact → planet | 181 | 11 % | 100 % | 250 | 100 % | 333 |
+| lastone.shatter → planet | 519 | 11 % | 91 % | 233 | 101 % | 317 |
+| lastone.lastlight shear → planet | 724 | 10 % | 95 % | 250 | 99 % | 0 |
+| planet.impact → lastone | 562 | 7 % | 92 % | 233 | 99 % | 333 |
+| planet.cataclysm quake → lastone | 1446 | 8 % | 85 % | 233 | 99 % | 333 |
+| lastone.shatter → lastone | 1167 | 9 % | 95 % | 217 | 99 % | 317 |
+
+  In real AI fights (`npx tsx tools/lead/pacing.ts --n=10`, the whole tree as of this round): the median heavy hit's largest
+  one-tick loss fell from 48 % to 12 % of its 1.5 s loss on the Planet (that tick: 98 % → 58 % particles) and from 36 % to 6 % on
+  the Witness. What still leaves in bulk as particles: the Last Light beam's PIERCE channel (every tick, by design), fluids and
+  gas, pulverised cores, and settled debris degraded when the 400-chunk pool overflows.

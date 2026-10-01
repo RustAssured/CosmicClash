@@ -32,6 +32,9 @@ const opts: CraterOpts = {
   craterR: 0,
   type: T_KINETIC,
   costCap: Infinity,
+  radial: 0.85,
+  wound: -1,
+  grain: 20,
 };
 const out: CraterOut = {
   ok: false,
@@ -106,7 +109,13 @@ export function embedShrapnel(
       const y = Math.floor(cr.fy + iy * depth + ty * lat);
       if (x < 0 || y < 0 || x >= w || y >= body.h) continue;
       const c = y * w + x;
-      if (map.material[c] === 0 || (map.flags[c]! & F_SHRAP) !== 0 || isImmune(body, c, T_KINETIC)) continue;
+      if (
+        map.material[c] === 0 ||
+        map.detached[c] !== 0 ||
+        (map.flags[c]! & F_SHRAP) !== 0 ||
+        isImmune(body, c, T_KINETIC)
+      )
+        continue;
       map.flags[c] = map.flags[c]! | F_SHRAP;
       const f = body.fuseCount++;
       body.fuseCell[f] = c;

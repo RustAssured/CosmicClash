@@ -46,7 +46,18 @@ export class Chunk {
   noHitUntil = 0;
   /** Sleeping = settled; skipped by physics unless a gravity source is active. */
   asleep = false;
+  /** Moment of inertia about the centre of mass (mass·px², from the cells it was cut from). */
+  inertia = 1;
+  /** Launched by a wound (it already waited for its shear): no slow heaviness ramp, its spin is physical. */
+  fast = false;
+  /** Interned particle ramp its dust uses when it wears away or is degraded (-1 = the shared generic rock-dust ramp). */
+  dustRamp = -1;
 }
+
+/** Chunks younger than this (ticks) are never degraded to make room: fresh slabs are the wound being read. */
+export const YOUNG_TICKS = 240;
+/** Wound slabs deal no impact damage for this long after their shear (they bounce). */
+const FRESH_SLAB_TICKS = 60;
 
 /** Pool of chunks (fixed capacity, objects preallocated). */
 export class ChunkPool {
@@ -86,20 +97,32 @@ export class ChunkPool {
     return this.list[slot]!;
   }
 
-  /** Oldest+smallest chunk is degraded first. Deterministic scan. */
+  /**
+   * The chunk degraded to make room: the smallest of the settled ones (age >= YOUNG_TICKS), the oldest first among equals.
+   * Young chunks are only sacrificed when every chunk is young (then the smallest young one goes). Deterministic scan.
+   */
   private pickVictim(): number {
-    let best = 0;
+    let best = -1;
     let bestScore = Infinity;
+    let young = 0;
+    let youngScore = Infinity;
     for (let i = 0; i < this.hi; i++) {
       const c = this.list[i]!;
       if (!c.alive) continue;
-      const score = c.mass * (1 + Math.min(c.age, 3600) / 1800);
+      if (c.age < YOUNG_TICKS) {
+        if (c.mass < youngScore) {
+          youngScore = c.mass;
+          young = i;
+        }
+        continue;
+      }
+      const score = c.mass / (1 + Math.min(c.age, 3600) / 1800);
       if (score < bestScore) {
         bestScore = score;
         best = i;
       }
     }
-    return best;
+    return best >= 0 ? best : young;
   }
 
   private release(c: Chunk, slot: number): void {
@@ -170,6 +193,8 @@ export class ChunkPool {
     c.heat = heat;
     c.asleep = false;
     c.noHitUntil = 0;
+    c.fast = false;
+    c.dustRamp = -1;
     c.refX = NaN;
     c.refY = NaN;
     c.launchNear = pxCount(pixels) >= 20 && vx * vx + vy * vy >= 140 * 140;
@@ -185,12 +210,13 @@ function pxCount(pixels: Uint32Array): number {
   return n;
 }
 
-/** Radius, opaque cell count and edge normals from the sprite. */
+/** Radius, opaque cell count, edge normals and (uniform-density) moment of inertia from the sprite. */
 function computeChunkGeometry(c: Chunk): void {
   const { w, h, pixels } = c;
   const nrm = new Uint8Array(w * h);
   let cells = 0;
   let r2 = 0;
+  let i2 = 0;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
@@ -199,6 +225,7 @@ function computeChunkGeometry(c: Chunk): void {
       const dx = x + 0.5 - c.cx;
       const dy = y + 0.5 - c.cy;
       const d2 = dx * dx + dy * dy;
+      i2 += d2 + 1 / 6;
       if (d2 > r2) r2 = d2;
       let nx = 0;
       let ny = 0;
@@ -216,22 +243,37 @@ function computeChunkGeometry(c: Chunk): void {
   c.nrm = nrm;
   c.cells = cells;
   c.radius = Math.sqrt(r2) + 1;
+  // Each opaque pixel carries mass/cells; a unit pixel square adds 1/6 about its own centre.
+  c.inertia = cells > 0 ? (c.mass / cells) * i2 : c.mass;
 }
 
-/** Turn a chunk into dust particles that carry its mass (used on overflow and hard destruction). */
+const GENERIC_DUST = [0xff8a96a0, 0xff606a74, 0xff3c4248];
+const genericDustIds = new WeakMap<object, number>();
+/** The shared dust ramp for chunks that carry no material ramp (spawned from outside the matter world). */
+function genericDust(core: WorldCore): number {
+  let id = genericDustIds.get(core.particles);
+  if (id === undefined) {
+    id = core.particles.internRamp(GENERIC_DUST);
+    genericDustIds.set(core.particles, id);
+  }
+  return id;
+}
+
+/**
+ * Turn a chunk into dust particles that carry its mass (used on overflow and hard destruction). The dust uses the chunk's own
+ * interned material ramp: degrading never interns new colour ramps (the ramp table is finite and must not run out mid-fight).
+ */
 export function degradeToDust(core: WorldCore, c: Chunk): void {
   const n = Math.min(6, 1 + (c.cells >> 4));
   const p = core.particles;
   const per = c.mass / n;
-  // Sample a few opaque pixels for colours.
+  const rid = c.dustRamp >= 0 ? c.dustRamp : genericDust(core);
   let k = 0;
   const step = Math.max(1, Math.floor(c.pixels.length / (n + 1)));
   for (let i = 0; i < c.pixels.length && k < n; i += step) {
     let j = i;
     while (j < c.pixels.length && c.pixels[j]! >>> 24 === 0) j++;
     if (j >= c.pixels.length) break;
-    const col = c.pixels[j]!;
-    const rid = p.internRamp([col, scalePx(col, 190), scalePx(col, 120)]);
     const ang = core.rng.next() * Math.PI * 2;
     const sp = 10 + core.rng.next() * 30;
     p.spawn(
@@ -329,6 +371,7 @@ export function splitChunk(
     origin: c.origin,
     brittle: c.brittle,
     heat: c.heat,
+    dustRamp: c.dustRamp,
   };
   const cxp = c.cx;
   const cyp = c.cy;
@@ -391,6 +434,7 @@ export function splitChunk(
     );
     ch.angle = parentAngle;
     ch.grace = 12;
+    ch.dustRamp = parent.dustRamp;
     lastChunk = ch;
   }
   // Rounding remainder (and the share of any empty group) stays with the last shard so mass is conserved exactly.
@@ -482,7 +526,8 @@ export function stepChunks(core: WorldCore): void {
     c.vx = vx;
     c.vy = vy;
     // Inertia: a big piece knocked off a massive body starts slowly and accelerates (longer for heavier ones); its spin spins up later.
-    const spinUp = c.mass < 4 ? 0 : Math.min(30, 4 + Math.sqrt(c.mass) * 1.6);
+    // (A wound slab already waited for its shear: it leaves with its momentum, easing in over 3 ticks only.)
+    const spinUp = c.mass < 4 ? 0 : c.fast ? 3 : Math.min(30, 4 + Math.sqrt(c.mass) * 1.6);
     let mv = 1;
     let ms = 1;
     if (c.age < spinUp * 1.6) {
@@ -558,7 +603,9 @@ function collideBodies(core: WorldCore, c: Chunk): void {
     ny /= nl;
     const vn = rvx * nx + rvy * ny;
     if (speed > 120 && c.mass > 1.2 && vn < 0 && core.tick >= b.debrisImmuneUntil) {
-      core.chunkImpact(b, c, hx, hy, rvx / speed, rvy / speed, speed);
+      // A fresh wound slab is still the wound's matter, not a weapon: it bounces off whatever it meets for its first second.
+      if (!(c.fast && c.age < FRESH_SLAB_TICKS))
+        core.chunkImpact(b, c, hx, hy, rvx / speed, rvy / speed, speed);
       // Bounce with heavy loss, shed some spin.
       const e = 0.35;
       c.vx = c.vx - (1 + e) * vn * nx;
@@ -642,9 +689,12 @@ export function rasterChunks(core: WorldCore, view: ViewRect, alpha: number, t: 
   for (let s = 0; s < pool.hi; s++) {
     const c = pool.list[s]!;
     if (!c.alive) continue;
-    const depth = chunkDepth(c);
-    if (depth === DEPTH_NEAR && nearDrawn >= MAX_NEAR_DRAWN) continue;
-    const par = PARALLAX[depth];
+    const cls = chunkDepth(c);
+    let depth = cls;
+    // Over the near-class budget a chunk is drawn 1x in the fight-plane layer instead (never dropped: debris does not blink
+    // out); it keeps its class parallax so it does not jump.
+    if (depth === DEPTH_NEAR && nearDrawn >= MAX_NEAR_DRAWN) depth = DEPTH_MID;
+    const par = PARALLAX[cls];
     const sc = depth === DEPTH_NEAR ? 2 : 1;
     // Screen position: about the view centre, scaled by the class parallax (integer view origin => stable, pixel-clean).
     if (c.refX !== c.refX) {

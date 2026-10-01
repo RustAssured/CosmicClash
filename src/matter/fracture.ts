@@ -24,6 +24,7 @@ import { PK } from './particles';
 import { findImpact, type Impact } from './impact';
 import { K_LINE } from './shape';
 import { carveCrater, type CraterOpts, type CraterOut } from './crater';
+import { openWound } from './wound';
 
 /** Energy (baseline units) to sever one full-strength (255) bond. Seam bonds are cheaper: they are the weak paths. */
 const K_E = 3.6;
@@ -43,6 +44,8 @@ interface CutStats {
 const cutStats: CutStats = { broken: 0, spent: 0, complete: true, tipCorner: -1 };
 /** Energy this event spent severing bonds (summed over its cuts): what is left of the cut budget is gouged instead. */
 let cutTotal = 0;
+/** Wound of the blow being applied (its cut edges are queued under it), or -1. */
+let curWound = -1;
 
 /** The chisel: energy that shearing could not use (tough matter, short cuts) still chips a pit out of the contact. */
 const gougeOpts: CraterOpts = {
@@ -55,6 +58,9 @@ const gougeOpts: CraterOpts = {
   craterR: 0,
   type: T_FRACTURE,
   costCap: 1.8,
+  radial: 0.16,
+  wound: -1,
+  grain: 12,
 };
 const gougeOut: CraterOut = {
   ok: false,
@@ -115,7 +121,27 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
 
   seedCorners.length = 0;
   cutTotal = 0;
+  curWound = -1;
   if (E >= 0.4) {
+    // The wound: its cuts become hairlines now and sever by its shear tick; the slabs they free carry its momentum.
+    if (findImpact(ctx, imp)) {
+      ctx.wound = openWound(
+        core,
+        body,
+        imp.fx,
+        imp.fy,
+        imp.nx,
+        imp.ny,
+        ctx.dirX,
+        ctx.dirY,
+        Eraw,
+        ctx.sourceMass,
+        isLine ? 0.08 : 0.16,
+        ctx.hitstop,
+        8,
+      );
+      curWound = ctx.wound;
+    }
     let cutB: number;
     let chanB: number;
     let grindB: number;
@@ -166,14 +192,22 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
   finishDamage(ctx, res, coverageOf(ctx), 1);
 }
 
-/** Delay (ticks) before the deferred chisel runs: past the CONN_NOW pass that frees the slabs. */
+/**
+ * Delay (ticks) before the deferred chisel runs when wounds are off (harness carving). In a match the chisel runs one tick
+ * after its wound's shear (world.ts `queueChisel`), so the slabs the cuts outlined leave first.
+ */
 export const CHISEL_DELAY = 3;
 
-/** The deferred chisel of a FRACTURE blow (world.ts runs it from the job queue): chips a pit out of what the cuts left at the contact. */
-export function chisel(ctx: DamageCtx, budget: number): void {
+/**
+ * The deferred chisel of a FRACTURE blow (world.ts runs it from the job queue): chips a pit out of what the cuts left at the
+ * contact. Its pit belongs to the blow's wound: the chewed matter sheds as that wound's slabs (pulverised core excepted).
+ */
+export function chisel(ctx: DamageCtx, budget: number, wound = -1): void {
   if (budget < 4) return;
   gougeOpts.budget = budget;
+  gougeOpts.wound = wound;
   carveCrater(ctx, gougeOpts, gougeOut);
+  gougeOpts.wound = -1;
 }
 
 /* --------------------------------------------------------------------------------------------- *
@@ -493,7 +527,7 @@ function runCut(ctx: DamageCtx, finder: CutFinder, budget: number, grindBudget: 
         break;
       }
       spent += cost;
-      queueSlowEdge(body, ux, uy, d);
+      queueSlowEdge(body, ux, uy, d, curWound);
       broken++;
       // Grind the two cells beside the cut and throw a glint or two.
       grindCell(ctx, a, perEdgeGrind);

@@ -353,6 +353,7 @@ describe('BodyStats', () => {
       );
       run(world, 4);
     }
+    run(world, 40); // the held wound slabs shear and leave (separation takes time; the damage already counted)
     const s = world.stats(ids[0]!);
     expect(s.exposedCoreFrac).toBeGreaterThan(0.1);
     expect(s.coreIntegrity).toBeLessThan(1);
@@ -474,7 +475,7 @@ describe('render layers, particles, chunks and gravity', () => {
     const px = new Uint32Array(6 * 4).fill(rgba(200, 120, 60, 255));
     world.spawnChunk({ pixels: px, w: 6, h: 4, x: 320, y: 180, vx: 60, vy: 0, spin: 0, mass: 5 });
     const l0 = world.renderLayers(view, 0);
-    expect(l0.map((l) => l.id).sort()).toEqual(['debris-back', 'debris-near', 'fx-front']);
+    expect(l0.map((l) => l.id).sort()).toEqual(['debris-back', 'debris-mid', 'debris-near', 'fx-front']);
     const layers = l0.slice();
     const find = (layer: (typeof l0)[number]): number[] => {
       const out: number[] = [];

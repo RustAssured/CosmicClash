@@ -59,6 +59,10 @@ export class DamageCtx {
   first = true;
   /** Energy a model wants spent later by the deferred chisel (FRACTURE); 0 = none. The world queues it. */
   chisel = 0;
+  /** Hit-stop ticks of this blow (`DamageEvent.hitstop`): the world is frozen for them, so they count toward the shear beat. */
+  hitstop = 0;
+  /** Wound opened by this application (wound.ts), or -1. */
+  wound = -1;
 
   /** Covered live cells: core.covIdx / core.covW hold the first `n`. */
   n = 0;
@@ -137,6 +141,8 @@ export function beginDamage(
   ctx.duration = ev.duration;
   ctx.first = first;
   ctx.chisel = 0;
+  ctx.hitstop = first ? Math.max(0, ev.hitstop ?? 0) : 0;
+  ctx.wound = -1;
   ctx.removed = 0;
   ctx.massRemoved = 0;
   ctx.massTransferred = 0;

@@ -278,7 +278,7 @@ describe('overlap / solidAt (pixel-accurate hit detection)', () => {
 });
 
 describe('connectivity and detachment', () => {
-  it('a bridge cut in two detaches the far half as a chunk, conserving mass', () => {
+  it('a bridge cut in two lets the far half go as slabs split along its grain, a piece per tick, conserving mass', () => {
     const tb = bridge({ seed: 3, x: 400, y: 290 });
     const { world, ids } = make(2, [tb]);
     const cellsBefore = world.stats(ids[0]!).cells;
@@ -288,16 +288,31 @@ describe('connectivity and detachment', () => {
     // find bridge columns x in 30..54 at rows 18..20: break all bonds at column 42
     for (let y = 18; y < 21; y++) map.bondR[y * map.w + 42] = 0;
     world.settleBody(ids[0]!);
+    // The half NOT containing the core (right side, ~24*24 + 12*3 cells, > 25 % of the body) is too big to fall off in one
+    // tick: it is held and split, then released a piece per tick.
+    expect(world.diagnostics().heldSlabs).toBeGreaterThan(1);
+    expect(world.stats(ids[0]!).cells).toBe(cellsBefore);
     const events: SimEvent[] = [];
-    world.tick();
-    world.drainEvents(events);
+    let ticks = 0;
+    let maxTick = 0;
+    let last = massBefore;
+    while (world.diagnostics().heldSlabs > 0 && ticks < 60) {
+      world.tick();
+      world.drainEvents(events);
+      const m = world.stats(ids[0]!).mass;
+      maxTick = Math.max(maxTick, last - m);
+      last = m;
+      ticks++;
+      expectConserved(world);
+    }
     const s = world.stats(ids[0]!);
     expect(s.cells).toBeLessThan(cellsBefore);
     expect(s.mass).toBeLessThan(massBefore);
-    // The half NOT containing the core (right side, ~24*24 + 12*3 cells) became one chunk.
+    expect(ticks).toBeGreaterThan(2);
     const d = world.diagnostics();
-    expect(d.chunks).toBe(1);
+    expect(d.chunks).toBeGreaterThan(1);
     expect(d.chunkMass).toBeGreaterThan(0.4 * massBefore);
+    expect(maxTick).toBeLessThan(0.5 * (massBefore - s.mass));
     expect(events.some((e) => e.t === 'matter' && e.kind === 'detach')).toBe(true);
     expectConserved(world);
     // stats report the survivors as anchored
@@ -442,17 +457,16 @@ describe('FRACTURE vs KINETIC on the same target', () => {
       largestChunkFrac: biggest / Math.max(1e-6, m0 - s.mass),
     };
   }
-  it('FRACTURE frees slabs (few, large chunks); KINETIC carves a crater with many small pieces', () => {
+  it('FRACTURE frees coarse slabs; KINETIC sheds its crater as finer blocks', () => {
+    // Both shed their wound a piece at a time (wound.ts), but with their own grain: a shear frees fewer, bigger slabs than
+    // a crater's blocks.
     const f = hit('FRACTURE');
     const k = hit('KINETIC');
     expect(f.removed).toBeGreaterThan(30);
     expect(k.removed).toBeGreaterThan(30);
-    // FRACTURE: a couple of big slabs carry most of the removed mass.
     expect(f.chunks).toBeGreaterThanOrEqual(1);
-    expect(f.chunks).toBeLessThanOrEqual(10);
-    expect(f.largestChunkFrac).toBeGreaterThan(0.3);
-    // KINETIC: mass goes into many fragments/dust; more chunks and none dominating.
-    expect(k.chunks).toBeGreaterThan(f.chunks * 2);
+    expect(k.chunks).toBeGreaterThan(f.chunks);
+    expect(f.largestChunkFrac).toBeGreaterThan(k.largestChunkFrac);
     expect(k.largestChunkFrac).toBeLessThan(0.15);
   });
 });
@@ -468,6 +482,8 @@ describe('detached chunks appear exactly where their cells were drawn (mirroring
       const tb = bridge({ seed: 3, x: 300, y: 200, facing });
       tb.spec.transform.lean = lean;
       const { world, ids } = make(2, [tb]);
+      // Extraction geometry only: let the piece go at once (wound pieces use the same extraction, a piece at a time).
+      world.core.woundsOff = true;
       const map = tb.map;
       const t = tb.spec.transform;
       const X = Math.round(t.x);

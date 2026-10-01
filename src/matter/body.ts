@@ -13,6 +13,7 @@ import {
   type TitanAttributes,
 } from '@/contracts';
 import { K_CONE, K_LINE, type ShapeQ } from './shape';
+import { WoundBook } from './wound';
 
 export const TILE = 16;
 export const TILE_SHIFT = 4;
@@ -208,10 +209,15 @@ export class Body implements MatterBody {
   readonly slowEdges = new Int32Array(4096);
   slowN = 0;
   slowPos = 0;
+  /** Wounds and the held slabs they will shed (see wound.ts). Slab tags live in `map.detached`. */
+  readonly wounds: WoundBook;
   /** A CRUSH has cracked this body: fissures glow with magma from then on (visual only). */
   magma = false;
   /** After a heal (round reset) the body is not pelted by the previous round's debris until this world tick. */
   debrisImmuneUntil = 0;
+  /** Debris-impact energy this body has taken on world tick `debrisTick` (a shower of debris hurts like one heavy chunk). */
+  debrisTick = -1;
+  debrisEnergy = 0;
 
   /* ---- shrapnel fuses (KINETIC EMBED) ---- */
   readonly fuseCell = new Int32Array(MAX_FUSES);
@@ -305,6 +311,7 @@ export class Body implements MatterBody {
     this.killMark = new Int32Array(this.n);
     this.killEvt = new Int32Array(this.n);
     this.connLabel = new Int32Array(this.n);
+    this.wounds = new WoundBook(this.n);
     let fluidAny = false;
     for (let i = 1; i < spec.materials.length; i++) if (spec.materials[i]!.fluid) fluidAny = true;
     this.hasFluid = fluidAny;
@@ -727,10 +734,12 @@ export class Body implements MatterBody {
     const integ = map.integrity;
     const mat = map.material;
     const disc = this.coreDiscIdx;
+    const det = map.detached;
     let sum = 0;
     for (let k = 0; k < disc.length; k++) {
       const c = disc[k]!;
-      if (mat[c] !== 0) sum += integ[c]!;
+      // a core cell a wound is shedding already counts as lost (the damage counts now, the slab leaves 80-300 ms later)
+      if (mat[c] !== 0 && det[c] === 0) sum += integ[c]!;
     }
     s.coreIntegrity = this.corePristine > 0 ? Math.min(1, sum / (255 * this.corePristine)) : 0;
     // Exposure: 16 rays from the core centre outwards; a ray is open if it meets no live cell beyond the core radius.

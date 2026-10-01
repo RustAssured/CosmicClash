@@ -4,9 +4,10 @@ import type { WorldCore } from './core';
 import { rasterParticles } from './particles';
 
 /**
- * The pooled screen-space debris/particle layers. Two layers, allocated lazily once and re-used every call:
+ * The pooled screen-space debris/particle layers. Four layers, allocated lazily once and re-used every call:
  *   debris-back  z -20: settled/drifting chunks behind the titans (~3 of 4 chunks, deterministic from chunk id)
- *   fx-front     z +10: the fight-plane chunks, all particles (sparks, embers, dust, gas, streams), with an emissive mask
+ *   debris-mid   z +9:  the fight-plane chunks (over the titans, under every particle), with an emissive mask
+ *   fx-front     z +10: all particles (sparks, embers, dust, gas, streams), with an emissive mask
  *   debris-near  z +15: chunks near the camera (and near-camera puffs) drawn at 2x pixel doubling with extra parallax
  * Chunks are rasterised rotated with nearest sampling (angle quantised to 1/48 turn), edge-lit per tumble angle.
  */
@@ -17,6 +18,9 @@ export class MatterRender {
   private frontEmi: Uint8Array | null = null;
   private near: RenderLayer | null = null;
   private nearEmi: Uint8Array | null = null;
+  private mid: RenderLayer | null = null;
+  private midEmi: Uint8Array | null = null;
+  private readonly midRange = { a: 0, b: -1 };
   private readonly nearRange = { a: 0, b: -1 };
   private readonly out: RenderLayer[] = [];
   private readonly backRange = { a: 0, b: -1 };
@@ -37,7 +41,11 @@ export class MatterRender {
     this.nearEmi = new Uint8Array(LOGICAL_W * LOGICAL_H);
     near.emissive = this.nearEmi;
     this.near = near;
-    this.out.push(back, front, near);
+    const mid = makeLayer('debris-mid', 'screen', 9, LOGICAL_W, LOGICAL_H);
+    this.midEmi = new Uint8Array(LOGICAL_W * LOGICAL_H);
+    mid.emissive = this.midEmi;
+    this.mid = mid;
+    this.out.push(back, mid, front, near);
   }
 
   render(core: WorldCore, view: ViewRect, alpha: number): RenderLayer[] {
@@ -62,15 +70,18 @@ export class MatterRender {
     clear(back, backEmi, this.backRange);
     clear(front, frontEmi, this.frontRange);
     clear(near, nearEmi, this.nearRange);
+    const mid = this.mid!;
+    const midEmi = this.midEmi!;
+    clear(mid, midEmi, this.midRange);
     rasterChunks(core, view, alpha, {
       backPix: back.pixels,
       backEmi,
-      frontPix: front.pixels,
-      frontEmi,
+      frontPix: mid.pixels,
+      frontEmi: midEmi,
       nearPix: near.pixels,
       nearEmi,
       backRange: this.backRange,
-      frontRange: this.frontRange,
+      frontRange: this.midRange,
       nearRange: this.nearRange,
     });
     rasterParticles(
@@ -86,12 +97,15 @@ export class MatterRender {
     );
     this.version++;
     back.version = this.version;
+    mid.version = this.version;
     front.version = this.version;
     near.version = this.version;
     back.dirty = null;
+    mid.dirty = null;
     front.dirty = null;
     near.dirty = null;
     back.visible = this.backRange.b >= this.backRange.a;
+    mid.visible = this.midRange.b >= this.midRange.a;
     front.visible = this.frontRange.b >= this.frontRange.a;
     near.visible = this.nearRange.b >= this.nearRange.a;
     return this.out;

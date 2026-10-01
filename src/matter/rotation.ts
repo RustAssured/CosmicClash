@@ -1,0 +1,275 @@
+import type { WorldPoint } from './body';
+import type { ShapeQ } from './shape';
+
+/**
+ * ROTATION SPIKE (Phase 1, matter side; not wired into contracts or Body yet — see docs/proposals/140-S4-rotation-contract.md).
+ *
+ * A rig region body (the Witness's arms, halo, cradle: SLICE_PLAN §4.1, D27) may carry a quantised rotation. Hit truth is
+ * WHAT THE RENDERER DRAWS: S5's clean-edge sampler (`src/render/rotsprite.ts`, proposal 151) — `ANGLE_STEPS` steps per turn,
+ * a Q14 integer LUT exact at the quadrants, 3×3 integer sub-samples per destination pixel mapped back with an exact (biased)
+ * floor division, the MAJORITY colour of the nine kept (ties → the centre sample), transparent texels voting as one "empty"
+ * colour. Matter cannot import `src/render` (purity), so the integer rule is reproduced here bit for bit until it moves to
+ * `src/contracts` (151); `rotation.test.ts` checks every destination pixel of every angle against S5's own `rotSample`.
+ *
+ * Body mapping: the source pivot is the map anchor (a pixel corner) drawn at the integer world pixel
+ * (round(t.x), round(t.y)); `facing = -1` mirrors the map about the pivot BEFORE rotating; row-shear lean does not apply to
+ * rotated regions (amended D4).
+ *
+ * The cache holds ONE mask per (body, angle, facing): for every destination pixel of the rotated map rectangle, the texel its
+ * centre sub-sample reads and whether all nine sub-samples read that same texel (true for every interior pixel). That is pure
+ * geometry, so it never goes stale under destruction; liveness and colour are read at query time, and only the few edge pixels
+ * whose sub-samples straddle texels run the 9-sample vote.
+ */
+
+export const ANGLE_STEPS = 256;
+const ROT_ONE = 1 << 14;
+const SUB = 3;
+const DEN = 2 * SUB;
+const DIV = DEN * ROT_ONE;
+const BIAS_PX = 4096;
+
+/** Q14 cos / sin per quantised step (exact quadrants first, so 90° turns are exact transposes). */
+export const ROT_COS = new Int32Array(ANGLE_STEPS);
+export const ROT_SIN = new Int32Array(ANGLE_STEPS);
+for (let i = 0; i < ANGLE_STEPS; i++) {
+  const q = i % (ANGLE_STEPS / 4);
+  const a = (2 * Math.PI * i) / ANGLE_STEPS;
+  const quad = i / (ANGLE_STEPS / 4);
+  ROT_COS[i] = q === 0 ? [ROT_ONE, 0, -ROT_ONE, 0][quad]! : Math.round(Math.cos(a) * ROT_ONE);
+  ROT_SIN[i] = q === 0 ? [0, ROT_ONE, 0, -ROT_ONE][quad]! : Math.round(Math.sin(a) * ROT_ONE);
+}
+
+/** Wrap any integer step to 0..ANGLE_STEPS-1. */
+export const rotStep = (k: number): number => ((k % ANGLE_STEPS) + ANGLE_STEPS) % ANGLE_STEPS;
+
+const floorDiv = (a: number): number => Math.trunc((a + BIAS_PX * DIV) / DIV) - BIAS_PX;
+
+/** The minimal body view the rotated hit-tests need (Body satisfies it). */
+export interface RotBody {
+  readonly w: number;
+  readonly h: number;
+  readonly map: {
+    readonly material: Uint8Array;
+    readonly integrity: Uint8Array;
+    readonly pixels: Uint32Array;
+  };
+  readonly transform: { x: number; y: number; anchorX: number; anchorY: number; facing: 1 | -1 };
+}
+
+/** Map cell (j*w+i) that sub-sample (sx, sy) of destination pixel (dx, dy) — relative to the pivot pixel — reads; -1 = off-map. */
+export function subCell(
+  b: RotBody,
+  step: number,
+  facing: 1 | -1,
+  dx: number,
+  dy: number,
+  sx: number,
+  sy: number,
+): number {
+  const c = ROT_COS[step]!;
+  const s = ROT_SIN[step]!;
+  const X = DEN * dx + 2 * sx + 1;
+  const Y = DEN * dy + 2 * sy + 1;
+  const u = floorDiv(c * X + s * Y);
+  const v = floorDiv(-s * X + c * Y);
+  const t = b.transform;
+  const i = facing === 1 ? t.anchorX + u : t.anchorX - 1 - u;
+  const j = t.anchorY + v;
+  if (i < 0 || j < 0 || i >= b.w || j >= b.h) return -1;
+  return j * b.w + i;
+}
+
+/** One cached rotated mask: per destination pixel, the centre sub-sample's cell and whether all nine read it. */
+export class RotMask {
+  constructor(
+    readonly step: number,
+    readonly facing: 1 | -1,
+    /** Destination rectangle, relative to the pivot pixel. */
+    readonly x0: number,
+    readonly y0: number,
+    readonly w: number,
+    readonly h: number,
+    readonly centre: Int32Array,
+    readonly uniform: Uint8Array,
+  ) {}
+}
+
+/** Build the mask of `b` at `step` (pure function of the map size, anchor, facing and angle). */
+export function buildRotMask(b: RotBody, step: number): RotMask {
+  const t = b.transform;
+  const c = ROT_COS[step]! / ROT_ONE;
+  const s = ROT_SIN[step]! / ROT_ONE;
+  let mnx = Infinity;
+  let mny = Infinity;
+  let mxx = -Infinity;
+  let mxy = -Infinity;
+  for (let k = 0; k < 4; k++) {
+    const lx = ((k & 1 ? b.w : 0) - t.anchorX) * t.facing;
+    const ly = (k & 2 ? b.h : 0) - t.anchorY;
+    const wx = c * lx - s * ly;
+    const wy = s * lx + c * ly;
+    if (wx < mnx) mnx = wx;
+    if (wx > mxx) mxx = wx;
+    if (wy < mny) mny = wy;
+    if (wy > mxy) mxy = wy;
+  }
+  const x0 = Math.floor(mnx) - 1;
+  const y0 = Math.floor(mny) - 1;
+  const w = Math.ceil(mxx) + 1 - x0;
+  const h = Math.ceil(mxy) + 1 - y0;
+  const centre = new Int32Array(w * h);
+  const uniform = new Uint8Array(w * h);
+  for (let v = 0; v < h; v++)
+    for (let u = 0; u < w; u++) {
+      const o = v * w + u;
+      const cc = subCell(b, step, t.facing, x0 + u, y0 + v, 1, 1);
+      centre[o] = cc;
+      let same = 1;
+      for (let k = 0; k < 9 && same; k++) {
+        if (k === 4) continue;
+        if (subCell(b, step, t.facing, x0 + u, y0 + v, k % 3, (k / 3) | 0) !== cc) same = 0;
+      }
+      uniform[o] = same;
+    }
+  return new RotMask(step, t.facing, x0, y0, w, h, centre, uniform);
+}
+
+/**
+ * Per-body cache: one mask per (angle, facing), built on first use. Masks are pure geometry that never changes, so the cache
+ * can never be stale and is not simulation state (not hashed). `maxMasks` bounds memory (5 bytes per destination pixel: ~70 KB
+ * for a 64×96 region); least recently used masks are dropped beyond it.
+ */
+export class RotMaskCache {
+  private readonly masks: (RotMask | undefined)[] = new Array<RotMask | undefined>(ANGLE_STEPS * 2);
+  private readonly order: number[] = [];
+  builds = 0;
+  constructor(
+    readonly body: RotBody,
+    readonly maxMasks = 12,
+  ) {}
+
+  get(step: number): RotMask {
+    const k = rotStep(step) * 2 + (this.body.transform.facing === 1 ? 0 : 1);
+    let m = this.masks[k];
+    if (!m) {
+      m = buildRotMask(this.body, rotStep(step));
+      this.builds++;
+      this.masks[k] = m;
+      this.order.push(k);
+      if (this.order.length > this.maxMasks) this.masks[this.order.shift()!] = undefined;
+    } else {
+      const at = this.order.indexOf(k);
+      if (at !== this.order.length - 1) {
+        this.order.splice(at, 1);
+        this.order.push(k);
+      }
+    }
+    return m;
+  }
+}
+
+const pivotX = (b: RotBody): number => Math.round(b.transform.x);
+const pivotY = (b: RotBody): number => Math.round(b.transform.y);
+
+/** Colour the renderer draws for a cell (alpha 0 = empty: off-map and dead cells all vote as one "empty" colour). */
+function colourOf(b: RotBody, c: number): number {
+  if (c < 0 || b.map.material[c] === 0) return 0;
+  const col = b.map.pixels[c]!;
+  return col >>> 24 === 0 ? 0 : col >>> 0;
+}
+
+const voteCell = new Int32Array(9);
+const voteCol = new Uint32Array(9);
+
+/**
+ * The cell DRAWN at destination pixel (u, v) of mask `m` (the cell of the winning sub-sample: the centre's if its colour wins,
+ * else the first sub-sample with the winning colour), or -1 where the renderer draws nothing.
+ */
+export function drawnCell(b: RotBody, m: RotMask, u: number, v: number): number {
+  if (u < 0 || v < 0 || u >= m.w || v >= m.h) return -1;
+  const o = v * m.w + u;
+  const cc = m.centre[o]!;
+  if (m.uniform[o] === 1) return colourOf(b, cc) === 0 ? -1 : cc;
+  for (let k = 0; k < 9; k++) {
+    const c = k === 4 ? cc : subCell(b, m.step, m.facing, m.x0 + u, m.y0 + v, k % 3, (k / 3) | 0);
+    voteCell[k] = c;
+    voteCol[k] = colourOf(b, c);
+  }
+  // S5's vote: the centre colour wins with >= 5 of 9; otherwise the colour with the most votes (first found on ties beats
+  // the others, the centre beats an equal count).
+  const centreCol = voteCol[4]!;
+  let nc = 0;
+  for (let j = 0; j < 9; j++) if (voteCol[j] === centreCol) nc++;
+  let best = 4;
+  if (nc < 5) {
+    let bestN = nc;
+    for (let i = 0; i < 9; i++) {
+      if (i === 4) continue;
+      let n = 0;
+      for (let j = 0; j < 9; j++) if (voteCol[j] === voteCol[i]) n++;
+      if (n > bestN) {
+        best = i;
+        bestN = n;
+      }
+    }
+  }
+  return voteCol[best] === 0 ? -1 : voteCell[best]!;
+}
+
+/** The cell drawn at world point (wx, wy) of the rotated body, or -1 (the renderer's pixel there). */
+export function rotCellAt(b: RotBody, m: RotMask, wx: number, wy: number): number {
+  return drawnCell(b, m, Math.floor(wx) - pivotX(b) - m.x0, Math.floor(wy) - pivotY(b) - m.y0);
+}
+
+/** solidAt for a rotated body: a live cell is drawn at that world point. */
+export function rotSolidAt(b: RotBody, m: RotMask, wx: number, wy: number): boolean {
+  return rotCellAt(b, m, wx, wy) >= 0;
+}
+
+/** World position of the CENTRE of local cell (i, j) under the rotation (float geometry for the damage models). */
+export function rotCellWorld(b: RotBody, step: number, i: number, j: number, out: WorldPoint): void {
+  const t = b.transform;
+  const c = ROT_COS[step]! / ROT_ONE;
+  const s = ROT_SIN[step]! / ROT_ONE;
+  const lx = (i + 0.5 - t.anchorX) * t.facing;
+  const ly = j + 0.5 - t.anchorY;
+  out.x = pivotX(b) + c * lx - s * ly;
+  out.y = pivotY(b) + s * lx + c * ly;
+}
+
+/**
+ * Body.collect for a rotated body: the live cells DRAWN inside the shape, each once, weighted at the first drawn pixel centre
+ * the shape covers (row-major over destination pixels: deterministic). Same output contract as `Body.collect`, so every damage
+ * model consumes it unchanged. `stamp`/`gen` deduplicate cells drawn by several pixels.
+ */
+export function rotCollect(
+  b: RotBody,
+  m: RotMask,
+  q: ShapeQ,
+  idx: Int32Array,
+  wgt: Float32Array,
+  stamp: Uint32Array,
+  gen: number,
+): number {
+  const PX = pivotX(b);
+  const PY = pivotY(b);
+  const u0 = Math.max(0, Math.floor(q.bx0) - PX - m.x0);
+  const v0 = Math.max(0, Math.floor(q.by0) - PY - m.y0);
+  const u1 = Math.min(m.w - 1, Math.ceil(q.bx1) - PX - m.x0);
+  const v1 = Math.min(m.h - 1, Math.ceil(q.by1) - PY - m.y0);
+  let n = 0;
+  for (let v = v0; v <= v1; v++) {
+    const wy = PY + m.y0 + v + 0.5;
+    for (let u = u0; u <= u1; u++) {
+      const wt = q.weight(PX + m.x0 + u + 0.5, wy);
+      if (wt <= 0) continue;
+      const c = drawnCell(b, m, u, v);
+      if (c < 0 || b.map.integrity[c] === 0 || stamp[c] === gen) continue;
+      stamp[c] = gen;
+      idx[n] = c;
+      wgt[n] = wt;
+      n++;
+    }
+  }
+  return n;
+}

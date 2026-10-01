@@ -6,6 +6,7 @@ import { PK } from './particles';
 import { hardness, localToWorldF, resistOf, type DamageCtx } from './dmg';
 import { findImpact, type Impact } from './impact';
 import { valueNoise } from './util';
+import { holdCells, openWound } from './wound';
 
 export interface CraterOpts {
   /** Effective energy to spend (after resist averaging). */
@@ -26,6 +27,12 @@ export interface CraterOpts {
   type: number;
   /** Upper bound on the energy one cell costs (a damage floor: no matter is harder to chew through than this). */
   costCap: number;
+  /** 0..1 how radially the wound's slabs leave (1 = straight out of the surface, 0 = along the blow). */
+  radial: number;
+  /** Wound the bowl's slabs belong to (-1: the crater opens its own). */
+  wound: number;
+  /** Pieces a held bowl is cut into (see wound.ts `pieceTarget`). */
+  grain: number;
 }
 
 export interface CraterOut {
@@ -56,6 +63,74 @@ const BLOCK = 6;
 let blockHead = new Int32Array(1);
 let blockNext = new Int32Array(1);
 const usedBlocks: number[] = [];
+
+/** Normalised bowl radius (× the threshold) inside which matter is pulverised at once; the rest of a big bowl is held. */
+const CORE_FRAC = 0.2;
+/** Bowls with fewer holdable cells than this go at once (light hits keep their instant crater). */
+const HOLD_MIN = 40;
+let holdK = new Int32Array(1);
+let holdBuf = new Int32Array(1);
+
+/** State shared by `ejectCell` during one crater (module scratch: no closures, no allocation). */
+const ej = {
+  ctx: null as unknown as DamageCtx,
+  o: null as unknown as CraterOpts,
+  bw: 0,
+  nOutWx: 0,
+  nOutWy: 0,
+  dirTx: 0,
+  dirTy: 0,
+  powerBoost: 1,
+  scatter: 1,
+  keep: 1,
+  removedMass: 0,
+};
+
+/**
+ * Remove bowl cell `i` (candidate `k`, normalised distance `d`) now: chunky bulk joins a fragment block (pass B makes it a
+ * chunk), everything else becomes directional ejecta particles (faster near the centre).
+ */
+function ejectCell(k: number, d: number, i: number): void {
+  const ctx = ej.ctx;
+  const { core, body } = ctx;
+  const w = body.w;
+  const x = i % w;
+  const y = (i - x) / w;
+  const m = body.map.material[i]!;
+  const md = body.materials[m]!;
+  const rng = body.rng;
+  const chunky = md.debris === 'chunk' || md.debris === 'shard';
+  if (chunky && d > 0.3 && rng.next() < ej.o.chunkProb) {
+    const id = Math.floor(y / BLOCK) * ej.bw + Math.floor(x / BLOCK);
+    if (blockHead[id] === -1) usedBlocks.push(id);
+    blockNext[k] = blockHead[id]!;
+    blockHead[id] = k;
+    return;
+  }
+  body.cellWorld(x, y, pt);
+  let rvx = pt.x - pt2.x;
+  let rvy = pt.y - pt2.y;
+  const rl = Math.sqrt(rvx * rvx + rvy * rvy);
+  if (rl < 0.5) {
+    rvx = ej.nOutWx;
+    rvy = ej.nOutWy;
+  } else {
+    rvx /= rl;
+    rvy /= rl;
+  }
+  let vx = rvx * 0.7 + ej.nOutWx * 0.7 + ej.dirTx * 0.3;
+  let vy = rvy * 0.7 + ej.nOutWy * 0.7 + ej.dirTy * 0.3;
+  const vl = Math.sqrt(vx * vx + vy * vy) + 1e-6;
+  const sp = (45 + 200 * Math.pow(1 - Math.min(1, d), 1.3)) * (0.5 + rng.next()) * ej.powerBoost * ej.scatter;
+  vx = (vx / vl) * sp;
+  vy = (vy / vl) * sp;
+  const mass = killCell(body, i);
+  ctx.note(i, 1);
+  ctx.removed++;
+  ctx.massRemoved += mass * ej.keep;
+  ej.removedMass += mass;
+  sprayCell(core, body, m, pt.x, pt.y, vx, vy, mass * ej.keep, MODE_MECH);
+}
 
 /**
  * Shared bowl-crater engine (KINETIC craters, CRUSH impact craters). Finds the first-contact point of the shape, derives a
@@ -139,7 +214,8 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     const ry = y + 0.5 - fy;
     for (let x = xa; x <= xb; x++) {
       const i = y * w + x;
-      if (mat[i] === 0) continue;
+      // (cells already shearing off with an earlier wound are not this crater's: its energy goes into fresh matter)
+      if (mat[i] === 0 || map.detached[i] !== 0) continue;
       const rx = x + 0.5 - fx;
       const depth = -(rx * nx + ry * ny);
       const lat = rx * tx + ry * ty;
@@ -193,7 +269,23 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   if (blockNext.length < n) blockNext = new Int32Array(n);
   usedBlocks.length = 0;
   const seed = body.seed;
-  // Pass A: decide which cells go, grouping the chunk-eligible ones into blocks; dust the rest immediately.
+  ej.ctx = ctx;
+  ej.o = o;
+  ej.bw = bw;
+  ej.nOutWx = nOutWx;
+  ej.nOutWy = nOutWy;
+  ej.dirTx = dirTx;
+  ej.dirTy = dirTy;
+  ej.powerBoost = powerBoost;
+  ej.scatter = scatter;
+  ej.keep = keep;
+  ej.removedMass = 0;
+  // Pass A: decide which cells go. Outside the pulverised core a big bowl is HELD as wound slabs that shear over the next ticks
+  // (wound.ts; core-disc cells too: a held anchor cell no longer anchors); the rest — and every cell of a small crater — goes
+  // now: chunk blocks for the chunky bulk, dust/particles for the centre and soft matter.
+  const holdOn = !core.woundsOff;
+  let nHold = 0;
+  if (holdK.length < n) holdK = new Int32Array(n);
   for (let k = 0; k < n; k++) {
     const d = dEff[k]!;
     const i = idx[k]!;
@@ -202,46 +294,62 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     // Ragged edge: the noise only matters in the band where it can change the outcome (same result, one noise call in ~10).
     if (d > thr * 1.07) continue;
     if (d > thr * 0.93 && d > thr * (0.93 + 0.14 * valueNoise(x / 2.6, y / 2.6, seed))) continue;
-    const m = mat[i]!;
-    const md = mats[m]!;
     const cost = Math.min(
       o.costCap,
       (hardness(body, i) * (map.integrity[i]! / 255)) / Math.max(0.15, resistOf(body, i, o.type)),
     );
     spent += cost;
-    const chunky = md.debris === 'chunk' || md.debris === 'shard';
-    if (chunky && d > 0.3 && rng.next() < o.chunkProb) {
-      const id = Math.floor(y / BLOCK) * bw + Math.floor(x / BLOCK);
-      if (blockHead[id] === -1) usedBlocks.push(id);
-      blockNext[k] = blockHead[id]!;
-      blockHead[id] = k;
+    if (holdOn && d > thr * CORE_FRAC) {
+      holdK[nHold++] = k;
       continue;
     }
-    // Dust/particles right now (ejecta velocity by distance from the centre).
-    body.cellWorld(x, y, pt);
-    let rvx = pt.x - pt2.x;
-    let rvy = pt.y - pt2.y;
-    const rl = Math.sqrt(rvx * rvx + rvy * rvy);
-    if (rl < 0.5) {
-      rvx = nOutWx;
-      rvy = nOutWy;
-    } else {
-      rvx /= rl;
-      rvy /= rl;
-    }
-    let vx = rvx * 0.7 + nOutWx * 0.7 + dirTx * 0.3;
-    let vy = rvy * 0.7 + nOutWy * 0.7 + dirTy * 0.3;
-    const vl = Math.sqrt(vx * vx + vy * vy) + 1e-6;
-    const sp = (45 + 200 * Math.pow(1 - Math.min(1, d), 1.3)) * (0.5 + rng.next()) * powerBoost * scatter;
-    vx = (vx / vl) * sp;
-    vy = (vy / vl) * sp;
-    const mass = killCell(body, i);
-    ctx.note(i, 1);
-    ctx.removed++;
-    ctx.massRemoved += mass * keep;
-    removedMass += mass;
-    sprayCell(core, body, m, pt.x, pt.y, vx, vy, mass * keep, MODE_MECH);
+    ejectCell(k, d, i);
   }
+  let held = false;
+  let heldPacked = 0;
+  if (nHold >= HOLD_MIN) {
+    let wd = o.wound;
+    if (wd < 0)
+      wd = openWound(
+        core,
+        body,
+        fx,
+        fy,
+        nx,
+        ny,
+        ctx.dirX,
+        ctx.dirY,
+        budget,
+        ctx.sourceMass,
+        o.radial,
+        ctx.hitstop,
+        o.grain,
+      );
+    ctx.wound = wd;
+    if (holdBuf.length < nHold) holdBuf = new Int32Array(nHold);
+    for (let j = 0; j < nHold; j++) holdBuf[j] = idx[holdK[j]!]!;
+    const first = Math.max(body.wounds.shear[wd]!, core.tick + 1);
+    if (holdCells(core, body, wd, holdBuf, nHold, first)) {
+      held = true;
+      // Counted now (the blow did this damage), separated later. CRUSH compaction: the packed share of a held cell leaves its
+      // density now (it goes into the rim below), so the slab carries exactly the rest.
+      for (let j = 0; j < nHold; j++) {
+        const i = holdBuf[j]!;
+        const mass = body.cellMass(i);
+        ctx.note(i, 1);
+        ctx.removed++;
+        ctx.massRemoved += mass * keep;
+        if (o.compact > 0) {
+          const den = map.density[i]!;
+          const nd = Math.max(1, Math.floor(den * keep + 1e-9));
+          map.density[i] = nd;
+          heldPacked += ((den - nd) / 128) * body.matDensity[mat[i]!]!;
+        }
+      }
+    }
+  }
+  if (!held) for (let j = 0; j < nHold; j++) ejectCell(holdK[j]!, dEff[holdK[j]!]!, idx[holdK[j]!]!);
+  removedMass += ej.removedMass;
   // Pass B: fragment blocks -> chunks (or dust when too small).
   const list = core.stack2;
   for (let u = 0; u < usedBlocks.length; u++) {
@@ -324,7 +432,7 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     const d = dEff[k]!;
     if (d <= thr || d > lipHi) continue;
     const i = idx[k]!;
-    if (mat[i] === 0) continue;
+    if (mat[i] === 0 || map.detached[i] !== 0) continue;
     const t = (d - thr) / (lipHi - thr);
     lipW += (1 - t) * (1 - t);
   }
@@ -333,15 +441,16 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
       const d = dEff[k]!;
       if (d <= thr || d > lipHi) continue;
       const i = idx[k]!;
-      if (mat[i] === 0) continue;
+      if (mat[i] === 0 || map.detached[i] !== 0) continue;
       const t = (d - thr) / (lipHi - thr);
       const share = ((1 - t) * (1 - t)) / lipW;
       const e = lipE * share * Math.max(0.2, resistOf(body, i, o.type));
       const loss = (e * 255) / hardness(body, i);
-      // The lip is bruised, not pulverised: only its innermost edge can die outright.
+      // The lip is bruised, not pulverised: only its innermost edge can die outright (and not while the bowl is held: the
+      // rim then stays as a cracked, crumbling edge instead of turning to dust on the impact frame).
       const it = t > 0.12 ? Math.max(28, map.integrity[i]! - loss) : map.integrity[i]! - loss;
       ctx.note(i, 0.35);
-      if (it <= 0) {
+      if (it <= 0 && !held) {
         const x = i % w;
         body.cellWorld(x, (i - x) / w, pt);
         const m = mat[i]!;
@@ -412,34 +521,38 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     }
   }
 
-  // Dust plume: a billow of big soft puffs lifting off along the surface normal, slowly rising and fading (the crater "breathes").
+  // Dust plume: a billow of big soft puffs lifting off along the surface normal. It starts above the bowl and is thrown clear
+  // of it, so it never hides the wound for long (the wound is the star: it must read within ~400 ms).
   {
     const dustRid = body.rampIds[(mat[Math.floor(fy) * w + Math.floor(fx)] || 1) * 5 + RAMP_DUST]!;
     const puffs = Math.min(14, 5 + Math.floor(Math.sqrt(budget) * 0.25));
+    const lift = 10 + Rl * thr * 0.4;
     for (let k = 0; k < puffs; k++) {
-      const a = Math.atan2(nOutWy, nOutWx) + (rng.next() - 0.5) * 1.9;
-      const sp = 18 + rng.next() * 46 * powerBoost;
+      const a = Math.atan2(nOutWy, nOutWx) + (rng.next() - 0.5) * 1.6;
+      const sp = 50 + rng.next() * 60 * powerBoost;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
       core.particles.spawn(
         core,
         PK.dust,
-        pt2.x + (rng.next() - 0.5) * 6,
-        pt2.y + (rng.next() - 0.5) * 6,
-        Math.cos(a) * sp,
-        Math.sin(a) * sp - 12,
-        34 + rng.int(30),
+        pt2.x + c * lift + (rng.next() - 0.5) * 6,
+        pt2.y + s * lift + (rng.next() - 0.5) * 6,
+        c * sp,
+        s * sp - 12,
+        22 + rng.int(16),
         3 + (rng.next() < 0.4 ? 1 : 0),
         0,
         dustRid,
         0,
-        1.6,
+        1.2,
         0,
       );
     }
   }
 
   /* ---- 7. compaction: some of the removed mass is packed into the rim (CRUSH) ---- */
-  if (o.compact > 0 && removedMass > 0) {
-    absorbMass(ctx, removedMass * o.compact, thr, thr * 1.8, dEff, n);
+  if (o.compact > 0 && (removedMass > 0 || heldPacked > 0)) {
+    absorbMass(ctx, removedMass * o.compact + heldPacked, thr, thr * 1.8, dEff, n);
   }
 
   // Everything the crater touched lies within ~1.8x its true (thresholded) radius.

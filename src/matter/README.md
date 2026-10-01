@@ -34,7 +34,7 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 ### Call protocol (DESIGN §1.2)
 1. Owner sets `body.transform` (+ `world.setGravitySource`) **before** `world.tick()`; it may call `applyDamage`/`overlap`/`solidAt` any time.
 2. `world.tick()` advances: multi-tick damage jobs → crack fronts + shrapnel fuses → thermal → infection → connectivity/detachment → shock rings → chunks → particles → visual refresh → stats → events.
-3. `map.pixels` / `map.emissive` are refreshed inside `tick()` (dirty 16×16 tiles only; `map.dirty` and `map.version` are updated). `renderLayers(view, alpha)` returns two pooled screen layers: `debris-back` (z −20) and `fx-front` (z +10, with emissive).
+3. `map.pixels` / `map.emissive` are refreshed inside `tick()` (dirty 16×16 tiles only; `map.dirty` and `map.version` are updated). `renderLayers(view, alpha)` returns four pooled screen layers, each with an emissive mask: `debris-back` (z −20), `debris-mid` (z +9, fight-plane chunks), `fx-front` (z +10, particles) and `debris-near` (z +15, 2x near chunks and puffs).
 4. `drainEvents` yields `{t:'matter', kind: detach|ignite|crack|consume|harvest|impact|evaporate|boil, x, y, mass, slot}`; noisy kinds are aggregated over a time window.
 
 ### Semantics worth knowing
@@ -65,6 +65,8 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 | `assimilation.ts` | ASSIMILATION: latch, spreading infection, harvest |
 | `visual.ts` | `map.pixels`/`emissive` refresh (lighting, heat glow, crack lines, lattice…) |
 | `lifecycle.ts` | restore / heal / grow / shed / carve |
+| `wound.ts` | wounds and held slabs: hairline outlines, shear schedule, wound momentum and lever-arm spin (DESTRUCTION Round 8) |
+| `rotation.ts` | rotation spike: quantised rotated hit masks matching the renderer's sampler (not wired; proposal 140) |
 | `materials.ts`, `archetypes.ts` | `buildMaterialTable`, `MATERIAL_ARCHETYPES` |
 | `debug.ts`, `hash.ts`, `shape.ts`, `dmg.ts`, `core.ts`, `util.ts` | overlays, state hash, shape queries, damage context/result, shared world state, helpers |
 | `testing/bodies.ts` | synthetic test bodies (layered disc, ribbed slab, lattices, planets, star, black hole, bridge, uniform disc) |
@@ -76,6 +78,8 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 4. **No allocation in the tick** after warm-up (bench: ~8 KB heap growth over 1000 ticks with GC forced); chunk/ramp creation allocate at *event* rate only.
 5. `restore()` returns every per-cell array to its pristine values exactly.
 6. Hit detection (`overlap`, `solidAt`) equals brute force over the live cells for mirrored and leaning bodies.
+7. **Separation takes time:** a heavy blow's freed matter is held as slabs (tagged in `map.detached`, anchored until its shear tick,
+   80–300 ms after the impact in wall time) and leaves a budgeted piece per tick carrying the wound's momentum (`wound.test.ts`).
 
 ## Testing & tooling
 ```
@@ -83,6 +87,8 @@ npx vitest run src/matter tools/matter             # 109 tests: contract behavio
 npx tsx tools/matter/bench.ts                      # step ms (load-robust min-of-5 replays + raw wall + cpu), section breakdown, pools full, 22k and 10k bodies, applyDamage per call
 node --expose-gc --import tsx tools/matter/bench.ts   # forces GC around the allocation check
 npx tsx tools/matter/calibrate.ts                  # % of a titan-size disc removed by a Strike (300) / Crush (1500), per archetype x damage type
+npx tsx tools/matter/wounds.ts                     # D1 wound sequencing of the slice's heavy blows on the real titans (shear, momentum, FX clear)
+npx tsx tools/matter/rotbench.ts                   # rotation spike: mask build / hit-test cost, undrawn cells per angle
 npx tsx tools/matter/gallery.ts all                # contact sheets into .scratch/
 npx vite --port 5202 --strictPort  ->  http://localhost:5202/dev/matter/   # interactive sandbox
 ```

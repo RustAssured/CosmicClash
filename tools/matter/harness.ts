@@ -321,29 +321,89 @@ export function replay(o: FightOpts, reps = 3): Replayed {
 }
 
 /**
- * How much slower than the reference machine this process currently runs: the minimum time of a fixed integer workload over
- * many runs, relative to `REFERENCE_MS` (measured on a quiet 2.8 GHz Xeon). >= 1 when the CPU is shared or slow; used to scale
- * budgets in the regression test so a busy CI box does not fail a healthy build.
+ * How much slower than the reference machine this process currently runs: the best time of two fixed workloads over several
+ * runs — an integer ALU loop and a memory-bound walk over 24 MB (more than the L3, so it feels the memory-bandwidth and cache
+ * contention that parallel test workers cause and that a matter tick feels too) — each relative to its time on the reference
+ * machine, WJ's laptop (Ryzen 5 5500U, quiet: ALU 11.2 ms, memory 5.2 ms). >= 1 when the machine is shared or slower; used to
+ * scale budgets in the regression test so a loaded run does not fail a healthy build. On the reference machine, quiet, it is 1:
+ * the budget is the spec budget there.
  */
-const REFERENCE_MS = 6.7;
-export function speedFactor(): number {
-  const work = (n: number): number => {
-    let x = 0x9e3779b9 | 0;
-    let acc = 0;
-    for (let i = 0; i < n; i++) {
-      x ^= x << 13;
-      x ^= x >>> 17;
-      x ^= x << 5;
-      acc = (acc + (x & 1023)) | 0;
-    }
-    return acc;
-  };
-  for (let w = 0; w < 3; w++) work(3_000_000);
-  let best = Infinity;
-  for (let r = 0; r < 25; r++) {
-    const t0 = performance.now();
-    work(3_000_000);
-    best = Math.min(best, performance.now() - t0);
+const REFERENCE_ALU_MS = 11.2;
+const REFERENCE_MEM_MS = 5.2;
+let memArr: Float64Array | null = null;
+function aluWork(n: number): number {
+  let x = 0x9e3779b9 | 0;
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    acc = (acc + (x & 1023)) | 0;
   }
-  return Math.max(1, best / REFERENCE_MS);
+  return acc;
+}
+function memWork(): number {
+  if (!memArr) {
+    memArr = new Float64Array(3_000_000);
+    for (let i = 0; i < memArr.length; i++) memArr[i] = i & 255;
+  }
+  const a = memArr;
+  let s = 0;
+  for (let rep = 0; rep < 2; rep++) for (let i = 0; i < a.length; i += 8) s += a[i]!;
+  let j = 12345;
+  for (let k = 0; k < 200_000; k++) {
+    j = (j * 1103515245 + 12345) >>> 0;
+    s += a[j % a.length]!;
+  }
+  return s;
+}
+export function speedFactor(runs = 15): number {
+  for (let w = 0; w < 2; w++) {
+    aluWork(3_000_000);
+    memWork();
+  }
+  let bestAlu = Infinity;
+  let bestMem = Infinity;
+  for (let r = 0; r < runs; r++) {
+    let t0 = performance.now();
+    aluWork(3_000_000);
+    bestAlu = Math.min(bestAlu, performance.now() - t0);
+    t0 = performance.now();
+    memWork();
+    bestMem = Math.min(bestMem, performance.now() - t0);
+  }
+  return Math.max(1, bestAlu / REFERENCE_ALU_MS, bestMem / REFERENCE_MEM_MS);
+}
+
+export interface BudgetRun {
+  stats: Stats;
+  /** Median machine-speed factor sampled around the replays (budgets are multiplied by it). */
+  factor: number;
+  reps: number;
+  last: FightRun;
+}
+
+/**
+ * Judge a scenario against a p99 budget robustly under load (e.g. the full test suite's parallel workers): replay it at least
+ * `minReps` times keeping the per-tick minimum, sampling the speed factor between replays; while the p99 still exceeds
+ * `budget × factor`, replay again (up to `maxReps`) — more replays strip more pre-emption, never the simulation's own cost.
+ */
+export function replayAgainst(o: FightOpts, budgetMs: number, minReps = 5, maxReps = 10): BudgetRun {
+  runFight({ ...o, ticks: Math.min(o.ticks, 300) });
+  const factors: number[] = [speedFactor(8)];
+  let min: Float64Array | null = null;
+  let last!: FightRun;
+  let reps = 0;
+  const median = (a: number[]): number => a.slice().sort((x, y) => x - y)[a.length >> 1]!;
+  for (;;) {
+    last = runFight(o);
+    reps++;
+    if (!min) min = last.step.slice();
+    else for (let i = 0; i < min.length; i++) if (last.step[i]! < min[i]!) min[i] = last.step[i]!;
+    factors.push(speedFactor(8));
+    if (reps < minReps) continue;
+    const s = summarize(min);
+    if (s.p99 <= budgetMs * median(factors) || reps >= maxReps)
+      return { stats: s, factor: median(factors), reps, last };
+  }
 }

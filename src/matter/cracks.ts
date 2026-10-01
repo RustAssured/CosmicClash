@@ -1,7 +1,9 @@
+import { CellFlag } from '@/contracts';
 import type { Body } from './body';
 import { CONN_NOW, CONN_STEADY } from './body';
 import type { WorldCore } from './core';
-import { DX, DY, edgeBond, edgeCells, breakEdge, isSurfaceCorner } from './cuts';
+import { DX, DY, edgeBond, edgeCells, breakEdge, isSurfaceCorner, setEdgeBond } from './cuts';
+import { HAIRLINE } from './wound';
 import { PK } from './particles';
 import { T_FRACTURE, isImmune, localToWorldF } from './dmg';
 import { RAMP_SHARD } from './debris';
@@ -224,66 +226,93 @@ export function stepFronts(core: WorldCore, body: Body): void {
 }
 
 /**
- * SLOW CUTS. A FRACTURE cut is planned at once (the energy is spent at the blow) but its bonds are severed progressively from the
- * contact end, so the fissure visibly runs across the body over ~0.5-1.5 s (a glinting tip leads it) and the slab shears when the
- * last bond goes. `queueSlowEdge` appends to the body's queue; a full queue breaks the edge immediately.
+ * SLOW CUTS. A FRACTURE cut is planned and paid at the blow. Its edges become HAIRLINE bonds at once (the crack is drawn on the
+ * impact frame, the matter still holds) and are severed progressively from the contact end — a glinting tip runs along the
+ * fissure — so that the last one goes on the wound's shear tick (wound.ts: 80–300 ms after the impact in wall time, hit-stop
+ * included). The slab shears then. `queueSlowEdge` appends to the body's queue (the wound slot rides in bits 22-24); a full
+ * queue breaks the edge immediately.
  */
-export function queueSlowEdge(body: Body, cx: number, cy: number, d: number): void {
-  if (body.slowN >= body.slowEdges.length || cx > 1023 || cy > 1023) {
+export function queueSlowEdge(body: Body, cx: number, cy: number, d: number, wound: number): void {
+  if (body.slowN >= body.slowEdges.length || cx > 1023 || cy > 1023 || wound < 0) {
     breakEdge(body, cx, cy, d);
     return;
   }
-  body.slowEdges[body.slowN++] = cx | (cy << 10) | (d << 20);
+  body.slowEdges[body.slowN++] = cx | (cy << 10) | (d << 20) | (wound << 22);
+  body.wounds.pending[wound]!++;
+  if (edgeBond(body, cx, cy, d) > HAIRLINE) {
+    setEdgeBond(body, cx, cy, d, HAIRLINE);
+    if (edgeCells(body, cx, cy, d, cellsTmp)) {
+      const fl = body.map.flags;
+      fl[cellsTmp[0]!] = fl[cellsTmp[0]!]! | CellFlag.CRACKED;
+      fl[cellsTmp[1]!] = fl[cellsTmp[1]!]! | CellFlag.CRACKED;
+    }
+    body.touch(cx - 1, cy - 1, cx, cy);
+  }
 }
 
 export function stepSlowCuts(core: WorldCore, body: Body): void {
   if (body.slowPos >= body.slowN) return;
   const rng = body.rng;
-  const pending = body.slowN - body.slowPos;
-  const rate = Math.max(2, Math.ceil(pending / 36));
-  let n = 0;
+  const book = body.wounds;
   let broke = false;
-  while (n < rate && body.slowPos < body.slowN) {
-    const e = body.slowEdges[body.slowPos++]!;
-    n++;
-    const cx = e & 1023;
-    const cy = (e >> 10) & 1023;
-    const d = (e >> 20) & 3;
-    if (edgeBond(body, cx, cy, d) <= 0) continue;
-    breakEdge(body, cx, cy, d);
-    broke = true;
-    body.touch(cx - 2, cy - 2, cx + 2, cy + 2);
-    localToWorldF(body, cx, cy, pt);
-    if (rng.next() < 0.5) {
-      const ci = edgeCells(body, cx, cy, d, cellsTmp) ? cellsTmp[0]! : 0;
-      const rid = body.rampIds[(body.map.material[ci] || 1) * 5 + RAMP_SHARD]!;
-      core.particles.spawn(
-        core,
-        PK.glint,
-        pt.x,
-        pt.y,
-        (rng.next() - 0.5) * 30,
-        (rng.next() - 0.5) * 30 - 6,
-        8 + rng.int(8),
-        1,
-        255,
-        rid,
-        0,
-        2,
-        0,
-      );
+  while (body.slowPos < body.slowN) {
+    // The wound at the head of the queue: sever its share so its last edge goes on its shear tick.
+    const w = (body.slowEdges[body.slowPos]! >> 22) & 7;
+    const left = book.shear[w]! - core.tick + 1;
+    const quota = left <= 1 ? Infinity : Math.max(1, Math.ceil(book.pending[w]! / left));
+    let n = 0;
+    while (n < quota && body.slowPos < body.slowN) {
+      const e = body.slowEdges[body.slowPos]!;
+      if (((e >> 22) & 7) !== w) break;
+      body.slowPos++;
+      n++;
+      if (book.pending[w]! > 0) book.pending[w]!--;
+      const cx = e & 1023;
+      const cy = (e >> 10) & 1023;
+      const d = (e >> 20) & 3;
+      if (edgeBond(body, cx, cy, d) <= 0) continue;
+      breakEdge(body, cx, cy, d);
+      broke = true;
+      body.touch(cx - 2, cy - 2, cx + 2, cy + 2);
+      localToWorldF(body, cx, cy, pt);
+      if (rng.next() < 0.5) {
+        const ci = edgeCells(body, cx, cy, d, cellsTmp) ? cellsTmp[0]! : 0;
+        const rid = body.rampIds[(body.map.material[ci] || 1) * 5 + RAMP_SHARD]!;
+        core.particles.spawn(
+          core,
+          PK.glint,
+          pt.x,
+          pt.y,
+          (rng.next() - 0.5) * 30,
+          (rng.next() - 0.5) * 30 - 6,
+          8 + rng.int(8),
+          1,
+          255,
+          rid,
+          0,
+          2,
+          0,
+        );
+      }
+      if ((body.slowPos & 3) === 0) core.emitMatter('crack', pt.x, pt.y, 0, body.ownerSlot);
     }
-    if ((body.slowPos & 3) === 0) core.emitMatter('crack', pt.x, pt.y, 0, body.ownerSlot);
+    // The wound's cut is complete: the slab it isolates shears now.
+    if (book.pending[w] === 0) body.connDirty = CONN_NOW;
+    // Quota spent: the edges behind (later wounds, later deadlines) wait for the next tick.
+    if (n >= quota) break;
   }
   if (broke) body.connDirty = Math.max(body.connDirty, CONN_STEADY);
   if (body.slowPos >= body.slowN) {
     body.slowPos = 0;
     body.slowN = 0;
+    book.pending.fill(0);
     body.connDirty = CONN_NOW;
   }
 }
 
 /** Sever every queued slow-cut edge at once (harness carving and tests that need the final state immediately). */
 export function flushSlowCuts(core: WorldCore, body: Body): void {
+  const book = body.wounds;
+  for (let w = 0; w < book.shear.length; w++) book.shear[w] = Math.min(book.shear[w]!, core.tick);
   for (let guard = 0; guard < 5000 && body.slowPos < body.slowN; guard++) stepSlowCuts(core, body);
 }

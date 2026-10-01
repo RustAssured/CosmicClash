@@ -41,7 +41,8 @@ export function impactBurst(ctx: DamageCtx): void {
   // Blend the outward normal with the blow reversed: sparks leave toward the attacker side and along the surface.
   const a0 = Math.atan2(ny * 0.7 - ctx.dirY * 0.3, nx * 0.7 - ctx.dirX * 0.3);
 
-  // Flash disc (bloom).
+  // Flash disc (bloom): peaks on the impact frame and is gone within ~100 ms of world time after the hit-stop, so the wound
+  // reads by ~300-400 ms wall.
   const fs = Math.min(15, Math.round(5 + 6 * k));
   P.spawn(
     core,
@@ -50,7 +51,7 @@ export function impactBurst(ctx: DamageCtx): void {
     by - ny * 2,
     nx * 12,
     ny * 12,
-    6 + Math.round(3 * k),
+    4 + Math.round(1.5 * k),
     fs,
     255,
     flash,
@@ -84,43 +85,46 @@ export function impactBurst(ctx: DamageCtx): void {
     );
     P.flags[p] = PF_STRETCH;
   }
-  // Shock ring of dust: a fan of soft puffs thrown outward and along the surface.
+  // Shock ring of dust: a fan of soft puffs thrown outward and along the surface, fast enough to clear the wound.
   const puffs = Math.min(16, Math.round(6 + 5 * k));
   for (let i = 0; i < puffs; i++) {
     const a = a0 + (i / puffs - 0.5) * 3.6 + (rng.next() - 0.5) * 0.3;
-    const sp = 45 + rng.next() * 65 * (0.7 + 0.3 * k);
+    const sp = 80 + rng.next() * 70 * (0.7 + 0.3 * k);
+    const c = Math.cos(a);
+    const s = Math.sin(a);
     P.spawn(
       core,
       PK.dust,
-      bx,
-      by,
-      Math.cos(a) * sp,
-      Math.sin(a) * sp,
-      16 + rng.int(14),
+      bx + c * 4,
+      by + s * 4,
+      c * sp,
+      s * sp,
+      12 + rng.int(10),
       2 + (rng.next() < 0.3 ? 1 : 0),
       0,
       dust,
       0,
-      2.6,
+      2.2,
       0,
     );
   }
-  // Heavy hits: dust that hugs and travels along the surface (both tangent directions), and a plume thrown at the camera.
+  // Heavy hits: dust that hugs and travels along the surface (both tangent directions), and a plume thrown at the camera from
+  // ABOVE the wound (it rises off the contact, it does not sit on it: the new shape must read).
   if (ctx.energy >= 400) {
     const tx = -ny;
     const ty = nx;
     const travel = Math.min(9, Math.round(4 + 3 * k));
     for (let i = 0; i < travel; i++) {
       const dir = i & 1 ? 1 : -1;
-      const sp = 60 + rng.next() * 90;
+      const sp = 90 + rng.next() * 90;
       P.spawn(
         core,
         PK.dust,
-        bx + nx * 1.5 + tx * dir * rng.next() * 3,
-        by + ny * 1.5 + ty * dir * rng.next() * 3,
+        bx + nx * 1.5 + tx * dir * (4 + rng.next() * 3),
+        by + ny * 1.5 + ty * dir * (4 + rng.next() * 3),
         tx * dir * sp + nx * 14,
         ty * dir * sp + ny * 14,
-        26 + rng.int(18),
+        18 + rng.int(12),
         2 + (rng.next() < 0.5 ? 1 : 0),
         0,
         dust,
@@ -132,15 +136,18 @@ export function impactBurst(ctx: DamageCtx): void {
     const plume = Math.min(8, Math.round(3 + 2.5 * k));
     for (let i = 0; i < plume; i++) {
       const a = a0 + (rng.next() - 0.5) * 1.6;
-      const sp = 12 + rng.next() * 34;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const lift = 42 + rng.next() * 14;
+      const sp = 40 + rng.next() * 40;
       const p = P.spawn(
         core,
         PK.dust,
-        bx + (rng.next() - 0.5) * 8,
-        by + (rng.next() - 0.5) * 8,
-        Math.cos(a) * sp,
-        Math.sin(a) * sp - 6,
-        42 + rng.int(28),
+        bx + c * lift,
+        by + s * lift,
+        c * sp,
+        s * sp - 6,
+        32 + rng.int(20),
         4 + rng.int(3),
         0,
         dust,

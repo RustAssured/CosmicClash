@@ -34,6 +34,9 @@ const run = (w: MatterWorldEx, n: number): void => {
   for (let i = 0; i < n; i++) w.tick();
 };
 const conserved = (w: MatterWorldEx): void => expect(Math.abs(w.ledger().error)).toBeLessThan(1e-2);
+/** A cell the blow took: removed, or held as a wound slab that will shear off (wound.ts: separation takes time). */
+const gone = (tb: TestBody, before: Uint8Array, i: number): boolean =>
+  before[i] !== 0 && (tb.map.material[i] === 0 || tb.map.detached[i] !== 0);
 const countFlag = (tb: TestBody, flag: number): number => {
   let n = 0;
   for (let i = 0; i < tb.map.flags.length; i++)
@@ -63,7 +66,7 @@ describe('KINETIC', () => {
       let y1 = -1;
       let removed = 0;
       for (let i = 0; i < map.material.length; i++) {
-        if (before[i] !== 0 && map.material[i] === 0) {
+        if (gone(tb, before, i)) {
           const x = i % map.w;
           const y = (i - x) / map.w;
           removed++;
@@ -302,9 +305,7 @@ describe('FRACTURE', () => {
 
 describe('CRUSH', () => {
   it('makes a wider, shallower crater than KINETIC, compacts the rim and snaps bonds with an expanding shock ring', () => {
-    const measure = (
-      type: 'CRUSH' | 'KINETIC',
-    ): { removed: number; dense: number; cracked: number; cracked30: number } => {
+    const measure = (type: 'CRUSH' | 'KINETIC'): { removed: number; dense: number; cracks: number } => {
       const tb = layeredDisc({ size: 54, seed: 4, x: 400, y: 290 });
       const { world, ids } = make(3, [tb]);
       const before = tb.map.material.slice();
@@ -318,21 +319,25 @@ describe('CRUSH', () => {
         }),
       );
       let removed = 0;
-      for (let i = 0; i < before.length; i++) if (before[i] !== 0 && tb.map.material[i] === 0) removed++;
+      for (let i = 0; i < before.length; i++) if (gone(tb, before, i)) removed++;
       let dense = 0;
       for (let i = 0; i < before.length; i++)
-        if (tb.map.density[i]! > 132 && tb.map.material[i] !== 0) dense++;
-      const c0 = world.stats(ids[0]!).crackedCells;
+        if (tb.map.density[i]! > 132 && tb.map.material[i] !== 0 && tb.map.detached[i] === 0) dense++;
+      // The shock ring keeps snapping bonds after the impact: it reports `crack` happenings on the following ticks.
+      const events: SimEvent[] = [];
+      world.drainEvents(events);
+      events.length = 0;
       run(world, 30);
-      const c30 = world.stats(ids[0]!).crackedCells;
+      world.drainEvents(events);
+      const cracks = events.filter((e) => e.t === 'matter' && e.kind === 'crack').length;
       conserved(world);
-      return { removed, dense, cracked: c0, cracked30: c30 };
+      return { removed, dense, cracks };
     };
     const c = measure('CRUSH');
     const k = measure('KINETIC');
     expect(c.dense).toBeGreaterThan(20); // compression: density rose around the crater
     expect(k.dense).toBe(0);
-    expect(c.cracked30).toBeGreaterThan(c.cracked + 5); // the shock ring keeps breaking bonds after the impact
+    expect(c.cracks).toBeGreaterThanOrEqual(2);
     expect(c.removed).toBeGreaterThan(50);
   });
 
@@ -674,10 +679,10 @@ describe('ASSIMILATION', () => {
 });
 
 describe('what differs between types on the same target', () => {
-  it('THERMAL leaves no chunks, TIDAL streams to the sink, KINETIC many small pieces, FRACTURE few big ones', () => {
+  it('THERMAL leaves no chunks, TIDAL streams to the sink, KINETIC and FRACTURE shed rigid pieces', () => {
     const outcome = (
       type: DamageEvent['type'],
-    ): { chunks: number; largest: number; particles: number; burning: number } => {
+    ): { chunks: number; mean: number; particles: number; burning: number } => {
       const tb = layeredDisc({ size: 46, seed: 3, x: 400, y: 290 });
       const { world, ids } = make(3, [tb]);
       const cont = type === 'TIDAL' ? DamageFlag.CONTINUOUS : 0;
@@ -702,12 +707,11 @@ describe('what differs between types on the same target', () => {
       }
       run(world, 40);
       const pool = world.core.chunks;
-      let largest = 0;
-      for (let i = 0; i < pool.hi; i++)
-        if (pool.list[i]!.alive) largest = Math.max(largest, pool.list[i]!.mass);
+      let sum = 0;
+      for (let i = 0; i < pool.hi; i++) if (pool.list[i]!.alive) sum += pool.list[i]!.mass;
       return {
         chunks: pool.count,
-        largest,
+        mean: sum / Math.max(1, pool.count),
         particles: world.diagnostics().particles,
         burning: world.stats(ids[0]!).burningCells,
       };
@@ -716,8 +720,12 @@ describe('what differs between types on the same target', () => {
     const fr = outcome('FRACTURE');
     const ki = outcome('KINETIC');
     expect(th.chunks).toBeLessThanOrEqual(1);
-    expect(ki.chunks).toBeGreaterThan(fr.chunks);
-    expect(fr.largest).toBeGreaterThan(ki.largest * 0.7); // kinetic ejecta blocks are ~6x6 cells, slabs are as big or bigger
+    // Both shed their wounds as rigid pieces, a piece at a time (wound.ts, D1: no blow turns its matter into embers at once);
+    // what differs is how the pieces were cut (seams vs. a bowl) and how they fly (along the blow vs. out of the surface).
+    expect(ki.chunks).toBeGreaterThan(4);
+    expect(fr.chunks).toBeGreaterThan(4);
+    expect(fr.mean).toBeGreaterThan(5);
+    expect(ki.mean).toBeGreaterThan(5);
     expect(outcome('TIDAL').particles).toBeGreaterThan(0);
   });
 });

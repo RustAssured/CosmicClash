@@ -9,6 +9,7 @@ import { killCell } from './cells';
 import { cohesionBondScale } from './bodyinit';
 import { lerpPx, noise2, hash2 } from './util';
 import type { MatterWorldEx } from './world';
+import { clearWounds, flushWounds } from './wound';
 
 const pt: WorldPoint = { x: 0, y: 0 };
 const F_CRACK = CellFlag.CRACKED;
@@ -40,6 +41,7 @@ function clearTransients(body: Body): void {
   body.blow.tick = -1000;
   body.blow.energy = 0;
   body.tileAct.fill(0);
+  clearWounds(body);
 }
 
 function finishRebuild(body: Body): void {
@@ -443,6 +445,20 @@ export function shed(
  * the scars are believable rather than a bare silhouette).
  */
 export function carve(world: MatterWorldEx, body: Body, massFrac: number, seed: number): void {
+  const core = world.core;
+  // Harness: separation is instant while carving (a carved body must reach its target now, not 300 ms later).
+  const wasOff = core.woundsOff;
+  core.woundsOff = true;
+  flushWounds(core, body);
+  world.settleBody(body.id);
+  try {
+    carveBody(world, body, massFrac, seed);
+  } finally {
+    core.woundsOff = wasOff;
+  }
+}
+
+function carveBody(world: MatterWorldEx, body: Body, massFrac: number, seed: number): void {
   const rng = new Rng(seed ^ body.seed ^ 0x6a09e667);
   const map = body.map;
   const w = body.w;
@@ -495,7 +511,13 @@ export function carve(world: MatterWorldEx, body: Body, massFrac: number, seed: 
       else if (md.ignition > 0) type = r < 0.35 ? 'THERMAL' : r < 0.65 ? 'FRACTURE' : 'KINETIC';
       else type = r < 0.4 ? 'KINETIC' : r < 0.7 ? 'FRACTURE' : 'CRUSH';
       const remaining = lastMass - goal;
-      const energy = Math.max(60, Math.min(900, remaining * 0.32)) * (0.7 + 0.5 * rng.next());
+      // Near the core, a blow must not be able to dig through to it (a crater's area grows ~ energy): the core is left last.
+      const coreDist = Math.hypot(x - map.coreX, y - map.coreY);
+      const room = Math.max(4, coreDist - map.coreRadius * 1.5);
+      const energy = Math.min(
+        Math.max(60, Math.min(900, remaining * 0.32)) * (0.7 + 0.5 * rng.next()),
+        Math.max(60, 1.2 * room * room),
+      );
       const rad = Math.max(4, Math.min(16, Math.sqrt(energy) * 0.55));
       const ev: DamageEvent = {
         type,

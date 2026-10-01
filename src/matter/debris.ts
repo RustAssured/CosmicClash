@@ -201,6 +201,11 @@ export function sprayCell(
  *  Chunk extraction
  * --------------------------------------------------------------------------------------------- */
 
+/** Scratch: cells per material of the piece being extracted. */
+const matCount = new Int32Array(256);
+const matSeen = new Uint8Array(256);
+let nSeen = 0;
+
 /**
  * Turn `n` live cells (indices in `cells`, all distinct) into ONE rigid chunk: copies the displayed pixels into a
  * world-orientation sprite (mirroring + row shear applied so it appears exactly where the cells were), removes the cells
@@ -275,7 +280,9 @@ export function extractChunk(
     mass += cm;
     sx += (wx - minWX + 0.5) * cm;
     sy += (wy - minWY + 0.5) * cm;
-    brit += body.materials[map.material[c]!]!.brittleness;
+    const mi = map.material[c]!;
+    brit += body.materials[mi]!.brittleness;
+    if (matCount[mi]++ === 0) matSeen[nSeen++] = mi;
     const T = map.temperature[c]!;
     if (T > GLOW_START) {
       heatSum += T;
@@ -286,6 +293,14 @@ export function extractChunk(
   sx /= mass;
   sy /= mass;
   mass *= massScale;
+  // Dominant material: its interned dust ramp is what the chunk crumbles into later.
+  let dom = 0;
+  for (let k = 0; k < nSeen; k++) {
+    const mi = matSeen[k]!;
+    if (dom === 0 || matCount[mi]! > matCount[dom]!) dom = mi;
+  }
+  for (let k = 0; k < nSeen; k++) matCount[matSeen[k]!] = 0;
+  nSeen = 0;
   // Remove the cells (mass now belongs to the chunk).
   for (let k = 0; k < n; k++) killCell(body, cells[k]!);
   body.touch(lx0, ly0, lx1, ly1);
@@ -309,6 +324,7 @@ export function extractChunk(
     heat,
   );
   ch.grace = 30;
+  ch.dustRamp = body.rampIds[dom * 5 + RAMP_DUST]!;
   return ch;
 }
 

@@ -145,6 +145,20 @@ export class WorldCore {
   clock: (() => number) | null = null;
   /** Tests: always run the full connectivity flood (the local reconnection shortcut must give identical results). */
   forceFullConn = false;
+  /**
+   * Harness only (`carve`): separation is instant again (no held wound slabs), so a carved body reaches its target at once.
+   * Never set in a match.
+   */
+  woundsOff = false;
+
+  /**
+   * Routing counters of the LAST world tick (everything between the end of the previous tick and the end of this one,
+   * damage applied in between included): mass that left bodies, and where removed matter went (particles + direct
+   * dissipation vs rigid chunks). Diagnostics only; derived from the ledger, never read by the simulation.
+   */
+  readonly route = { tick: 0, bodyLoss: 0, toParticles: 0, toChunks: 0 };
+  /** Ledger marks at the end of the previous tick (for `route`). */
+  readonly routeMark = { bodyMass: NaN, particles: 0, chunks: 0 };
   readonly prof = new Float64Array(12);
 
   readonly waves: Wave[] = Array.from({ length: 16 }, () => new Wave());

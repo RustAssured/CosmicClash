@@ -2,6 +2,7 @@ import { CellFlag } from '@/contracts';
 import { TILE, TILE_SHIFT, type Body } from './body';
 import type { WorldCore } from './core';
 import { BAYER4, hashI, lerpPx, scalePx } from './util';
+import { HAIRLINE } from './wound';
 
 const F_BURN = CellFlag.BURNING;
 const F_CRACK = CellFlag.CRACKED;
@@ -202,14 +203,14 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         }
       }
 
-      /* ---- crack fissures (dark lines on cells beside a broken bond) ---- */
+      /* ---- crack fissures (dark lines on cells beside a broken bond or a hairline crack that has not sheared yet) ---- */
       if ((fl & F_CRACK) !== 0) {
         let strong = false;
         let weak = false;
-        if (x < w - 1 && bondR[i] === 0 && mat[i + 1] !== 0) strong = true;
-        if (y < h - 1 && bondD[i] === 0 && mat[i + w] !== 0) strong = true;
-        if (x > 0 && bondR[i - 1] === 0 && mat[i - 1] !== 0) weak = true;
-        if (y > 0 && bondD[i - w] === 0 && mat[i - w] !== 0) weak = true;
+        if (x < w - 1 && bondR[i]! <= HAIRLINE && mat[i + 1] !== 0) strong = true;
+        if (y < h - 1 && bondD[i]! <= HAIRLINE && mat[i + w] !== 0) strong = true;
+        if (x > 0 && bondR[i - 1]! <= HAIRLINE && mat[i - 1] !== 0) weak = true;
+        if (y > 0 && bondD[i - w]! <= HAIRLINE && mat[i - w] !== 0) weak = true;
         // A chasm: the far wall is dark, the near lip catches the light. Big bodies get 2-px fissures (both walls dark) so they read
         // at 640x360.
         if (strong) {

@@ -29,6 +29,9 @@ const opts: CraterOpts = {
   craterR: 0,
   type: T_CRUSH,
   costCap: Infinity,
+  radial: 0.6,
+  wound: -1,
+  grain: 18,
 };
 const out: CraterOut = {
   ok: false,
@@ -121,7 +124,8 @@ function plantTectonics(ctx: DamageCtx, cr: CraterOut, E: number): void {
       const x = Math.floor(cr.fx + ca * d);
       const y = Math.floor(cr.fy + sa * d);
       if (x < 1 || y < 1 || x >= w - 1 || y >= body.h - 1) break;
-      if (mat[y * w + x] !== 0) {
+      // (held wound slabs are leaving: the crater edge is where the body that stays begins)
+      if (mat[y * w + x] !== 0 && body.map.detached[y * w + x] === 0) {
         ex = x;
         ey = y;
         break;

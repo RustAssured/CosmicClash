@@ -44,6 +44,7 @@ import { applyTidal } from './tidal';
 import { applyAssimilation, stepInfection } from './assimilation';
 import { debugOverlay } from './debug';
 import { impactBurst } from './blowfx';
+import { finishReleases, shearDelay, stepWounds } from './wound';
 
 /** A multi-tick damage application waiting to deliver its remaining slices. */
 class Job {
@@ -59,6 +60,8 @@ class Job {
   /** Body transform when a deferred chisel was queued: the chisel follows the body the blow struck (see `shiftEvent`). */
   bx = 0;
   by = 0;
+  /** The wound of the blow a deferred chisel belongs to (its pit sheds as that wound's slabs), or -1. */
+  wound = -1;
 }
 
 /** Slide a deferred blow's world-space shape and origin by (dx, dy) so it keeps biting the same matter. */
@@ -78,6 +81,8 @@ function shiftEvent(ev: DamageEvent, dx: number, dy: number): void {
 }
 
 const MAX_JOBS = 48;
+/** Debris-impact energy a body can take per world tick (one heavy chunk's worth). */
+const DEBRIS_TICK_BUDGET = 60;
 
 const DEFAULT_PARTICLE_DRAG: Record<string, number> = {
   spark: 0.4,
@@ -100,6 +105,12 @@ export interface MatterDiagnostics {
   bodies: number;
   /** Pending multi-tick damage slices and deferred chisels. */
   jobs: number;
+  /** Held wound slabs waiting to shear (all bodies). */
+  heldSlabs: number;
+  /** Routing of the last world tick: body mass lost, mass routed to particles (+ dissipated) and to rigid chunks. */
+  tickBodyLoss: number;
+  tickToParticles: number;
+  tickToChunks: number;
 }
 
 /** Everything the mass ledger tracks. `error` is the conservation residual (should be ~0). */
@@ -182,8 +193,15 @@ class MatterWorldImpl implements MatterWorldEx {
     this.core.chunkImpact = (body, chunk, x, y, dx, dy, speed) => {
       // Debris impact: a capped KINETIC point blow. Modest by design; heavy fast chunks still hurt.
       const ex = Math.max(0, speed - 100) / 60;
-      const energy = Math.min(60, 0.5 * chunk.mass * ex * ex * 2.2);
+      let energy = Math.min(DEBRIS_TICK_BUDGET, 0.5 * chunk.mass * ex * ex * 2.2);
+      // A body takes at most one heavy chunk's worth of debris damage per tick, however many pieces land together.
+      if (body.debrisTick !== this.core.tick) {
+        body.debrisTick = this.core.tick;
+        body.debrisEnergy = 0;
+      }
+      energy = Math.min(energy, DEBRIS_TICK_BUDGET - body.debrisEnergy);
       if (energy < 2) return;
+      body.debrisEnergy += energy;
       const ev: DamageEvent = {
         type: 'KINETIC',
         shape: { kind: 'point', x, y, r: Math.max(1.6, Math.min(6, Math.sqrt(chunk.cells) * 0.55)) },
@@ -287,7 +305,7 @@ class MatterWorldImpl implements MatterWorldEx {
     switch (ev.type) {
       case 'FRACTURE':
         applyFracture(ctx, res);
-        if (ctx.chisel > 0) this.queueChisel(body, ev, ctx.chisel);
+        if (ctx.chisel > 0) this.queueChisel(body, ev, ctx.chisel, ctx.wound);
         break;
       case 'KINETIC':
         applyKinetic(ctx, res);
@@ -308,8 +326,11 @@ class MatterWorldImpl implements MatterWorldEx {
     endSpray(core); // never leave mass parked in the spray accumulator across API calls
   }
 
-  /** Defer the chisel share of a FRACTURE blow (see fracture.ts): it re-runs the blow's shape against what the cuts left behind. */
-  private queueChisel(body: Body, ev: DamageEvent, energy: number): void {
+  /**
+   * Defer the chisel share of a FRACTURE blow (see fracture.ts): it re-runs the blow's shape against what the cuts left
+   * behind, one tick AFTER the wound's shear (so the slabs the cuts outlined leave as slabs, not as the chisel's dust).
+   */
+  private queueChisel(body: Body, ev: DamageEvent, energy: number, wound: number): void {
     for (let i = 0; i < this.jobs.length; i++) {
       const j = this.jobs[i]!;
       if (j.active) continue;
@@ -319,14 +340,15 @@ class MatterWorldImpl implements MatterWorldEx {
       j.ev = { ...ev, shape: { ...ev.shape }, params: { ...ev.params } };
       j.remaining = 1;
       j.energy = energy;
-      j.delay = CHISEL_DELAY;
+      j.delay = this.core.woundsOff ? CHISEL_DELAY : shearDelay(ev.hitstop ?? 0) + 1;
       j.bx = body.transform.x;
       j.by = body.transform.y;
+      j.wound = wound;
       return;
     }
     // Queue full: chisel at once rather than lose the energy.
     const ctx = beginDamage(this.core, this.ctx, body, ev, energy, false);
-    if (ctx !== null) chisel(ctx, energy);
+    if (ctx !== null) chisel(ctx, energy, wound);
     endSpray(this.core);
   }
 
@@ -448,7 +470,7 @@ class MatterWorldImpl implements MatterWorldEx {
         // The blow that queued this chisel usually knocks the body away within the delay: chase it, or the pit lands on empty air.
         shiftEvent(j.ev, body.transform.x - j.bx, body.transform.y - j.by);
         const ctx = beginDamage(core, this.ctx, body, j.ev, j.energy, false);
-        if (ctx !== null) chisel(ctx, j.energy);
+        if (ctx !== null) chisel(ctx, j.energy, j.wound);
         endSpray(core);
         j.active = false;
         continue;
@@ -463,6 +485,7 @@ class MatterWorldImpl implements MatterWorldEx {
       stepFronts(core, b);
       stepSlowCuts(core, b);
       stepFuses(core, b);
+      stepWounds(core, b);
     }
     this.lap(1);
     for (let i = 0; i < bodies.length; i++) stepThermal(core, bodies[i]!);
@@ -476,6 +499,7 @@ class MatterWorldImpl implements MatterWorldEx {
         core.tick - b.lastConnTick >= (b.connDirty === CONN_NOW ? 1 : b.connDirty === CONN_STEADY ? 3 : 6)
       )
         runConnectivity(core, b);
+      finishReleases(core, b);
     }
     this.lap(4);
     stepWaves(core);
@@ -486,10 +510,28 @@ class MatterWorldImpl implements MatterWorldEx {
     this.lap(7);
     for (let i = 0; i < bodies.length; i++) refreshVisuals(core, bodies[i]!);
     this.lap(8);
-    for (let i = 0; i < bodies.length; i++) bodies[i]!.refreshStats();
+    let bodyMass = 0;
+    for (let i = 0; i < bodies.length; i++) bodyMass += bodies[i]!.refreshStats().mass;
     endSpray(core);
+    this.updateRoute(bodyMass);
     core.flushEvents();
     this.lap(9);
+  }
+
+  /** Per-tick routing counters (diagnostics; see WorldCore.route). */
+  private updateRoute(bodyMass: number): void {
+    const core = this.core;
+    const r = core.route;
+    const m = core.routeMark;
+    const parts = core.particles.massLive + core.sprayMass + core.ledger.dissipated;
+    const chunks = core.chunks.massLive;
+    r.tick = core.tick;
+    r.bodyLoss = Number.isNaN(m.bodyMass) ? 0 : m.bodyMass - bodyMass;
+    r.toParticles = parts - m.particles;
+    r.toChunks = chunks - m.chunks;
+    m.bodyMass = bodyMass;
+    m.particles = parts;
+    m.chunks = chunks;
   }
 
   drainEvents(into: SimEvent[]): void {
@@ -639,6 +681,7 @@ class MatterWorldImpl implements MatterWorldEx {
         if (!j.active) continue;
         h = mix32(h, i | (j.kind << 8) | (j.bodyId << 12));
         h = mix32(h, j.remaining | (j.delay << 16));
+        h = mix32(h, j.wound + 1);
         f64[0] = j.energy;
         h = mix32(mix32(h, u32[0]!), u32[1]!);
       }
@@ -694,6 +737,10 @@ class MatterWorldImpl implements MatterWorldEx {
       particleMass: core.particles.massLive,
       bodies: core.bodyList.length,
       jobs: this.jobs.reduce((n, j) => n + (j.active ? 1 : 0), 0),
+      heldSlabs: core.bodyList.reduce((n, b) => n + b.wounds.held, 0),
+      tickBodyLoss: core.route.bodyLoss,
+      tickToParticles: core.route.toParticles,
+      tickToChunks: core.route.toChunks,
     };
   }
 

@@ -33,11 +33,57 @@ function hashBody(h: number, b: Body): number {
     h = mixF(h, b.frontStress[k]!);
   }
   h = mix32(h, b.slowN | (b.slowPos << 16));
+  for (let k = b.slowPos; k < b.slowN; k++) h = mix32(h, b.slowEdges[k]!);
   h = mix32(h, b.fuseCount);
   for (let k = 0; k < b.fuseCount; k++) {
     h = mix32(h, b.fuseCell[k]!);
     h = mix32(h, b.fuseTimer[k]!);
   }
+  // Wounds and held slabs (slab tags live in map.detached).
+  h = hashBytes(h, m.detached);
+  const wb = b.wounds;
+  h = mix32(h, wb.next | (wb.held << 8) | (wb.top << 16));
+  for (let w = 0; w < wb.tick.length; w++) {
+    h = mix32(h, wb.tick[w]!);
+    h = mix32(h, wb.shear[w]!);
+    h = mix32(h, wb.pending[w]!);
+    h = mixF(h, wb.lx[w]!);
+    h = mixF(h, wb.ly[w]!);
+    h = mixF(h, wb.dx[w]!);
+    h = mixF(h, wb.dy[w]!);
+    h = mixF(h, wb.energy[w]!);
+    h = mixF(h, wb.sourceMass[w]!);
+    h = mixF(h, wb.speed[w]!);
+    h = mixF(h, wb.mass[w]!);
+    h = mix32(h, wb.grain[w]!);
+  }
+  for (let q = 0; q < wb.schedTick.length; q++) {
+    if (wb.schedTick[q]! < 0) continue;
+    h = mix32(h, wb.schedTick[q]!);
+    h = mixF(h, wb.schedMass[q]!);
+  }
+  for (let s = 1; s < wb.state.length; s++) {
+    if (wb.state[s] === 0) continue;
+    h = mix32(h, s | (wb.state[s]! << 8) | (wb.woundOf[s]! << 16));
+    h = mix32(h, wb.shearAt[s]!);
+    h = mix32(h, wb.start[s]! | (wb.count[s]! << 16));
+  }
+  // Transient body state that steers later damage (last blow, magma fissures, debris immunity, tidal cadence).
+  const bl = b.blow;
+  h = mix32(h, bl.tick);
+  h = mixF(h, bl.dirX);
+  h = mixF(h, bl.dirY);
+  h = mixF(h, bl.energy);
+  h = mixF(h, bl.x);
+  h = mixF(h, bl.y);
+  h = mixF(h, bl.sourceMass);
+  h = mixF(h, bl.radial);
+  h = mix32(h, (b.magma ? 1 : 0) | (b.connDirty << 1));
+  h = mix32(h, b.debrisImmuneUntil);
+  h = mix32(h, b.debrisTick);
+  h = mixF(h, b.debrisEnergy);
+  h = mix32(h, b.lastTidalTick);
+  h = mixF(h, b.tidalCarry);
   const s = b.rng.getState();
   h = mix32(h, s[0]);
   h = mix32(h, s[1]);
@@ -64,8 +110,25 @@ export function hashWorld(core: WorldCore, extra: (h: number) => number): number
     h = mixF(h, c.angle);
     h = mixF(h, c.spin);
     h = mixF(h, c.mass);
+    h = mixF(h, c.heat);
+    h = mixF(h, c.inertia);
     h = mix32(h, c.w | (c.h << 12));
+    h = mix32(h, c.age);
+    h = mix32(h, c.grace | (c.noHitUntil << 12) | (c.asleep ? 1 << 30 : 0) | (c.fast ? 1 << 29 : 0));
+    h = mix32(h, c.origin + 1);
     h = hashBytes(h, c.pixels);
+  }
+  // Shock rings / blast waves in flight.
+  for (let k = 0; k < core.waves.length; k++) {
+    const wv = core.waves[k]!;
+    if (!wv.active) continue;
+    h = mix32(h, k | (wv.type << 8) | ((wv.bodyId + 1) << 12));
+    h = mixF(h, wv.cx);
+    h = mixF(h, wv.cy);
+    h = mixF(h, wv.r);
+    h = mixF(h, wv.speed);
+    h = mixF(h, wv.maxR);
+    h = mixF(h, wv.power);
   }
   const pp = core.particles;
   h = mix32(h, pp.count);

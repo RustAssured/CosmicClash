@@ -11,6 +11,7 @@ import {
   uniformDisc,
   type TestBody,
 } from './testing/bodies';
+import { isHeld, shearDelay } from './wound';
 
 /**
  * Work that is spread over ticks (multi-tick events, the deferred FRACTURE chisel, crack fronts, shock rings) and the
@@ -97,14 +98,16 @@ describe('deferred chisel and multi-tick jobs', () => {
     expect(c).not.toEqual(a);
   });
 
-  it('a FRACTURE blow leaves a deferred chisel in the queue that runs a few ticks later', () => {
+  it('a FRACTURE blow leaves a deferred chisel in the queue that runs one tick after its wound shears', () => {
     const { world, ids } = build(2, [celadonBody({ size: 46, seed: 6, x: 400, y: 290 })]);
     world.applyDamage(ids[0]!, fractureBlow(360, 282));
     expect(world.diagnostics().jobs).toBe(1);
     const h0 = world.hash();
-    world.tick();
+    // No hit-stop: the shear is shearDelay(0) = 8 world ticks after the impact frame, the chisel the tick after it.
+    const due = 1 + shearDelay(0) + 1;
+    for (let i = 0; i < due - 1; i++) world.tick();
     expect(world.diagnostics().jobs).toBe(1);
-    for (let i = 0; i < 6; i++) world.tick();
+    world.tick();
     expect(world.diagnostics().jobs).toBe(0);
     expect(world.hash()).not.toBe(h0);
   });
@@ -240,7 +243,7 @@ describe('connectivity shortcut', () => {
     });
   }
 
-  it('after every settle, all live cells of a solid body are anchored (brute force)', () => {
+  it('after every settle, all live cells of a solid body are anchored (brute force; held wound slabs are anchors)', () => {
     for (let sc = 0; sc < 4; sc++) {
       const rng = new Rng(9000 + sc);
       const tb = layeredDisc({ size: 46, seed: sc, x: 400, y: 290 });
@@ -271,6 +274,12 @@ describe('connectivity shortcut', () => {
       const stack: number[] = [];
       for (const c of body.coreDiscIdx)
         if (m.material[c] !== 0) {
+          seen[c] = 1;
+          stack.push(c);
+        }
+      // Matter a wound is still holding (it shears on its own tick) is anchored until then.
+      for (let c = 0; c < body.n; c++)
+        if (m.material[c] !== 0 && !seen[c] && isHeld(body, c)) {
           seen[c] = 1;
           stack.push(c);
         }
