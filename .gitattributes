@@ -1,0 +1,7 @@
+# Keep LF in the working tree on every OS (Prettier and the CI expect LF; Windows git defaults to CRLF).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webm binary
+*.mp4 binary
+*.wav binary
