@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { parseScript, type DamageEvent, type SimEvent, type TitanId } from '@/contracts';
+import {
+  Btn,
+  parseScript,
+  type DamageEvent,
+  type RenderLayer,
+  type SimEvent,
+  type TitanId,
+} from '@/contracts';
 import { createMatterWorld, type MatterWorldEx } from '@/matter';
 import type { FighterImpl } from './fighter';
 import type { PlanetBehaviour } from './behaviours/planet';
-import { createScriptSource, makeMatch, skipIntro } from './testing/harness';
+import { ManualSource, createScriptSource, makeMatch, skipIntro } from './testing/harness';
 
 function duel(a: TitanId, b: TitanId, gap = 170, seed = 7) {
   const m = makeMatch({ a, b, seed, createWorld: (s) => createMatterWorld(s) });
@@ -143,7 +150,7 @@ describe('Planet', () => {
     void pl;
   }, 60_000);
 
-  it('is deterministic: identical scripted fights end in identical hashes (moons included)', () => {
+  it('is deterministic: identical scripted fights end in identical hashes (moons and spin included)', () => {
     const run = (): number => {
       const { m } = duel('planet', 'lastone', 200);
       const t0 = m.tick;
@@ -156,4 +163,206 @@ describe('Planet', () => {
     };
     expect(run()).toBe(run());
   }, 90_000);
+});
+
+/** A Planet (slot 0) against a far, idle Asteroid, driven by hand. */
+function handDuel(gap = 420) {
+  const { m, fa, fb, pl } = duel('planet', 'asteroid', gap);
+  const a = new ManualSource();
+  m.setSources(a, null);
+  const step = (n = 1): void => {
+    for (let i = 0; i < n; i++) m.step();
+  };
+  return { m, fa, fb, pl, a, step };
+}
+
+/** Lit pixels in the Planet's detached fx overlay (ring, aurora, moon trails, move fx) this frame. */
+function fxPixels(f: FighterImpl): number {
+  const fx = f
+    .renderLayers({ x0: 0, y0: 0, w: 640, h: 360 }, 0)
+    .find((l: RenderLayer) => l.id === 'planet-fx');
+  if (!fx || !fx.visible) return 0;
+  let n = 0;
+  for (let i = 0; i < fx.pixels.length; i++) if (fx.pixels[i]! >>> 24 !== 0) n++;
+  return n;
+}
+
+const crushAt = (x: number, y: number, dirX: number, energy = 650): DamageEvent => ({
+  type: 'CRUSH',
+  shape: { kind: 'point', x, y, r: 26 },
+  energy,
+  dirX,
+  dirY: 0,
+  duration: 1,
+  sourceMass: 6,
+  sourceBodyId: -1,
+  originX: x - dirX * 80,
+  originY: y,
+  flags: 0,
+  params: { crater: 12, compress: 6, shock: 0.8 },
+});
+
+describe('Planet spin and orientation', () => {
+  it('turns on its own at the day rate, published (and hashed) as FighterView.angle/spin', () => {
+    const { m, fa, pl, step } = handDuel();
+    step(5);
+    const a0 = fa.view.angle;
+    step(120);
+    // prograde (negative in the fighters' sense), 0.14 rad/s: two seconds turn it ~0.28 rad
+    expect(fa.view.spin).toBeCloseTo(pl.spin, 9);
+    expect(fa.view.spin).toBeLessThan(-0.1);
+    expect(Math.abs(fa.view.angle - a0)).toBeGreaterThan(0.2);
+    expect(Math.abs(fa.view.angle - a0)).toBeLessThan(0.4);
+    // the angular state is part of the match hash
+    const h = m.hash();
+    fa.view.spin += 0.5;
+    expect(m.hash()).not.toBe(h);
+  }, 60_000);
+
+  it('Impact commits the world into spin; the stop overshoots the day rate, then the day carries on', () => {
+    const { fa, pl, a, step } = handDuel();
+    step(5);
+    const day = pl.spin; // the world's own day, prograde
+    expect(day).toBeCloseTo(-0.14, 2);
+    a.held = Btn.CRUSH;
+    step();
+    a.held = 0;
+    let peak = day;
+    let peakTick = 0;
+    for (let t = 0; t < 60; t++) {
+      step();
+      if (Math.abs(pl.spin - day) > Math.abs(peak - day)) {
+        peak = pl.spin;
+        peakTick = t;
+      }
+      expect(fa.body.transform.lean).toBe(0); // a world never shears
+    }
+    expect(Math.abs(peak - day)).toBeGreaterThan(2); // committed: the cloud deck streaks
+    // after the peak the spin swings back PAST the day rate (overshoot) before settling on it
+    const side = Math.sign(peak - day);
+    let overshoot = 0;
+    for (let t = 0; t < 300; t++) {
+      step();
+      overshoot = Math.max(overshoot, -(pl.spin - day) * side);
+    }
+    expect(peakTick).toBeGreaterThan(0);
+    expect(overshoot).toBeGreaterThan(0.05);
+    expect(pl.spin).toBeCloseTo(day, 1); // …and the day carries on: the world never stops turning
+    expect(Math.abs(pl.spin)).toBeGreaterThan(0.08);
+  }, 60_000);
+
+  it('the cloud deck lags a spin-up (atmospheric drag) and the moons fall behind their orbits', () => {
+    // the Cataclysm's windup spins the world up to its limit over 1.5 s
+    const { fa, pl, a, step } = handDuel();
+    step(5);
+    fa.meter = 1;
+    a.held = Btn.ULTIMATE;
+    step();
+    a.held = 0;
+    let lagged = false;
+    let moonLag = 0;
+    for (let t = 0; t < 90; t++) {
+      step();
+      if (Math.abs(pl.cloudSpin) < Math.abs(pl.spin) - 0.05) lagged = true;
+      for (const mo of pl.moonBodies) moonLag = Math.min(moonLag, mo.lag);
+    }
+    expect(lagged).toBe(true);
+    expect(moonLag).toBeLessThan(-0.03);
+  }, 60_000);
+
+  it('answers every command on its input tick with light and fx (feel respond, channel fx), never with a lean', () => {
+    for (const [btn, cmd] of [
+      [Btn.STRIKE, 'strike'],
+      [Btn.CRUSH, 'crush'],
+      [Btn.SURGE, 'surge'],
+      [Btn.SIGNATURE, 'signature'],
+      [Btn.GUARD, 'guard'],
+    ] as const) {
+      const ctl = handDuel();
+      ctl.step(8);
+      ctl.step();
+      const quiet = fxPixels(ctl.fa);
+      const d = handDuel();
+      d.step(8);
+      d.a.held = btn;
+      d.step();
+      expect(d.pl.feelRespond(cmd), cmd).toBe('fx');
+      expect(fxPixels(d.fa), cmd).toBeGreaterThan(quiet + 20);
+      expect(d.fa.body.transform.lean, cmd).toBe(0);
+    }
+  }, 120_000);
+
+  it('Rotational Brace turns the more intact face toward the foe under a cloud cover, and the next blow lands on it', () => {
+    const { m, fa, pl, a, step } = handDuel(300);
+    m.setSources(a, null);
+    step(5);
+    // batter the face toward the foe (the foe is to the right: blows come from the right, heading left)
+    const hitNear = (): void => {
+      fa.world.applyDamage(fa.body.id, crushAt(fa.px + 50, fa.py, -1));
+      step(30);
+    };
+    hitNear();
+    hitNear();
+    hitNear();
+    const before = { near: 1, far: 1 };
+    pl.faceIntegrity(before);
+    expect(before.near).toBeLessThan(before.far - 0.04);
+    expect(fa.body.transform.facing).toBe(fa.facing);
+    a.held = Btn.GUARD;
+    step();
+    expect(pl.turning).toBe(true);
+    let streak = 0;
+    for (let t = 0; t < 20; t++) {
+      step();
+      streak = Math.max(streak, Math.abs(pl.cloudSpin));
+    }
+    expect(pl.turning).toBe(false);
+    expect(pl.bracedFace).toBe(true);
+    expect(streak).toBeGreaterThan(5); // the half-turn streaks the cloud deck
+    // the body is now drawn and hit mirrored against the fighter's facing: the intact face is toward the foe
+    expect(fa.body.transform.facing).toBe(-fa.facing as 1 | -1);
+    const after = { near: 1, far: 1 };
+    pl.faceIntegrity(after);
+    expect(after.near).toBeCloseTo(before.far, 2);
+    expect(after.far).toBeCloseTo(before.near, 2);
+    // the same blow now lands on the fresh face; the battered one, turned away, is spared
+    hitNear();
+    const hit = { near: 1, far: 1 };
+    pl.faceIntegrity(hit);
+    expect(hit.near).toBeLessThan(after.near - 0.01);
+    expect(after.far - hit.far).toBeLessThan((after.near - hit.near) * 0.5);
+  }, 90_000);
+
+  it('does not turn when the face toward the foe is already the better one', () => {
+    const { fa, pl, a, step } = handDuel(300);
+    step(5);
+    for (let k = 0; k < 3; k++) {
+      fa.world.applyDamage(fa.body.id, crushAt(fa.px - 50, fa.py, 1));
+      step(30);
+    }
+    a.held = Btn.GUARD;
+    step(25);
+    expect(pl.bracedFace).toBe(false);
+    expect(fa.body.transform.facing).toBe(fa.facing);
+  }, 60_000);
+
+  it('the Cataclysm quake light is local (an impact light at the epicentre), never a screen wash', () => {
+    const { fa, fb, m, a, step } = handDuel(220);
+    step(5);
+    fa.meter = 1;
+    a.held = Btn.ULTIMATE;
+    step();
+    a.held = 0;
+    const flashes: SimEvent[] = [];
+    for (let t = 0; t < 200 && !fb.view.ko; t++) {
+      step();
+      if (!fb.view.ko) for (const e of m.events) if (e.t === 'flash') flashes.push(e);
+    }
+    expect(flashes.length).toBeGreaterThan(0);
+    for (const e of flashes) {
+      if (e.t !== 'flash') continue;
+      expect(Number.isFinite(e.x)).toBe(true);
+      expect(Number.isFinite(e.y)).toBe(true);
+    }
+  }, 60_000);
 });

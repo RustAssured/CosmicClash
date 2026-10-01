@@ -1,9 +1,11 @@
 import {
   CellFlag,
   DamageFlag,
+  TICK_DT,
   clamp,
   clamp01,
   hex,
+  smoothstep,
   type DamageEvent,
   type DamageShape,
   type DebugShape,
@@ -23,6 +25,7 @@ import { GlowSprite } from '../fx/glowSprite';
 import { bayer, glowD, rampAt, rampDither, ribbon, ringBand, tn } from '../fx/lib';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
+import { spinKeysOf } from '../pose';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
 
 /** Moon modes. */
@@ -42,6 +45,51 @@ const BREAK_FRAC = 0.28;
 const LOST_RADIUS = 300;
 const GRAVITY_STRENGTH = 12;
 const GRAVITY_RADIUS = 250;
+
+/*
+ * SPIN. The world turns about its tilted polar axis: ω (rad/s, + = the visible surface moves toward the body's local +x) and the
+ * surface phase θ (rad, FighterView.angle). Spin is never coupled to travel (it is the world's own day, always prograde), so it
+ * cannot read as a rolling ball. It is shown by what turns with the world: cloud bands (dragged behind the surface), aurora, the
+ * moons (which lag a spin-up) and the debris ring. A commanded change is a target the spin is pulled toward by an under-damped
+ * spring, so a hard stop overshoots below the day rate before the day carries on; blows add angular impulse through their lever arm.
+ */
+/**
+ * World sense of the Planet's own rotation, in the sign convention of the fighters' angular state (+ = clockwise on screen; for the
+ * Planet, whose axis lies in the screen plane, + reads as its visible face moving toward +x): prograde with its moons, whose near
+ * halves move toward −x. Facing the other way is a mirror, not a new rotation, so the sense does not depend on the foe's side.
+ */
+const PROGRADE = -1;
+/** The world's own day (rad/s): clouds drift even when nothing happens. */
+const SPIN_BASE = 0.14;
+/** Spin a committed Impact winds up to, and the Cataclysm's. */
+const SPIN_COMMIT = 2.4;
+const SPIN_MAX = 4;
+/** Spring of ω toward its target: stiffness (1/s²) and damping ratio (< 1: overshoot on stops). */
+const SPIN_K = 9;
+const SPIN_ZETA = 0.72;
+/** How fast the atmosphere catches up with the surface (1/s): cloud bands lag a spin-up and trail a stop. */
+const CLOUD_DRAG = 3.2;
+/** Moons lag behind a spinning-up world (rad of orbit per rad/s² of spin acceleration), on a spring (stiffness 1/s², damping). */
+const MOON_LAG_GAIN = 0.022;
+const MOON_LAG_K = 26;
+const MOON_LAG_ZETA = 0.5;
+/** Rotational Brace: a half-turn takes this many ticks; it happens only if the far face is this much more intact. */
+const TURN_TICKS = 16;
+const BRACE_MARGIN = 0.04;
+/** Cloud-texture px of smear per rad/s of atmospheric spin (bands streak), capped. */
+const SMEAR_PER_SPIN = 2.6;
+const SMEAR_MAX = 14;
+/** Debris ring: motes, radius (planet radii) slack and tight, and its flattening (seen nearly edge-on, like the moon orbits). */
+const RING_MOTES = 44;
+const RING_LOOSE = 2.05;
+const RING_TIGHT = 1.3;
+const RING_FLAT = 0.26;
+const RING_TILT = -0.12;
+/** Aurora ovals: angular radius about each pole and samples around the oval. */
+const AURORA_BETA = 0.4;
+const AURORA_STEPS = 72;
+/** Aurora colours from faint to bright: violet fringe, blue, green body, pale-green crest, white-hot. */
+const AURORA_RAMP = ['#2a1a58', '#3048b0', '#28b888', '#78f0a8', '#e0fff0'].map(hex);
 
 interface SlamCfg {
   speed: number;
@@ -80,6 +128,16 @@ class Moon {
   readonly ty = new Float32Array(14);
   spec!: PlanetRig['moons'][number];
   back = false;
+  /** Phase offset from the nominal orbit (rad): the moon lags a spin-up, swings ahead when called on; a spring brings it home. */
+  lag = 0;
+  lagV = 0;
+}
+
+/** Cloud density 0..1 of the wrapping 256-wide cloud texture row `row` (= lat·256) at fractional longitude `lx` (texture px). */
+function cloudAt(clouds: Uint8Array, row: number, lx: number): number {
+  const l0 = Math.floor(lx);
+  const lf = lx - l0;
+  return (clouds[row + (l0 & 255)]! * (1 - lf) + clouds[row + ((l0 + 1) & 255)]! * lf) / 255;
 }
 
 const INTERIOR = (r: PlanetRig['ids'], m: number): boolean =>
@@ -91,6 +149,10 @@ const INTERIOR = (r: PlanetRig['ids'], m: number): boolean =>
  * CRUSH projectile that comes home (or breaks); Cataclysm compresses the foe, quakes it, then rains both moons on it. Blows that
  * reach a moon damage the moon itself, and a hard one knocks it out of orbit for good. The atmosphere is matter that soaks heat and
  * can be stripped; cracks in the crust glow with magma; the gravity well gathers debris into a slow ring.
+ *
+ * No face, no limbs, no shear: the world answers commands with its sky (aurora, the cloud deck, the debris ring, its moons) on
+ * the input tick, turns at its own day rate, is committed into spin by its moves and twisted by blows (see SPIN_*), and on Guard
+ * turns its more intact face toward the foe (Rotational Brace; the two-face shell swap is Phase 2, this is the mirror prototype).
  */
 export class PlanetBehaviour extends Behaviour {
   private rig!: PlanetRig;
@@ -130,7 +192,35 @@ export class PlanetBehaviour extends Behaviour {
   private aimX = 1;
   private aimY = 0;
   private guardBlend = 0;
-  private spinBoost = 0;
+  /* spin (see SPIN_*): surface ω / acceleration / phase, the atmosphere's lagging ω and phase, the commanded target */
+  private omega = PROGRADE * SPIN_BASE;
+  private alpha = 0;
+  private theta = 0;
+  private omegaAir = PROGRADE * SPIN_BASE;
+  private thetaAir = 0;
+  private spinCmd = 0;
+  /** Spin as last published, to tell the impulse the fighter added since (its impact model, a move's authored spin keys). */
+  private spinOut = PROGRADE * SPIN_BASE;
+  /** The drawn facing the cloud phase was last advanced with (+1 / −1): the local sense of the world's spin. */
+  private airSense = 1;
+  /** Rotational Brace: the far face is toward the foe (body drawn and hit mirrored against the fighter's facing). */
+  private braced = false;
+  /** Half-turn progress in ticks (−1 = not turning) and this tick's extra phase rate from it (rad/s). */
+  private turnTick = -1;
+  private turnRate = 0;
+  private wasGuard = false;
+  /** Pristine and current integrity per local half (0 = −x, 1 = +x), the census the Brace reads. */
+  private readonly halfPristine = new Float64Array(2);
+  private readonly halfNow = new Float64Array(2);
+  /** Debris ring: phase (rad), tightness 0..1 and its target; aurora pulse 0..1. */
+  private ringPhase = 0;
+  private ringTight = 0;
+  private ringTarget = 0;
+  private auroraPulse = 0;
+  /** The command this behaviour answered on its input tick (feel `respond`), and that tick. */
+  private respondCmd = '';
+  private respondTick = -1;
+  private forceSkin = false;
   /* monitoring of the failure mode */
   private atmoCells0 = 1;
   private oceanCells0 = 1;
@@ -209,6 +299,8 @@ export class PlanetBehaviour extends Behaviour {
     this.atmoCells0 = Math.max(1, a);
     this.oceanCells0 = Math.max(1, o);
     this.lastOcean = 1;
+    this.censusHalves(this.halfPristine);
+    this.resetSpin();
     // the moons: real bodies
     this.moons = [];
     const specs = r.moons;
@@ -261,8 +353,253 @@ export class PlanetBehaviour extends Behaviour {
     this.barrageNext = 0;
     this.quaked = false;
     this.atmoCue = 0;
+    this.resetSpin();
     this.updateOrbit(f.tickNo, true);
   }
+
+  /** A new round: the world turns at its own day rate, its near face toward the foe, ring slack. */
+  private resetSpin(): void {
+    this.omega = PROGRADE * SPIN_BASE;
+    this.alpha = 0;
+    this.theta = 0;
+    this.omegaAir = this.omega;
+    this.thetaAir = 0;
+    this.spinCmd = 0;
+    this.braced = false;
+    this.turnTick = -1;
+    this.turnRate = 0;
+    this.wasGuard = false;
+    this.ringPhase = 0;
+    this.ringTight = 0;
+    this.ringTarget = 0;
+    this.auroraPulse = 0;
+    this.respondCmd = '';
+    this.respondTick = -1;
+    for (const m of this.moons) {
+      m.lag = 0;
+      m.lagV = 0;
+    }
+    this.writeAngular();
+  }
+
+  /**
+   * Publish the angular state (FighterView.angle/spin, hashed by the match): the surface phase (every half-turn included, wrapped to
+   * ±π) and its rate, in the world sense of the fighter's angular model (+ = clockwise on screen). The fighter's own free-spin state
+   * (`ang`, where its impact model adds the angular impulse of blows) is set to the same values, so what the fighter publishes after
+   * this behaviour has run is this state, and the next tick's difference is exactly the impulse it added (see `stepSpin`).
+   */
+  private writeAngular(): void {
+    const TAU = Math.PI * 2;
+    let a = this.theta - Math.floor(this.theta / TAU) * TAU;
+    if (a > Math.PI) a -= TAU;
+    this.theta = a;
+    const spin = this.omega + this.turnRate;
+    const v = this.f.view;
+    v.angle = a;
+    v.spin = spin;
+    const ang = (this.f as unknown as { ang?: { angle: number; spin: number } }).ang;
+    if (ang) {
+      ang.angle = a;
+      ang.spin = spin;
+    }
+    this.spinOut = spin;
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  spin and orientation
+   * ---------------------------------------------------------------------------------------------- */
+
+  /** Surface spin (rad/s, world sense, a half-turn in progress included) and the cloud deck's, which drags behind it. */
+  get spin(): number {
+    return this.omega + this.turnRate;
+  }
+  get cloudSpin(): number {
+    return this.omegaAir + this.turnRate;
+  }
+  /** True while the far face is turned toward the foe (Rotational Brace). */
+  get bracedFace(): boolean {
+    return this.braced;
+  }
+  get turning(): boolean {
+    return this.turnTick >= 0;
+  }
+  /** Integrity (0..1 of pristine) of the face currently toward the foe and of the face turned away. */
+  faceIntegrity(out: { near: number; far: number }): void {
+    this.censusHalves(this.halfNow);
+    const nearHalf = this.braced ? 0 : 1;
+    out.near = this.halfNow[nearHalf]! / Math.max(1, this.halfPristine[nearHalf]!);
+    out.far = this.halfNow[1 - nearHalf]! / Math.max(1, this.halfPristine[1 - nearHalf]!);
+  }
+
+  /**
+   * Integrity summed per local half of the map (column < core = −x half, else +x half), in units of a pristine cell. The +x half
+   * faces the foe unless braced (the body's own facing follows the fighter's). Same data as BodyStats.regionGrid, but in map
+   * coordinates, so it does not depend on which way the body was facing when the stats were last refreshed.
+   */
+  private censusHalves(out: Float64Array): void {
+    const map = this.f.body.map;
+    const W = map.w;
+    const cx = map.coreX;
+    const mat = map.material;
+    const integ = map.integrity;
+    let l = 0;
+    let r = 0;
+    for (let y = 0; y < map.h; y++) {
+      const row = y * W;
+      for (let x = 0; x < W; x++) {
+        const i = row + x;
+        if (mat[i] === 0) continue;
+        if (x < cx) l += integ[i]!;
+        else r += integ[i]!;
+      }
+    }
+    out[0] = l / 255;
+    out[1] = r / 255;
+  }
+
+  /** Add angular impulse (rad/s, world sense), scaled up by how light the wounded world has become. */
+  private kickSpin(dw: number): void {
+    const inertia = Math.max(0.45, this.f.view.bodyStats.massFrac);
+    this.omega = clamp(this.omega + dw / inertia, -SPIN_MAX, SPIN_MAX);
+  }
+
+  /**
+   * The commanded spin for the current move (rad/s above the day rate, in the prograde sense): Impact winds the world up over its
+   * windup and lets go after the blow, the Cataclysm spins it to the limit until the quake, Moon Slam winds up with the charge,
+   * Orbital Shift carries spin through the dash. A move whose choreography authors its own spin keys (applied by the fighter and
+   * folded in by `stepSpin`) gets no commanded spin here: only the pull back to the day.
+   */
+  private spinTarget(m: ActiveMove): number {
+    const id = m.def?.id ?? '';
+    if (m.feint || spinKeysOf(m)) return 0;
+    if (id === 'planet.impact') {
+      if (m.phase === 'startup') return (SPIN_COMMIT - SPIN_BASE) * smoothstep(0, 1, m.phaseTick / m.startup);
+      if (m.phase === 'active') return SPIN_COMMIT - SPIN_BASE;
+      return 0;
+    }
+    if (id === 'planet.cataclysm') {
+      if (m.phase === 'startup') return (SPIN_MAX - SPIN_BASE) * smoothstep(0, 1, m.phaseTick / m.startup);
+      if (m.phase === 'active' && m.phaseTick - 1 < 52) return SPIN_MAX - SPIN_BASE;
+      return 0;
+    }
+    if (id === 'planet.moonslam') {
+      if (m.phase === 'startup') return 0.5;
+      if (m.phase === 'charge') return 0.5 + 0.9 * clamp01(m.chargeTicks / Math.max(1, m.chargeMax));
+      return 0;
+    }
+    if (id === 'planet.shift') return 0.9;
+    return 0;
+  }
+
+  /**
+   * One tick of the angular state: fold in the impulse the fighter's impact model added since the last tick (or, if it added none,
+   * this behaviour's own lever-arm estimate of the blows taken), spring toward the commanded spin, drag the atmosphere, advance the
+   * phases and the Brace half-turn, swing the moons, the ring and the aurora.
+   */
+  private stepSpin(m: ActiveMove): void {
+    const dt = TICK_DT;
+    const f = this.f;
+    const before = this.omega;
+    // the impulse the fighter's own angular state received since we last published it: a blow's torque (impact model) or a
+    // move's authored spin keys. It is folded in whole; the day-rate spring below then takes the world back to its day.
+    const ang = (f as unknown as { ang?: { spin: number } }).ang;
+    const ext = ang ? ang.spin - this.spinOut : 0;
+    if (Math.abs(ext) > 1e-6) this.omega = clamp(this.omega + ext, -SPIN_MAX, SPIN_MAX);
+
+    this.spinCmd = this.spinTarget(m);
+    const target = PROGRADE * (SPIN_BASE + this.spinCmd);
+    const w0 = Math.sqrt(SPIN_K);
+    const acc = SPIN_K * (target - this.omega) - 2 * SPIN_ZETA * w0 * this.alpha;
+    this.alpha += acc * dt;
+    this.omega = clamp(this.omega + this.alpha * dt, -SPIN_MAX, SPIN_MAX);
+    const angAcc = (this.omega - before) / dt;
+    this.omegaAir += (this.omega - this.omegaAir) * Math.min(1, CLOUD_DRAG * dt);
+    // the Brace half-turn: an eased π of extra phase in the sense the world already turns; the mirror swaps at its midpoint, under
+    // the cloud cover
+    this.turnRate = 0;
+    if (this.turnTick >= 0) {
+      const k = this.turnTick;
+      const dTh = Math.PI * (smoothstep(0, 1, (k + 1) / TURN_TICKS) - smoothstep(0, 1, k / TURN_TICKS));
+      this.turnRate = ((this.omega >= 0 ? 1 : -1) * dTh) / dt;
+      if (k + 1 === TURN_TICKS >> 1) this.braced = !this.braced;
+      if (++this.turnTick >= TURN_TICKS) {
+        this.turnTick = -1;
+        // the stop overshoots: the world swings on past its day rate, then the spring settles it
+        this.kickSpin(PROGRADE * 0.7);
+      }
+    }
+    // the cloud deck turns in map coordinates: the world sense seen through the drawn (possibly mirrored) facing
+    const rf = this.braced ? -f.facing : f.facing;
+    this.theta += (this.omega + this.turnRate) * dt;
+    this.thetaAir += (this.omegaAir + this.turnRate) * rf * dt;
+    this.airSense = rf;
+    // moons lag a spin-up (and swing ahead of a spin-down), each on its own spring; their orbits run prograde
+    const lk = MOON_LAG_K;
+    const lc = 2 * MOON_LAG_ZETA * Math.sqrt(lk);
+    for (const mo of this.moons) {
+      const a = -lk * mo.lag - lc * mo.lagV - MOON_LAG_GAIN * lk * PROGRADE * angAcc;
+      mo.lagV += a * dt;
+      mo.lag += mo.lagV * dt;
+    }
+    // the ring: debris orbits with the world, slower than its surface, and is drawn in by commitment
+    const sw = this.omega >= 0 ? 1 : -1;
+    this.ringPhase -= (0.3 * sw + 0.5 * this.omega) * dt;
+    this.ringTarget = this.ringGoal(m);
+    this.ringTight += (this.ringTarget - this.ringTight) * 0.12;
+    this.auroraPulse *= 0.93;
+    this.writeAngular();
+  }
+
+  /** How tight the debris ring is drawn for the current move (0 = slack). */
+  private ringGoal(m: ActiveMove): number {
+    const id = m.def?.id ?? '';
+    if (id === 'planet.impact' && m.phase !== 'recovery')
+      return m.phase === 'startup' ? clamp01(m.phaseTick / m.startup) : 1;
+    if (id === 'planet.cataclysm' && (m.phase === 'startup' || (m.phase === 'active' && m.phaseTick < 52)))
+      return 1;
+    if (id === 'planet.moonslam' && m.phase === 'charge')
+      return 0.4 + 0.5 * clamp01(m.chargeTicks / Math.max(1, m.chargeMax));
+    if (this.turnTick >= 0) return 0.7;
+    return 0;
+  }
+
+  /**
+   * Answer a command on its input tick, with no anatomy: the aurora flares, the debris ring is drawn in, the moon that will act
+   * swings ahead along its orbit (all of them for a whole-world command), the cloud deck redraws. Recorded for the feel `respond`.
+   */
+  private telegraph(cmd: string, strength: number, moon: Moon | null): void {
+    this.auroraPulse = Math.max(this.auroraPulse, 0.55 * strength);
+    this.ringTight = Math.min(1, this.ringTight + 0.5 * strength);
+    if (moon) moon.lagV += 3.2 * strength;
+    else for (const mo of this.moons) mo.lagV += 1.6 * strength;
+    this.forceSkin = true;
+    this.respondCmd = cmd;
+    this.respondTick = this.f.tickNo;
+  }
+
+  /**
+   * Feel instrumentation (docs/proposals/131-s1-planet-behaviour-hooks.md): the channel through which `cmd` (a move slot or
+   * 'guard') is answered on THIS tick, or null. Valid from the moment the fighter accepted the command: a move's telegraph is
+   * armed in `onMoveStart`, a raised Guard is answered in this tick's `update`. The Planet answers with light and detached fx
+   * (aurora, ring, moons, cloud deck), never with a lean.
+   */
+  override feelRespond(cmd: string): 'fx' | null {
+    const f = this.f;
+    if (cmd === 'guard') return f.guardUp && (!this.wasGuard || this.respondTick === f.tickNo) ? 'fx' : null;
+    return this.respondTick === f.tickNo && this.respondCmd === cmd ? 'fx' : null;
+  }
+
+  /**
+   * Rotational Brace: raising Guard turns the more intact face toward the foe (a half-turn under a cloud-streak cover). Nothing
+   * turns when the near face is already the better one, or while a turn is under way.
+   */
+  private brace(): void {
+    if (this.turnTick >= 0 || this.f.ko) return;
+    const o = this.faceTmp;
+    this.faceIntegrity(o);
+    if (o.far > o.near + BRACE_MARGIN) this.turnTick = 0;
+  }
+  private readonly faceTmp = { near: 1, far: 1 };
 
   /** Moons still bound to the planet (orbiting, flung or returning): the HUD count and the resource ceiling. */
   get moonsAlive(): number {
@@ -285,13 +622,14 @@ export class PlanetBehaviour extends Behaviour {
   private orbitPos(m: Moon, out: { x: number; y: number }, back: { v: boolean }, slotIdx: number): void {
     const f = this.f;
     const s = m.spec;
-    const ex = Math.cos(m.ang) * s.a;
-    const ey = Math.sin(m.ang) * s.b;
+    const ang = m.ang + m.lag;
+    const ex = Math.cos(ang) * s.a;
+    const ey = Math.sin(ang) * s.b;
     const ct = Math.cos(s.tilt);
     const st = Math.sin(s.tilt);
     let x = ex * ct - ey * st;
     let y = ex * st + ey * ct;
-    back.v = Math.sin(m.ang) < 0;
+    back.v = Math.sin(ang) < 0;
     const gb = this.guardBlend;
     if (gb > 0.01) {
       // shield: stand in front of the planet on the foe's side, one above the other
@@ -313,7 +651,8 @@ export class PlanetBehaviour extends Behaviour {
       const m = this.moons[i]!;
       if (m.mode === GONE) continue;
       if (m.mode === ORBIT) {
-        const w = ((Math.PI * 2) / m.spec.period) * (1 + this.spinBoost * 3);
+        // a faster-turning world drags its moons along a little faster (tidal coupling)
+        const w = ((Math.PI * 2) / m.spec.period) * (1 + 0.6 * Math.max(0, this.omega - SPIN_BASE));
         m.ang += w;
         this.orbitPos(m, p, b, i);
         m.back = b.v;
@@ -431,7 +770,6 @@ export class PlanetBehaviour extends Behaviour {
     f.events.push({ t: 'resource', slot: f.slot, kind: 'spend', amount: 1 });
     f.events.push({ t: 'shockwave', x: m.x, y: m.y, strength: 0.35, radius: 110, hue: 0.6 });
     if (wasBound && f.resource > this.moonsAlive) f.resource = this.moonsAlive;
-    this.spinBoost = 0;
   }
 
   /** The Guard shell is as strong as the atmosphere that remains (and the moons standing in front of it). */
@@ -439,10 +777,6 @@ export class PlanetBehaviour extends Behaviour {
     let shield = 0;
     for (const m of this.moons) if (m.mode === ORBIT) shield += 0.12;
     return 0.4 + 0.6 * this.atmoFrac + shield;
-  }
-
-  override onDamaged(energy: number, _dx: number, _dy: number): void {
-    this.spinBoost = Math.min(1, this.spinBoost + energy / 4000);
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -495,9 +829,22 @@ export class PlanetBehaviour extends Behaviour {
         ay = f.foe.view.y - moon.y;
       }
       this.launch(moon, this.cfg.speed * (1 + 0.35 * cf), ax, ay);
-      this.spinBoost = 0.6;
-    } else if (id === 'planet.impact') this.spinBoost = 1;
-    else if (id === 'planet.cataclysm') this.quaked = false;
+      // the throw's reaction: the world lurches on its axis and the other moon swings back
+      this.kickSpin(PROGRADE * (0.5 + 0.6 * cf));
+      for (const mo of this.moons) if (mo !== moon && mo.mode === ORBIT) mo.lagV -= 2.2;
+    } else if (id === 'planet.cataclysm') this.quaked = false;
+  }
+
+  /** Every command is answered on its input tick (see `telegraph`); the moon that will be thrown is the one that moves. */
+  override onMoveStart(m: ActiveMove): void {
+    const id = m.def?.id ?? '';
+    const slot = m.def?.slot ?? '';
+    if (id === 'planet.moonslam') this.telegraph(slot, 1, this.pickMoon());
+    else if (id === 'planet.shift') {
+      this.telegraph(slot, 0.8, null);
+      this.kickSpin(PROGRADE * 1.2);
+    } else if (id === 'planet.impact' || id === 'planet.cataclysm') this.telegraph(slot, 1.2, null);
+    else this.telegraph(slot, 0.7, null);
   }
 
   override onMoveEnd(m: ActiveMove, _interrupted: boolean): void {
@@ -531,8 +878,9 @@ export class PlanetBehaviour extends Behaviour {
     if (m.def?.id === 'planet.cataclysm' && m.phase === 'active' && !this.quaked && m.phaseTick - 1 >= 52) {
       this.quaked = true;
       const t = f.body.transform;
+      // the quake's light is local to its epicentre (an impact light, never a screen wash)
       f.events.push(
-        { t: 'flash', amount: 0.45 },
+        { t: 'flash', amount: 0.45, x: f.foe.view.x, y: f.foe.view.y },
         { t: 'shake', dirX: f.facing, dirY: 0.4, amp: 13 },
         { t: 'shockwave', x: f.foe.view.x, y: f.foe.view.y, strength: 1, radius: 300, hue: 0.08 },
         { t: 'zoom', amount: 0.04 },
@@ -680,9 +1028,17 @@ export class PlanetBehaviour extends Behaviour {
     const m = f.mv;
     this.tickLast = tick;
     this.guardBlend += ((f.guardUp ? 1 : 0) - this.guardBlend) * 0.16;
-    const surge = m.def?.slot === 'surge';
-    this.spinBoost *= 0.985;
-    if (surge) this.spinBoost = Math.max(this.spinBoost, 0.8);
+    // Guard answers on its input tick, and turns the better face toward the foe (Rotational Brace)
+    if (f.guardUp && !this.wasGuard && f.live) {
+      this.telegraph('guard', 0.9, null);
+      this.brace();
+    }
+    this.wasGuard = f.guardUp;
+    this.stepSpin(m);
+    // a world neither shears nor leans: the body is drawn (and hit) upright; the Brace decides which face is toward the foe
+    const t = f.body.transform;
+    t.lean = 0;
+    t.facing = this.braced ? (f.facing === 1 ? -1 : 1) : f.facing;
     this.updateOrbit(tick, false);
 
     // Gravity Well (passive): a small well that gathers debris into a slow ring
@@ -771,18 +1127,33 @@ export class PlanetBehaviour extends Behaviour {
   private draw(tick: number, m: ActiveMove): void {
     const f = this.f;
     const map = f.body.map;
-    // skin + glow every third tick (clouds drift slowly; the reveal only changes with the map)
-    if (tick % 3 === 0 || map.version !== this.lastVer) {
-      if (tick % 3 === 0 || this.redraw++ % 2 === 0) {
+    // skin + glow every third tick while the day drifts calmly; every tick while the cloud deck streaks (spin, a half-turn) and on a
+    // command's input tick; the reveal only changes with the map
+    const fast = Math.abs(this.cloudSpin) > 0.6 || this.forceSkin;
+    if (fast || tick % 3 === 0 || map.version !== this.lastVer) {
+      if (fast || tick % 3 === 0 || this.redraw++ % 2 === 0) {
         this.drawSkin(tick);
-        this.drawGlow(tick);
+        if (!fast || tick % 3 === 0 || map.version !== this.lastVer) this.drawGlow(tick);
         this.lastVer = map.version;
       }
     }
+    this.forceSkin = false;
     this.drawFx(tick, m);
   }
 
+  /** Mark interior cells that damage has brought within 3 cells of the surface; cached per map version. */
   private stampExposure(): boolean {
+    const f = this.f;
+    const map = f.body.map;
+    if (map.version === this.expoVer) return this.expoAny;
+    this.expoVer = map.version;
+    this.expoAny = this.scanExposure();
+    return this.expoAny;
+  }
+  private expoVer = -1;
+  private expoAny = false;
+
+  private scanExposure(): boolean {
     const f = this.f;
     const map = f.body.map;
     const W = map.w;
@@ -823,8 +1194,14 @@ export class PlanetBehaviour extends Behaviour {
     const clouds = rig.clouds;
     const px = S.px;
     const em = S.emis!;
-    const density = this.atmoFrac;
-    const drift = tick * 0.03;
+    // the cloud deck turns with the atmosphere's phase (+ = toward local +x); it streaks along the motion when the world spins hard,
+    // and during a half-turn it closes over the face (the cover under which the far face comes round)
+    const phase = (this.thetaAir * 256) / (Math.PI * 2);
+    const ws = this.cloudSpin * this.airSense;
+    const smear = Math.min(SMEAR_MAX, Math.abs(ws) * SMEAR_PER_SPIN);
+    const sdir = ws >= 0 ? 1 : -1;
+    const cover = this.turnTick >= 0 ? Math.sin((Math.PI * (this.turnTick + 0.5)) / TURN_TICKS) : 0;
+    const density = Math.max(this.atmoFrac, cover);
     const cn = this.cloudC;
     let any = false;
     for (let y = 0; y < H; y++)
@@ -860,11 +1237,19 @@ export class PlanetBehaviour extends Behaviour {
         if (mm === ids.atmosphere || mm === ids.cloud) continue;
         // drifting clouds over the face, lit like the surface, thinning as the atmosphere is stripped
         const lat = rig.lat[i]!;
-        const lx = rig.lon[i]! / 256 + drift * (1 + 0.5 * Math.cos((lat / 127 - 0.5) * Math.PI));
-        const l0 = Math.floor(lx);
-        const lf = lx - l0;
+        // latitude bands turn at slightly different rates (the equator leads)
+        const band = 1 + 0.5 * Math.cos((lat / 127 - 0.5) * Math.PI);
+        const lx = rig.lon[i]! / 256 - phase * band;
         const row = lat * 256;
-        const d = (clouds[row + (l0 & 255)]! * (1 - lf) + clouds[row + ((l0 + 1) & 255)]! * lf) / 255;
+        let d = cloudAt(clouds, row, lx);
+        if (smear >= 1) {
+          // motion streak: what passed over this point in the last moment still shows, fading along the band
+          for (let k = 1; k <= 3; k++) {
+            const s = cloudAt(clouds, row, lx + (sdir * smear * band * k) / 3) * (1 - 0.18 * k);
+            if (s > d) d = s;
+          }
+        }
+        if (cover > 0) d += (1 - d) * cover * (0.55 + 0.35 * tn(lx * 0.07, lat * 0.21));
         const foreshorten = (0.45 + 0.55 * (nz / 255)) * Math.min(1, Math.max(0, (nz - 70) / 90));
         const a = d * density * foreshorten * 0.72;
         const thr = 0.12 + 0.55 * bayer(x, y);
@@ -919,6 +1304,98 @@ export class PlanetBehaviour extends Behaviour {
     G.commit();
   }
 
+  /**
+   * The debris ring: motes on a flattened, tilted ellipse (the moons' plane), each drawn as a short arc that curves along the ring
+   * — longer the faster the world turns. Slack it is a faint dotted halo; commitment draws it in tight and bright. The half behind
+   * the globe is hidden by it.
+   */
+  private drawRing(X: Overlay, tick: number): void {
+    const t = this.f.body.transform;
+    const R = this.rig.radius;
+    const tight = this.ringTight;
+    const vis = 0.18 + 0.82 * tight;
+    const a = R * (RING_LOOSE + (RING_TIGHT - RING_LOOSE) * tight);
+    const b = a * RING_FLAT;
+    const ct = Math.cos(RING_TILT);
+    const st = Math.sin(RING_TILT);
+    const hide = (R + this.rig.atmo) * (R + this.rig.atmo);
+    const arc = Math.min(0.5, 0.05 + 0.06 * Math.abs(this.omega) * (0.6 + 0.4 * tight));
+    // the ring lies in the moons' (world-fixed) plane; each mote trails an arc behind its motion (see `stepSpin`)
+    const sense = this.omega >= 0 ? 1 : -1;
+    const ramp = this.crustR;
+    for (let k = 0; k < RING_MOTES; k++) {
+      const h = ((k * 2654435761) >>> 0) / 4294967296;
+      // each mote keeps its own slot and drifts a little in and out of the band
+      const phi0 = (k / RING_MOTES) * Math.PI * 2 + this.ringPhase + h * 0.4;
+      const bright = vis * (0.55 + 0.45 * h);
+      const segs = 1 + Math.round(arc * a * 0.5);
+      for (let s = 0; s < segs; s++) {
+        const phi = phi0 + (sense * arc * s) / Math.max(1, segs);
+        const sp = Math.sin(phi);
+        const rr = 1 + 0.05 * (h - 0.5);
+        const ex = Math.cos(phi) * a * rr;
+        const ey = sp * b * rr;
+        const lx = ex * ct - ey * st;
+        const ly = ex * st + ey * ct;
+        if (sp < 0 && lx * lx + ly * ly < hide) continue;
+        const x = Math.round(t.x + lx);
+        const y = Math.round(t.y + ly);
+        const fade = bright * (1 - s / (segs + 1));
+        if (fade <= bayer(x + tick, y) * 0.9) continue;
+        X.set(x, y, rampAt(ramp, 0.35 + 0.6 * fade), Math.round(40 * tight));
+      }
+    }
+  }
+
+  /**
+   * Aurora ovals about both poles of the tilted axis: curtains standing out of the limb and over the face, shimmering, brighter the
+   * faster the world turns and on every command; they need an atmosphere to light.
+   */
+  private drawAurora(X: Overlay, tick: number): void {
+    const t = this.f.body.transform;
+    const R = this.rig.radius;
+    const level =
+      clamp01(0.08 + (0.55 * Math.abs(this.spin)) / SPIN_MAX + this.auroraPulse) *
+      (0.35 + 0.65 * this.atmoFrac);
+    if (level < 0.06) return;
+    const rf = t.facing;
+    const s = Math.sin(this.rig.tilt);
+    const c = Math.cos(this.rig.tilt);
+    const cb = Math.cos(AURORA_BETA);
+    const sb = Math.sin(AURORA_BETA);
+    const height = 2 + 7 * level;
+    for (let pole = 0; pole < 2; pole++) {
+      const sg = pole === 0 ? 1 : -1;
+      // pole direction (screen plane, local), its in-plane perpendicular, and the view axis
+      const px = s * sg;
+      const py = -c * sg;
+      for (let k = 0; k < AURORA_STEPS; k++) {
+        const ph = (k / AURORA_STEPS) * Math.PI * 2 + this.thetaAir * 0.5 * sg;
+        const cp = Math.cos(ph);
+        const sp = Math.sin(ph);
+        // a point on the oval: pole·cosβ + (e1·cos φ + view·sin φ)·sinβ, with e1 = (c, s) in the plane
+        const ox = px * cb + c * cp * sb;
+        const oy = py * cb + s * cp * sb;
+        const oz = sp * sb;
+        if (oz < -0.12) continue;
+        const shimmer = tn(k * 0.37 + tick * 0.12, pole * 7 + tick * 0.05);
+        const v = level * (0.45 + 0.75 * shimmer);
+        const ol = Math.hypot(ox, oy) || 1;
+        const ux = ox / ol;
+        const uy = oy / ol;
+        const h = height * (0.5 + 0.5 * shimmer);
+        for (let j = 0; j < h; j++) {
+          const r = R * ol + j;
+          const x = Math.round(t.x + ux * r * rf);
+          const y = Math.round(t.y + uy * r);
+          const fade = v * (1 - j / (h + 1));
+          if (fade <= bayer(x, y + (tick >> 2)) * 0.85) continue;
+          X.set(x, y, rampAt(AURORA_RAMP, clamp01(fade)), Math.round(200 * clamp01(fade)));
+        }
+      }
+    }
+  }
+
   private drawFx(tick: number, m: ActiveMove): void {
     const f = this.f;
     const t = f.body.transform;
@@ -928,6 +1405,8 @@ export class PlanetBehaviour extends Behaviour {
     const at = m.phase === 'active' ? m.phaseTick - 1 : -1;
     const R = this.rig.radius;
     const dir = f.facing;
+    this.drawRing(X, tick);
+    this.drawAurora(X, tick);
     // moon ribbons in flight
     for (const mo of this.moons) {
       if (mo.mode === SLAM) {

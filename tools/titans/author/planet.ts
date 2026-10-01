@@ -1,10 +1,18 @@
 /**
  * Authoring script for `src/titans/planet.json` (see supernova.ts for the workflow):
  *   npx tsx tools/titans/author/planet.ts && npx prettier --write src/titans/planet.json
+ *
+ * Two blocks of the JSON are owned elsewhere and are carried over from the file on disk instead of being authored here:
+ *  - `balance` (written by tools/ai/autotune.ts),
+ *  - the `planet.impact` move (its root motion and choreography belong to the combat owner, SLICE_PLAN §6); the fallback
+ *    below is only used when the file has no such move.
+ * Everything else here is the source of truth and matches the JSON exactly (energies after the global balance pass).
  */
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { DamageFlag, type MaterialSpec, type MoveDef, type TitanDef } from '@/contracts';
 import { AIM_SIGN, aims, frame, hb, key } from './kit';
+
+const PATH = 'src/titans/planet.json';
 
 const vis = (ramp: string[], emissive: number, crack: string, char = '#1a1012', debris?: string) => ({
   ramp,
@@ -141,15 +149,35 @@ const MATERIALS: MaterialSpec[] = [
   },
 ];
 
-/** A living world is not armour: its solid layers take more from a blow than the bare archetype rock would. */
+/**
+ * A living world is not armour: its shell (surface → mantle) takes a little more from a blow than the bare archetype would.
+ * Calibrated for the slice (SLICE_PLAN §3 D1): at the old ×4 every cell cost ~0.18 energy, so any heavy blow saturated the
+ * crater search and the whole bowl left as powder in one tick.
+ */
+const SHELL_RESIST = { CRUSH: 1.4, KINETIC: 1.4, FRACTURE: 1.4, THERMAL: 1.2 };
 const SOFTEN = ['forest', 'desert', 'mountain', 'ice', 'crust', 'mantle', 'ocean', 'atmosphere', 'cloud'];
-for (const mat of MATERIALS)
-  if (SOFTEN.includes(mat.key))
-    mat.physics = {
-      ...mat.physics,
-      ...(['ocean', 'atmosphere', 'cloud'].includes(mat.key) ? { heatAbsorb: 0.08 } : {}),
-      resist: { CRUSH: 4, KINETIC: 4, FRACTURE: 4, THERMAL: 3.2 },
-    };
+const SOAK = ['ocean', 'atmosphere', 'cloud'];
+/** A planet is lighter per cell than bare rock (it is mostly a thin painted shell over a hot interior): mass per cell by layer. */
+const DENSITY: Record<string, number> = {
+  ocean: 0.6,
+  forest: 0.5,
+  desert: 0.5,
+  mountain: 0.6,
+  ice: 0.4,
+  crust: 0.6,
+  mantle: 0.5,
+  magma: 0.5,
+  core: 0.8,
+};
+for (const mat of MATERIALS) {
+  const physics: NonNullable<MaterialSpec['physics']> = {};
+  // the air and the seas are the world's heat shield (the focused core of a THERMAL blow ignores them; this is the rest): at the
+  // calibrated shell resist a stripped world loses ~17% more to the same burst (planet.test.ts), at 0.4 it lost none more
+  if (SOAK.includes(mat.key)) physics.heatAbsorb = 0.6;
+  if (SOFTEN.includes(mat.key)) physics.resist = { ...SHELL_RESIST };
+  if (DENSITY[mat.key] !== undefined) physics.density = DENSITY[mat.key]!;
+  if (Object.keys(physics).length > 0) mat.physics = physics;
+}
 
 const moonMats = (rock: string[], dust: string[], dark: string[]): MaterialSpec[] => [
   { key: 'moonrock', base: 'rock', visual: vis(rock, 0, '#0c0a0e', '#1a1616', rock[3]) },
@@ -160,6 +188,8 @@ const moonMats = (rock: string[], dust: string[], dark: string[]): MaterialSpec[
 const C = 'CRUSH' as const;
 const UNBLOCK = DamageFlag.UNBLOCKABLE;
 const CONT = DamageFlag.CONTINUOUS;
+/** A world does not shear: every phase of every Planet move holds the body upright (the fighter's default lean is overridden). */
+const RIGID = { startup: { lean: 0 }, charge: { lean: 0 }, active: { lean: 0 }, recovery: { lean: 0 } };
 
 const nudge: MoveDef = {
   id: 'planet.nudge',
@@ -177,8 +207,8 @@ const nudge: MoveDef = {
           8,
           { kind: 'point', ox: 82, oy: s * 30, r: 30 },
           C,
-          360,
-          { compress: 5, crater: 8, shock: 0.6 },
+          252,
+          { compress: 4, crater: 6.4, shock: 0.48 },
           0,
           { x: 560, y: s * 90 - 30 },
           0.4,
@@ -193,10 +223,11 @@ const nudge: MoveDef = {
   resourceCost: 0,
   meterCost: 0,
   tags: ['shove'],
-  extra: { pose: { startup: { lean: -4 }, active: { lean: 6 } } },
+  extra: { pose: RIGID },
 };
 
-const impact: MoveDef = {
+/** Fallback only: the live block is carried over from the JSON (combat owns its choreography). */
+const impactFallback: MoveDef = {
   id: 'planet.impact',
   slot: 'crush',
   name: 'Impact',
@@ -212,8 +243,8 @@ const impact: MoveDef = {
           8,
           { kind: 'point', ox: 96, oy: s * 34, r: 44 },
           C,
-          1000,
-          { crater: 22, compress: 10, shock: 1.4, scatter: 1.2 },
+          700,
+          { crater: 17.6, compress: 8, shock: 1.12, scatter: 1.2 },
           0,
           { x: 760, y: s * 120 - 60 },
           1,
@@ -225,7 +256,7 @@ const impact: MoveDef = {
   resourceCost: 0,
   meterCost: 0,
   tags: ['heavy', 'ram', 'quake'],
-  extra: { pose: { startup: { lean: -9 }, active: { lean: 8 }, recovery: { lean: 2 } } },
+  extra: { pose: RIGID },
 };
 
 const shift: MoveDef = {
@@ -255,8 +286,8 @@ const slam: MoveDef = {
         6,
         { kind: 'point', ox: 76, oy: 0, r: 20 },
         C,
-        120,
-        { crater: 5 },
+        84,
+        { crater: 4 },
         0,
         { x: 200, y: 0 },
         0.3,
@@ -273,7 +304,7 @@ const slam: MoveDef = {
     /** The moon is flung at speed px/tick and hits for `energy` (× charge power) as CRUSH with a crater; recoil is the share of the energy the moon itself takes. */
     slam: { speed: 9, energy: 430, crater: 14, compress: 8, shock: 1.2, recoil: 0.14, life: 46 },
     ctl: { charge: 0.2, active: 0.25 },
-    pose: { startup: { lean: -5 }, charge: { lean: -7 }, active: { lean: 5 } },
+    pose: RIGID,
   },
 };
 
@@ -291,8 +322,8 @@ const cataclysm: MoveDef = {
         50,
         { kind: 'field', ox: 150, oy: 0, r: 100, falloff: 1.5 },
         C,
-        20,
-        { compress: 4, crater: 6 },
+        14,
+        { compress: 3.2, crater: 4.8 },
         CONT,
         { x: -70, y: 0 },
         0.2,
@@ -304,8 +335,8 @@ const cataclysm: MoveDef = {
         62,
         { kind: 'point', ox: 140, oy: 0, r: 64 },
         C,
-        2000,
-        { crater: 32, compress: 14, shock: 2.2, scatter: 1.6 },
+        1400,
+        { crater: 25.6, compress: 11.2, shock: 1.76, scatter: 1.6 },
         UNBLOCK,
         { x: 500, y: -160 },
         1,
@@ -320,7 +351,7 @@ const cataclysm: MoveDef = {
     /** After the quake each surviving moon is flung at the foe in turn: ticks after the quake between launches. */
     barrage: { from: 66, gap: 10, speed: 11, energy: 520, crater: 14, compress: 7, shock: 1 },
     ctl: { startup: 0.1, active: 0.05, recovery: 0.3 },
-    pose: { startup: { lean: -5 }, active: { lean: 3 } },
+    pose: RIGID,
   },
 };
 
@@ -340,6 +371,12 @@ const guard: MoveDef = {
     },
   },
 };
+
+/** Blocks owned by other tools/specialists, read back from the file on disk. */
+const onDisk = existsSync(PATH)
+  ? (JSON.parse(readFileSync(PATH, 'utf8')) as { moves?: MoveDef[]; balance?: unknown })
+  : {};
+const impact = onDisk.moves?.find((m) => m.id === 'planet.impact') ?? impactFallback;
 
 export const planet: TitanDef = {
   id: 'planet',
@@ -425,5 +462,17 @@ export const planet: TitanDef = {
   ui: { accent: '#58a6d8', accent2: '#e0b06a', tagline: 'All things fall toward me.' },
 };
 
-writeFileSync('src/titans/planet.json', JSON.stringify(planet, null, 2) + '\n');
-console.log('wrote src/titans/planet.json');
+/**
+ * A world neither shears nor recoils like a creature: no row-shear lean of any kind and no lean kick when hit; its angular state
+ * spins freely (no restoring spring) with no drag of its own, because the behaviour owns the spin (its day rate, commitment spin-up
+ * and overshoot) and only folds in the impulse the impact model adds (src/combat/behaviours/planet.ts `stepSpin`).
+ */
+const feel = { recoil: 0, shear: 0, angular: { omega: 0, dragTau: 1000, maxSpin: 6 } };
+
+const out = {
+  ...planet,
+  feel,
+  ...(onDisk.balance !== undefined ? { balance: onDisk.balance } : {}),
+};
+writeFileSync(PATH, JSON.stringify(out, null, 2) + '\n');
+console.log(`wrote ${PATH}`);
