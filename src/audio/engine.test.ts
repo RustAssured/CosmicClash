@@ -4,8 +4,10 @@ import { STAGE_IDS, TITAN_IDS } from '@/contracts';
 import { MODES, STAGE_MUSIC } from './dsp/scales';
 import { createAudioEngine } from './engine';
 import {
+  FakeBiquad,
   FakeContext,
   FakeGain,
+  FakeNode,
   FakeOsc,
   FakeShaper,
   WebAudioViolation,
@@ -191,7 +193,7 @@ describe('lifecycle', () => {
     const n = ctx.nodes.length;
     await eng.unlock();
     expect(ctx.nodes.length).toBe(n);
-    expect(ctx.count('convolver')).toBe(1);
+    expect(ctx.count('convolver')).toBe(2); // the impacts' space and the bed's own (ducked with it)
   });
   it('unlock swallows a missing AudioContext (no WebAudio at all)', async () => {
     const eng = createAudioEngine();
@@ -208,27 +210,111 @@ describe('lifecycle', () => {
 });
 
 describe('master chain (the "nothing clips" guarantee)', () => {
-  it('ends in compressor → 4× oversampled soft limiter → master gain → memoryless hard clip → destination, ceiling ≤ 0.98', async () => {
-    const { ctx } = await ready();
+  it('ends in high-pass → calibration → master → limiter → safety clip → destination; the impacts never pass a compressor', async () => {
+    const { ctx, eng } = await ready();
     const shapers = ctx.nodes.filter((n): n is FakeShaper => n instanceof FakeShaper);
+    // without AudioWorklet (this fake) the limiter falls back to a 4× oversampled soft clip; the last node is a hard clip
     expect(shapers).toHaveLength(2);
-    const [soft, clip] = shapers as [FakeShaper, FakeShaper];
-    expect(soft.oversample).toBe('4x');
-    expect(clip.oversample).toBe('none'); // no oversampling filter, so no ringing past the ceiling
+    const soft = shapers.find((s) => s.oversample === '4x')!;
+    const clip = shapers.find((s) => s.oversample === 'none')!; // no oversampling filter, so no ringing past the ceiling
+    expect(soft).toBeDefined();
+    expect(clip).toBeDefined();
     for (const sh of shapers) {
       let max = 0;
       for (const v of sh.curve!) max = Math.max(max, Math.abs(v));
-      expect(max).toBeLessThanOrEqual(0.98 + 1e-6);
+      expect(max).toBeLessThanOrEqual(Math.pow(10, -1 / 20) + 1e-6); // −1 dBTP ceiling (D6)
     }
-    const comp = ctx.nodes.find((n) => n.kind === 'compressor')!;
-    expect(comp.outputs.has(soft)).toBe(true);
-    // master volume is applied after the dynamics, so it scales a signal that is already safe (and can never push it past the ceiling)
-    const master = [...soft.outputs][0] as FakeGain;
+    // master sits right before the limiter: linear under the ceiling, and nothing (not even master at 100 %) gets past it
+    const master = [...soft.inputs][0] as FakeGain;
     expect(master).toBeInstanceOf(FakeGain);
-    expect(master.outputs.has(clip)).toBe(true);
-    expect(clip.outputs.has(ctx.destination)).toBe(true);
-    // nothing but the final clip feeds the destination
+    expect(soft.inputs.size).toBe(1);
+    expect(soft.outputs.has(clip)).toBe(true);
     expect([...ctx.destination.inputs]).toEqual([clip]);
+    // the output high-pass: two 2nd-order sections at 50 Hz (laptop speakers) ahead of the limiter
+    const hps = ctx.nodes.filter(
+      (n): n is FakeBiquad => n instanceof FakeBiquad && n.type === 'highpass' && n.frequency.value === 50,
+    );
+    expect(hps).toHaveLength(2);
+    expect(hps[0]!.outputs.has(hps[1]!)).toBe(true);
+    // exactly one compressor (the bed glue), and the impact bus does not lead into it
+    const comps = ctx.nodes.filter((n) => n.kind === 'compressor');
+    expect(comps).toHaveLength(1);
+    const taps = eng.taps()!;
+    const reaches = (from: FakeNode, to: FakeNode, seen = new Set<FakeNode>()): boolean => {
+      if (from === to) return true;
+      if (seen.has(from)) return false;
+      seen.add(from);
+      for (const o of from.outputs) if (o instanceof FakeNode && reaches(o, to, seen)) return true;
+      return false;
+    };
+    expect(reaches(taps.sfx as unknown as FakeNode, comps[0]!)).toBe(false);
+    expect(reaches(taps.music as unknown as FakeNode, comps[0]!)).toBe(false); // the bed tap sits AFTER the glue (and the duck)
+    expect(reaches(taps.sfx as unknown as FakeNode, ctx.destination)).toBe(true);
+    expect(reaches(taps.music as unknown as FakeNode, ctx.destination)).toBe(true);
+  });
+  it('ducks the whole bed 4–8 dB for 300–600 ms under heavy blows, a KO and the big rings — never under light ones', async () => {
+    const { eng, ctx } = await ready();
+    const duck = eng.taps()!.music as unknown as FakeGain;
+    const downs = (): number[] =>
+      duck.gain.events.filter((e) => e.type === 'target' && e.v < 1).map((e) => e.v);
+    eng.handleAt(
+      [
+        {
+          t: 'hit',
+          attacker: 0,
+          target: 1,
+          titan: 'planet',
+          x: 800,
+          y: 300,
+          dirX: 1,
+          dirY: 0,
+          type: 'KINETIC',
+          energy: 300,
+          cellsRemoved: 5,
+          massRemoved: 2,
+          blocked: 0,
+          heavy: false,
+          onDamaged: 0,
+        },
+      ],
+      1,
+    );
+    expect(downs()).toHaveLength(0);
+    eng.handleAt(
+      [
+        {
+          t: 'hit',
+          attacker: 0,
+          target: 1,
+          titan: 'planet',
+          x: 800,
+          y: 300,
+          dirX: 1,
+          dirY: 0,
+          type: 'CRUSH',
+          energy: 6000,
+          cellsRemoved: 300,
+          massRemoved: 120,
+          blocked: 0,
+          heavy: true,
+          onDamaged: 0,
+        },
+      ],
+      2,
+    );
+    const d = downs();
+    expect(d).toHaveLength(1);
+    const db = -20 * Math.log10(d[0]!);
+    expect(db).toBeGreaterThanOrEqual(4 - 1e-9);
+    expect(db).toBeLessThanOrEqual(8 + 1e-9);
+    const ev = duck.gain.events.filter((e) => e.type === 'target');
+    const hold = ev[ev.length - 1]!.t - ev[ev.length - 2]!.t;
+    expect(hold).toBeGreaterThanOrEqual(0.24);
+    expect(hold).toBeLessThanOrEqual(0.6);
+    eng.handleAt([{ t: 'ko', slot: 1, x: 800, y: 300 }], 4);
+    expect(-20 * Math.log10(Math.min(...downs()))).toBeCloseTo(8, 5);
+    expect(takeViolations()).toEqual([]);
+    void ctx;
   });
   it('uses one long convolution reverb with a generated (not loaded) impulse response of 3+ seconds', async () => {
     const { ctx } = await ready();

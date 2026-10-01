@@ -117,7 +117,13 @@ export function tone(
   return osc;
 }
 
-/** Sub-bass impact: a sine that drops in pitch, plus a soft click. Never sent to the reverb (the caller's `Out` has wet 0). */
+/**
+ * Low impact: a sine that drops in pitch, its KNOCK, and a soft click. Never sent to the reverb (the caller's `Out` has wet 0).
+ *
+ * Tuned for laptop speakers (D27): the output is high-passed at 50 Hz, and a laptop barely plays anything below ~150 Hz, so the
+ * weight is carried by the knock — the drop's 2nd harmonic (a triangle, so 3rd/5th come with it) and a short band of noise at
+ * 100–200 Hz — while the sine itself is kept lower (on headphones it still adds the floor shake).
+ */
 export function thump(
   c: VoiceCtx,
   o: Out,
@@ -127,8 +133,25 @@ export function thump(
   dur: number,
   gain: number,
 ): void {
-  tone(c, o, t, { f0, f1, dur, gain, attack: 0.003, glide: dur * 0.6 });
-  // a short filtered noise "knock" so the hit reads on small speakers that cannot reproduce the sub
+  tone(c, o, t, { f0, f1, dur, gain: gain * 0.35, attack: 0.003, glide: dur * 0.6 });
+  const kd = Math.min(dur, 0.12 + dur * 0.25);
+  tone(c, o, t, {
+    type: 'triangle',
+    // exactly an octave up: a pitched thump (the score's taiko) stays in key
+    f0: f0 * 2,
+    f1: f1 * 2,
+    dur: kd,
+    gain: gain * 0.42,
+    attack: 0.002,
+    glide: kd * 0.8,
+  });
+  noiseHit(c, o, t, {
+    dur: 0.08,
+    gain: gain * 0.75,
+    filter: { type: 'bandpass', f0: 190, f1: 105, q: 1.1 },
+    kind: 'brown',
+    attack: 0.001,
+  });
   noiseHit(c, o, t, {
     dur: 0.05,
     gain: gain * 0.5,

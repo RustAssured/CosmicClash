@@ -25,9 +25,11 @@ frameRT [MRT] colour(+occlusion α) · emissive        ◄── 2D layers, z-so
    ├─► bloom: dual-filter pyramid (3/4/5 levels from the emissive attachment) ─► half-res, dithered add
    ├─► god rays: radial march (16/28/44 taps) toward the stage light, occluded by layer + dust alpha
    ▼
-post @ 640×360: shockwave refraction ─► chromatic aberration ─► + bloom + rays ─► vignette ─► grain ─► flash
+post @ 640×360: shockwave + local wound refraction ─► lens fringe ─► + bloom + rays ─► vignette ─► grain
    ▼
-final @ canvas: nearest integer upscale + micro-zoom + roll (camera) ─► UI layer composited last, un-zoomed, never bloomed
+luminance governor: 40×23 block sums ─► 1×1 state (300 ms average, rise cap 0.12) ─► gain for the final pass; async PBO read-back
+   ▼
+final @ canvas: nearest integer upscale (push=1: sharp-bilinear zoom ≤ 1.10) + roll ─► governor gain ─► UI composited last, un-zoomed, never bloomed
 ```
 
 * **Scenery is dithered, layers are not.** Titans/debris/particles keep their own colours; only the 3D backdrop is quantised into the stage palette.
@@ -54,7 +56,7 @@ final @ canvas: nearest integer upscale + micro-zoom + roll (camera) ─► UI l
 ## `FrameFx` (contracts/render.ts)
 
 Positions are **world** coordinates (converted with the frame's view). Shockwaves refract everything composited so far (ring width grows with radius) *and* push the scenery; impulses swirl and warm
-the scenery; lenses (≤ 4) bend the **scenery only** (Einstein-ring mapping, θE = 0.9…1.8 × `horizonR`); `flash` whitens; `aberration` widens the chromatic fringe; `intensity` brightens the scene, tightens the
+the scenery; lenses (≤ 4) bend the **scenery only** (Einstein-ring mapping, θE = 0.9…1.8 × `horizonR`); **D5: nothing washes the frame** — `flash` is informational, light from impacts arrives as `lights` of `kind: 'impact'` (local, they tint the gas and relight the faces turned to them, never own a sprite), and `aberration` is the strength of a LOCAL lens refraction around those impact lights; `intensity` (slew-limited by FxState) nudges exposure (≤ +6 %), tightens the
 stage and speeds its flow; `timeScale` slows the scenery clock with the sim (KO slow-mo). Limits: 8 shockwaves, 6 impulses, 4 lenses.
 
 ## Fighter readability

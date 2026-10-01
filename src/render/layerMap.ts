@@ -103,7 +103,9 @@ export function placeLayer(
 
 /**
  * Source cell for the screen pixel (px, py) (integer, view-relative). Returns false when the pixel falls outside the
- * sprite. Uses float32 arithmetic (Math.fround) for the lean division so it matches the GPU bit for bit.
+ * sprite. Uses float32 arithmetic (Math.fround) like the GPU, and the same exactness fix-up after the lean division: a GPU's
+ * float division may be an ulp off (ANGLE/D3D11 on WJ's Vega measured 57 mismatched pixels at exact .5 shifts), so the
+ * rounded quotient is corrected with two multiplications, which are exact for pixel-sized values.
  */
 export function sourceCell(
   p: LayerPlacement,
@@ -119,9 +121,11 @@ export function sourceCell(
   }
   const ly = py - p.ay + p.anchorY;
   if (ly < 0 || ly >= p.h) return false;
-  const shift = Math.floor(
-    Math.fround(Math.fround(p.lean * (p.anchorY - ly)) / Math.max(1, p.anchorY)) + 0.5,
-  );
+  const num = Math.fround(p.lean * (p.anchorY - ly));
+  const den = Math.max(1, p.anchorY);
+  let shift = Math.floor(Math.fround(num / den) + 0.5);
+  if (Math.fround((shift - 0.5) * den) > num) shift -= 1;
+  else if (Math.fround((shift + 0.5) * den) <= num) shift += 1;
   const d = px - p.ax - shift;
   const lx = p.facing > 0 ? d + p.anchorX : p.anchorX - 1 - d;
   if (lx < 0 || lx >= p.w) return false;

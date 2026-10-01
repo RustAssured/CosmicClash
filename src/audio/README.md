@@ -25,23 +25,24 @@ skips the compressor and the limiters so a test can show that a storm would clip
 
 Wiring (what the app calls when) is in `docs/proposals/400-b4-ui-input-audio-wiring.md`; `dev/ui/main.ts` is a working example.
 
-## Signal path
+## Signal path (D6, slice Phase 1)
 
 ```
-voices ─ per-voice pan + dry ─► sfx bus ───┐                         ┌─ dry ─┐
-       └ reverb send (long dark IR) ─►     ├─► mix ─► high-pass 22 Hz ─► compressor ─► soft limiter (4× oversampled) ─► MASTER ─► hard clip ─► speakers
-score ─► music bus ─► (+ send) ────────────┘
-                              wet: one ConvolverNode, procedural IR (RT60 3.4 s, decorrelated stereo, dark, energy-normalised), send high-passed at 140 Hz
+impact voices ─► IMPACT bus (sfx fader) ───────────────────────────────┐
+     └ sends ─► space reverb (return 0.75) ────────────────────────────┤
+ui sounds ─► UI bus (sfx fader, −9 dB) ────────────────────────────────┤
+titan beds (sfx fader) ┐                                               ├─► mix ─► HP 50 Hz (24 dB/oct) ─► calibration +11.5 dB
+score (music fader) ───┼─► BED bus (−4.5 dB) ─► glue 2:1 ─► DUCK ──────┘      ─► MASTER ─► TRUE-PEAK LIMITER (−1 dBTP) ─► clip
+bed sends ─► bed reverb┘
 ```
 
-- **Master volume is after the dynamics.** Before them, a ratio-5 compressor flattened the level the player asked for (master at
-  ½ changed a hit by −1.3 dB); now ½ is −11.5 dB, and because master ≤ 1 it can never push the limiter's output past its ceiling.
-- **Nothing clips.** Soft limiter: linear to 0.72, then a `tanh` shoulder asymptoting to 0.98 (`limiterCurve`), at 4× oversampling.
-  The oversampler's down-sampling filter can overshoot its own ceiling by ~1 dB on a hard-clipped signal, so the last node is a
-  memoryless, non-oversampled hard clip at 0.98 (`hardClipCurve`): it can only ever touch those rare overshoots.
-- **Polyphony cap** (28 concurrent one-shots; low-priority sounds are shed first, KO and ultimates never are), a look-ahead of 6 ms so
-  start times are exact, and a ducking dip on the music bus for hits and hit-stop so impacts read louder without raising master.
-
+- **Impacts never pass a compressor**; only the bed is glued (2:1 at −18 dB, its automatic makeup gain taken back).
+- **Bed duck**: 4–8 dB for 300–600 ms under heavy blows, the KO and the big rings (Planet quake, moon slams, nova).
+- **The score breathes**: −15 dB at neutral, full when a fighter commits (wind-up, charge, strike) or the fight heats up.
+- **Laptop speakers (D27)**: the output is high-passed at 50 Hz; `thump`'s weight is its 80–250 Hz knock (an octave triangle plus band noise).
+- **Limiter**: `worklets/limiter.ts`, lookahead 2.5 ms, 4× true-peak detection, a sliding-minimum/moving-average gain (no clicks), release 120 ms. Its core class is the exact code the AudioWorklet runs (stringified), unit-tested in Node. Master sits before it: linear under the ceiling, nothing passes it.
+- **Measured** (`npx tsx tools/ui/audio-verify.ts --round`, a scripted 60 s Witness-vs-Planet round, BS.1770 via `src/telemetry/loudness.ts`): −20.2 LUFS integrated, −1.2 dBTP, LRA 11.7 LU, heavy blows 18.8 dB over the bed (short-term, median), bed duck 5.3 dB for 400 ms, limiter 2–5 dB on heavy blows.
+- `taps()`: `output` = speakers, `music` = the whole bed after its duck, `sfx` = the impact bus.
 ## Voices (`voices/`)
 
 | File | |

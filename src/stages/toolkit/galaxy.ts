@@ -69,7 +69,7 @@ if (c.x + ext < -8.0 || c.y + ext < -8.0 || c.x - ext > uRes.x + 8.0 || c.y - ex
   vLocal = vec2(0.0); vG1 = vec4(0.0); vCore = vec4(0.0); vArm = vec4(0.0); vKnot = vec4(0.0); vMid = vec3(0.0); vR = 1.0; vSeed = 0.0;
   return;
 }
-gl_Position = toNdc(c + off);
+gl_Position = toNdc(camWarp(c, par) + off * camScale(par));
 vLocal = off;
 vG1 = aG1;
 vCore = aG2;
@@ -236,7 +236,7 @@ if (c.x < -size - 4.0 || c.y < -size - 4.0 || c.x > uRes.x + size + 4.0 || c.y >
   vQ = vec2(0.0); vCol = vec4(0.0);
   return;
 }
-gl_Position = toNdc(c + position.xy * size);
+gl_Position = toNdc(camWarp(c, par) + position.xy * size * camScale(par));
 vQ = position.xy;
 float tw = 1.0 + uTwinkle * sin(uTime * (1.0 + aS1.w * 2.5) + aS1.w * 71.0);
 vCol = vec4(aS2.rgb * (1.0 + 0.25 * depth) * tw, aS2.a);

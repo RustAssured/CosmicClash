@@ -88,6 +88,9 @@ export interface KitUniforms {
   uImp: IUniform<Float32Array>;
   uImp2: IUniform<Float32Array>;
   uNImp: IUniform<number>;
+  uGlowK: IUniform<number>;
+  uDolly: IUniform<number>;
+  uKick: IUniform<Vector2>;
   uNoise: IUniform<Texture>;
 }
 
@@ -113,8 +116,10 @@ void main() {
   vec2 c = aPos.xy - uView * par;
   if (uDrift > 0.0) c += curl2(aPos.xy * uDriftFreq + uFlow * uDriftSpeed * vec2(0.7, 0.4)) * uDrift;
   c = warpByForces(c, uForceK);
+  c = camWarp(c, par);
+  float zs = camScale(par);
   if (uSnap > 0.5) c = floor(c) + 0.5;
-  float ext = max(aShape.x, aShape.y) * 1.5 + 4.0;
+  float ext = max(aShape.x, aShape.y) * 1.5 * zs + 4.0;
   if (c.x < -ext || c.y < -ext || c.x > uRes.x + ext || c.y > uRes.y + ext) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     vQ = vec2(0.0); vColor = vec4(0.0); vSeed = 0.0; vHalf = 1.0;
@@ -123,14 +128,14 @@ void main() {
   float cs = cos(aShape.z);
   float sn = sin(aShape.z);
   vec2 q = position.xy;
-  vec2 off = vec2(q.x * aShape.x * cs - q.y * aShape.y * sn, q.x * aShape.x * sn + q.y * aShape.y * cs);
+  vec2 off = vec2(q.x * aShape.x * cs - q.y * aShape.y * sn, q.x * aShape.x * sn + q.y * aShape.y * cs) * zs;
   vec2 p = c + off;
   gl_Position = vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0);
   vQ = q;
   float tw = 1.0 + uTwinkle * sin(uTime * (1.2 + aPos.w * 2.6) + aPos.w * 90.0);
   vColor = vec4(aColor.rgb * tw, aColor.a);
   vSeed = aPos.w;
-  vHalf = max(aShape.x, aShape.y);
+  vHalf = max(aShape.x, aShape.y) * zs;
 }
 `;
 
@@ -194,9 +199,13 @@ uniform float uParallax;
 uniform vec2 uView;
 uniform vec2 uRes;
 uniform float uPad;       // extra px around the rect so force displacement never reveals the edge
+uniform float uDolly;     // camera push-in and impact kick (the vertex twin of camWarp in FORCES_GLSL)
+uniform vec2 uKick;
 out vec2 vScreen;
 void main() {
   vec2 s = uRect.xy - floor(uView * uParallax + 0.5) + (position.xy * 2.0 - 1.0) * uPad + position.xy * uRect.zw;
+  s += uKick * (uParallax - 1.0);
+  s = uRes * 0.5 + (s - uRes * 0.5) * ((1.0 - uDolly) / (1.0 - clamp(uParallax, 0.0, 2.2) * uDolly));
   vScreen = s;
   gl_Position = vec4(s.x / uRes.x * 2.0 - 1.0, 1.0 - s.y / uRes.y * 2.0, 0.0, 1.0);
 }
@@ -339,6 +348,9 @@ export class SceneryKit {
       uImp: { value: new Float32Array(MAX_IMPULSES * 4) },
       uImp2: { value: new Float32Array(MAX_IMPULSES * 4) },
       uNImp: { value: 0 },
+      uGlowK: { value: 1 },
+      uDolly: { value: 0 },
+      uKick: { value: new Vector2(0, 0) },
       uNoise: { value: this.noiseTex },
     };
   }
@@ -547,7 +559,8 @@ ${o.fragment}
 in vec2 vUv;
 out vec4 o;
 uniform float uParallax;
-vec2 screenPx() { return vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y); }
+// The layer-screen position of this pixel (camera dolly / kick undone, so the layer's content scales with its depth).
+vec2 screenPx() { return camUnwarp(vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y), uParallax); }
 ${fragment}`,
       uniforms,
       depthTest: false,
@@ -615,7 +628,7 @@ uniform float uForceK;
 uniform sampler2D uMap;
 // Sample the baked map at a screen position after undoing the fight displacement. Outside the rect → transparent.
 vec4 sampleMap(vec2 sp) {
-  vec2 q = warpByForces(sp, -uForceK);
+  vec2 q = warpByForces(camUnwarp(sp, uParallax), -uForceK);
   vec2 lp = q + floor(uView * uParallax + 0.5) - uRect.xy;
   vec2 uv = lp / uRect.zw;
   if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return vec4(0.0);
@@ -706,6 +719,9 @@ ${opts.fragment}`;
     u.uImp.value.set(f.forces.impulse);
     u.uImp2.value.set(f.forces.impulse2);
     u.uNImp.value = f.forces.nImpulse;
+    u.uGlowK.value = f.comfort;
+    u.uDolly.value = f.cam.dolly;
+    u.uKick.value.set(f.cam.kickX, f.cam.kickY);
   }
 
   render(renderer: SceneryInit['renderer'], target: WebGLRenderTarget): void {

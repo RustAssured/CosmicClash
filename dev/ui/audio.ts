@@ -10,6 +10,7 @@ import {
 } from '@/contracts';
 import { createAudioEngine } from '@/audio/engine';
 import { runVerification, type VerifyReport } from './audio-verify';
+import { runRoundVerification, type RoundReport } from './audio-round';
 import { runStageVerification, type StageReport } from './audio-stages';
 import { runBodyCharacter, runTitanVerification, type TitanReport } from './audio-titans';
 
@@ -25,6 +26,7 @@ declare global {
     __titans?: TitanReport;
     __stages?: StageReport;
     __body?: Awaited<ReturnType<typeof runBodyCharacter>>;
+    __round?: RoundReport;
     __audio?: ReturnType<typeof createAudioEngine>;
     /** Largest level seen by the meter since the page loaded, before and after the limiter. */
     __meter?: { maxPre: number; maxPost: number };
@@ -429,12 +431,15 @@ requestAnimationFrame(frame);
 const runBtn = $<HTMLButtonElement>('verify');
 const reportEl = $<HTMLPreElement>('report');
 const stateEl = $('verifyState');
-async function verify(mode: 'full' | 'quick' | 'titans' | 'stages' | 'body' = 'full'): Promise<void> {
+async function verify(
+  mode: 'full' | 'quick' | 'titans' | 'stages' | 'body' | 'round' = 'full',
+): Promise<void> {
   stateEl.textContent = 'rendering…';
   runBtn.disabled = true;
   try {
     let out: unknown;
     if (mode === 'body') out = window.__body = await runBodyCharacter();
+    else if (mode === 'round') out = window.__round = await runRoundVerification();
     else if (mode === 'titans') out = window.__titans = await runTitanVerification();
     else if (mode === 'stages') out = window.__stages = await runStageVerification();
     else {
@@ -455,4 +460,8 @@ runBtn.addEventListener('click', () => void verify());
 const q = new URLSearchParams(location.search);
 const mode = q.get('verify');
 if (q.has('verify'))
-  void verify(mode === 'quick' || mode === 'titans' || mode === 'stages' || mode === 'body' ? mode : 'full');
+  void verify(
+    mode === 'quick' || mode === 'titans' || mode === 'stages' || mode === 'body' || mode === 'round'
+      ? mode
+      : 'full',
+  );

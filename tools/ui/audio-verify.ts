@@ -4,6 +4,7 @@ import type { VerifyReport } from '../../dev/ui/audio-verify';
 import type { TitanReport } from '../../dev/ui/audio-titans';
 import type { StageReport } from '../../dev/ui/audio-stages';
 import type { EventMetric } from '../../dev/ui/audio-render';
+import type { RoundReport } from '../../dev/ui/audio-round';
 
 /**
  * Run the audio engine's OfflineAudioContext verification in headless Chromium and print the measurements.
@@ -12,18 +13,22 @@ import type { EventMetric } from '../../dev/ui/audio-render';
  *   --titans  the four newer titans: events, character, and their continuous voices' behaviours
  *   --stages  the five stage scores: character, key, rhythm
  *   --body    just each titan's voice-only body character (seconds): the loop for tuning materials
+ *   --round   D6: one scripted Witness-vs-Planet round through the real engine, measured like telemetry (LUFS, dBTP, LRA,
+ *             impact over bed, bed duck); exit 1 if a D6 target is missed
  * Exit code 1 if the page errored or the report is missing.
  */
 const json = process.argv.includes('--json');
-const mode = process.argv.includes('--body')
-  ? 'body'
-  : process.argv.includes('--titans')
-    ? 'titans'
-    : process.argv.includes('--stages')
-      ? 'stages'
-      : process.argv.includes('--quick')
-        ? 'quick'
-        : '1';
+const mode = process.argv.includes('--round')
+  ? 'round'
+  : process.argv.includes('--body')
+    ? 'body'
+    : process.argv.includes('--titans')
+      ? 'titans'
+      : process.argv.includes('--stages')
+        ? 'stages'
+        : process.argv.includes('--quick')
+          ? 'quick'
+          : '1';
 const { server, url } = await startDevServer();
 const browser = await launch();
 let code = 0;
@@ -44,10 +49,27 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    // a missing favicon is the dev server's business, not the engine's
+    if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text());
   });
   await page.goto(`${url}/dev/ui/audio.html?verify=${mode}`);
-  if (mode === 'body') {
+  if (mode === 'round') {
+    await page.waitForFunction(() => window.__round !== undefined, null, { timeout: 600_000 });
+    const r = (await page.evaluate(() => window.__round)) as RoundReport;
+    console.log(JSON.stringify(r, null, json ? 2 : undefined));
+    const miss: string[] = [];
+    if (r.integrated < -21 || r.integrated > -19)
+      miss.push(`integrated ${r.integrated} LUFS (target −20 ± 1)`);
+    if (r.truePeak > -1) miss.push(`true peak ${r.truePeak} dBTP (> −1)`);
+    if (r.range < 10) miss.push(`LRA ${r.range} LU (< 10)`);
+    if (r.median.overShort < 10) miss.push(`impact over bed (short-term) ${r.median.overShort} dB (< 10)`);
+    if (r.median.duck < 4 || r.median.duck > 8) miss.push(`bed duck ${r.median.duck} dB (outside 4–8)`);
+    if (r.nonFinite) miss.push(`non-finite samples ${r.nonFinite}`);
+    if (miss.length) {
+      console.error(`D6 targets missed: ${miss.join('; ')}`);
+      code = 1;
+    }
+  } else if (mode === 'body') {
     await page.waitForFunction(() => window.__body !== undefined, null, { timeout: 120_000 });
     console.table(await page.evaluate(() => window.__body));
   } else if (mode === 'titans') {

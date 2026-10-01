@@ -7,11 +7,21 @@ import {
   type BodyTransform,
   type CameraState,
   type FrameFx,
+  type MatchApi,
   type RenderFrame,
+  type SimEvent,
   type RenderLayer,
   type ViewRect,
 } from '@/contracts';
-import { createRenderer } from '@/render';
+import { WebGLRenderer } from 'three';
+import { createRenderer, type DebuggableRenderer } from '@/render';
+import { makeRT } from '@/render/gl';
+import { GpuTimer } from '@/render/gpuTimer';
+import { ANGLE_STEPS, rotRaster, type RotPart } from '@/render/rotsprite';
+import { RotSpritePass } from '@/render/rotspritePass';
+import { FxState } from '@/app/fx';
+import { createMatch } from '@/sim';
+import { fakeDeps } from '@/sim/testing/fakes';
 import { makeRockBody } from './testSprites';
 import { contractCell, makePlacement, placeLayer, sourceCell } from '@/render/layerMap';
 
@@ -119,13 +129,451 @@ const meanAbsDiff = (
   return sum / n;
 };
 
+/** Mean relative luminance (Rec. 709 on linearised sRGB, 0..1) of a captured frame: the measure telemetry uses for flashes. */
+const lin8 = (c: number): number => {
+  const v = c / 255;
+  return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+};
+const meanLuminance = (a: Uint32Array): number => {
+  let s = 0;
+  for (let i = 0; i < a.length; i++) {
+    const p = a[i]!;
+    s += 0.2126 * lin8(p & 255) + 0.7152 * lin8((p >>> 8) & 255) + 0.0722 * lin8((p >>> 16) & 255);
+  }
+  return s / a.length;
+};
+/** An impact light (D5) at a WORLD point. */
+const impactLight = (
+  x: number,
+  y: number,
+  radius: number,
+  intensity: number,
+  c: [number, number, number] = [1, 0.93, 0.82],
+): NonNullable<FrameFx['lights']>[number] => ({
+  x,
+  y,
+  radius,
+  r: c[0],
+  g: c[1],
+  b: c[2],
+  intensity,
+  slot: -1,
+  kind: 'impact',
+});
+/** The slice's renderer checks (D5 flashes, sprite push, governor): also runnable alone with `?only=d5`. */
+async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Promise<void> {
+  /* ---------- 10b. sprite push (push=1 A/B, D27): off = sprites 1:1 under zoom; on = sharp-bilinear resampling ---------- */
+  {
+    const bg = blackBackdrop();
+    const A = rgba(210, 200, 60, 255);
+    const B = rgba(30, 70, 140, 255);
+    const chk = makeLayer('pushchk', 'screen', -10, LOGICAL_W, LOGICAL_H);
+    for (let y = 0; y < LOGICAL_H; y++)
+      for (let x = 0; x < LOGICAL_W; x++) chk.pixels[y * LOGICAL_W + x] = ((x >> 3) + (y >> 3)) & 1 ? A : B;
+    chk.version = 1;
+    const c2 = document.createElement('canvas');
+    c2.width = canvas.width;
+    c2.height = canvas.height;
+    const ctx = c2.getContext('2d', { willReadFrequently: true })!;
+    const grab = (): Uint8ClampedArray => {
+      ctx.drawImage(canvas, 0, 0);
+      return ctx.getImageData(0, 0, c2.width, c2.height).data;
+    };
+    r.draw(frameOf([bg, chk], { tick: 1100 }));
+    const flatPx = grab();
+    const flatLogical = r.captureLogical();
+    r.draw(frameOf([bg, chk], { tick: 1100, camera: cam({ zoom: 1.06 }) }));
+    const zoomedOff = grab();
+    let diffOff = 0;
+    for (let i = 0; i < flatPx.length; i += 4 * 97) if (flatPx[i] !== zoomedOff[i]) diffOff++;
+    check(
+      'without push=1 a camera zoom never resamples the sprites (1:1 pixels)',
+      diffOff === 0,
+      `${diffOff} differ`,
+    );
+    r.debugSetSpritePush(true);
+    r.draw(frameOf([bg, chk], { tick: 1100, camera: cam({ zoom: 1.08 }) }));
+    const pushed = grab();
+    r.debugSetSpritePush(false);
+    let diffOn = 0;
+    let clean = 0;
+    let n = 0;
+    const near = (i: number, c: number): boolean =>
+      Math.max(
+        Math.abs(pushed[i]! - (c & 255)),
+        Math.abs(pushed[i + 1]! - ((c >>> 8) & 255)),
+        Math.abs(pushed[i + 2]! - ((c >>> 16) & 255)),
+      ) <= 14;
+    const lay = r.debugLayout();
+    const zoom = 1.08;
+    for (let y = lay.y + 40; y < lay.y + lay.h - 40; y += 5)
+      for (let x = lay.x + 40; x < lay.x + lay.w - 40; x += 5) {
+        const i = (y * c2.width + x) * 4;
+        n++;
+        if (pushed[i] !== flatPx[i]) diffOn++;
+        // the source pixel this canvas pixel shows under the push: unblended = that pixel's own colour
+        const lx = Math.floor(LOGICAL_W / 2 + ((x - lay.x + 0.5) / lay.scale - LOGICAL_W / 2) / zoom);
+        const ly = Math.floor(LOGICAL_H / 2 + ((y - lay.y + 0.5) / lay.scale - LOGICAL_H / 2) / zoom);
+        if (near(i, flatLogical[ly * LOGICAL_W + lx]!)) clean++;
+      }
+    check(
+      'push=1: zoom pushes the frame in with sharp-bilinear edges (pixels stay flat inside, ≥ 80 % unblended)',
+      diffOn > n * 0.2 && clean / n >= 0.8,
+      `${diffOn}/${n} moved, ${((100 * clean) / n).toFixed(1)} % unblended`,
+    );
+  }
+
+  /* ---------- 10b2. camera dolly + kick move the SCENERY by depth; sprites stay 1:1 (D27) ---------- */
+  {
+    const body = makeRockBody('dolly-rock', 5);
+    const rock = body.layer;
+    Object.assign(rock, { x: 620, y: 280, prevX: 620, prevY: 280, anchorX: 64, anchorY: 64 });
+    r.draw(frameOf([rock], { tick: 1400 }));
+    const still = r.captureLogical();
+    r.draw(frameOf([rock], { tick: 1400, camera: cam({ dolly: 1, kickX: 8, kickY: -4 }) }));
+    const pushed = r.captureLogical();
+    // sprite interior (opaque, ≥ 3 px from its edge): unchanged up to a few levels of glow spill
+    const sx0 = 620 - 64 - view.x0;
+    const sy0 = 280 - 64 - view.y0;
+    const opaque = (x: number, y: number): boolean =>
+      x >= 0 && y >= 0 && x < rock.w && y < rock.h && rock.pixels[y * rock.w + x]! >>> 24 === 255;
+    let inside = 0;
+    let moved = 0;
+    for (let y = 3; y < rock.h - 3; y++)
+      for (let x = 3; x < rock.w - 3; x++) {
+        if (!(opaque(x, y) && opaque(x - 3, y) && opaque(x + 3, y) && opaque(x, y - 3) && opaque(x, y + 3)))
+          continue;
+        inside++;
+        const i = (sy0 + y) * LOGICAL_W + sx0 + x;
+        const a = still[i]!;
+        const b = pushed[i]!;
+        for (let k = 0; k < 24; k += 8) if (Math.abs(((a >>> k) & 255) - ((b >>> k) & 255)) > 3) moved++;
+      }
+    const scenery =
+      meanAbsDiff(still, pushed, 0, 0, 200, 100) + meanAbsDiff(still, pushed, 460, 260, 640, 360);
+    check(
+      'camera dolly + kick move the scenery but never a sprite (sprites stay 1:1)',
+      inside > 2000 && moved === 0 && scenery > 0.5,
+      `${inside} interior sprite pixels, ${moved} channel changes > 3; scenery corners Δ ${scenery.toFixed(2)}`,
+    );
+  }
+
+  /* ---------- 10e. rotation spike: GPU clean-edge sampler = CPU twin at EVERY quantised angle (dense grid), and its cost ---------- */
+  {
+    const glc = document.createElement('canvas');
+    glc.width = 64;
+    glc.height = 64;
+    const three = new WebGLRenderer({ canvas: glc, antialias: false, alpha: true });
+    const w = 48;
+    const h = 70;
+    const px = new Uint32Array(w * h);
+    const rng = new Rng(77);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const blob = ((x - 24) / 22) ** 2 + ((y - 35) / 33) ** 2 < 1 && !((x - 30) ** 2 + (y - 20) ** 2 < 30);
+        if (blob) px[y * w + x] = rgba(60 + ((x * 7) & 63), 120 + ((y * 5) & 63), 200, 255);
+      }
+    for (let i = 0; i < 40; i++) px[rng.int(w * h)] = rgba(250, 240, 120, 255); // speckles: the hardest case
+    const pass = new RotSpritePass(256, 256);
+    const part0: RotPart = { pixels: px, w, h, px: 21, py: 50, step: 0 };
+    const tex = pass.texture(part0);
+    const rt = makeRT(256, 256, { filter: 'nearest' });
+    const bytes = new Uint8Array(256 * 256 * 4);
+    let worst = 0;
+    let mismatches = 0;
+    let pixels = 0;
+    for (let step = 0; step < ANGLE_STEPS; step++) {
+      const part = { ...part0, step };
+      three.setRenderTarget(rt);
+      three.setClearColor(0x000000, 0);
+      three.clear(true, false, false);
+      pass.draw(three, rt, [{ part, tex, qx: 128, qy: 128 }]);
+      three.readRenderTargetPixels(rt, 0, 0, 256, 256, bytes);
+      const got = new Uint32Array(bytes.buffer);
+      const cpu = rotRaster(part);
+      let bad = 0;
+      for (let y = 0; y < 256; y++)
+        for (let x = 0; x < 256; x++) {
+          const g = got[(255 - y) * 256 + x]! >>> 0;
+          const lx = x - 128 + cpu.ox;
+          const ly = y - 128 + cpu.oy;
+          const want =
+            lx >= 0 && ly >= 0 && lx < cpu.w && ly < cpu.h ? cpu.pixels[ly * cpu.w + lx]! >>> 0 : 0;
+          pixels++;
+          if ((g >>> 24 === 0 ? 0 : g) !== want) bad++;
+        }
+      mismatches += bad;
+      worst = Math.max(worst, bad);
+    }
+    check(
+      `rotation spike: GPU sampler = CPU twin, pixel for pixel, at all ${ANGLE_STEPS} quantised angles`,
+      mismatches === 0,
+      `${mismatches} mismatching of ${pixels} pixels (worst angle ${worst})`,
+    );
+    // cost: 24 parts (64×96, the size of a Witness arm segment) at random angles into a 640×360 target
+    const big = new RotSpritePass(LOGICAL_W, LOGICAL_H);
+    const pw = 64;
+    const ph = 96;
+    const ppx = new Uint32Array(pw * ph).fill(rgba(180, 200, 190, 255));
+    const bigPart: RotPart = { pixels: ppx, w: pw, h: ph, px: 32, py: 80, step: 0 };
+    const bigTex = big.texture(bigPart);
+    const target = makeRT(LOGICAL_W, LOGICAL_H, { filter: 'nearest' });
+    const parts = Array.from({ length: 24 }, (_, i) => ({
+      part: { ...bigPart, step: rng.int(ANGLE_STEPS) },
+      tex: bigTex,
+      qx: 40 + ((i * 97) % 560),
+      qy: 60 + ((i * 53) % 240),
+    }));
+    const gl = three.getContext() as WebGL2RenderingContext;
+    const one = new Uint8Array(4);
+    const time = (n: number): number => {
+      const a = performance.now();
+      for (let i = 0; i < n; i++) big.draw(three, target, parts);
+      three.readRenderTargetPixels(target, 0, 0, 1, 1, one); // waits for the GPU
+      gl.finish();
+      return (performance.now() - a) / n;
+    };
+    time(5);
+    const msWall = time(60);
+    // GPU-only time from the timer query (Chromium on a real GPU), 20 frames in one query
+    let msGpu: number | null = null;
+    const timer = GpuTimer.create(gl);
+    if (timer) {
+      timer.begin();
+      for (let i = 0; i < 20; i++) big.draw(three, target, parts);
+      timer.end();
+      for (let k = 0; k < 100 && msGpu === null; k++) {
+        await new Promise((res) => setTimeout(res, 10));
+        const v = timer.poll();
+        if (v !== null) msGpu = v / 20;
+      }
+    }
+    const c0 = performance.now();
+    for (let i = 0; i < 24; i++) rotRaster({ ...bigPart, step: (i * 11) % ANGLE_STEPS });
+    const msCpu = (performance.now() - c0) / 24;
+    check(
+      'rotation spike: cost of 24 rotated 64×96 parts per frame (GPU) and of one CPU-twin mask (64×96)',
+      (msGpu ?? msWall) < 4,
+      `GPU ${msGpu === null ? 'n/a' : msGpu.toFixed(3)} ms per frame of 24 parts (timer query), wall ${msWall.toFixed(2)} ms incl. read-back sync; CPU twin ${msCpu.toFixed(2)} ms per mask`,
+    );
+    pass.dispose();
+    big.dispose();
+    tex.dispose();
+    bigTex.dispose();
+    rt.dispose();
+    target.dispose();
+    three.dispose();
+    three.forceContextLoss();
+  }
+
+  /* ---------- 10c. D5: a KO is local light + refraction, never a wash; the luminance governor caps the rest ---------- */
+  {
+    const rock = makeRockBody('ko-rock', 1).layer;
+    Object.assign(rock, { x: 620, y: 280, prevX: 620, prevY: 280, anchorX: 64, anchorY: 64 });
+    r.draw(frameOf([rock], { tick: 1200 }));
+    const calm = r.captureLogical();
+    const ko = noFx();
+    ko.lights = [impactLight(620, 280, 200, 1.6, [0.62, 0.95, 0.88])];
+    ko.aberration = 1;
+    ko.shockwaves.push({ x: 620, y: 280, age: 0.15, radius: 140, strength: 1 });
+    r.draw(frameOf([rock], { tick: 1200, fx: ko }));
+    const koFrame = r.captureLogical();
+    const dKo = Math.abs(meanLuminance(koFrame) - meanLuminance(calm));
+    const corner = meanAbsDiff(calm, koFrame, 0, 0, 80, 60);
+    check(
+      'KO (impact light 1.6 + refraction + ring) changes full-frame mean luminance by ≤ 0.20, governor OFF',
+      dKo <= 0.2 && corner < 1.5,
+      `Δ mean ${dKo.toFixed(4)} (target ≤ 0.20), far-corner diff ${corner.toFixed(2)}`,
+    );
+
+    // governor: a black frame, then the worst case — a full-frame white emissive layer appears in one frame
+    r.debugSetGovernor(true);
+    r.debugLumaReadback(true);
+    r.drainLuma();
+    const bg = blackBackdrop();
+    const white = makeLayer('white', 'screen', -10, LOGICAL_W, LOGICAL_H);
+    white.pixels.fill(rgba(255, 255, 255, 255));
+    white.emissive = new Uint8Array(LOGICAL_W * LOGICAL_H).fill(255);
+    white.version = 1;
+    let ts = 20;
+    const L: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      ts += 1 / 60;
+      r.draw(frameOf([bg], { tick: 1300, timeSec: ts }));
+    }
+    L.push(meanLuminance(r.captureLogical()));
+    for (let i = 0; i < 90; i++) {
+      ts += 1 / 60;
+      r.draw(frameOf([bg, white], { tick: 1300, timeSec: ts }));
+      L.push(meanLuminance(r.captureLogical()));
+      // WebGL fences only update once control returns to the event loop (as between real frames)
+      await new Promise((res) => setTimeout(res, 0));
+    }
+    let worst = 0;
+    for (let i = 1; i < L.length; i++)
+      for (let k = 1; k <= 6 && i - k >= 0; k++) worst = Math.max(worst, Math.abs(L[i]! - L[i - k]!));
+    check(
+      'governor: black → full-frame white emissive in one frame stays ≤ 0.20 change within 100 ms',
+      worst <= 0.2 && L[L.length - 1]! > L[0]! + 0.3,
+      `max Δ within 6 frames ${worst.toFixed(3)}, from ${L[0]!.toFixed(3)} to ${L[L.length - 1]!.toFixed(3)} after 1.5 s`,
+    );
+    const samples = r.drainLuma();
+    const health = r.debugLumaReadback(false);
+    check(
+      'governor: its mean luminance is read back asynchronously (stats.luma / drainLuma)',
+      samples.length > 0 &&
+        r.stats.luma !== null &&
+        samples.some((s) => s.gain < 0.99) &&
+        health.errors.length === 0,
+      `${samples.length} samples (${health.skipped} skipped, collect ≤ ${health.pollMs.toFixed(2)} ms CPU), newest ${JSON.stringify(r.stats.luma)}${
+        health.errors.length ? `, GL errors ${health.errors.join('; ')}` : ''
+      }`,
+    );
+    r.debugSetGovernor(false);
+  }
+  /* ---------- 10d. D5 scripted fight on the brightest stage: heavy hits every 0.4 s, then a KO in slow motion ---------- */
+  {
+    r.setStage('nursery');
+    const m = createMatch(
+      {
+        seed: 3,
+        stage: 'nursery',
+        mode: 'versus',
+        slots: [
+          { titan: 'lastone', controller: 'dummy' },
+          { titan: 'planet', controller: 'dummy' },
+        ],
+      },
+      fakeDeps(),
+    );
+    const v0 = m.fighters[0].view;
+    const v1 = m.fighters[1].view;
+    const mid = { x: (v0.x + v1.x) / 2, y: (v0.y + v1.y) / 2 };
+    const fightView: ViewRect = {
+      x0: Math.round(mid.x - 320),
+      y0: Math.round(mid.y - 180),
+      w: LOGICAL_W,
+      h: LOGICAL_H,
+    };
+    const bodyA = makeRockBody('fA', 11, 110, 'celadon').layer;
+    const bodyB = makeRockBody('fB', 12, 120, 'rock').layer;
+    Object.assign(bodyA, { x: v0.x, y: v0.y, prevX: v0.x, prevY: v0.y, anchorX: 55, anchorY: 55 });
+    Object.assign(bodyB, { x: v1.x, y: v1.y, prevX: v1.x, prevY: v1.y, anchorX: 60, anchorY: 60 });
+    const run = (governor: boolean): { maxD: number; flashesPerSec: number } => {
+      r.debugSetGovernor(governor);
+      const fx = new FxState();
+      let ts = 100;
+      let acc = 0;
+      let simTick = 0;
+      let scale = 1;
+      let slowLeft = 0;
+      const L: number[] = [];
+      for (let frame = 0; frame < 300; frame++) {
+        acc += scale;
+        while (acc >= 1) {
+          acc -= 1;
+          simTick++;
+          const ev: SimEvent[] = [];
+          const hx = v1.x - 30;
+          if (simTick % 24 === 0 && simTick < 150)
+            ev.push(
+              {
+                t: 'hit',
+                attacker: 0,
+                target: 1,
+                titan: 'planet',
+                x: hx,
+                y: v1.y,
+                dirX: 1,
+                dirY: 0,
+                type: 'FRACTURE',
+                energy: 2600,
+                cellsRemoved: 90,
+                massRemoved: 40,
+                blocked: 0,
+                heavy: true,
+                onDamaged: 0,
+              },
+              { t: 'shockwave', x: hx, y: v1.y, strength: 0.8, radius: 280, hue: 0.42 },
+            );
+          if (simTick === 150) {
+            ev.push(
+              { t: 'flash', amount: 0.7, x: hx, y: v1.y },
+              { t: 'shockwave', x: hx, y: v1.y, strength: 1, radius: 240, hue: 0.1 },
+              { t: 'ko', slot: 1, x: hx, y: v1.y },
+            );
+            scale = 0.3;
+            slowLeft = 60;
+          }
+          const sm = Object.create(m, { timeScale: { value: scale } }) as MatchApi;
+          fx.tick(ev, sm);
+          if (slowLeft > 0 && --slowLeft === 0) scale = 1;
+        }
+        ts += 1 / 60;
+        r.draw(
+          frameOf([bodyA, bodyB], {
+            tick: simTick,
+            timeSec: ts,
+            alpha: acc,
+            view: fightView,
+            stage: 'nursery',
+            fx: fx.sample(acc),
+          }),
+        );
+        L.push(meanLuminance(r.captureLogical()));
+      }
+      let maxD = 0;
+      for (let i = 1; i < L.length; i++)
+        for (let k = 1; k <= 6 && i - k >= 0; k++) maxD = Math.max(maxD, Math.abs(L[i]! - L[i - k]!));
+      // WCAG-style opposing ≥ 0.1 transitions, as telemetry counts them
+      const turns: number[] = [];
+      let dir = 0;
+      let anchor = L[0]!;
+      for (let i = 1; i < L.length; i++) {
+        const d = L[i]! - anchor;
+        if (Math.abs(d) >= 0.1 && Math.min(L[i]!, anchor) < 0.8) {
+          if (Math.sign(d) !== dir) {
+            turns.push(i);
+            dir = Math.sign(d);
+          }
+          anchor = L[i]!;
+        } else if ((dir > 0 && L[i]! > anchor) || (dir < 0 && L[i]! < anchor)) anchor = L[i]!;
+      }
+      let perSec = 0;
+      for (let i = 0; i < turns.length; i++) {
+        let n = 0;
+        for (let j = i; j < turns.length && turns[j]! - turns[i]! < 60; j++) n++;
+        perSec = Math.max(perSec, Math.floor(n / 2));
+      }
+      return { maxD, flashesPerSec: perSec };
+    };
+    const bare = run(false);
+    const governed = run(true);
+    check(
+      'D5 scripted fight (nursery, 6 heavy hits + KO in slow motion): max Δ mean luminance within 100 ms ≤ 0.20, ≤ 3 flashes/s',
+      bare.maxD <= 0.2 && governed.maxD <= 0.2 && governed.flashesPerSec <= 3,
+      `governor off ${bare.maxD.toFixed(3)} (${bare.flashesPerSec}/s), on ${governed.maxD.toFixed(3)} (${governed.flashesPerSec}/s); Gate A baseline 0.32`,
+    );
+    r.debugSetGovernor(false);
+    r.setStage('tussenruimte');
+  }
+}
+
 async function main(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const r = createRenderer();
   await r.init(canvas, { quality: 0, preserveDrawingBuffer: true });
   r.setStage('tussenruimte');
   r.resize(1280, 720, 1);
+  // conformance checks compare frame pairs bit for bit: the luminance governor (its own section) must not adapt between them
+  r.debugSetGovernor(false);
   const ref = { x: 0, y: 0 };
+
+  if (new URLSearchParams(location.search).get('only') === 'd5') {
+    await sliceChecks(r, canvas);
+    finish(r);
+    return;
+  }
 
   // `?only=stages` skips the long conformance sections and runs just the per-stage checks (readability, distinctness): a quick loop while tuning scenery.
   const onlyStages = new URLSearchParams(location.search).get('only') === 'stages';
@@ -425,21 +873,35 @@ async function main(): Promise<void> {
         ring > 4 && centre < 2 && outside < 0.5,
         `ring ${ring.toFixed(1)} centre ${centre.toFixed(2)} outside ${outside.toFixed(2)}`,
       );
+      // D5: `flash` no longer whitens anything (it used to: this check asserted the opposite before the slice)
       const flash = noFx();
       flash.flash = 1;
       r.draw(frameOf([bg, stripes], { fx: flash, tick: 900 }));
       const flashed = r.captureLogical();
-      check('flash brightens the frame', meanAbsDiff(calm, flashed) > 20);
+      const flashDl = Math.abs(meanLuminance(flashed) - meanLuminance(calm));
+      check(
+        'flash never washes the frame (D5): mean luminance unchanged by fx.flash = 1',
+        flashDl < 0.005,
+        `Δ mean luminance ${flashDl.toFixed(4)}`,
+      );
+      // `aberration` is now LOCAL wound refraction around impact lights: nothing happens without one, and with one the change
+      // stays inside its lens
       const ab = noFx();
       ab.aberration = 1;
       r.draw(frameOf([bg, stripes], { fx: ab, tick: 900 }));
-      const aberrated = r.captureLogical();
-      const edge = meanAbsDiff(calm, aberrated, 600, 100, 640, 260);
-      const mid = meanAbsDiff(calm, aberrated, 300, 150, 340, 210);
       check(
-        'chromatic aberration grows toward the screen edge',
-        edge > mid * 2 && edge > 3,
-        `edge ${edge.toFixed(1)} mid ${mid.toFixed(1)}`,
+        'aberration without an impact light leaves the frame untouched',
+        maxDiff(calm, r.captureLogical()).count === 0,
+      );
+      ab.lights = [impactLight(300 + 320, 100 + 180, 120, 0.03)];
+      r.draw(frameOf([bg, stripes], { fx: ab, tick: 900 }));
+      const refracted = r.captureLogical();
+      const near = meanAbsDiff(calm, refracted, 320 - 60, 180 - 30, 320 + 60, 180 + 30);
+      const farEdge = meanAbsDiff(calm, refracted, 560, 10, 640, 100);
+      check(
+        'wound refraction bends the image around the wound only (no full-frame aberration)',
+        near > 4 && farEdge < 0.3,
+        `near ${near.toFixed(1)} far edge ${farEdge.toFixed(2)}`,
       );
       const lens = noFx();
       lens.lenses.push({ x: 300 + 320, y: 100 + 180, horizonR: 30, strength: 1 });
@@ -539,6 +1001,8 @@ async function main(): Promise<void> {
       );
       r.resize(1280, 720, 1);
     }
+
+    await sliceChecks(r, canvas);
 
     /* ---------- 11. context loss is survivable ---------- */
     if (!new URLSearchParams(location.search).has('skipctx')) {
@@ -753,9 +1217,20 @@ async function main(): Promise<void> {
         ra.captureLogical();
         await new Promise((res) => requestAnimationFrame(() => res(null)));
       }
+      // in software GL every frame misses, so it must walk down to 0 and stay; on a real GPU (a timer query exists) the frames
+      // are fast, so it may hold or step UP — what is checked there is only that it is wired (auto, starts at 1, reports)
+      const realGpu = ra.stats.gpuMs !== null;
       check(
-        'adaptive quality (auto) starts at tier 1, walks down under sustained misses and stays put at the bottom',
-        ra.stats.auto && startTier === 1 && settled === 0 && ra.stats.tier === 0 && ra.stats.tierChanges >= 1,
+        realGpu
+          ? 'adaptive quality (auto) starts at tier 1 and adapts on the real GPU (timer query wired)'
+          : 'adaptive quality (auto) starts at tier 1, walks down under sustained misses and stays put at the bottom',
+        realGpu
+          ? ra.stats.auto && startTier === 1
+          : ra.stats.auto &&
+              startTier === 1 &&
+              settled === 0 &&
+              ra.stats.tier === 0 &&
+              ra.stats.tierChanges >= 1,
         `start ${startTier} → ${settled}, changes ${ra.stats.tierChanges}, late ${(ra.stats.lateRate * 100).toFixed(0)} %, gpu timer ${ra.stats.gpuMs === null ? 'n/a' : ra.stats.gpuMs.toFixed(1) + ' ms'}`,
       );
       ra.dispose();
@@ -1016,6 +1491,10 @@ async function main(): Promise<void> {
     r.setStage('tussenruimte');
   }
 
+  finish(r);
+}
+
+function finish(r: DebuggableRenderer): void {
   const failed = results.filter((x) => !x.ok).length;
   out.textContent += `\n\n${results.length - failed}/${results.length} passed`;
   (window as unknown as { __VERIFY__: unknown }).__VERIFY__ = { done: true, failed, results };

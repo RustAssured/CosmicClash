@@ -10,7 +10,15 @@ import {
   type TitanId,
 } from '@/contracts';
 import { generateImpulseResponse } from './dsp/ir';
-import { clamp, clamp01, hardClipCurve, limiterCurve, volumeCurve } from './dsp/math';
+import { clamp, clamp01, dbToGain, hardClipCurve, limiterCurve, volumeCurve } from './dsp/math';
+import { designTruePeakFir } from '@/telemetry/loudness';
+import {
+  LIMITER_CEILING,
+  LIMITER_LOOKAHEAD,
+  LIMITER_PROCESSOR,
+  LIMITER_RELEASE,
+  limiterWorkletSource,
+} from './worklets/limiter';
 import { ScoreEngine } from './score/engine';
 import {
   magnitude,
@@ -52,14 +60,70 @@ const CUE_TRIM: Readonly<Partial<Record<TitanId, number>>> = { lastone: 3, aster
 /** Concurrent one-shot cap (events, not nodes). Above it, low-priority sounds are dropped. */
 const POLYPHONY = 28;
 
+/* ---- D6 mix constants (calibrated with tools/ui/audio-verify.ts --round: −20 LUFS integrated, ≤ −1 dBTP at default faders) ---- */
+/** Output high-pass (Hz, 24 dB/oct): laptop speakers cannot play below it, so it would only eat limiter headroom (D27). */
+export const OUTPUT_HIGHPASS_HZ = 50;
+/** Gain before the limiter that puts a typical round at −20 LUFS integrated with the default faders. */
+export const CALIBRATION_DB = 11.5;
+/** Menu / UI sounds sit this far under the calibrated impacts (they were authored against the old, quieter master). */
+const UI_LEVEL_DB = -9;
+/** Reverb returns: the impacts' space and the bed's. */
+const IMPACT_REVERB = 0.75;
+const BED_REVERB = 0.3;
+/** Gentle bed glue: compresses only the loudest bed moments, 2:1, slow (the impacts never pass through it). */
+export const BED_GLUE = { threshold: -18, knee: 10, ratio: 2, attack: 0.03, release: 0.35 } as const;
+/** The score at neutral sits this many dB under its full, committed level. */
+export const SCORE_NEUTRAL_DB = 15;
+/** The whole bed sits this far under the impacts (dB): the floor a blow rises from. */
+export const BED_LEVEL_DB = -4.5;
+/** Bed duck under heavy blows: depth (dB) and total time (s) from the lightest to the heaviest qualifying event. */
+export const DUCK_DB: readonly [number, number] = [4, 8];
+export const DUCK_SEC: readonly [number, number] = [0.3, 0.6];
+
+/**
+ * The automatic makeup gain (dB) a DynamicsCompressorNode applies (WebAudio spec: (1 / gain at 0 dBFS)^0.6). Approximates the
+ * knee as the midpoint of its span, which is within a few tenths of a dB of Chromium for these settings.
+ */
+export function compressorMakeupDb(c: { threshold: number; knee: number; ratio: number }): number {
+  const kneeEnd = c.threshold + c.knee;
+  // output level for a 0 dBFS input: the linear segment to the threshold, half-slope through the knee, 1/ratio above it
+  const atKneeEnd = c.threshold + c.knee * (0.5 + 0.5 / c.ratio);
+  const out0 =
+    kneeEnd >= 0
+      ? c.threshold + (0 - c.threshold) * (0.5 + 0.5 / c.ratio)
+      : atKneeEnd + (0 - kneeEnd) / c.ratio;
+  return -out0 * 0.6;
+}
+
+const workletReady = new WeakMap<BaseAudioContext, Promise<boolean>>();
+/** Load the limiter AudioWorklet module once per context. Resolves false where AudioWorklet is unavailable. */
+function loadLimiter(ac: BaseAudioContext): Promise<boolean> {
+  let p = workletReady.get(ac);
+  if (!p) {
+    const aw = (ac as { audioWorklet?: AudioWorklet }).audioWorklet;
+    if (!aw || typeof AudioWorkletNode === 'undefined' || typeof Blob === 'undefined')
+      p = Promise.resolve(false);
+    else {
+      const url = URL.createObjectURL(new Blob([limiterWorkletSource()], { type: 'text/javascript' }));
+      p = aw
+        .addModule(url)
+        .then(() => true)
+        .catch(() => false)
+        .finally(() => URL.revokeObjectURL(url));
+    }
+    workletReady.set(ac, p);
+  }
+  return p;
+}
 export interface AudioEngineOptions {
   /** Use this context instead of creating one on `unlock()` (OfflineAudioContext for verification). */
   context?: BaseAudioContext;
   /** Seed for the deterministic variation stream and the generative score. */
   seed?: number;
   /**
-   * TEST ONLY: skip the compressor and the safety limiter. Lets the verification page prove the limiter is doing real work
-   * (the same event storm without it must exceed full scale). Never set in the shipped app.
+   * TEST ONLY: skip the true-peak limiter and the safety clip (the calibrated mix goes straight out). Lets the verification page
+   * measure what enters the limiter and prove it does real work (the same event storm without it must exceed full scale).
+   * Never set in the shipped app.
    */
   unsafeBypassLimiter?: boolean;
 }
@@ -78,9 +142,11 @@ export interface AudioEngineExt extends AudioEngine {
   readonly volumes: Readonly<AudioVolumes>;
   /**
    * Measurement taps (telemetry / recording; never in the signal path): `output` is exactly what reaches the speakers,
-   * `music` the score bus after its fader and duck, `sfx` the effects bus. Null until the graph exists.
+   * `music` the whole BED bus after its duck (titan beds + score + bed reverb), `sfx` the impact bus. Null until the graph exists.
    */
   taps(): { output: AudioNode; music: AudioNode; sfx: AudioNode } | null;
+  /** Deepest true-peak limiter gain reduction (dB) since the last call (diagnostics). */
+  limiterReductionDb(): number;
 }
 
 /** The IR is deterministic per (sample rate, seed) and takes a noticeable moment to synthesise: build it once. */
@@ -102,8 +168,10 @@ export function createAudioEngine(opts: AudioEngineOptions = {}): AudioEngineExt
 
 interface Graph {
   ac: BaseAudioContext;
+  /** The IMPACT bus (one-shot voices, after the sfx fader) and its reverb send. */
   sfx: GainNode;
   sfxSend: GainNode;
+  /** The music fader (inside the bed) and the score's reverb send. */
   music: GainNode;
   musicSend: GainNode;
   master: GainNode;
@@ -111,20 +179,37 @@ interface Graph {
   out: AudioNode;
   preAn: AnalyserNode;
   postAn: AnalyserNode;
+  /** UI sounds (sfx fader). */
+  ui: GainNode;
+  /** The titans' continuous beds (sfx fader), into the bed bus. */
+  bedSfx: GainNode;
+  /** The bed's duck: the WHOLE bed (beds + score + its reverb) after the glue. */
+  duck: GainNode;
+  /** The score's swell gain (thin at neutral, full on commitment), before the music fader. */
+  scoreIn: GainNode;
 }
 
 class Engine implements AudioEngineExt {
   private ac: BaseAudioContext | null;
   private g: Graph | null = null;
   private sfxCtx: VoiceCtx | null = null;
+  private uiCtx: VoiceCtx | null = null;
+  private bedCtx: VoiceCtx | null = null;
   private musicCtx: VoiceCtx | null = null;
+  private building: Promise<void> | null = null;
+  /** Smallest limiter gain reported since the last limiterReductionDb() (1 = untouched). */
+  private limiterMinGain = 1;
+  private duckDepth = 0;
+  /** The score's commitment drive 0..1 (smoothed): neutral = thin, committed = full. */
+  private commit = 0;
   private score: ScoreEngine | null = null;
   private readonly seed: number;
   private readonly voices = new Map<TitanId, TitanVoice>();
   private readonly ends: number[] = [];
   private scene: AudioScene | null = null;
   private slotTitan: [TitanId | null, TitanId | null] = [null, null];
-  private vol: AudioVolumes = { master: 0.85, music: 0.7, sfx: 0.9 };
+  /** The app's settings defaults (8 / 7 / 8 of 10), so offline verification measures what the player hears. */
+  private vol: AudioVolumes = { master: 0.8, music: 0.7, sfx: 0.8 };
   private timeScale = 1;
   private now = 0;
   private preBuf: Float32Array | null = null;
@@ -167,7 +252,13 @@ class Engine implements AudioEngineExt {
         if (!Ctor) return;
         this.ac = new Ctor({ latencyHint: 'interactive' });
       }
-      if (!this.g) this.build(this.ac);
+      if (!this.g) {
+        const ac = this.ac;
+        this.building ??= loadLimiter(ac).then((ok) => {
+          if (!this.g && this.ac === ac) this.build(ac, ok);
+        });
+        await this.building;
+      }
       if (this.ac.state === 'suspended' && 'resume' in this.ac) await (this.ac as AudioContext).resume();
     } catch {
       /* no WebAudio (or blocked): the game stays silent but playable */
@@ -183,81 +274,174 @@ class Engine implements AudioEngineExt {
     };
   }
 
-  private build(ac: BaseAudioContext): void {
+  private build(ac: BaseAudioContext, worklet: boolean): void {
     const sr = ac.sampleRate;
-    // Signal path:  buses → mix → high-pass → compressor → soft limiter (4×) → MASTER → hard clip → speakers.
-    // The master volume sits AFTER the dynamics on purpose. Before them, a compressor at ratio 5 flattens the level differences
-    // the player asked for (measured: master at ½ changed a hit's peak by only −1.3 dB); after them, master is a plain
-    // linear scale of an already-safe signal, and because it is ≤ 1 it can never push the limiter's output past its ceiling.
+    /*
+     * Signal path (D6, tuned for LAPTOP SPEAKERS — D27):
+     *
+     *   impact voices ─► IMPACT bus (sfx fader) ─────────────────────────────────────────────┐
+     *       └ sends ─► space reverb ─► return ──────────────────────────────────────────────┤
+     *   ui sounds ─► UI bus (sfx fader) ─────────────────────────────────────────────────────┤
+     *   titan beds ─► (sfx fader) ┐                                                         ├► mix ─► HP 50 Hz (24 dB/oct)
+     *   score ─► (music fader) ───┼► BED bus ─► gentle glue ─► DUCK ──────────────────────────┘     ─► calibration gain
+     *   bed sends ─► bed reverb ──┘                                                                 ─► MASTER
+     *                                                                                               ─► TRUE-PEAK LIMITER ─► safety clip
+     *
+     * Impacts never pass through a compressor: their level above the bed is what the player hears as weight. Only the bed
+     * is glued (gently) and ducked 4–8 dB for 300–600 ms under heavy blows. The output's sub-bass is high-passed (laptop
+     * speakers cannot play it, it only eats headroom); weight is carried by the 80–250 Hz knock (`thump`). The limiter is a
+     * lookahead true-peak brick wall at −1 dBTP (AudioWorklet), the LAST gain stage: the master fader sits before it, so the
+     * fader is a plain linear scale for everything under the ceiling and nothing can ever pass the ceiling (with a fader after
+     * the limiter, the default 8/10 would cap every peak at −5 dBTP and squeeze the round's range).
+     */
     const mix = ac.createGain();
+    const hp1 = ac.createBiquadFilter();
+    const hp2 = ac.createBiquadFilter();
+    hp1.type = hp2.type = 'highpass';
+    hp1.frequency.value = hp2.frequency.value = OUTPUT_HIGHPASS_HZ;
+    // two cascaded 2nd-order sections = a 4th-order Butterworth
+    hp1.Q.value = 0.5412;
+    hp2.Q.value = 1.3066;
+    const calib = ac.createGain();
+    calib.gain.value = dbToGain(CALIBRATION_DB);
     const master = ac.createGain();
     master.gain.value = volumeCurve(this.vol.master);
-    const hp = ac.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 22;
-    hp.Q.value = 0.5;
-    const comp = ac.createDynamicsCompressor();
-    comp.threshold.value = -16;
-    comp.knee.value = 12;
-    comp.ratio.value = 5;
-    comp.attack.value = 0.004;
-    comp.release.value = 0.2;
-    const shaper = ac.createWaveShaper();
-    shaper.curve = limiterCurve() as Float32Array<ArrayBuffer>;
-    shaper.oversample = '4x';
     const clip = ac.createWaveShaper();
-    clip.curve = hardClipCurve() as Float32Array<ArrayBuffer>;
+    clip.curve = hardClipCurve(2049, LIMITER_CEILING) as Float32Array<ArrayBuffer>;
     const preAn = ac.createAnalyser();
     preAn.fftSize = 2048;
     const postAn = ac.createAnalyser();
     postAn.fftSize = 2048;
     mix.connect(preAn);
-    mix.connect(hp);
+    mix.connect(hp1);
+    hp1.connect(hp2);
+    // unsafeBypassLimiter (tests only) measures the mix as it ENTERS the limiter (calibrated), with no limiter and no clip
+    hp2.connect(calib);
+    let limiter: AudioNode;
     if (this.bypass) {
-      hp.connect(master);
-      master.connect(postAn);
-      master.connect(ac.destination);
+      limiter = ac.createGain();
+    } else if (worklet) {
+      const node = new AudioWorkletNode(ac, LIMITER_PROCESSOR, {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [2],
+        channelCount: 2,
+        channelCountMode: 'explicit',
+        channelInterpretation: 'speakers',
+        processorOptions: {
+          channels: 2,
+          lookahead: LIMITER_LOOKAHEAD,
+          ceiling: LIMITER_CEILING,
+          release: LIMITER_RELEASE,
+          phases: designTruePeakFir().map((p) => Array.from(p)),
+        },
+      });
+      node.port.onmessage = (e: MessageEvent<number>): void => {
+        if (e.data < this.limiterMinGain) this.limiterMinGain = e.data;
+      };
+      limiter = node;
     } else {
-      hp.connect(comp);
-      comp.connect(shaper);
-      shaper.connect(master);
-      master.connect(clip);
+      // no AudioWorklet (unit tests' fake context, very old browsers): a 4× oversampled soft clip to the same ceiling
+      const soft = ac.createWaveShaper();
+      soft.curve = limiterCurve(4097, 0.6, LIMITER_CEILING) as Float32Array<ArrayBuffer>;
+      soft.oversample = '4x';
+      limiter = soft;
+    }
+    calib.connect(master);
+    master.connect(limiter);
+    if (this.bypass) {
+      limiter.connect(postAn);
+      limiter.connect(ac.destination);
+    } else {
+      limiter.connect(clip);
       clip.connect(postAn);
       clip.connect(ac.destination);
     }
 
-    // reverb: one long, dark convolver shared by both buses; the send is high-passed so sub-bass never muddies the tail
+    // reverbs: one long dark IR shared by two convolvers — the impacts' space (not ducked: tails are the weight) and the bed's
+    // own (ducked with it). Both sends are high-passed so sub-bass never muddies a tail.
     const ir = cachedImpulseResponse(sr, this.seed);
     const buf = ac.createBuffer(2, ir[0].length, sr);
     buf.copyToChannel(ir[0] as Float32Array<ArrayBuffer>, 0);
     buf.copyToChannel(ir[1] as Float32Array<ArrayBuffer>, 1);
-    const conv = ac.createConvolver();
-    conv.normalize = false;
-    conv.buffer = buf;
-    const sendHp = ac.createBiquadFilter();
-    sendHp.type = 'highpass';
-    sendHp.frequency.value = 140;
-    const wetOut = ac.createGain();
-    wetOut.gain.value = 0.55;
-    sendHp.connect(conv);
-    conv.connect(wetOut);
-    wetOut.connect(mix);
+    const reverb = (ret: number, into: AudioNode): GainNode => {
+      const send = ac.createGain();
+      const hp = ac.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 140;
+      const conv = ac.createConvolver();
+      conv.normalize = false;
+      conv.buffer = buf;
+      const out = ac.createGain();
+      out.gain.value = ret;
+      send.connect(hp);
+      hp.connect(conv);
+      conv.connect(out);
+      out.connect(into);
+      return send;
+    };
 
+    // impacts
     const sfx = ac.createGain();
     sfx.gain.value = volumeCurve(this.vol.sfx);
     sfx.connect(mix);
-    const sfxWet = ac.createGain();
-    sfxWet.gain.value = 1;
-    sfxWet.connect(sendHp);
+    const sfxWet = reverb(IMPACT_REVERB, mix);
+    // ui
+    const ui = ac.createGain();
+    ui.gain.value = volumeCurve(this.vol.sfx);
+    const uiLevel = ac.createGain();
+    uiLevel.gain.value = dbToGain(UI_LEVEL_DB);
+    ui.connect(uiLevel);
+    uiLevel.connect(mix);
+    const uiWet = ac.createGain();
+    uiWet.connect(sfxWet);
+    // bed: titan beds + score + the bed's reverb → glue → duck
+    const bedIn = ac.createGain();
+    bedIn.gain.value = dbToGain(BED_LEVEL_DB);
+    const glue = ac.createDynamicsCompressor();
+    glue.threshold.value = BED_GLUE.threshold;
+    glue.knee.value = BED_GLUE.knee;
+    glue.ratio.value = BED_GLUE.ratio;
+    glue.attack.value = BED_GLUE.attack;
+    glue.release.value = BED_GLUE.release;
+    // the compressor adds automatic makeup gain (WebAudio spec); take it back so the glue only ever shapes, never lifts
+    const glueTrim = ac.createGain();
+    glueTrim.gain.value = dbToGain(-compressorMakeupDb(BED_GLUE));
+    const duck = ac.createGain();
+    bedIn.connect(glue);
+    glue.connect(glueTrim);
+    glueTrim.connect(duck);
+    duck.connect(mix);
+    const bedWet = reverb(BED_REVERB, bedIn);
+    const bedSfx = ac.createGain();
+    bedSfx.gain.value = volumeCurve(this.vol.sfx);
+    bedSfx.connect(bedIn);
     const music = ac.createGain();
     music.gain.value = volumeCurve(this.vol.music);
-    music.connect(mix);
+    music.connect(bedIn);
     const musicWet = ac.createGain();
     musicWet.gain.value = 0.7;
-    musicWet.connect(sendHp);
+    musicWet.connect(bedWet);
+    // the score's own swell (thin at neutral, full on commitment) sits before the music fader
+    const scoreIn = ac.createGain();
+    scoreIn.gain.value = dbToGain(-SCORE_NEUTRAL_DB);
+    scoreIn.connect(music);
 
-    const out: AudioNode = this.bypass ? master : clip;
-    this.g = { ac, sfx, sfxSend: sfxWet, music, musicSend: musicWet, master, out, preAn, postAn };
+    this.g = {
+      ac,
+      sfx,
+      sfxSend: sfxWet,
+      music,
+      musicSend: musicWet,
+      master,
+      out: this.bypass ? limiter : clip,
+      preAn,
+      postAn,
+      ui,
+      bedSfx,
+      duck,
+      scoreIn,
+    };
 
     // shared noise (white + brown), generated deterministically
     const N = sr * 2;
@@ -277,29 +461,22 @@ class Engine implements AudioEngineExt {
     const base = { ac, noise: white, brown, rand: (): number => voiceRng.next() };
     const pan = (x: number): number => this.panOf(x);
     const timeScale = (): number => this.timeScale;
-    this.sfxCtx = {
+    const ctx = (dry: AudioNode, wet: AudioNode, gated: boolean): VoiceCtx => ({
       ...base,
-      dry: sfx,
-      wet: sfxWet,
+      dry,
+      wet,
       panOf: pan,
-      take: (prio: number): boolean => this.take(prio),
+      take: gated ? (prio: number): boolean => this.take(prio) : (): boolean => true,
       release: (): void => undefined,
       get timeScale(): number {
         return timeScale();
       },
-    };
-    this.musicCtx = {
-      ...base,
-      dry: music,
-      wet: musicWet,
-      panOf: pan,
-      take: (): boolean => true,
-      release: (): void => undefined,
-      get timeScale(): number {
-        return timeScale();
-      },
-    };
-    this.score = new ScoreEngine(ac, music, this.musicCtx, this.seed);
+    });
+    this.sfxCtx = ctx(sfx, sfxWet, true);
+    this.uiCtx = ctx(ui, uiWet, true);
+    this.bedCtx = ctx(bedSfx, bedWet, true);
+    this.musicCtx = ctx(scoreIn, musicWet, false);
+    this.score = new ScoreEngine(ac, scoreIn, this.musicCtx, this.seed);
   }
 
   /* ------------------------------------------------------------------------------------------------ *
@@ -331,22 +508,26 @@ class Engine implements AudioEngineExt {
     return v;
   }
 
-  /** A `VoiceCtx` whose dry and reverb-send taps are scaled by `gain` (cached per value: a handful of extra gain nodes). */
-  private trimmed(gain: number): VoiceCtx {
-    const base = this.sfxCtx!;
+  /**
+   * A `VoiceCtx` whose dry and reverb-send taps are scaled by `gain` (cached per value: a handful of extra gain nodes), on the
+   * impact bus or (`ui`) the UI bus.
+   */
+  private trimmed(gain: number, bus: 'impact' | 'ui' = 'impact'): VoiceCtx {
+    const base = bus === 'ui' ? this.uiCtx! : this.sfxCtx!;
     const key = Math.round(gain * 20) / 20;
     if (key === 1) return base;
-    let c = this.trims.get(key);
+    const id = bus === 'ui' ? -key : key;
+    let c = this.trims.get(id);
     if (!c) {
       const g = this.g!;
       const dry = g.ac.createGain();
       dry.gain.value = key;
-      dry.connect(g.sfx);
+      dry.connect(base.dry);
       const wet = g.ac.createGain();
       wet.gain.value = key;
-      wet.connect(g.sfxSend);
+      wet.connect(base.wet);
       c = Object.create(base, { dry: { value: dry }, wet: { value: wet } }) as VoiceCtx;
-      this.trims.set(key, c);
+      this.trims.set(id, c);
     }
     return c;
   }
@@ -383,7 +564,7 @@ class Engine implements AudioEngineExt {
   private dispatch(c: VoiceCtx, ev: AudioEvent, t: number): void {
     switch (ev.t) {
       case 'ui':
-        if (c.take(1)) playUi(this.trimmed(UI_TRIM[ev.id]), t, ev.id);
+        if (c.take(1)) playUi(this.trimmed(UI_TRIM[ev.id], 'ui'), t, ev.id);
         if (ev.id === 'roundwin') this.score?.roundEvent('end', t);
         return;
       case 'move': {
@@ -432,7 +613,9 @@ class Engine implements AudioEngineExt {
         atk.onHitDealt?.(c, t, ev, mag);
         const tgt = this.voiceFor(this.titanOf(ev.target, ev.titan));
         tgt.onHitTaken?.(c, t, ev, mag);
-        this.duck(t, 0.05 + 0.1 * mag, 0.08 + 0.14 * mag);
+        // the bed gets out of the way of a heavy blow (sidechain-style): this is what lets an impact stand 10+ dB over it
+        if (ev.heavy || mag >= 0.62)
+          this.duck(t, clamp01((mag - 0.55) / 0.4) * (1 - 0.7 * clamp01(ev.blocked)));
         return;
       }
       case 'guard': {
@@ -444,11 +627,11 @@ class Engine implements AudioEngineExt {
       }
       case 'shockwave':
         if (c.take(1)) playShockwave(c, t, ev.strength, ev.radius, c.panOf(ev.x));
-        return;
-      case 'hitstop':
-        this.duck(t, 0.55, (ev.ticks / 60) * 0.9);
+        // the big rings are the cataclysms: the Planet's quake and moon slams, a nova, a KO
+        if (ev.strength >= 0.8 && ev.radius >= 220) this.duck(t, clamp01((ev.radius - 220) / 160));
         return;
       case 'ko': {
+        this.duck(t, 1);
         const v = this.voiceFor(this.titanOf(ev.slot));
         if (v.onKo) {
           playKoSub(c, t, c.panOf(ev.x));
@@ -531,17 +714,26 @@ class Engine implements AudioEngineExt {
     }
   }
 
-  /** Duck the music bus for a hit / hit-stop and let it swell back: impacts feel louder without raising the master. */
-  private duck(t: number, depth: number, sec: number): void {
+  /**
+   * Sidechain-style duck of the WHOLE bed (titan beds, score, the bed's reverb) under a heavy event: `k` 0..1 picks the depth
+   * (DUCK_DB) and the time it stays down (DUCK_SEC). A deeper event inside a duck re-ducks; a lighter one leaves it alone.
+   */
+  private duck(t: number, k: number): void {
     const g = this.g;
     if (!g) return;
-    const base = volumeCurve(this.vol.music);
-    const p = g.music.gain;
-    if (t < this.duckUntil - 0.02) return; // already ducked: don't stack
+    const depth = DUCK_DB[0] + (DUCK_DB[1] - DUCK_DB[0]) * clamp01(k);
+    const sec = DUCK_SEC[0] + (DUCK_SEC[1] - DUCK_SEC[0]) * clamp01(k);
+    if (t < this.duckUntil - 0.02 && depth <= this.duckDepth) {
+      // already down at least this far: only stretch the hold if this one would end later
+      if (t + sec <= this.duckUntil) return;
+    }
     this.duckUntil = t + sec;
+    this.duckDepth = depth;
+    const p = g.duck.gain;
     p.cancelScheduledValues(t);
-    p.setTargetAtTime(base * (1 - depth), t, 0.006);
-    p.setTargetAtTime(base, t + sec, 0.12);
+    // down in ~10 ms, held, then back with a 120 ms time constant (the hold ends early enough that the ≥ 3 dB-down time is `sec`)
+    p.setTargetAtTime(dbToGain(-depth), t, 0.01);
+    p.setTargetAtTime(1, t + Math.max(0.05, sec - 0.06), 0.12);
   }
 
   /* ------------------------------------------------------------------------------------------------ *
@@ -577,15 +769,41 @@ class Engine implements AudioEngineExt {
       if (fighting && f) {
         if (prev && prev !== f.titan) this.voiceFor(prev).stop?.(slot);
         this.slotTitan[slot] = f.titan;
-        this.voiceFor(f.titan).update?.(c, f, slot, dtSec);
+        // continuous voices are the titans' BED (ducked under heavy blows), not impacts
+        this.voiceFor(f.titan).update?.(this.bedCtx ?? c, f, slot, dtSec);
       } else if (prev) {
         this.voiceFor(prev).stop?.(slot);
       }
     }
     this.score.update(scene, dtSec);
     this.score.scheduleUntil(horizon);
+    this.breathe(scene, fighting, dtSec);
     // meter the master
     this.sample();
+  }
+
+  /**
+   * The score breathes with the round (D6): thin at neutral (SCORE_NEUTRAL_DB down), swelling as a fighter COMMITS (winding
+   * up, charging, striking) or the fight heats up. Rises in ~0.25 s, falls back over ~1.2 s. setTarget only: it is retargeted
+   * every frame.
+   */
+  private breathe(scene: AudioScene, fighting: boolean, dtSec: number): void {
+    const g = this.g;
+    if (!g) return;
+    let want = 0;
+    if (fighting && scene.phase !== 'pause') {
+      for (const f of scene.fighters ?? []) {
+        const s = f.state;
+        const k =
+          s === 'active' ? 1 : s === 'charge' ? 0.6 + 0.4 * clamp01(f.charge) : s === 'startup' ? 0.6 : 0;
+        want = Math.max(want, k);
+      }
+      const i = clamp01((scene.intensity - 0.25) / 0.6);
+      want = Math.max(want, i * i * (3 - 2 * i));
+    } else if (!fighting) want = 1; // menus and results: the score is the whole show
+    const tau = want > this.commit ? 0.25 : 1.2;
+    this.commit += (want - this.commit) * (1 - Math.exp(-Math.max(0, dtSec) / tau));
+    g.scoreIn.gain.setTargetAtTime(dbToGain(-SCORE_NEUTRAL_DB * (1 - this.commit)), g.ac.currentTime, 0.08);
   }
 
   private sample(): void {
@@ -624,12 +842,20 @@ class Engine implements AudioEngineExt {
     const t = g.ac.currentTime;
     g.master.gain.setTargetAtTime(volumeCurve(this.vol.master), t, 0.02);
     g.music.gain.setTargetAtTime(volumeCurve(this.vol.music), t, 0.02);
-    g.sfx.gain.setTargetAtTime(volumeCurve(this.vol.sfx), t, 0.02);
+    for (const n of [g.sfx, g.ui, g.bedSfx]) n.gain.setTargetAtTime(volumeCurve(this.vol.sfx), t, 0.02);
   }
 
   taps(): { output: AudioNode; music: AudioNode; sfx: AudioNode } | null {
     const g = this.g;
-    return g ? { output: g.out, music: g.music, sfx: g.sfx } : null;
+    // `music` is the WHOLE bed after its duck (titan beds + score + bed reverb): what an impact has to rise above
+    return g ? { output: g.out, music: g.duck, sfx: g.sfx } : null;
+  }
+
+  /** Deepest limiter gain reduction (dB, ≥ 0) since the last call; 0 when the worklet limiter is not in use. */
+  limiterReductionDb(): number {
+    const g = this.limiterMinGain;
+    this.limiterMinGain = 1;
+    return g < 1 ? -20 * Math.log10(Math.max(1e-6, g)) : 0;
   }
 
   latencyMs(): number {
@@ -644,6 +870,7 @@ class Engine implements AudioEngineExt {
     this.score = null;
     const ac = this.ac;
     this.g = null;
+    this.building = null;
     this.trims.clear();
     if (ac && 'close' in ac && ac.state !== 'closed')
       void (ac as AudioContext).close().catch(() => undefined);

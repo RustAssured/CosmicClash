@@ -63,7 +63,8 @@ void main() {
   vec2 drift = vec2(sin(uTime * 0.045 + ph) * 14.0 + cos(uTime * 0.021 + ph * 2.3) * 9.0, cos(uTime * 0.037 + ph * 1.7) * 8.0);
   vec2 c = aF0.xy - floor(uView * par + 0.5) + drift;
   c = warpByForces(c, uForceK);
-  float size = aF1.x;
+  c = camWarp(c, par);
+  float size = aF1.x * camScale(par);
   float ext = size * 1.6 + 4.0;
   if (c.x < -ext || c.y < -ext || c.x > uRes.x + ext || c.y > uRes.y + ext) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -141,6 +142,8 @@ export class Foreground {
       nImp: IUniform<number>;
       lights: IUniform<Float32Array>;
       nLights: IUniform<number>;
+      dolly: IUniform<number>;
+      kick: IUniform<Vector2>;
     },
   ) {
     const pos = new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0]), 3);
@@ -159,6 +162,8 @@ export class Foreground {
       uNImp: uniformsShared.nImp,
       uLt: uniformsShared.lights,
       uNLt: uniformsShared.nLights,
+      uDolly: uniformsShared.dolly,
+      uKick: uniformsShared.kick,
       uColor: { value: [0.03, 0.03, 0.04] },
       uForceK: { value: 2.4 },
       uBand: { value: new Vector2(60, 250) },

@@ -44,6 +44,15 @@ export interface SceneryFrame {
   /** Integer view origin: the same one the 2D layers use. Parallax offsets derive from it. */
   view: ViewRect;
   camera: CameraState;
+  /**
+   * What the scenery does with the camera (D27): `dolly` is the dolly-zoom push-in δ (a layer at parallax p is scaled by
+   * (1 − δ) / (1 − p·δ) about the frame centre: the fight plane p = 1 and the sprites stay 1:1, the far sky recedes, the
+   * foreground rushes outward), `kickX/kickY` the impact parallax kick in px at depth 1
+   * (a layer moves by kick × (p − 1)). Derived by the renderer from `camera`.
+   */
+  cam: { dolly: number; kickX: number; kickY: number };
+  /** Comfort scale 0..1 for flash-like scenery effects (tinted impulse glow). 1 = full. */
+  comfort: number;
   fx: FrameFx;
   forces: SceneryForces;
 }

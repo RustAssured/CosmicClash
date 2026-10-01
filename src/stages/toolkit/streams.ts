@@ -73,7 +73,7 @@ if (c.x < -ext || c.y < -ext || c.x > uRes.x + ext || c.y > uRes.y + ext) {
   return;
 }
 vec2 off = dir * (position.x * lenPx) + nrm * (position.y * size);
-gl_Position = toNdc(c + off);
+gl_Position = toNdc(camWarp(c, par) + off * camScale(par));
 vQ = position.xy;
 float env = smoothstep(0.0, 0.12, life) * (1.0 - smoothstep(0.62, 1.0, life));
 vec3 col = life < 0.5 ? mix(uC0, uC1, life * 2.0) : mix(uC1, uC2, (life - 0.5) * 2.0);

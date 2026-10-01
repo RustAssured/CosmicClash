@@ -61,11 +61,14 @@ import {
   BLOOM_UP_FRAG,
   FINAL_FRAG,
   GODRAYS_FRAG,
+  GOVERN_FRAG,
   HALO_BLUR_FRAG,
   LAYER_COMPOSITE_FRAG,
+  LUM_DOWN_FRAG,
   POST_FRAG,
   SCENERY_DITHER_FRAG,
 } from './shaders';
+import { LumaReadback, type LumaSample } from './lumaReadback';
 import { computeViewport, type ViewportLayout } from './viewport';
 
 /** Per-tier tuning: scenery supersampling, bloom pyramid depth, god-ray taps. (Scenery particle density is the kit's job.) */
@@ -95,7 +98,7 @@ const FALLBACK_LOOK: SceneryLook = {
   vignette: 0.5,
 };
 
-/** `'auto'` (default): start at tier 1 and let the QualityController move between tiers from measured frame pacing. */
+/** `'auto'` (default): start at tier 1 and let the QualityController move between tiers 0 and 1 from measured frame pacing. */
 export type QualitySetting = QualityTier | 'auto';
 
 export interface RenderInitOptions extends Omit<RendererOptions, 'quality'> {
@@ -103,7 +106,36 @@ export interface RenderInitOptions extends Omit<RendererOptions, 'quality'> {
   quality?: QualitySetting;
   /** Milliseconds of work per frame while a stage is being prepared in the background (default 5). */
   prepareBudgetMs?: number;
+  /**
+   * The Gate B sprite-push A/B (D27): when true, `CameraState.zoom` > 1 (up to SPRITE_PUSH_MAX) resamples the finished frame
+   * with sharp-bilinear filtering. When false (default) sprites always stay 1:1 and camera zoom pulses become scenery dolly.
+   * Default: the page URL's `push=1`.
+   */
+  spritePush?: boolean;
 }
+
+/**
+ * A full dolly (CameraState.dolly = 1) moves the scenery camera this fraction of the way to the fight plane (a dolly-zoom: the
+ * fight plane and the 1:1 sprites stay put, the far sky recedes by up to this much, the foreground rushes outward).
+ */
+export const DOLLY_MAX = 0.1;
+/** Without the sprite push, a camera zoom pulse of +6 % becomes this much extra dolly (zoom − 1) × DOLLY_FROM_ZOOM. */
+export const DOLLY_FROM_ZOOM = 10;
+/** Largest impact parallax kick passed to the scenery (px at depth 1). */
+export const KICK_MAX = 24;
+/** Largest sprite-push zoom (push=1 only). */
+export const SPRITE_PUSH_MAX = 1.1;
+/** Luminance governor: largest rise of the frame's mean relative luminance above its 300 ms average (D5 target ≤ 0.20). */
+export const GOVERNOR_LIMIT = 0.12;
+export const GOVERNOR_TAU = 0.3;
+
+/**
+ * Mean relative luminance of the displayed game frame (no UI), read back asynchronously (no stall): `mean` after the
+ * governor, `raw` before it, the `gain` it applied, its 300 ms average `avg`, and the frame / sim tick measured.
+ */
+export type LumaStats = LumaSample;
+/** Samples kept for `drainLuma()` when nobody drains them (≈ 10 s at 60 fps). */
+const LUMA_KEEP = 600;
 
 /** RenderStats plus what the adaptive controller and the stage loader know. */
 export interface RenderStatsEx extends RenderStats {
@@ -119,6 +151,12 @@ export interface RenderStatsEx extends RenderStats {
   tierChanges: number;
   /** The last stage preparation: wall ms, CPU ms spent in our slices, frames it was spread over, longest single slice. */
   prepare: { stage: StageId; wallMs: number; cpuMs: number; frames: number; maxSliceMs: number } | null;
+  /**
+   * Newest luminance-governor reading (1–3 frames old: read back asynchronously through a PBO + fence, never stalling the
+   * frame). Null until the first read completes or where float read-back is unavailable. Every frame's sample is also kept
+   * for `drainLuma()`.
+   */
+  luma: LumaStats | null;
 }
 
 /** Readability defaults; a stage overrides any of them through SceneryLook. */
@@ -177,6 +215,22 @@ export interface DebuggableRenderer extends Renderer {
   debugSetForeground(on: boolean): void;
   /** The stage whose scenery is currently drawn (null while none is ready). */
   debugActiveStage(): StageId | null;
+  /**
+   * Comfort scale 0..1 of the flash-like effects the renderer owns (tinted impulse glow, bloom gain). The FxState applies the
+   * same setting to impact lights and refraction. 1 (default) = full; the D5 limits hold at 1.
+   */
+  setComfort(flash: number): void;
+  /**
+   * Every luminance-governor sample read back since the last call (oldest first; ≤ 1 per drawn frame, possibly a few frames
+   * late). Cheap: a 1×1 float read per frame through a ring of pixel-pack buffers. For telemetry's flash metrics.
+   */
+  drainLuma(): LumaStats[];
+  /** Turn the luminance governor's gain off (measure only) or on (default), for A/B verification. */
+  debugSetGovernor(on: boolean): void;
+  /** Read-back health (and, with `diag`, record GL errors around its calls): verification only. */
+  debugLumaReadback(diag: boolean): { available: boolean; skipped: number; errors: string[]; pollMs: number };
+  /** Switch the sharp-bilinear sprite push (push=1) at run time. */
+  debugSetSpritePush(on: boolean): void;
 }
 
 export function createRenderer(): DebuggableRenderer {
@@ -231,6 +285,7 @@ class PixelRenderer implements DebuggableRenderer {
     lateRate: 0,
     tierChanges: 0,
     prepare: null,
+    luma: null,
   };
 
   private three!: WebGLRenderer;
@@ -259,6 +314,16 @@ class PixelRenderer implements DebuggableRenderer {
   private postRT!: WebGLRenderTarget;
   private captureRT: WebGLRenderTarget | null = null;
   private hdrType: TextureDataType = HalfFloatType;
+  /** Luminance governor: 40×23 block sums and a 1×1 ping-pong state. */
+  private lumRT!: WebGLRenderTarget;
+  private govRT: WebGLRenderTarget[] = [];
+  private govIdx = 0;
+  private govType: TextureDataType = HalfFloatType;
+  private govReset = true;
+  private govOn = true;
+  private lumaRead: LumaReadback | null = null;
+  private comfort = 1;
+  private spritePush = false;
 
   // passes
   private ditherPass!: FullscreenPass;
@@ -268,6 +333,8 @@ class PixelRenderer implements DebuggableRenderer {
   private bloomUp!: FullscreenPass;
   private godPass!: FullscreenPass;
   private postPass!: FullscreenPass;
+  private lumPass!: FullscreenPass;
+  private govPass!: FullscreenPass;
   private finalPass!: FullscreenPass;
   private layers!: LayerTextures;
   private compositor!: LayerCompositor;
@@ -296,10 +363,17 @@ class PixelRenderer implements DebuggableRenderer {
     nImpulse: 0,
   };
   private readonly postShock = new Float32Array(MAX_SHOCKS * 4);
-  /** Dynamic lights of the bodies (screen px): x, y, radius, intensity per light, and their colours. Shared by the grade, post and foreground passes. */
+  /**
+   * Dynamic lights (screen px): x, y, radius, intensity per light, their colours, and whether each is an impact light. Body
+   * lights are packed first. Shared by the grade, post and foreground passes.
+   */
   private readonly lightData: IUniform<Float32Array> = { value: new Float32Array(16) };
   private readonly lightCol: IUniform<Float32Array> = { value: new Float32Array(12) };
+  private readonly lightImp: IUniform<Float32Array> = { value: new Float32Array(4) };
   private readonly nLights: IUniform<number> = { value: 0 };
+  /** Local wound refraction around the strongest impact lights: x, y, radius, strength (≤ 2). */
+  private readonly refr = new Float32Array(8);
+  private nRefr = 0;
   private foreground: Foreground | null = null;
   private fgEnabled = true;
   private readonly fgShared = {
@@ -314,6 +388,8 @@ class PixelRenderer implements DebuggableRenderer {
     nImp: { value: 0 },
     lights: this.lightData,
     nLights: this.nLights,
+    dolly: { value: 0 },
+    kick: { value: new Vector2() },
   };
   /** Reused every frame (no per-frame allocation). */
   private readonly sceneryFrame: SceneryFrame = {
@@ -321,6 +397,8 @@ class PixelRenderer implements DebuggableRenderer {
     dtSec: 0,
     view: { x0: 0, y0: 0, w: LOGICAL_W, h: LOGICAL_H },
     camera: { x: 0, y: 0, zoom: 1, roll: 0, shakeX: 0, shakeY: 0, dolly: 0, kickX: 0, kickY: 0 },
+    cam: { dolly: 0, kickX: 0, kickY: 0 },
+    comfort: 1,
     fx: { shockwaves: [], lenses: [], impulses: [], flash: 0, aberration: 0, intensity: 0, timeScale: 1 },
     forces: this.forces,
   };
@@ -356,6 +434,10 @@ class PixelRenderer implements DebuggableRenderer {
     // the timer-query extension object belongs to the dead context: ask the new one
     this.gpuTimer = GpuTimer.create(this.three.getContext() as WebGL2RenderingContext);
     this.stats.gpuMs = null;
+    // the pixel-pack buffers and fences died with the old context too (dropped, never deleted)
+    this.lumaRead = null;
+    this.lumaRead = this.makeLumaReadback();
+    this.govReset = true;
     this.active = null;
     this.prepared = null;
     this.jobs.clear();
@@ -372,11 +454,15 @@ class PixelRenderer implements DebuggableRenderer {
     this.canvas = canvas;
     this.opts = opts;
     const q = opts.quality ?? 'auto';
+    this.spritePush =
+      opts.spritePush ??
+      (typeof location !== 'undefined' && new URLSearchParams(location.search).get('push') === '1');
     this.stats.auto = q === 'auto';
     this.tierNow = q === 'auto' ? 1 : q;
     this.tier = TIERS[this.tierNow];
     this.stats.tier = this.tierNow;
-    this.controller = q === 'auto' ? new QualityController({ startTier: 1 }) : null;
+    // tier 2 (2× supersampled scenery) stays opt-in (SLICE_PLAN §0: an integrated GPU must not probe its way into it)
+    this.controller = q === 'auto' ? new QualityController({ startTier: 1, maxTier: 1 }) : null;
     this.three = new WebGLRenderer({
       canvas,
       antialias: false,
@@ -401,10 +487,13 @@ class PixelRenderer implements DebuggableRenderer {
     const canFloat =
       r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float');
     this.hdrType = canFloat ? HalfFloatType : UnsignedByteType;
+    // the governor's running average wants full float (an EMA in half float stalls on tiny steps); half float otherwise
+    this.govType = r.extensions.has('EXT_color_buffer_float') ? FloatType : this.hdrType;
     r.extensions.get('EXT_color_buffer_float');
     r.extensions.get('EXT_color_buffer_half_float');
     r.extensions.get('OES_texture_float_linear');
     this.gpuTimer = GpuTimer.create(r.getContext() as WebGL2RenderingContext);
+    this.lumaRead = this.makeLumaReadback();
 
     this.layers = new LayerTextures(r);
     this.compositor = new LayerCompositor(this.layers, this.emisGain);
@@ -428,6 +517,8 @@ class PixelRenderer implements DebuggableRenderer {
       this.bloomUp,
       this.godPass,
       this.postPass,
+      this.lumPass,
+      this.govPass,
       this.finalPass,
     ];
     await Promise.all([...passes.map((p) => p.compile(r)), this.compositor.compile(r)]);
@@ -440,7 +531,11 @@ class PixelRenderer implements DebuggableRenderer {
     this.layerRT = makeRT(LOGICAL_W, LOGICAL_H, { count: 2, filter: 'nearest' });
     this.haloA = makeRT(LOGICAL_W >> 1, LOGICAL_H >> 1, { filter: 'linear' });
     this.haloB = makeRT(LOGICAL_W >> 1, LOGICAL_H >> 1, { filter: 'linear' });
-    this.postRT = makeRT(LOGICAL_W, LOGICAL_H, { filter: 'nearest' });
+    // linear: only the sharp-bilinear final path filters it; every other read is texelFetch (exact)
+    this.postRT = makeRT(LOGICAL_W, LOGICAL_H, { filter: 'linear' });
+    this.lumRT = makeRT(Math.ceil(LOGICAL_W / 16), Math.ceil(LOGICAL_H / 16), { type: this.govType });
+    this.govRT = [makeRT(1, 1, { type: this.govType }), makeRT(1, 1, { type: this.govType })];
+    this.govReset = true;
     this.godRT = makeRT(LOGICAL_W >> 1, LOGICAL_H >> 1, { filter: 'linear' });
     this.buildBloomChain();
   }
@@ -485,7 +580,6 @@ class PixelRenderer implements DebuggableRenderer {
       uNumLens: { value: 0 },
       uBloomThreshold: { value: 0.7 },
       uBloomGain: { value: 0.5 },
-      uFlash: { value: 0 },
       uHalo: { value: this.haloB.texture },
       uCover: { value: this.layerRT.textures[0] },
       uHasLayers: { value: 0 },
@@ -495,6 +589,7 @@ class PixelRenderer implements DebuggableRenderer {
       uBandRatio: { value: 0.3 },
       uLt: this.lightData,
       uLtCol: this.lightCol,
+      uLtImp: this.lightImp,
       uNLt: this.nLights,
       uRelight: { value: 0 },
     });
@@ -560,12 +655,13 @@ class PixelRenderer implements DebuggableRenderer {
       uGlowDamp: { value: new Vector2(0.6, 0.9) },
       uLt: this.lightData,
       uLtCol: this.lightCol,
+      uLtImp: this.lightImp,
       uNLt: this.nLights,
       uRelight: { value: 0 },
       uShock: { value: this.postShock },
       uNumShock: { value: 0 },
-      uAberration: { value: 0 },
-      uFlash: { value: 0 },
+      uRefr: { value: this.refr },
+      uNumRefr: { value: 0 },
       uBloomGain: { value: 1 },
       uBloomLevels: { value: 14 },
       uGodColor: { value: this.godColor },
@@ -575,6 +671,19 @@ class PixelRenderer implements DebuggableRenderer {
       uFrameNo: { value: 0 },
       uGodTint: { value: 0.5 },
     });
+    this.lumPass = new FullscreenPass(LUM_DOWN_FRAG, {
+      uRes: res,
+      uSrc: { value: this.postRT.texture },
+    });
+    this.govPass = new FullscreenPass(GOVERN_FRAG, {
+      uBlocks: { value: this.lumRT.texture },
+      uPrev: { value: this.govRT[1]!.texture },
+      uDt: { value: 1 / 60 },
+      uTau: { value: GOVERNOR_TAU },
+      uLimit: { value: GOVERNOR_LIMIT },
+      uReset: { value: 1 },
+      uOn: { value: 1 },
+    });
     this.finalPass = new FullscreenPass(FINAL_FRAG, {
       uRes: res,
       uPost: { value: this.postRT.texture },
@@ -582,6 +691,10 @@ class PixelRenderer implements DebuggableRenderer {
       uHasUi: { value: 0 },
       uZoom: { value: 1 },
       uRoll: { value: 0 },
+      uPush: { value: 0 },
+      uSharp: { value: 1 },
+      uGov: { value: this.govRT[0]!.texture },
+      uHasGov: { value: 0 },
     });
   }
 
@@ -680,6 +793,7 @@ class PixelRenderer implements DebuggableRenderer {
     this.lastTimeSec = -1;
     this.sceneTime = 0;
     this.drawnOnce = false;
+    this.govReset = true;
     this.controller?.disrupt(now());
     if (old && old !== p) this.disposeStage(old);
   }
@@ -838,27 +952,61 @@ class PixelRenderer implements DebuggableRenderer {
       lens[k * 4 + 3] = l.strength;
       k++;
     }
+    // lights: body lights first (they own sprite relighting), then impact lights; ≤ 4 in all
     const lt = this.lightData.value;
     const lc = this.lightCol.value;
+    const li = this.lightImp.value;
     let nl = 0;
+    let maxImp = 0;
     const lights = fx.lights;
     if (lights) {
-      for (let i = 0; i < lights.length && nl < 4; i++) {
-        const l = lights[i]!;
-        if (!(l.intensity > 0.02) || !(l.radius > 1)) continue;
-        lt[nl * 4] = l.x - vx;
-        lt[nl * 4 + 1] = l.y - vy;
-        lt[nl * 4 + 2] = l.radius;
-        lt[nl * 4 + 3] = l.intensity;
-        lc[nl * 3] = l.r;
-        lc[nl * 3 + 1] = l.g;
-        lc[nl * 3 + 2] = l.b;
-        nl++;
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < lights.length && nl < 4; i++) {
+          const l = lights[i]!;
+          const imp = l.kind === 'impact';
+          if (imp !== (pass === 1)) continue;
+          if (!(l.intensity > 0.02) || !(l.radius > 1)) continue;
+          lt[nl * 4] = l.x - vx;
+          lt[nl * 4 + 1] = l.y - vy;
+          lt[nl * 4 + 2] = l.radius;
+          lt[nl * 4 + 3] = l.intensity;
+          lc[nl * 3] = l.r;
+          lc[nl * 3 + 1] = l.g;
+          lc[nl * 3 + 2] = l.b;
+          li[nl] = imp ? 1 : 0;
+          if (imp) maxImp = Math.max(maxImp, l.intensity);
+          nl++;
+        }
       }
     }
     this.nLights.value = nl;
+    // Local wound refraction (D5, replaces the full-frame aberration): around the impact lights, `fx.aberration` is the
+    // strongest lens strength (FxState decays it with its light), shared out by each impact light's share of the brightest.
+    let nr = 0;
+    if (fx.aberration > 0.01 && maxImp > 0) {
+      for (let i = 0; i < nl && nr < 2; i++) {
+        if (li[i]! < 0.5) continue;
+        const s = (Math.min(1, fx.aberration) * lt[i * 4 + 3]!) / maxImp;
+        if (s < 0.02) continue;
+        this.refr[nr * 4] = lt[i * 4]!;
+        this.refr[nr * 4 + 1] = lt[i * 4 + 1]!;
+        this.refr[nr * 4 + 2] = lt[i * 4 + 2]! * 0.7;
+        this.refr[nr * 4 + 3] = s;
+        nr++;
+      }
+    }
+    this.nRefr = nr;
     this.ditherPass.uniforms.uNumLens!.value = k;
     (this.ditherPass.uniforms.uLens!.value as Float32Array).set(lens);
+  }
+
+  /** What the scenery does with the camera this frame (D27): dolly scale at parallax 1 and the impact kick. */
+  private sceneryCamera(cam: RenderFrame['camera'], out: SceneryFrame['cam']): void {
+    const zoomDolly = this.spritePush ? 0 : Math.max(0, (cam.zoom ?? 1) - 1) * DOLLY_FROM_ZOOM;
+    const d = Math.max(0, Math.min(1, (cam.dolly ?? 0) + zoomDolly));
+    out.dolly = d * DOLLY_MAX;
+    out.kickX = Math.max(-KICK_MAX, Math.min(KICK_MAX, cam.kickX ?? 0));
+    out.kickY = Math.max(-KICK_MAX, Math.min(KICK_MAX, cam.kickY ?? 0));
   }
 
   draw(frame: RenderFrame): void {
@@ -872,6 +1020,7 @@ class PixelRenderer implements DebuggableRenderer {
       else if (!this.jobs.has(frame.stage)) void this.prepareStage(frame.stage).catch(() => undefined);
     }
     const scenery = this.active?.scenery ?? null;
+    this.collectLuma();
     r.info.reset();
     this.frameNo++;
     this.layers.beginFrame();
@@ -891,12 +1040,14 @@ class PixelRenderer implements DebuggableRenderer {
 
     this.packFx(fx, view.x0, view.y0);
     const look = scenery?.look ?? FALLBACK_LOOK;
+    const sf = this.sceneryFrame;
+    this.sceneryCamera(frame.camera, sf.cam);
     if (scenery) {
-      const sf = this.sceneryFrame;
       sf.timeSec = this.sceneTime;
       sf.dtSec = dt;
       sf.view = view;
       sf.camera = frame.camera;
+      sf.comfort = this.comfort;
       sf.fx = fx;
       scenery.update(sf);
       scenery.render(this.sceneRT);
@@ -912,11 +1063,11 @@ class PixelRenderer implements DebuggableRenderer {
 
     // ---- resolve: lens → tone map → readability grade → dither into the stage palette ----
     const du = this.ditherPass.uniforms;
-    du.uExposure!.value = look.exposure * (1 + 0.18 * fx.intensity);
+    // D5: the fight's intensity only nudges exposure (it used to step it +18 %); FxState also slew-limits intensity itself
+    du.uExposure!.value = look.exposure * (1 + 0.06 * fx.intensity);
     du.uContrast!.value = look.contrast;
     du.uBloomThreshold!.value = look.bloomThreshold;
     du.uBloomGain!.value = look.bloomGain;
-    du.uFlash!.value = Math.min(1, fx.flash) * 0.45;
     du.uHasLayers!.value = hasLayers ? 1 : 0;
     (du.uHaloParams!.value as Vector4).set(halo.strength, halo.desat, halo.rim, halo.rimReach ?? 1);
     (du.uHaloLift!.value as Vector2).set(halo.lift ?? DEFAULT_SPRITE_HALO.lift, 0);
@@ -946,6 +1097,8 @@ class PixelRenderer implements DebuggableRenderer {
       fu.intensity.value = fx.intensity;
       fu.nShock.value = this.forces.nShock;
       fu.nImp.value = this.forces.nImpulse;
+      fu.dolly.value = sf.cam.dolly;
+      fu.kick.value.set(sf.cam.kickX, sf.cam.kickY);
       this.foreground.setBand(restY + band.top - view.y0, restY + band.bottom - view.y0);
       this.foreground.render(r, this.frameRT);
     }
@@ -955,6 +1108,7 @@ class PixelRenderer implements DebuggableRenderer {
 
     // ---- god rays (half res) ----
     if (scenery) scenery.lightScreenPos(this.lightPos);
+    this.warpLight(this.lightPos, sf.cam);
     const gu = this.godPass.uniforms;
     (gu.uLight!.value as Vector2).set(this.lightPos.x, this.lightPos.y);
     gu.uHaloR!.value = look.godRayHalo;
@@ -966,15 +1120,18 @@ class PixelRenderer implements DebuggableRenderer {
     const pu = this.postPass.uniforms;
     pu.uRelight!.value = this.tierNow > 0 ? 1 : 0;
     pu.uNumShock!.value = this.forces.nShock;
-    pu.uAberration!.value = Math.min(1, fx.aberration);
-    pu.uFlash!.value = Math.min(1, fx.flash) * 0.5;
-    pu.uGodGain!.value = look.godRayGain * (0.75 + 0.5 * fx.intensity);
+    pu.uNumRefr!.value = this.nRefr;
+    pu.uBloomGain!.value = 0.6 + 0.4 * this.comfort;
+    pu.uGodGain!.value = look.godRayGain * (0.85 + 0.25 * fx.intensity);
     pu.uVignette!.value = look.vignette;
     pu.uFrameNo!.value = frame.tick & 1023; // grain follows the sim tick: identical frames render identically
     pu.uHasLayers!.value = hasLayers ? 1 : 0;
     const damp = look.glowDamp ?? DEFAULT_GLOW_DAMP;
     (pu.uGlowDamp!.value as Vector2).set(damp[0], damp[1]);
     this.postPass.render(r, this.postRT);
+
+    // ---- luminance governor: measure the frame, hold back any full-frame brightening beyond the limit ----
+    this.govern(frame.tick, Math.min(0.1, elapsed));
 
     // ---- present ----
     this.present(frame);
@@ -1087,11 +1244,116 @@ class PixelRenderer implements DebuggableRenderer {
     }
   }
 
+  /** The god-ray light is far away (parallax ≈ 0.1): it follows the scenery dolly / kick like a far layer. */
+  private warpLight(p: { x: number; y: number }, cam: SceneryFrame['cam']): void {
+    const par = 0.1;
+    const s = (1 - cam.dolly) / (1 - par * cam.dolly);
+    const kx = p.x + cam.kickX * (par - 1);
+    const ky = p.y + cam.kickY * (par - 1);
+    p.x = LOGICAL_W / 2 + (kx - LOGICAL_W / 2) * s;
+    p.y = LOGICAL_H / 2 + (ky - LOGICAL_H / 2) * s;
+  }
+
+  private readonly lumaQueue: LumaSample[] = [];
+
+  /**
+   * Luminance governor (D5 safety net): block sums of the post frame → a 1×1 state that holds back any rise of the frame's mean
+   * relative luminance beyond GOVERNOR_LIMIT above its 300 ms average (the final pass applies the gain; UI excluded). Its state
+   * is read back asynchronously for `stats.luma` / `drainLuma()`.
+   */
+  private govern(tick: number, dtSec: number): void {
+    const r = this.three;
+    this.lumPass.render(r, this.lumRT);
+    const prev = this.govRT[this.govIdx]!;
+    const next = this.govRT[1 - this.govIdx]!;
+    const g = this.govPass.uniforms;
+    g.uPrev!.value = prev.texture;
+    g.uDt!.value = dtSec;
+    g.uReset!.value = this.govReset ? 1 : 0;
+    g.uOn!.value = this.govOn ? 1 : 0;
+    // the comfort setting tightens the cap too (half of it at 0 %)
+    g.uLimit!.value = GOVERNOR_LIMIT * (0.5 + 0.5 * this.comfort);
+    this.govPass.render(r, next);
+    this.govIdx = 1 - this.govIdx;
+    this.govReset = false;
+    const fu = this.finalPass.uniforms;
+    fu.uGov!.value = next.texture;
+    fu.uHasGov!.value = 1;
+    const rb = this.lumaRead;
+    if (rb) {
+      // `next` is still the bound framebuffer: queue its 16 bytes into a pack buffer, collect the ones that have landed
+      rb.capture(this.frameNo, tick);
+    }
+  }
+
+  /**
+   * Collect finished luminance reads. Called at the START of a frame, before it issues any GL command, so the buffer read
+   * only has to wait for the previous frame's (already submitted) commands to reach the GPU process.
+   */
+  private collectLuma(): void {
+    const rb = this.lumaRead;
+    if (!rb) return;
+    const a = now();
+    const q = this.lumaQueue;
+    const before = q.length;
+    rb.poll(q, this.frameNo);
+    if (q.length > before) this.stats.luma = q[q.length - 1]!;
+    if (q.length > LUMA_KEEP) q.splice(0, q.length - LUMA_KEEP);
+    this.lumaPollMs = Math.max(this.lumaPollMs * 0.98, now() - a);
+  }
+
+  /** Slowly decaying maximum CPU ms of collectLuma (verification). */
+  private lumaPollMs = 0;
+
+  private makeLumaReadback(): LumaReadback | null {
+    this.lumaRead?.dispose();
+    if (this.govType !== FloatType) return null;
+    return LumaReadback.create(this.three.getContext() as WebGL2RenderingContext);
+  }
+
+  drainLuma(): LumaStats[] {
+    const out = this.lumaQueue.slice();
+    this.lumaQueue.length = 0;
+    return out;
+  }
+
+  setComfort(flash: number): void {
+    this.comfort = Math.max(0, Math.min(1, Number.isFinite(flash) ? flash : 1));
+  }
+
+  debugSetGovernor(on: boolean): void {
+    this.govOn = on;
+  }
+
+  debugLumaReadback(diag: boolean): {
+    available: boolean;
+    skipped: number;
+    errors: string[];
+    pollMs: number;
+  } {
+    const rb = this.lumaRead;
+    if (rb) rb.diag = diag;
+    return {
+      available: rb !== null,
+      skipped: rb?.skipped ?? 0,
+      errors: rb ? [...rb.errors] : [],
+      pollMs: this.lumaPollMs,
+    };
+  }
+
+  debugSetSpritePush(on: boolean): void {
+    this.spritePush = on;
+  }
+
   private present(frame: RenderFrame): void {
     const r = this.three;
     const fu = this.finalPass.uniforms;
     const cam = frame.camera;
-    fu.uZoom!.value = Math.max(1, Math.min(1.06, cam.zoom));
+    // D27: sprites stay 1:1 unless the sprite-push A/B (push=1) is on; then zoom resamples sharp-bilinearly
+    const zoom = this.spritePush ? Math.max(1, Math.min(SPRITE_PUSH_MAX, cam.zoom)) : 1;
+    fu.uZoom!.value = zoom;
+    fu.uPush!.value = this.spritePush ? 1 : 0;
+    fu.uSharp!.value = this.layout.scale * zoom;
     fu.uRoll!.value = Math.max(-ROLL_LIMIT, Math.min(ROLL_LIMIT, cam.roll));
     if (frame.ui && frame.ui.visible) {
       fu.uUi!.value = this.layers.acquire(frame.ui).tex;
@@ -1118,11 +1380,14 @@ class PixelRenderer implements DebuggableRenderer {
     const fu = this.finalPass.uniforms;
     const zoom = fu.uZoom!.value;
     const roll = fu.uRoll!.value;
+    const sharp = fu.uSharp!.value;
     fu.uZoom!.value = 1;
     fu.uRoll!.value = 0;
+    fu.uSharp!.value = 1;
     this.finalPass.render(r, this.captureRT);
     fu.uZoom!.value = zoom;
     fu.uRoll!.value = roll;
+    fu.uSharp!.value = sharp;
     const bytes = new Uint8Array(LOGICAL_W * LOGICAL_H * 4);
     r.readRenderTargetPixels(this.captureRT, 0, 0, LOGICAL_W, LOGICAL_H, bytes);
     r.setRenderTarget(null);
@@ -1194,9 +1459,13 @@ class PixelRenderer implements DebuggableRenderer {
       this.bloomUp,
       this.godPass,
       this.postPass,
+      this.lumPass,
+      this.govPass,
       this.finalPass,
     ])
       p.dispose();
+    this.lumaRead?.dispose();
+    this.lumaRead = null;
     for (const t of [
       this.sceneRT,
       this.frameRT,
@@ -1206,6 +1475,8 @@ class PixelRenderer implements DebuggableRenderer {
       this.godRT,
       this.postRT,
       this.captureRT,
+      this.lumRT,
+      ...this.govRT,
       ...this.bloomRTs,
     ])
       t?.dispose();

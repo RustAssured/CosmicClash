@@ -423,11 +423,12 @@ export async function runVerification(opts: { quick?: boolean } = {}): Promise<V
     return Math.max(...env) - Math.min(...env);
   };
 
-  // --- volume control (a fixed, unclipped test tone-like event; master scales linearly AFTER the dynamics)
+  // --- volume control: a light blow that stays under the limiter's ceiling even at full master — the fader scales it linearly
+  // (louder settings press into the true-peak limiter, which is the point of putting master before it)
   const gainProbe = (master: number) =>
     render(1.2, (eng) => {
-      eng.setVolumes({ master, sfx: 1, music: 0 });
-      eng.handleAt([hit({ type: 'KINETIC', energy: 400 })], 0.05);
+      eng.setVolumes({ master, sfx: 0.4, music: 0 });
+      eng.handleAt([hit({ type: 'KINETIC', energy: 200 })], 0.05);
     });
   const zero = await render(1.2, (eng) => {
     eng.setVolumes({ master: 0 });

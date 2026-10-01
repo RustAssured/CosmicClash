@@ -47,7 +47,9 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
       continue;
     }
     expect(e.peakDb, `${e.name} is inaudible`).toBeGreaterThan(-30);
-    expect(e.peakDb, `${e.name} is hot before the limiter`).toBeLessThan(-2);
+    // D6 re-stage (slice Phase 1): impacts no longer pass a compressor; the lookahead true-peak limiter owns the
+    // ceiling and takes 2–5 dB off the heaviest blows by design, so pre-limiter peaks up to ~+2 dB are expected
+    expect(e.peakDb, `${e.name} is far too hot before the limiter`).toBeLessThan(4);
     expect(e.tailSec, `${e.name} never decays`).toBeLessThan(6);
   }
   // menu sounds sit above the menu score (calm score ≈ −28 dB rms): audible, but the biggest ones are not louder than a KO
@@ -91,7 +93,7 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
   expect(t.events.length).toBeGreaterThan(60);
   for (const e of t.events) {
     expect(e.peakDb, `${e.name} is inaudible`).toBeGreaterThan(-26);
-    expect(e.peakDb, `${e.name} is hot before the limiter`).toBeLessThan(-3);
+    expect(e.peakDb, `${e.name} is far too hot before the limiter`).toBeLessThan(4);
     expect(e.tailSec, `${e.name} never decays`).toBeLessThan(6);
   }
   const by = Object.fromEntries(t.character.map((c) => [c.titan, c]));

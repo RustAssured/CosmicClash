@@ -30,12 +30,24 @@ float hash13(vec3 p3) {
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 `;
 
-/** Dynamic light sources (the fighters' own lights). Positions are screen-space logical px (top-left origin). */
+/**
+ * Dynamic light sources: the fighters' own lights ('body') and short local impact bursts ('impact', D5: they replace every
+ * full-screen flash). Positions are screen-space logical px (top-left origin). Body lights are packed first.
+ */
 const LIGHTS_GLSL = /* glsl */ `
 uniform vec4 uLt[4];       // x, y, falloff radius, intensity
 uniform vec3 uLtCol[4];
+uniform float uLtImp[4];   // 1 = impact light (never owns a sprite, never shades), 0 = body light
 uniform int uNLt;
 uniform int uRelight;      // 1 = relight the sprites (tier >= 1)
+`;
+
+/** sRGB transfer helpers (the frame targets hold sRGB-encoded palette colours). */
+const SRGB_GLSL = /* glsl */ `
+float srgbToLin1(float c) { return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4); }
+float linToSrgb1(float c) { return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1.0 / 2.4) - 0.055; }
+vec3 srgbToLin(vec3 c) { return vec3(srgbToLin1(c.r), srgbToLin1(c.g), srgbToLin1(c.b)); }
+vec3 linToSrgb(vec3 c) { return vec3(linToSrgb1(c.r), linToSrgb1(c.g), linToSrgb1(c.b)); }
 `;
 
 export const FULLSCREEN_VERT = /* glsl */ `${HEAD}
@@ -66,7 +78,6 @@ uniform vec4 uLens[4];         // x, y (logical px), horizon radius px, strength
 uniform int uNumLens;
 uniform float uBloomThreshold;
 uniform float uBloomGain;
-uniform float uFlash;
 // Fighter readability: everything drawn by the 2D layers casts a soft dark, slightly desaturated halo and a thin dark
 // contact rim INTO the scenery beneath it (multiplied in before the palette dither, so it dithers like the rest), and a
 // luminance ceiling in the vertical band where the fighters live keeps highlights from sitting right behind a body.
@@ -93,13 +104,18 @@ vec2 lensPx(vec2 p) {
   return p;
 }
 
+// One exit and an initialised result on every path: the D3D11 back-end (ANGLE on Windows) warned "use of potentially
+// uninitialized variable (f_sampleScene)" for the early-return form of this function.
 vec4 sampleScene(vec2 p) {
   vec2 uv = pxToUv(p);
-  if (uTaps == 1) return texture(uScene, uv);
-  // 2x supersampled: four bilinear taps = a 4x4 tent over the logical pixel.
-  vec2 o = vec2(0.5) / uRes;
-  return 0.25 * (texture(uScene, uv + vec2(-o.x, -o.y)) + texture(uScene, uv + vec2(o.x, -o.y)) +
-                 texture(uScene, uv + vec2(-o.x, o.y)) + texture(uScene, uv + vec2(o.x, o.y)));
+  vec4 s = texture(uScene, uv);
+  if (uTaps != 1) {
+    // 2x supersampled: four bilinear taps = a 4x4 tent over the logical pixel.
+    vec2 o = vec2(0.5) / uRes;
+    s = 0.25 * (texture(uScene, uv + vec2(-o.x, -o.y)) + texture(uScene, uv + vec2(o.x, -o.y)) +
+                texture(uScene, uv + vec2(-o.x, o.y)) + texture(uScene, uv + vec2(o.x, o.y)));
+  }
+  return s;
 }
 
 // Coverage of the 2D layers in the ring of pixels just around this one (dilation by reach px, 1 or 2).
@@ -166,7 +182,6 @@ void main() {
   vec3 t = m > 1e-5 ? x * (tm / m) : vec3(0.0);
   t = mix(t, vec3(tm), smoothstep(1.4, 4.0, m) * 0.75);
   t = clamp((t - 0.5) * uContrast + 0.5, 0.0, 1.0);
-  t = mix(t, vec3(1.0), uFlash);
 
   vec3 s = pow(t, vec3(1.0 / 2.2));
   vec4 e = texture(uLut, (s * (uLutSize - 1.0) + 0.5) / uLutSize);
@@ -224,7 +239,13 @@ void main() {
     cell = P;
   } else {
     float ly = float(P.y) - uPlace.y + uPlace.w;
-    float shift = floor(uFL.y * (uPlace.w - ly) / max(1.0, uPlace.w) + 0.5);
+    // round-half-up of lean·(anchorY − row) / anchorY, made exact: the division may be an ulp off on some GPUs (D3D11), the
+    // two products that check it are exact for pixel-sized values (layerMap.ts::sourceCell is the CPU twin)
+    float num = uFL.y * (uPlace.w - ly);
+    float den = max(1.0, uPlace.w);
+    float shift = floor(num / den + 0.5);
+    if ((shift - 0.5) * den > num) shift -= 1.0;
+    else if ((shift + 0.5) * den <= num) shift += 1.0;
     float d = float(P.x) - uPlace.x - shift;
     float lx = uFL.x > 0.0 ? d + uPlace.z : uPlace.z - 1.0 - d;
     cell = ivec2(int(lx), int(ly));
@@ -364,7 +385,8 @@ void main() {
 `;
 
 /* ------------------------------------------------------------------------------------------------ *
- *  Post: shockwave refraction → chromatic aberration → + bloom + god rays → vignette → grain → flash.
+ *  Post: shockwave + local wound refraction → chromatic fringe → + bloom + god rays → vignette → grain.
+ *  Nothing here changes the whole frame's brightness (D5): there is no flash; light from impacts is LOCAL (impact lights).
  *  Everything keeps to the pixel grid: samples snap to whole source pixels and bloom/vignette are dithered.
  * ------------------------------------------------------------------------------------------------ */
 export const POST_FRAG = /* glsl */ `${HEAD}${COMMON}${LIGHTS_GLSL}
@@ -377,8 +399,8 @@ uniform int uHasLayers;
 uniform vec2 uGlowDamp;      // how much bloom / god rays are damped ON the pixels of a sprite (0..1)
 uniform vec4 uShock[8];      // x, y (logical px), radius px, displacement px
 uniform int uNumShock;
-uniform float uAberration;   // 0..1 extra
-uniform float uFlash;
+uniform vec4 uRefr[2];       // local wound refraction: x, y (logical px), radius px, strength 0..1
+uniform int uNumRefr;
 uniform float uBloomGain;
 uniform float uBloomLevels;
 uniform vec3 uGodColor;
@@ -395,14 +417,9 @@ out vec4 o;
 // centre, so this is a Voronoi split that also catches debris); its normal is a sphere seen from the front, tilted by the offset from
 // that body's centre; the side facing a light gets stepped (Bayer-dithered) warm light, the far side steps into shadow, and two
 // bodies close together shade each other. Emissive / already-bright pixels are left alone. Everything is quantised: no muddy gradients.
-vec3 relight(vec3 col, vec2 p, float th) {
-  int j = 0;
-  float dj = 1e9;
-  for (int i = 0; i < 4; i++) {
-    if (i >= uNLt) break;
-    float d = length(p - uLt[i].xy);
-    if (d < dj) { dj = d; j = i; }
-  }
+// Only BODY lights own pixels: an impact light sits on a wound, and letting it claim the sprite would re-shade the body around
+// the wrong centre. Impact lights only ADD light to the faces turned toward them (no shading, no occlusion).
+vec3 relightFrom(vec3 col, vec2 p, float th, int j) {
   vec2 cj = uLt[j].xy;
   float Rb = clamp(uLt[j].z * 0.45, 42.0, 100.0);
   vec2 o2 = (p - cj) / Rb;
@@ -424,17 +441,32 @@ vec3 relight(vec3 col, vec2 p, float th) {
     float I = min(L.w, 1.3);
     float lam = max(dot(n, normalize(vec3(dir, 0.5))), 0.0);
     float lit = floor(I * fall * lam * 4.0 + th) / 4.0;
-    float dark = floor(I * fall * (1.0 - lam) * 3.0 + th) / 3.0;
     add += uLtCol[i] * lit;
-    shade += 0.4 * dark;
+    float body = 1.0 - step(0.5, uLtImp[i]);
+    float dark = floor(I * fall * (1.0 - lam) * 3.0 + th) / 3.0;
+    shade += 0.4 * dark * body;
     // mutual occlusion: near another body, the side facing it loses ambient light
     float Rbi = clamp(L.z * 0.45, 42.0, 100.0);
     float occ = smoothstep(Rbi * 2.0, Rbi * 0.8, dist) * max(dot(od, dir), 0.0) * r;
-    shade += 0.2 * floor(occ * 3.0 + th) / 3.0;
+    shade += 0.2 * floor(occ * 3.0 + th) / 3.0 * body;
   }
   float keep = 1.0 - smoothstep(0.62, 0.95, luma(col));   // glowing / near-white pixels keep their own light
-  col *= 1.0 - clamp(shade, 0.0, 0.5) * keep;
-  return col + add * 1.2 * keep;
+  vec3 res = col * (1.0 - clamp(shade, 0.0, 0.5) * keep);
+  return res + add * 1.2 * keep;
+}
+
+vec3 relight(vec3 col, vec2 p, float th) {
+  int j = -1;
+  float dj = 1e9;
+  for (int i = 0; i < 4; i++) {
+    if (i >= uNLt) break;
+    if (uLtImp[i] > 0.5) continue;
+    float d = length(p - uLt[i].xy);
+    if (d < dj) { dj = d; j = i; }
+  }
+  vec3 res = col;
+  if (j >= 0) res = relightFrom(col, p, th, j);
+  return res;
 }
 
 vec3 fetchFrame(vec2 sp) {
@@ -457,14 +489,26 @@ void main() {
     float ring = exp(-pow((r - s.z) / t, 2.0));
     sp -= d / r * ring * s.w;
   }
+  // Local wound refraction (replaces the old full-frame aberration): the space around a heavy wound bulges like a lens
+  // (sampling pulled toward its centre), with a chromatic split that lives only inside that lens.
+  vec2 caL = vec2(0.0);
+  for (int i = 0; i < 2; i++) {
+    if (i >= uNumRefr) break;
+    vec4 R = uRefr[i];
+    vec2 d = p - R.xy;
+    float r = length(d);
+    float w = exp(-(r * r) / max(R.z * R.z, 1.0));
+    sp -= d * w * (0.16 * R.w);
+    caL += d / (r + 1e-3) * w * (4.0 * R.w) * smoothstep(0.0, 0.35 * R.z, r);
+  }
   vec2 fromC = (p - uRes * 0.5) / (uRes.y * 0.5);
   float edge = dot(fromC, fromC);
-  float ca = (0.35 + 3.0 * uAberration) * edge;
+  float ca = 0.35 * edge;
   vec2 dir = fromC / (length(fromC) + 1e-4);
   vec3 col;
-  col.r = fetchFrame(sp + dir * ca).r;
+  col.r = fetchFrame(sp + dir * ca + caL).r;
   col.g = fetchFrame(sp).g;
-  col.b = fetchFrame(sp - dir * ca).b;
+  col.b = fetchFrame(sp - dir * ca - caL).b;
 
   float th = texelFetch(uBayer, ivec2(gl_FragCoord.xy) & 3, 0).r;
   vec2 uv = pxToUv(sp);
@@ -483,20 +527,82 @@ void main() {
 
   float n = hash13(vec3(floor(gl_FragCoord.xy), uFrameNo)) - 0.5;
   col += n * uGrain * (0.35 + luma(col));
-  col = mix(col, vec3(1.0), uFlash);
   o = vec4(clamp(col, 0.0, 1.0), 1.0);
+}
+`;
+
+/* ------------------------------------------------------------------------------------------------ *
+ *  Luminance governor (D5 safety net): mean relative luminance of the post frame → 1×1 state that clamps any brightening
+ *  of the whole frame to `uLimit` above its 300 ms average. Three tiny passes, no CPU read-back on the frame's path.
+ * ------------------------------------------------------------------------------------------------ */
+/** 640×360 → 40×23 blocks: r = Σ linear relative luminance of the block's pixels, g = pixel count. */
+export const LUM_DOWN_FRAG = /* glsl */ `${HEAD}${COMMON}${SRGB_GLSL}
+uniform sampler2D uSrc;
+out vec4 o;
+void main() {
+  ivec2 b = ivec2(gl_FragCoord.xy) * 16;
+  ivec2 lim = ivec2(uRes);
+  float s = 0.0;
+  float n = 0.0;
+  for (int y = 0; y < 16; y++) {
+    for (int x = 0; x < 16; x++) {
+      ivec2 q = b + ivec2(x, y);
+      if (q.x < lim.x && q.y < lim.y) {
+        vec3 c = srgbToLin(texelFetch(uSrc, q, 0).rgb);
+        s += dot(c, vec3(0.2126, 0.7152, 0.0722));
+        n += 1.0;
+      }
+    }
+  }
+  o = vec4(s, n, 0.0, 1.0);
+}
+`;
+
+/**
+ * 1×1 governor state (ping-pong): r = A, the 300 ms average of the DISPLAYED luminance; g = this frame's raw mean;
+ * b = the gain the final pass applies (≤ 1: only brightening is ever held back); a = the displayed mean.
+ */
+export const GOVERN_FRAG = /* glsl */ `${HEAD}
+uniform sampler2D uBlocks;   // 40×23 from LUM_DOWN_FRAG
+uniform sampler2D uPrev;     // previous state
+uniform float uDt;           // wall seconds since the previous frame
+uniform float uTau;          // averaging time constant (s)
+uniform float uLimit;        // largest allowed rise of the mean above its average (relative luminance, 0..1)
+uniform int uReset;          // 1 = adopt this frame as the average (first frame, stage switch)
+uniform int uOn;             // 0 = measure only (gain 1)
+out vec4 o;
+void main() {
+  float S = 0.0;
+  float N = 0.0;
+  for (int y = 0; y < 23; y++) {
+    for (int x = 0; x < 40; x++) {
+      vec2 t = texelFetch(uBlocks, ivec2(x, y), 0).rg;
+      S += t.r;
+      N += t.g;
+    }
+  }
+  float L = S / max(N, 1.0);
+  float A = uReset == 1 ? L : texelFetch(uPrev, ivec2(0), 0).r;
+  float g = uOn == 1 ? clamp((A + uLimit) / max(L, 1e-4), 0.0, 1.0) : 1.0;
+  float shown = L * g;
+  A += (shown - A) * (1.0 - exp(-uDt / uTau));
+  o = vec4(A, L, g, shown);
 }
 `;
 
 /* ------------------------------------------------------------------------------------------------ *
  *  Final: nearest-neighbour integer upscale to the canvas with micro-zoom + roll; UI composited last, un-zoomed.
  * ------------------------------------------------------------------------------------------------ */
-export const FINAL_FRAG = /* glsl */ `${HEAD}${COMMON}
-uniform sampler2D uPost;
+export const FINAL_FRAG = /* glsl */ `${HEAD}${COMMON}${SRGB_GLSL}
+uniform sampler2D uPost;     // LINEAR-filtered (only the sharp-bilinear path uses the filter; the rest is texelFetch)
 uniform sampler2D uUi;
 uniform int uHasUi;
 uniform float uZoom;
 uniform float uRoll;
+uniform int uPush;           // 1 = sharp-bilinear resampling (the push=1 sprite-push A/B), 0 = nearest
+uniform float uSharp;        // canvas px per logical px after zoom: the width of the sharp-bilinear transition
+uniform sampler2D uGov;      // 1×1 governor state (b = gain)
+uniform int uHasGov;
 in vec2 vUv;
 out vec4 o;
 void main() {
@@ -506,8 +612,22 @@ void main() {
   float sn = sin(uRoll);
   q = vec2(cs * q.x + sn * q.y, -sn * q.x + cs * q.y) / uZoom;
   vec2 sp = q + uRes * 0.5;
-  ivec2 c = clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1);
-  vec3 col = texelFetch(uPost, pxToTexel(c), 0).rgb;
+  vec3 col;
+  if (uPush == 1) {
+    // sharp-bilinear: flat inside each source pixel, a one-canvas-pixel linear blend at its edges (no shimmer, no uneven pixels)
+    vec2 t = sp - 0.5;
+    vec2 i = floor(t);
+    vec2 f = clamp((t - i - 0.5) * uSharp + 0.5, 0.0, 1.0);
+    vec2 s = clamp(i + 0.5 + f, vec2(0.5), uRes - 0.5);
+    col = texture(uPost, pxToUv(s)).rgb;
+  } else {
+    ivec2 c = clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1);
+    col = texelFetch(uPost, pxToTexel(c), 0).rgb;
+  }
+  if (uHasGov == 1) {
+    float g = texelFetch(uGov, ivec2(0), 0).b;
+    if (g < 0.999) col = linToSrgb(srgbToLin(col) * g);
+  }
   if (uHasUi == 1) {
     ivec2 u = clamp(ivec2(floor(p)), ivec2(0), ivec2(uRes) - 1);
     vec4 ui = texelFetch(uUi, u, 0);
