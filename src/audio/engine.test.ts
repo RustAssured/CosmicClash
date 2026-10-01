@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AudioEvent, AudioScene, SimEvent, StageId, TitanId } from '@/contracts';
 import { STAGE_IDS, TITAN_IDS } from '@/contracts';
 import { MODES, STAGE_MUSIC } from './dsp/scales';
-import { createAudioEngine } from './engine';
+import { DUCK_DB, DUCK_SEC, createAudioEngine } from './engine';
 import {
   FakeBiquad,
   FakeContext,
@@ -252,7 +252,7 @@ describe('master chain (the "nothing clips" guarantee)', () => {
     expect(reaches(taps.sfx as unknown as FakeNode, ctx.destination)).toBe(true);
     expect(reaches(taps.music as unknown as FakeNode, ctx.destination)).toBe(true);
   });
-  it('ducks the whole bed 4–8 dB for 300–600 ms under heavy blows, a KO and the big rings — never under light ones', async () => {
+  it('ducks the whole bed (DUCK_DB / DUCK_SEC; ≈ 4–8 dB for 300–600 ms in momentary loudness) under heavy blows, a KO and the big rings — never under light ones', async () => {
     const { eng, ctx } = await ready();
     const duck = eng.taps()!.music as unknown as FakeGain;
     const downs = (): number[] =>
@@ -305,14 +305,14 @@ describe('master chain (the "nothing clips" guarantee)', () => {
     const d = downs();
     expect(d).toHaveLength(1);
     const db = -20 * Math.log10(d[0]!);
-    expect(db).toBeGreaterThanOrEqual(4 - 1e-9);
-    expect(db).toBeLessThanOrEqual(8 + 1e-9);
+    expect(db).toBeGreaterThanOrEqual(DUCK_DB[0] - 1e-9);
+    expect(db).toBeLessThanOrEqual(DUCK_DB[1] + 1e-9);
     const ev = duck.gain.events.filter((e) => e.type === 'target');
     const hold = ev[ev.length - 1]!.t - ev[ev.length - 2]!.t;
-    expect(hold).toBeGreaterThanOrEqual(0.24);
-    expect(hold).toBeLessThanOrEqual(0.6);
+    expect(hold).toBeGreaterThanOrEqual(DUCK_SEC[0] - 0.07);
+    expect(hold).toBeLessThanOrEqual(DUCK_SEC[1]);
     eng.handleAt([{ t: 'ko', slot: 1, x: 800, y: 300 }], 4);
-    expect(-20 * Math.log10(Math.min(...downs()))).toBeCloseTo(8, 5);
+    expect(-20 * Math.log10(Math.min(...downs()))).toBeCloseTo(DUCK_DB[1], 5);
     expect(takeViolations()).toEqual([]);
     void ctx;
   });

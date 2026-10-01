@@ -37,6 +37,7 @@ export interface RoundReport {
   limiterGrDb: number;
   /** Limiter gain reduction (dB) around each heavy blow (and the KO, last). */
   limiterGrAtHeavyDb: number[];
+  limiterGrHistogram: GrHistogram;
   nonFinite: number;
 }
 
@@ -225,7 +226,33 @@ export async function runRoundVerification(): Promise<RoundReport> {
   await new Promise((res) => setTimeout(res, 50));
   const limiterGrDb = +eng.limiterReductionDb().toFixed(1);
 
+  const heavyTimes = [...blows.filter((b) => b.heavy).map((b) => b.t), ko];
+  return measureRender(buf, SECONDS, heavyTimes, gr, limiterGrDb);
+}
+
+/** Gain-reduction histogram of the limiter: share of 100 ms readings with no reduction, ≤ 1, 1–3, 3–6 and > 6 dB. */
+export interface GrHistogram {
+  none: number;
+  upTo1: number;
+  upTo3: number;
+  upTo6: number;
+  over6: number;
+}
+
+/**
+ * Telemetry's audio measures on a 4-channel render (1–2 = speakers, 3–4 = the bed tap): integrated / true peak / LRA of the
+ * speakers, and per heavy blow (times in s) the impact over the bed, the bed's dip and how long it stays ≥ 3 dB down.
+ * `gr` = limiter gain-reduction readings (dB) taken through the render.
+ */
+export function measureRender(
+  buf: AudioBuffer,
+  seconds: number,
+  heavyTimes: readonly number[],
+  gr: readonly { t: number; db: number }[],
+  limiterGrDb: number,
+): RoundReport {
   // measure: 100 ms blocks, telemetry's accumulator
+  const SR = buf.sampleRate;
   const block = SR / 10;
   const master = new LoudnessAccumulator();
   const bed = new LoudnessAccumulator();
@@ -252,7 +279,6 @@ export async function runRoundVerification(): Promise<RoundReport> {
   const duck: number[] = [];
   const duckMs: number[] = [];
   const grAt: number[] = [];
-  const heavyTimes = [...blows.filter((b) => b.heavy).map((b) => b.t), ko];
   for (const t of heavyTimes) {
     const before = median(series(bed, t - 3, t - 0.15, 'momentary'));
     const peak = Math.max(...series(master, t, t + 0.7, 'momentary'));
@@ -267,7 +293,7 @@ export async function runRoundVerification(): Promise<RoundReport> {
   }
   const med = (a: number[]): number => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)]!;
   return {
-    seconds: SECONDS,
+    seconds,
     integrated: +master.integrated.toFixed(1),
     truePeak: +master.truePeak.toFixed(2),
     range: +master.range.toFixed(1),
@@ -279,6 +305,27 @@ export async function runRoundVerification(): Promise<RoundReport> {
     median: { over: med(over), overShort: med(overS), duck: med(duck), duckMs: med(duckMs) },
     limiterGrDb,
     limiterGrAtHeavyDb: grAt,
+    limiterGrHistogram: histogram(gr),
     nonFinite,
   };
+}
+
+function histogram(gr: readonly { t: number; db: number }[]): GrHistogram {
+  const h: GrHistogram = { none: 0, upTo1: 0, upTo3: 0, upTo6: 0, over6: 0 };
+  // one reading per 100 ms block: the deepest of the readings that fell in it
+  const blocks = new Map<number, number>();
+  for (const g of gr) {
+    const k = Math.floor(g.t * 10);
+    blocks.set(k, Math.max(blocks.get(k) ?? 0, g.db));
+  }
+  const n = Math.max(1, blocks.size);
+  for (const db of blocks.values()) {
+    if (db <= 0.05) h.none++;
+    else if (db <= 1) h.upTo1++;
+    else if (db <= 3) h.upTo3++;
+    else if (db <= 6) h.upTo6++;
+    else h.over6++;
+  }
+  for (const k of Object.keys(h) as (keyof GrHistogram)[]) h[k] = +(h[k] / n).toFixed(3);
+  return h;
 }

@@ -64,7 +64,7 @@ const POLYPHONY = 28;
 /** Output high-pass (Hz, 24 dB/oct): laptop speakers cannot play below it, so it would only eat limiter headroom (D27). */
 export const OUTPUT_HIGHPASS_HZ = 50;
 /** Gain before the limiter that puts a typical round at −20 LUFS integrated with the default faders. */
-export const CALIBRATION_DB = 11.5;
+export const CALIBRATION_DB = 1.3;
 /** Menu / UI sounds sit this far under the calibrated impacts (they were authored against the old, quieter master). */
 const UI_LEVEL_DB = -9;
 /** Reverb returns: the impacts' space and the bed's. */
@@ -73,12 +73,17 @@ const BED_REVERB = 0.3;
 /** Gentle bed glue: compresses only the loudest bed moments, 2:1, slow (the impacts never pass through it). */
 export const BED_GLUE = { threshold: -18, knee: 10, ratio: 2, attack: 0.03, release: 0.35 } as const;
 /** The score at neutral sits this many dB under its full, committed level. */
-export const SCORE_NEUTRAL_DB = 15;
+export const SCORE_NEUTRAL_DB = 8;
 /** The whole bed sits this far under the impacts (dB): the floor a blow rises from. */
 export const BED_LEVEL_DB = -4.5;
-/** Bed duck under heavy blows: depth (dB) and total time (s) from the lightest to the heaviest qualifying event. */
-export const DUCK_DB: readonly [number, number] = [4, 8];
-export const DUCK_SEC: readonly [number, number] = [0.3, 0.6];
+/**
+ * Bed duck under heavy blows: gain depth (dB) and time held (s) from the lightest to the heaviest qualifying event. Telemetry
+ * reads the duck through 400 ms momentary loudness, which smooths it: these gains read as ≈ 4–8 dB for 300–600 ms there.
+ */
+export const DUCK_DB: readonly [number, number] = [6.5, 10];
+export const DUCK_SEC: readonly [number, number] = [0.45, 0.65];
+/** Smallest blow that ducks the bed (the same line telemetry draws for a heavy hit). */
+export const DUCK_MIN_ENERGY = 400;
 
 /**
  * The automatic makeup gain (dB) a DynamicsCompressorNode applies (WebAudio spec: (1 / gain at 0 dBFS)^0.6). Approximates the
@@ -614,8 +619,9 @@ class Engine implements AudioEngineExt {
         const tgt = this.voiceFor(this.titanOf(ev.target, ev.titan));
         tgt.onHitTaken?.(c, t, ev, mag);
         // the bed gets out of the way of a heavy blow (sidechain-style): this is what lets an impact stand 10+ dB over it
-        if (ev.heavy || mag >= 0.62)
-          this.duck(t, clamp01((mag - 0.55) / 0.4) * (1 - 0.7 * clamp01(ev.blocked)));
+        // every blow telemetry calls heavy (energy ≥ 400; continuous beam/field slices are flagged heavy but carry ~10–100)
+        if (ev.energy >= DUCK_MIN_ENERGY)
+          this.duck(t, clamp01((mag - 0.3) / 0.6) * (1 - 0.7 * clamp01(ev.blocked)));
         return;
       }
       case 'guard': {
@@ -795,13 +801,13 @@ class Engine implements AudioEngineExt {
       for (const f of scene.fighters ?? []) {
         const s = f.state;
         const k =
-          s === 'active' ? 1 : s === 'charge' ? 0.6 + 0.4 * clamp01(f.charge) : s === 'startup' ? 0.6 : 0;
+          s === 'charge' ? 0.4 + 0.4 * clamp01(f.charge) : s === 'startup' || s === 'active' ? 0.3 : 0;
         want = Math.max(want, k);
       }
       const i = clamp01((scene.intensity - 0.25) / 0.6);
       want = Math.max(want, i * i * (3 - 2 * i));
     } else if (!fighting) want = 1; // menus and results: the score is the whole show
-    const tau = want > this.commit ? 0.25 : 1.2;
+    const tau = want > this.commit ? 0.6 : 2;
     this.commit += (want - this.commit) * (1 - Math.exp(-Math.max(0, dtSec) / tau));
     g.scoreIn.gain.setTargetAtTime(dbToGain(-SCORE_NEUTRAL_DB * (1 - this.commit)), g.ac.currentTime, 0.08);
   }

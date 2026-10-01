@@ -166,13 +166,20 @@ void main() {
   // Light from the bodies themselves: nebula and dust near a light take on its colour, more where the scenery has substance (so
   // it reads as LIT gas, not an overlay), and a faint base so even empty space is touched. Applied after the fight-band
   // compression so a fighter's own glow is not squashed by it.
+  // Impact lights (D5) brighten the gas in its OWN hue and never light empty dust (the Gate B KO turned a dark dust column
+  // into a flat teal patch: blue light on near-black quantised into the palette's teal), with a capped amount.
   for (int i = 0; i < 4; i++) {
     if (i >= uNLt) break;
     vec4 L = uLt[i];
     float d = length(p - L.xy) / max(L.z, 1.0);
     float f = 1.0 / (1.0 + d * d * 3.0) * (1.0 - smoothstep(0.9, 1.7, d));
     float lm = clamp(luma(x) * 2.0, 0.0, 1.0);
-    x += uLtCol[i] * min(L.w, 1.1) * f * (0.11 + 0.4 * lm);
+    if (uLtImp[i] > 0.5) {
+      // an impact lights only what is there, in its own hue: dark dust stays dark (no floor term), lit gas gets brighter
+      x += x * min(L.w, 0.7) * f * 1.6 * lm;
+    } else {
+      x += uLtCol[i] * min(L.w, 1.1) * f * (0.11 + 0.4 * lm);
+    }
   }
   // Hue-preserving tone map: identity below the knee (so colours authored on a palette ramp stay on it), a soft
   // shoulder above it, and very bright light bleeds toward white the way an overexposed sensor does.
@@ -438,7 +445,8 @@ vec3 relightFrom(vec3 col, vec2 p, float th, int j) {
     vec2 dir = toL / max(dist, 1e-3);
     float fall = 1.0 / (1.0 + pow(dist / (L.z * 0.9), 2.0));
     fall *= 1.0 - smoothstep(1.0, 2.0, dist / L.z);
-    float I = min(L.w, 1.3);
+    // an impact light never burns a sprite white: the wound has to stay legible at the light's peak
+    float I = min(L.w, uLtImp[i] > 0.5 ? 0.75 : 1.3);
     float lam = max(dot(n, normalize(vec3(dir, 0.5))), 0.0);
     float lit = floor(I * fall * lam * 4.0 + th) / 4.0;
     add += uLtCol[i] * lit;
@@ -489,17 +497,21 @@ void main() {
     float ring = exp(-pow((r - s.z) / t, 2.0));
     sp -= d / r * ring * s.w;
   }
-  // Local wound refraction (replaces the old full-frame aberration): the space around a heavy wound bulges like a lens
-  // (sampling pulled toward its centre), with a chromatic split that lives only inside that lens.
+  // Local wound refraction (replaces the old full-frame aberration): a thin RIPPLE of the existing image travelling out from
+  // the wound — at most ~3 px of displacement on a ring, with a ~1 px chromatic split only on that ring's edge. It never
+  // magnifies or tints an area (a magnifying lens read as a foreign object in the Gate B footage). As the strength decays
+  // (1 → 0) the ring grows from 0.35 to 1.0 of the radius, so it reads as a wave leaving the blow.
   vec2 caL = vec2(0.0);
   for (int i = 0; i < 2; i++) {
     if (i >= uNumRefr) break;
     vec4 R = uRefr[i];
     vec2 d = p - R.xy;
-    float r = length(d);
-    float w = exp(-(r * r) / max(R.z * R.z, 1.0));
-    sp -= d * w * (0.16 * R.w);
-    caL += d / (r + 1e-3) * w * (4.0 * R.w) * smoothstep(0.0, 0.35 * R.z, r);
+    float r = length(d) + 1e-3;
+    float rr = R.z * (1.0 - 0.65 * R.w);
+    float width = 3.0 + 0.08 * R.z;
+    float ring = exp(-pow((r - rr) / width, 2.0));
+    sp -= d / r * ring * (3.0 * R.w);
+    caL += d / r * ring * smoothstep(0.35, 0.8, ring) * (1.2 * R.w);
   }
   vec2 fromC = (p - uRes * 0.5) / (uRes.y * 0.5);
   float edge = dot(fromC, fromC);

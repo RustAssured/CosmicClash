@@ -5,6 +5,7 @@ import type { TitanReport } from '../../dev/ui/audio-titans';
 import type { StageReport } from '../../dev/ui/audio-stages';
 import type { EventMetric } from '../../dev/ui/audio-render';
 import type { RoundReport } from '../../dev/ui/audio-round';
+import type { FightReport } from '../../dev/ui/audio-fight';
 
 /**
  * Run the audio engine's OfflineAudioContext verification in headless Chromium and print the measurements.
@@ -15,20 +16,26 @@ import type { RoundReport } from '../../dev/ui/audio-round';
  *   --body    just each titan's voice-only body character (seconds): the loop for tuning materials
  *   --round   D6: one scripted Witness-vs-Planet round through the real engine, measured like telemetry (LUFS, dBTP, LRA,
  *             impact over bed, bed duck); exit 1 if a D6 target is missed
+ *   --fight   D6 on REAL fight density: a real AI-vs-AI Match (Witness vs Planet) drives the engine offline; same measures
+ *             and targets, plus the limiter's gain-reduction histogram. [--seconds=60] [--seed=21] [--level=4]
  * Exit code 1 if the page errored or the report is missing.
  */
 const json = process.argv.includes('--json');
-const mode = process.argv.includes('--round')
-  ? 'round'
-  : process.argv.includes('--body')
-    ? 'body'
-    : process.argv.includes('--titans')
-      ? 'titans'
-      : process.argv.includes('--stages')
-        ? 'stages'
-        : process.argv.includes('--quick')
-          ? 'quick'
-          : '1';
+const arg = (k: string, d: string): string =>
+  process.argv.find((a) => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;
+const mode = process.argv.includes('--fight')
+  ? 'fight'
+  : process.argv.includes('--round')
+    ? 'round'
+    : process.argv.includes('--body')
+      ? 'body'
+      : process.argv.includes('--titans')
+        ? 'titans'
+        : process.argv.includes('--stages')
+          ? 'stages'
+          : process.argv.includes('--quick')
+            ? 'quick'
+            : '1';
 const { server, url } = await startDevServer();
 const browser = await launch();
 let code = 0;
@@ -52,10 +59,16 @@ try {
     // a missing favicon is the dev server's business, not the engine's
     if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text());
   });
-  await page.goto(`${url}/dev/ui/audio.html?verify=${mode}`);
-  if (mode === 'round') {
-    await page.waitForFunction(() => window.__round !== undefined, null, { timeout: 600_000 });
-    const r = (await page.evaluate(() => window.__round)) as RoundReport;
+  const extra =
+    mode === 'fight'
+      ? `&seconds=${arg('seconds', '60')}&seed=${arg('seed', '21')}&level=${arg('level', '4')}`
+      : '';
+  await page.goto(`${url}/dev/ui/audio.html?verify=${mode}${extra}`);
+  if (mode === 'round' || mode === 'fight') {
+    await page.waitForFunction(() => window.__round !== undefined || window.__fight !== undefined, null, {
+      timeout: 1_800_000,
+    });
+    const r = (await page.evaluate(() => window.__round ?? window.__fight)) as RoundReport | FightReport;
     console.log(JSON.stringify(r, null, json ? 2 : undefined));
     const miss: string[] = [];
     if (r.integrated < -21 || r.integrated > -19)

@@ -386,6 +386,49 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
       `Δ mean ${dKo.toFixed(4)} (target ≤ 0.20), far-corner diff ${corner.toFixed(2)}`,
     );
 
+    // Gate B: a blue KO light on the nursery's pink gas left a flat TEAL patch, and the old magnifying lens enlarged it.
+    // The KO now brightens the gas in its own hue and ripples the image: no area may change hue.
+    {
+      r.setStage('nursery');
+      r.draw(frameOf([], { tick: 1250, stage: 'nursery' }));
+      const before = r.captureLogical();
+      const ko2 = noFx();
+      // the light alone (the ripple displaces pixels by design, which is not a tint)
+      ko2.lights = [impactLight(620, 280, 130, 1.2, [0.55, 0.72, 1])];
+      r.draw(frameOf([], { tick: 1250, stage: 'nursery', fx: ko2 }));
+      const after = r.captureLogical();
+      const hue = (p: number): number => {
+        const R = p & 255;
+        const G = (p >>> 8) & 255;
+        const B = (p >>> 16) & 255;
+        const mx = Math.max(R, G, B);
+        const c = mx - Math.min(R, G, B);
+        if (c < 30) return -1;
+        const h = mx === R ? ((G - B) / c + 6) % 6 : mx === G ? (B - R) / c + 2 : (R - G) / c + 4;
+        return h * 60;
+      };
+      let shifted = 0;
+      let chromatic = 0;
+      for (let y = 180 - 90; y < 180 + 90; y++)
+        for (let x = 320 - 90; x < 320 + 90; x++) {
+          const h0 = hue(before[y * LOGICAL_W + x]!);
+          const h1 = hue(after[y * LOGICAL_W + x]!);
+          chromatic++;
+          if (h1 < 0) continue; // still neutral after the light: not a tint
+          // tinted = pulled toward the LIGHT's own hue (≈ 205°, blue-teal) from somewhere else (brightening along a stage ramp
+          // may move a hue — the nursery's ramps walk magenta → coral → amber — and that is the palette, not a tint)
+          const dist = (a: number, b: number): number => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+          // (a dark / neutral pixel turning blue-teal is exactly the Gate B patch: the dark dust column lit by the KO light)
+          if (dist(h1, 205) < 35 && (h0 < 0 || dist(h0, 205) > 60)) shifted++;
+        }
+      const frac = shifted / Math.max(1, chromatic);
+      check(
+        'the KO light keeps the hue of the gas around the wound (no tinted area — the Gate B teal patch)',
+        frac < 0.01,
+        `${(100 * frac).toFixed(1)} % of ${chromatic} pixels within 90 px turned blue-teal (the light's hue)`,
+      );
+      r.setStage('tussenruimte');
+    }
     // governor: a black frame, then the worst case — a full-frame white emissive layer appears in one frame
     r.debugSetGovernor(true);
     r.debugLumaReadback(true);

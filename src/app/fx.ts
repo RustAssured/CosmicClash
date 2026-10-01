@@ -325,7 +325,8 @@ export class FxState {
         }
         case 'ko': {
           const victim = match.fighters[e.slot].view.titan;
-          this.impact(e.x, e.y, TITAN_LIGHT[victim].c, 1.6, 200, 0.45, 1, true);
+          // capped core (Gate B: a 1.6 / 200 px KO light blew a ~150 px area out): bright, local, the wound stays legible
+          this.impact(e.x, e.y, TITAN_LIGHT[victim].c, 1.2, 130, 0.45, 1, true);
           this.heat += 3;
           break;
         }
