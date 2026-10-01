@@ -88,6 +88,7 @@ Ryzen 5 5500U, integrated Radeon (Vega 7, ANGLE/D3D11), ~6 GB RAM, 1920×1080 @ 
 (the worst is the first frame after start); **sim ms/tick mean 1.5, p99 4.9, max 37.7** (a 20 s run: p99 6.6). GC (GC-category trace only, 30 s): 190–194
 main-thread pauses, 6–8 over 4 ms, max 6.2–7.1 ms; **3-minute fight: 258 pauses, 6 over 4 ms, worst 14.0 ms** (`docs/gates/evidence/gate-a/baseline-gc.json`).
 Instrumentation costs are in DECISIONS D24. These numbers are the slice baseline; every gate re-measures them the same way.
+**Correction:** the runs above were at the ×2 scale (1280×720 output). The capture window was not full-screen, and Windows display scaling is 125 %. At a true 1920×1080 ×3 (DevTools-forced full screen): 59.4 fps mean, 1 % low 24.8, 33 frames > 25 ms, sim p99 5.3 ms. That run had concurrent CPU load (mean 46 %), so it is pessimistic; it will be re-measured on a quiet machine. `rtcapture` now records canvas size and scale in every JSON.
 
 ## Lead: matter tail-latency note (final integration)
 

@@ -18,7 +18,11 @@ npx vite preview --port 4173
 
 ## 2. Footage and strips (current build, real time, this machine's GPU)
 
-**Graphics: ANGLE / Direct3D11 on AMD Radeon (Vega 7), 1920×1080, tier `auto`.** The video files are too big for git. They are in `evidence/gate-a/` inside the repo folder.
+**Graphics: ANGLE / Direct3D11 on AMD Radeon (Vega 7), tier `auto`.**
+
+> **Correction (after Gate A).** Windows display scaling here is 125 %, and Playwright's launch flags did not make the capture window full-screen. The canvas was therefore 1285×883, and **every Phase 0 run above rendered at the ×2 scale (1280×720 output), not 1080p**. The clips are 1284×882.
+>
+> The capture tool now forces true full-screen through the DevTools protocol and records the canvas size and scale in every JSON. A re-run at ×3 (1920×1080, same build, `baseline-perf-1080.json`) gave **59.4 fps mean, 1 % low 24.8, 33 frames over 25 ms, sim p99 5.3 ms**. That run happened while the Phase 1 specialists were using the CPU (mean load 46 %), so it is pessimistic. A quiet-machine 1080p baseline is taken before Gate B. Everything up to the final upscale runs at 640×360 at any scale, so the other numbers here are unaffected. The video files are too big for git. They are in `evidence/gate-a/` inside the repo folder.
 
 | File | What to look at |
 |---|---|

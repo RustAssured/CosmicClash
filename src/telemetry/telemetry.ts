@@ -38,6 +38,11 @@ export interface TelemetryReport {
    * that move no root pixel are NOT counted, so this can over-state latency for moves whose first cue is a light.
    */
   pixelLatencyMs: number[];
+  /**
+   * Fighter-reported feel (SimEvent 'feel', Phase 1+): ticks from accepting a command to its first drawn pixel
+   * (`respond`, with the pixel channel) and to rest (`settle`), per command. The sim-side truth behind pixelLatencyMs.
+   */
+  feel: { slot: number; kind: 'respond' | 'settle'; cmd: string; ticks: number; channel?: string }[];
   settleMs: number[];
   wounds: WoundRecord[];
   rounds: RoundRecord[];
@@ -132,6 +137,7 @@ export class Telemetry {
   private respondedTicks: { slot: 0 | 1; tick: number }[] = [];
   private readonly latency: number[] = [];
   private readonly pixelLatency: number[] = [];
+  private readonly feel: TelemetryReport['feel'] = [];
   /** Per slot: the drawn root transform of the previous frame, and a command waiting for its first visible pixel. */
   private readonly drawn: [{ x: number; y: number; lean: number }, { x: number; y: number; lean: number }] = [
     { x: 0, y: 0, lean: 0 },
@@ -221,6 +227,8 @@ export class Telemetry {
       else if (e.t === 'move') this.moveStart[e.slot] = m.tick;
       else if (e.t === 'hit' && m.phase === 'fight') this.onHit(m, e);
       else if (e.t === 'matter' && e.kind === 'detach' && e.slot !== -1) this.onDetach(m, e.slot, e.mass);
+      else if (e.t === 'feel' && e.kind !== 'accept' && this.feel.length < 5000)
+        this.feel.push({ slot: e.slot, kind: e.kind, cmd: e.cmd, ticks: e.ticks, channel: e.channel });
     }
     for (const s of [0, 1] as const) {
       const v = m.fighters[s].view;
@@ -559,6 +567,7 @@ export class Telemetry {
       },
       inputLatencyMs: this.latency.map((x) => +x.toFixed(1)),
       pixelLatencyMs: this.pixelLatency.map((x) => +x.toFixed(1)),
+      feel: this.feel.slice(),
       settleMs: this.settle.map((x) => Math.round(x)),
       wounds: this.woundLog.slice(),
       rounds: this.rounds.slice(),

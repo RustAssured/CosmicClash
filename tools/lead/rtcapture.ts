@@ -12,7 +12,7 @@
  * Writes: <out>/<name>.webm (video+audio), <stripsOut>/<name>.json (telemetry, perf, GC, GPU), <stripsOut>/<name>-<strip>.png.
  * Long jobs are resumable at scenario granularity: an existing <name>.json is skipped unless --force=1.
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync, createWriteStream } from 'node:fs';
 import { LOGICAL_H, LOGICAL_W, rgba } from '@/contracts';
 import { PixelCanvas, drawText } from '@/ui';
@@ -220,6 +220,22 @@ const { page, errors } = await openGame(browser, url, null);
 const gpu = await page.evaluate(() => window.__ADEUK__!.gpu());
 console.log(`GPU: ${gpu}`);
 
+// Launch flags do not make Playwright's window full-screen; the DevTools protocol does. A windowed canvas on a 1080p
+// panel (with Windows display scaling) lands at the ×2 integer scale (1280×720) instead of ×3 — Phase 0 learned this.
+const cdp = await page.context().newCDPSession(page);
+const { windowId } = (await cdp.send('Browser.getWindowForTarget')) as { windowId: number };
+await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'fullscreen' } });
+await page.waitForTimeout(1200);
+const display = await page.evaluate(() => {
+  const c = document.getElementById('game') as HTMLCanvasElement;
+  const scale = Math.max(1, Math.floor(Math.min(c.width / 640, c.height / 360)));
+  return { canvas: [c.width, c.height], dpr: devicePixelRatio, css: [innerWidth, innerHeight], scale };
+});
+console.log(
+  `display: canvas ${display.canvas.join('×')} (dpr ${display.dpr}) → ×${display.scale} integer scale`,
+);
+if (display.scale < 3) console.warn('WARNING: not at ×3 — numbers are not 1080p numbers');
+
 // recording sink: chunks arrive as base64 through an exposed binding
 const webmPath = `${outDir}/${name}.webm`;
 const sink = record ? createWriteStream(webmPath) : null;
@@ -372,6 +388,7 @@ const out = {
   url,
   when: new Date().toISOString(),
   gpu,
+  display,
   recording: record ? { file: webmPath, mime } : null,
   audioUnlocked: audioOk,
   seconds,
@@ -384,6 +401,24 @@ const out = {
 };
 writeFileSync(`${stripsOut}/${name}.json`, JSON.stringify(out, null, 1));
 printSummary(out);
+if (record) toMp4(webmPath);
+
+/**
+ * MediaRecorder WebM has no duration/cues (players can't seek it) and Windows' default player is picky: remux the
+ * H.264 + Opus streams into an MP4 next to it (no re-encode, so frames stay exact). Skipped when ffmpeg is absent.
+ */
+function toMp4(webm: string): void {
+  const mp4 = webm.replace(/\.webm$/, '.mp4');
+  const r = spawnSync(
+    'ffmpeg',
+    ['-y', '-loglevel', 'error', '-i', webm, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', mp4],
+    {
+      stdio: 'inherit',
+    },
+  );
+  if (r.error) console.log('ffmpeg not found: keeping the .webm only');
+  else if (r.status === 0) console.log(`mp4: ${mp4}`);
+}
 
 /**
  * Main-thread GC pauses from a Chrome trace. The trace of a 3-minute fight exceeds V8's maximum string length, so the
