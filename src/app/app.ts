@@ -35,6 +35,9 @@ import { STAGES, isStageImplemented } from '@/stages';
 import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, renderPortrait } from '@/titans';
 import { PixelCanvas, createUI, drawText, titanInfoFromDef, type TitanInfo } from '@/ui';
 import { FIXTURE_TITANS, fixturePortraitProvider } from '@/ui/fixtures';
+import { AudioMeter } from '@/telemetry/audioMeter';
+import type { StripRecorder } from '@/telemetry/strips';
+import { Telemetry } from '@/telemetry/telemetry';
 import { fillHudState } from './announcer';
 import { createDebugLayer, drawDebugShapes } from './debugDraw';
 import { FxState, buildAudioScene } from './fx';
@@ -115,6 +118,13 @@ export class App {
   /** Per-tick sim cost samples for the harness benchmark. */
   simSamples: number[] = [];
   measureSim = false;
+  /** Evidence telemetry (harness `tele=1|2`): presentation-side only, never read by the sim. */
+  telemetry: Telemetry | null = null;
+  strips: StripRecorder | null = null;
+  private teleOverlay = false;
+  private meterState: 'none' | 'pending' | 'on' = 'none';
+  private readonly teleLayer = makeLayer('telemetry', 'screen', 104, LOGICAL_W, LOGICAL_H);
+  private readonly teleCv = new PixelCanvas(LOGICAL_W, LOGICAL_H, this.teleLayer.pixels);
 
   constructor() {
     const cam = this.camera.sample(0);
@@ -309,10 +319,14 @@ export class App {
     const s = this.session;
     if (!s || this.paused) return;
     const m = s.match;
-    const t0 = this.measureSim ? performance.now() : 0;
+    const timed = this.measureSim || this.telemetry !== null;
+    const t0 = timed ? performance.now() : 0;
     m.step();
-    if (this.measureSim) this.simSamples.push(performance.now() - t0);
+    const simMs = timed ? performance.now() - t0 : 0;
+    if (this.measureSim) this.simSamples.push(simMs);
     const ev = m.events;
+    if (this.telemetry) this.telemetry.afterTick(m, ev, simMs);
+    if (this.strips) this.strips.onTick(m.tick, ev);
     this.fx.tick(ev, m);
     const v0 = m.fighters[0].view;
     const v1 = m.fighters[1].view;
@@ -370,6 +384,13 @@ export class App {
     this.nowMs = now;
     this.timeSec += dtSec;
     const t0 = now;
+    if (this.telemetry) {
+      this.telemetry.beginFrame(
+        now,
+        typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : null,
+      );
+      if (this.meterState === 'none' && this.audio.ready) void this.attachMeters();
+    }
     this.input.poll(now);
     this.ui.update(dtSec);
     this.handleUiActions();
@@ -434,7 +455,16 @@ export class App {
       this.drawLoading();
       this.layers.push(this.loadingLayer);
     }
+    if (this.telemetry && this.teleOverlay && s) {
+      this.drawTelemetry();
+      this.layers.push(this.teleLayer);
+    }
     this.renderer.draw(f);
+    if (s && (this.telemetry || this.strips)) {
+      const done = performance.now();
+      this.telemetry?.afterDraw(done, this.layers, f.fx, f.view, f.alpha, this.canvas);
+      this.strips?.onFrame(f.tick, done, this.canvas);
+    }
 
     // audio: one-shots then continuous state
     if (this.frameEvents.length) {
@@ -483,6 +513,52 @@ export class App {
         if (l) this.layers.push(l);
       }
     }
+  }
+
+  /** Turn evidence telemetry on (harness / capture tools). `overlay` draws the two-line readout at the bottom edge. */
+  enableTelemetry(overlay: boolean): Telemetry {
+    if (!this.telemetry) {
+      this.telemetry = new Telemetry();
+      this.telemetry.attach(window);
+      this.telemetry.flashMeter = true;
+    }
+    this.teleOverlay = overlay;
+    const s = this.session;
+    if (s)
+      this.telemetry.humanSlots = [
+        s.config.slots[0].controller === 'human',
+        s.config.slots[1].controller === 'human',
+      ];
+    return this.telemetry;
+  }
+
+  private async attachMeters(): Promise<void> {
+    const t = this.telemetry;
+    const ac = this.audio.context;
+    const taps = this.audio.taps();
+    if (!t || !taps || !(ac instanceof AudioContext)) return;
+    this.meterState = 'pending';
+    try {
+      t.master = await AudioMeter.attach(ac, taps.output);
+      t.bed = await AudioMeter.attach(ac, taps.music);
+      this.meterState = 'on';
+    } catch (e) {
+      console.warn('loudness meter unavailable:', e);
+      this.meterState = 'on';
+    }
+  }
+
+  private drawTelemetry(): void {
+    const t = this.telemetry!;
+    const cv = this.teleCv;
+    cv.clear(0);
+    const [a, b] = t.summaryLines();
+    const y = LOGICAL_H - 14;
+    cv.rect(0, y - 2, LOGICAL_W, 14, rgba(4, 6, 10, 170));
+    drawText(cv, a, 3, y, { color: rgba(168, 220, 200), font: 'micro' });
+    drawText(cv, b, 3, y + 6, { color: rgba(230, 214, 150), font: 'micro' });
+    this.teleLayer.version++;
+    this.teleLayer.dirty = null;
   }
 
   private drawLoading(): void {

@@ -7,7 +7,9 @@ async function main(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const params = parseHarnessParams(location.search);
   const app = new App();
-  await app.start(canvas, { preserveDrawingBuffer: params.active, quality: params.q });
+  // preserveDrawingBuffer only for screenshot tooling: real-time evidence runs (tele) read frames right after drawing
+  // and must pay exactly what a player's build pays
+  await app.start(canvas, { preserveDrawingBuffer: params.active && !params.tele, quality: params.q });
   await installHarness(app, params);
 }
 

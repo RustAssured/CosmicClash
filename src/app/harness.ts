@@ -9,6 +9,7 @@ import {
   type SlotConfig,
 } from '@/contracts';
 import { createScriptSource } from '@/sim';
+import { StripRecorder, type StripRequest } from '@/telemetry/strips';
 import { showScreen } from '@/ui';
 import type { App } from './app';
 
@@ -157,7 +158,53 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
     matchPhase(): string {
       return app.session ? app.session.match.phase : 'none';
     },
+    run(on: boolean): void {
+      if (on) app.loop.resume();
+      else app.loop.pause();
+    },
+    gpu(): string {
+      const gl = app.canvasEl.getContext('webgl2');
+      if (!gl) return 'unknown';
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    },
+    enableTelemetry(overlay: boolean): void {
+      app.enableTelemetry(overlay);
+    },
+    telemetry(): unknown {
+      return app.telemetry ? app.telemetry.report() : null;
+    },
+    armStrip(req: unknown): void {
+      app.strips ??= new StripRecorder();
+      app.strips.arm(req as StripRequest);
+    },
+    async takeStrips() {
+      if (!app.strips) return [];
+      return (await app.strips.take()).map((s) => ({
+        name: s.name,
+        armedTick: s.armedTick,
+        frames: s.frames.map((f) => ({ tick: f.tick, wallMs: f.wallMs, b64: toBase64(f.rgba) })),
+      }));
+    },
+    renderStats(): unknown {
+      return JSON.parse(JSON.stringify(app.renderer.stats)) as unknown;
+    },
+    async unlockAudio(): Promise<boolean> {
+      await app.audio.unlock();
+      return app.audio.ready;
+    },
+    recordingStream(): MediaStream | null {
+      if (recStream) return recStream;
+      const ac = app.audio.context;
+      const taps = app.audio.taps();
+      if (!(ac instanceof AudioContext) || !taps) return null;
+      const dest = ac.createMediaStreamDestination();
+      taps.output.connect(dest);
+      recStream = dest.stream;
+      return recStream;
+    },
   };
+  let recStream: MediaStream | null = null;
   let ready = false;
   window.__ADEUK__ = api;
 
@@ -171,6 +218,7 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
       if (params.t > 0) app.loop.stepTicks(params.t, false);
       if (params.freeze) app.loop.pause();
       app.hideUi = !params.hud;
+      if (params.tele) app.enableTelemetry(params.tele === 1).flashMeter = params.lum;
     } else {
       const screen =
         { title: 'title', menu: 'mode', select: 'select', controller: 'controller' }[params.mode as string] ??
@@ -184,6 +232,14 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
   await nextFrame();
   ready = true;
   void ROUND_INTRO_TICKS;
+}
+
+function toBase64(bytes: Uint8ClampedArray): string {
+  let s = '';
+  const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH)
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH) as unknown as number[]);
+  return btoa(s);
 }
 
 function blank(): HarnessSummary['fighters'][0] {

@@ -18,6 +18,7 @@ import { Btn, type ScriptEvent } from './input';
  *   &meter=1                        (start ultimate meters full so `script0=4:ult` fires)
  *   &gap=380                         (px between the fighters at round start; 40..700)
  *   &hud=0|1  &debug=0|1  &freeze=1  &scale=2
+ *   &tele=0|1|2                      (evidence telemetry: 1 = collect + overlay, 2 = collect only; see src/telemetry)
 
  * Script tick 0 = the tick the fight goes live (intro is fast-forwarded silently in harness mode).
  * Also exposed at runtime as window.__ADEUK__ (`AdeukHarnessApi` below).
@@ -44,6 +45,10 @@ export interface HarnessParams {
   hud: boolean;
   debug: boolean;
   freeze: boolean;
+  /** Evidence telemetry: 0 off, 1 collect + overlay, 2 collect only. Never affects the simulation. */
+  tele: 0 | 1 | 2;
+  /** Telemetry's full-frame luminance meter (a 32×18 GPU-side snapshot per frame); `lum=0` turns it off. */
+  lum: boolean;
   /** True if ANY harness param was present (the app skips the title and boots straight in). */
   active: boolean;
 }
@@ -155,6 +160,8 @@ export function parseHarnessParams(search: string): HarnessParams {
     hud: q.get('hud') !== '0',
     debug: q.get('debug') === '1',
     freeze: q.get('freeze') === '1' || (has('t') && q.get('freeze') !== '0'),
+    tele: q.get('tele') === '1' ? 1 : q.get('tele') === '2' ? 2 : 0,
+    lum: q.get('lum') !== '0',
     active: keys.some(has),
   };
 }
@@ -221,6 +228,30 @@ export interface AdeukHarnessApi {
   uiScreen(): string;
   /** Whether a match is running, and its phase ('none' otherwise). */
   matchPhase(): string;
+  /** Run (true) or freeze (false) the real-time clock; frozen frames keep rendering. */
+  run(on: boolean): void;
+  /** WebGL renderer string (to prove a capture ran on the real GPU, not a software rasteriser). */
+  gpu(): string;
+  /** Turn evidence telemetry on (idempotent); `overlay` shows the readout strip. */
+  enableTelemetry(overlay: boolean): void;
+  /** The telemetry report so far (see src/telemetry/telemetry.ts `TelemetryReport`), or null when off. */
+  telemetry(): unknown;
+  /** Arm a motion strip (see src/telemetry/strips.ts `StripRequest`). */
+  armStrip(req: unknown): void;
+  /** Strips taken so far: frames as base64 RGBA (640×360, top row first). Read back after the run. */
+  takeStrips(): Promise<
+    {
+      name: string;
+      armedTick: number;
+      frames: { tick: number; wallMs: number; b64: string }[];
+    }[]
+  >;
+  /** Renderer stats (quality tier, GPU/frame ms where measurable). */
+  renderStats(): unknown;
+  /** Resume/create the AudioContext (real-time capture runs without a user gesture). */
+  unlockAudio(): Promise<boolean>;
+  /** A MediaStream of exactly what reaches the speakers (for recording next to canvas.captureStream), or null. */
+  recordingStream(): MediaStream | null;
 }
 
 declare global {

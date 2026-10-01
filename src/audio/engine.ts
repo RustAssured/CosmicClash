@@ -76,6 +76,11 @@ export interface AudioEngineExt extends AudioEngine {
   /** Resume the context on the next user gesture of any kind (click, key, touch, pointer, gamepad activity). */
   autoUnlock(target: EventTarget): () => void;
   readonly volumes: Readonly<AudioVolumes>;
+  /**
+   * Measurement taps (telemetry / recording; never in the signal path): `output` is exactly what reaches the speakers,
+   * `music` the score bus after its fader and duck, `sfx` the effects bus. Null until the graph exists.
+   */
+  taps(): { output: AudioNode; music: AudioNode; sfx: AudioNode } | null;
 }
 
 /** The IR is deterministic per (sample rate, seed) and takes a noticeable moment to synthesise: build it once. */
@@ -102,6 +107,8 @@ interface Graph {
   music: GainNode;
   musicSend: GainNode;
   master: GainNode;
+  /** The last node before `ac.destination`. */
+  out: AudioNode;
   preAn: AnalyserNode;
   postAn: AnalyserNode;
 }
@@ -249,7 +256,8 @@ class Engine implements AudioEngineExt {
     musicWet.gain.value = 0.7;
     musicWet.connect(sendHp);
 
-    this.g = { ac, sfx, sfxSend: sfxWet, music, musicSend: musicWet, master, preAn, postAn };
+    const out: AudioNode = this.bypass ? master : clip;
+    this.g = { ac, sfx, sfxSend: sfxWet, music, musicSend: musicWet, master, out, preAn, postAn };
 
     // shared noise (white + brown), generated deterministically
     const N = sr * 2;
@@ -617,6 +625,11 @@ class Engine implements AudioEngineExt {
     g.master.gain.setTargetAtTime(volumeCurve(this.vol.master), t, 0.02);
     g.music.gain.setTargetAtTime(volumeCurve(this.vol.music), t, 0.02);
     g.sfx.gain.setTargetAtTime(volumeCurve(this.vol.sfx), t, 0.02);
+  }
+
+  taps(): { output: AudioNode; music: AudioNode; sfx: AudioNode } | null {
+    const g = this.g;
+    return g ? { output: g.out, music: g.music, sfx: g.sfx } : null;
   }
 
   latencyMs(): number {
