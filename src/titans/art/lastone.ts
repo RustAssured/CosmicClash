@@ -7,6 +7,7 @@ import {
   lerp,
   rgba,
   smoothstep,
+  type MaterialSpec,
   type MatterMap,
   type StageLighting,
   type TitanDef,
@@ -15,7 +16,7 @@ import { blend } from './color';
 import { ArtCanvas, buildLitRamps, type ShadeParams } from './canvas';
 import { edt, keepLargestComponent } from './field';
 import { bayer8, fbm, hash01, makeWorley, ridged, worley } from './noise';
-import { sdCircle, sdEllipse, sdEllipseRot, sdSegment, smax, smin, ssub } from './sdf';
+import { sdCircle, sdEllipse, sdEllipseRot, sdSegment, sdTaperedCapsule, smax, smin, ssub } from './sdf';
 
 /**
  * THE LAST ONE — an ancient celadon idol: a weathered glazed pod-head with one great eye set in a bevelled socket, a tilted
@@ -33,6 +34,13 @@ export interface TendrilRoot {
   /** Natural length in px and a phase in [0,1) for idle sway. */
   len: number;
   phase: number;
+  /**
+   * Rest shape: total heading change from root to tip (rad, signed; a curl), and an S-wave along the length (amplitude rad and
+   * phase rad). Every tendril gets its own, so the veil reads as grown, not combed.
+   */
+  curl: number;
+  wave: number;
+  wavePh: number;
   /** Drives resting posture. */
   kind: 'hem' | 'back' | 'crown' | 'front';
 }
@@ -192,6 +200,7 @@ function makeRoots(L: Layout): TendrilRoot[] {
   const n = p.tendrils.count;
   const roots: TendrilRoot[] = [];
   const rng = new Rng(L.seed ^ 0x7e1d);
+  const shape = new Rng(L.seed ^ 0x51c3);
   // path: front-lower → hem → back → crown, expressed as polar angles from a point below the head centre
   const ox = L.cx - 2;
   const oy = L.cy + 14;
@@ -213,13 +222,20 @@ function makeRoots(L: Layout): TendrilRoot[] {
     nx /= nl;
     ny /= nl;
     const kind: TendrilRoot['kind'] = t < 0.16 ? 'front' : t < 0.55 ? 'hem' : t < 0.86 ? 'back' : 'crown';
-    const lenBase = kind === 'front' ? 0.55 : kind === 'crown' ? 0.62 : kind === 'hem' ? 0.95 : 0.85;
+    const lenBase = kind === 'front' ? 0.45 : kind === 'crown' ? 0.5 : kind === 'hem' ? 0.85 : 0.72;
+    // lengths vary a lot (and every third hem tendril is a long one) so the veil never reads as a comb of equal rods
+    const longOne = kind === 'hem' && i % 3 === 1 ? 0.3 : 0;
     const len = clamp(
-      lerp(p.tendrils.minLen, p.tendrils.maxLen, lenBase * (0.75 + 0.25 * rng.next())),
+      lerp(p.tendrils.minLen, p.tendrils.maxLen, clamp01(lenBase * (0.3 + 0.8 * rng.next()) + longOne)),
       p.tendrils.minLen,
       p.tendrils.maxLen,
     );
-    roots.push({ x, y, nx, ny, len, phase: rng.next(), kind });
+    const phase = rng.next();
+    const sign = shape.next() < 0.5 ? -1 : 1;
+    const curl = sign * (kind === 'crown' ? shape.range(0.7, 1.3) : shape.range(0.3, 0.95));
+    const wave = shape.range(0.12, 0.42);
+    const wavePh = shape.range(0, Math.PI * 2);
+    roots.push({ x, y, nx, ny, len, phase, kind, curl, wave, wavePh });
   }
   return roots;
 }
@@ -699,4 +715,1062 @@ function paintHaloDetail(
       }
     }
   }
+}
+
+/* ================================================================================================================== *
+ *  THE WITNESS — painter v1 (rest pose; not yet wired into the game, see docs/briefs/witness-art-notes.md)
+ *
+ *  A colossal sacred witness that HANGS: the crosshair sigil and a large broken halo above, the planet-scale eye in its
+ *  cracked jade-black carapace in the middle, a chandelier of bone and gold spires below, and four asymmetric scythe
+ *  architectures sweeping down and around. Painted as SEPARATE region maps (one matter body per rigid region, D27), each
+ *  with its own frame pivot and parent for the XPBD rig:
+ *
+ *    eye cradle (root, the KO core) → carapace → [channels, lattice, abyss] (welded interior layers, behind the carapace)
+ *                                              → shrine
+ *                                              → arm k segment 0 → 1 → …      (k = 0..3; 3, 4, 2 and 3 segments)
+ *    eye cradle → halo arc 0..3 (each orbits the eye on its own; arc 2 sits a little out of phase)
+ *
+ *  The four reveal layers are stacked bodies at the same place: the carapace in front, then the luminous cyan-white
+ *  tension channels (a sparse network), the gold sacred-geometry lattice (sparse), and the abyss (a full back wall with
+ *  star specks and closed inner eyes). A hole in a front layer shows the next one behind it.
+ *
+ *  Wrong at the second glance: the pupil sits off-centre and is not quite round, a few hairline fractures glow cyan as if
+ *  something inside were looking out, the orb-eyes on the arm joints are dormant but not quite closed, the arms differ in
+ *  length and joint count, two spires have snapped, one halo arc drifts out of phase.
+ *
+ *  Body coordinates: origin = the eye's centre, +x = facing (right), +y down, px. The palette is three ramps (jade,
+ *  bone, dead gold) plus emissives (cyan channels, white-gold lattice, abyss, stars); wound light is white-gold and cyan,
+ *  never red or orange (crack and heat-glow colours included).
+ * ================================================================================================================== */
+
+const W_JADE = ['#070d0d', '#0f1c1a', '#1a2f2a', '#284539', '#3c5f4c', '#5a7f63', '#86a585'];
+const W_BONE = ['#2c2820', '#4d4638', '#7a7058', '#a69c7f', '#cdc5a8', '#ece6d0'];
+const W_GOLD = ['#211a10', '#3d3018', '#5f4c24', '#857034', '#a89048', '#c8b068'];
+const W_CYAN = ['#1d4c55', '#3d8d96', '#7fd2d6', '#cdf6f2', '#f6fffd'];
+const W_WHITEGOLD = ['#6b5426', '#a88a44', '#e2c77e', '#fff1c9'];
+const W_ABYSS = ['#030409', '#080a14', '#10122a', '#1a1c3a'];
+const W_IRIS = ['#14302c', '#2c5a50', '#56877a', '#8fae8c', '#b49a52', '#d8bb6a'];
+/** Wound light: what cracks and heat show on every Witness material (white-gold and cyan). */
+const W_GLOW = ['#3d8d96', '#7fd2d6', '#e2f6e6', '#fff1c9', '#ffffff'];
+const W_RESIST = { FRACTURE: 1.1, KINETIC: 1, CRUSH: 1, THERMAL: 1.4, ASSIMILATION: 0.3, TIDAL: 0.9 };
+
+const wmat = (
+  key: string,
+  base: string,
+  ramp: string[],
+  emissive: number,
+  crack: string,
+  physics: MaterialSpec['physics'] = {},
+): MaterialSpec => ({
+  key,
+  base,
+  physics: { ...physics, resist: W_RESIST },
+  visual: {
+    ramp,
+    emissive,
+    glowRamp: W_GLOW,
+    char: ramp[1]!,
+    crack,
+    debris: ramp[Math.floor(ramp.length / 2)]!,
+  },
+});
+
+/** The Witness's materials (Phase 2 moves them into `lastone.json`; ids are index + 1, as for every titan). */
+export const WITNESS_MATERIALS: readonly MaterialSpec[] = Object.freeze([
+  wmat('carapace', 'celadon', W_JADE, 0, '#5fc4c8'),
+  wmat('vein', 'celadon', W_JADE.slice(3), 12, '#a6eef0', { bond: 46, toughness: 0.15 }),
+  wmat('channel', 'crystal', W_CYAN, 170, '#f6fffd'),
+  wmat('lattice', 'lattice', W_WHITEGOLD, 90, '#fff1c9'),
+  wmat('abyss', 'glass', W_ABYSS, 0, '#7fd2d6'),
+  wmat('star', 'glass', ['#7fd2d6', '#e9fbff', '#ffffff'], 210, '#ffffff'),
+  wmat('sclera', 'eye', W_BONE.slice(2), 22, '#5fc4c8'),
+  wmat('iris', 'eye', W_IRIS, 70, '#e2c77e'),
+  wmat('pupil', 'eye', ['#010205', '#04060c', '#090c18'], 0, '#7fd2d6'),
+  wmat('gold', 'glass', W_GOLD, 30, '#fff1c9'),
+  wmat('bronze', 'ironNickel', W_GOLD.slice(0, 5), 0, '#e2c77e'),
+  wmat('bone', 'crystal', W_BONE, 0, '#7fd2d6'),
+  wmat('membrane', 'tendril', W_JADE.slice(2), 40, '#a6eef0'),
+  wmat('orb', 'eye', W_GOLD.slice(1), 16, '#fff1c9'),
+  wmat('hairline', 'celadon', W_CYAN.slice(1), 120, '#f6fffd', { bond: 46, toughness: 0.15 }),
+]);
+
+const WID = (key: string): number => {
+  const i = WITNESS_MATERIALS.findIndex((m) => m.key === key);
+  if (i < 0) throw new Error(`witness: material '${key}' missing`);
+  return i + 1;
+};
+
+export type WitnessRegionKind = 'eye' | 'carapace' | 'interior' | 'shrine' | 'halo' | 'arm';
+
+export interface WitnessRegion {
+  key: string;
+  kind: WitnessRegionKind;
+  /** The region's own matter map (one body). `coreX/coreY` is its connectivity anchor (always on matter). */
+  map: MatterMap;
+  /** Body coordinates of map cell (0, 0)'s corner: cell (x, y) covers [ox + x, ox + x + 1) × [oy + y, oy + y + 1). */
+  ox: number;
+  oy: number;
+  /** Frame origin (the rig body's pivot) in body coordinates at rest. It may lie off the region's matter (halo arcs orbit the eye). */
+  pivotX: number;
+  pivotY: number;
+  /** Parent region index (−1 = the root: the eye, driven by intent). */
+  parent: number;
+  /** Interior layers move rigidly with their parent (one rig body, several matter bodies). */
+  weld: boolean;
+  /** Reveal layer for the carapace stack: 0 carapace, 1 channels, 2 lattice, 3 abyss; −1 elsewhere. */
+  layer: number;
+  /** Draw order, back to front. */
+  z: number;
+  /** Arm index and segment for arm regions (−1 otherwise). */
+  arm: number;
+  segment: number;
+}
+
+/** A point attached to a region, in body coordinates at rest (convert to the region's frame with its pivot). */
+export interface WitnessAnchor {
+  region: number;
+  x: number;
+  y: number;
+}
+
+/** An arm's joint chain at rest: the joints (segment starts) and the blade tip, with the region of each segment. */
+export interface WitnessArm {
+  regions: number[];
+  /** Joint points (segment starts) then the tip; length = regions.length + 1. */
+  points: { x: number; y: number }[];
+  /** Spine and blade half-widths (px) at the root, for the runtime arm renderer. */
+  width: number;
+  /** +1 / −1: the blade (membrane) side relative to the root → tip direction. */
+  bladeSide: number;
+}
+
+export interface WitnessBody {
+  regions: WitnessRegion[];
+  materials: readonly MaterialSpec[];
+  arms: WitnessArm[];
+  /** Tension membranes (dithered opaque triangles between three anchors) and luminous fibres (two anchors). */
+  membranes: [WitnessAnchor, WitnessAnchor, WitnessAnchor][];
+  fibres: [WitnessAnchor, WitnessAnchor][];
+  /** Live extent in body coordinates (px). */
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  cells: number;
+}
+
+/** Shape constants (body px). */
+const WE = {
+  eyeR: 30,
+  rimR: 33.5,
+  socketR: 32.5,
+  carCX: 0,
+  carCY: 6,
+  carR: 46,
+  haloR: 62,
+  haloT: 5.5,
+  shrineY: 46,
+  /** The pupil is not quite centred and not quite round (it tracks at runtime). */
+  pupilDX: 2.5,
+  pupilDY: 1.5,
+};
+
+/** Halo arcs: span (degrees, y down: −90 = straight up) and a radius offset (arc 2 drifts out of phase). The top arc carries the sigil. */
+const HALO_ARCS: readonly [number, number, number][] = [
+  [-122, -58, 0],
+  [-46, -6, 0],
+  [8, 42, 3.5],
+  [140, 204, 0],
+];
+
+interface ArmDef {
+  /** Cubic Bézier control points (body px). */
+  c: readonly number[];
+  /** Arc-length fractions where segments start (the first is 0). */
+  joints: readonly number[];
+  /** Width scale. */
+  w: number;
+}
+
+/** Four asymmetric scythe architectures sweeping down and around (one short one raised). */
+const ARMS: readonly ArmDef[] = [
+  { c: [40, -10, 82, 4, 94, 54, 70, 88], joints: [0, 0.34, 0.67], w: 1 },
+  { c: [-38, -6, -86, -40, -110, -4, -96, 44], joints: [0, 0.27, 0.52, 0.76], w: 1.05 },
+  { c: [32, -30, 60, -62, 88, -56, 88, -22], joints: [0, 0.5], w: 0.8 },
+  { c: [-30, 30, -54, 54, -46, 84, -22, 92], joints: [0, 0.4, 0.72], w: 0.8 },
+];
+
+interface RegionCanvas {
+  cv: ArtCanvas;
+  ox: number;
+  oy: number;
+}
+
+function regionCanvas(x0: number, y0: number, x1: number, y1: number): RegionCanvas {
+  const ox = Math.floor(x0) - 3;
+  const oy = Math.floor(y0) - 3;
+  const w = Math.ceil(x1) - ox + 4;
+  const h = Math.ceil(y1) - oy + 4;
+  return { cv: new ArtCanvas(w, h), ox, oy };
+}
+
+/** Shading per Witness material (low relief on the parts that rotate a lot, so baked light stays plausible). */
+function witnessShade(): (Partial<ShadeParams> | undefined)[] {
+  const s: (Partial<ShadeParams> | undefined)[] = [];
+  s[WID('carapace')] = { contrast: 1.25, bias: -0.1, dither: 0.35, ao: 0.6, rim: 0.3 };
+  s[WID('vein')] = { contrast: 1.0, dither: 0.2, rim: 0.2, outline: 0 };
+  s[WID('hairline')] = { contrast: 0.6, dither: 0.2, rim: 0, outline: 0 };
+  s[WID('channel')] = { contrast: 0.8, dither: 0.2, rim: 0, outline: 0.3 };
+  s[WID('lattice')] = { contrast: 1.0, dither: 0.25, rim: 0, outline: 0.3 };
+  s[WID('abyss')] = { contrast: 0.5, dither: 0.8, rim: 0, outline: 0.4, bayer8: true };
+  s[WID('star')] = { contrast: 0.6, rim: 0, outline: 0 };
+  s[WID('gold')] = { contrast: 1.3, dither: 0.3, rim: 0.25 };
+  s[WID('bronze')] = { contrast: 1.35, dither: 0.3, rim: 0.2 };
+  s[WID('bone')] = { contrast: 1.15, dither: 0.35, rim: 0.15, bump: 0.7 };
+  s[WID('membrane')] = { contrast: 0.9, dither: 0.7, rim: 0.2, bayer8: true, bump: 0.5 };
+  s[WID('orb')] = { contrast: 1.3, dither: 0.2, rim: 0.3 };
+  return s;
+}
+
+/** Turn a painted canvas into a region (largest connected piece only, so every region body is one piece). */
+function finishRegion(
+  rc: RegionCanvas,
+  ramps: number[][],
+  lighting: StageLighting,
+  over: ((colors: Uint32Array, cv: ArtCanvas, ox: number, oy: number) => void) | null,
+  anchorX: number,
+  anchorY: number,
+  coreR: number,
+  meta: Omit<WitnessRegion, 'map' | 'ox' | 'oy'>,
+): WitnessRegion {
+  const { cv, ox, oy } = rc;
+  keepLargestComponent(cv.mat, cv.w, cv.h);
+  cv.invalidate();
+  const colors = cv.render({ ramps, params: witnessShade(), lighting, rimMix: 0.12 });
+  if (over) over(colors, cv, ox, oy);
+  const map = createMatterMap(cv.w, cv.h);
+  const ids = {
+    lat: WID('lattice'),
+    ch: WID('channel'),
+    star: WID('star'),
+    gold: WID('gold'),
+    bronze: WID('bronze'),
+  };
+  cv.writeTo(map, colors, (m) =>
+    m === ids.ch || m === ids.lat || m === ids.star ? 110 : m === ids.gold || m === ids.bronze ? 150 : 128,
+  );
+  // connectivity anchor: the live cell nearest the requested point
+  let best = -1;
+  let bd = Infinity;
+  for (let y = 0; y < cv.h; y++)
+    for (let x = 0; x < cv.w; x++) {
+      if (cv.mat[y * cv.w + x] === 0) continue;
+      const d = (x + ox + 0.5 - anchorX) ** 2 + (y + oy + 0.5 - anchorY) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = y * cv.w + x;
+      }
+    }
+  map.coreX = best % cv.w;
+  map.coreY = (best / cv.w) | 0;
+  map.coreRadius = coreR;
+  return { ...meta, map, ox, oy };
+}
+
+/** Points along a cubic Bézier with cumulative arc length (normalised 0..1). */
+function bezierSamples(
+  c: readonly number[],
+  n: number,
+): { x: Float64Array; y: Float64Array; s: Float64Array } {
+  const x = new Float64Array(n + 1);
+  const y = new Float64Array(n + 1);
+  const s = new Float64Array(n + 1);
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const a = (1 - t) ** 3;
+    const b = 3 * (1 - t) ** 2 * t;
+    const cc = 3 * (1 - t) * t * t;
+    const d = t ** 3;
+    x[i] = a * c[0]! + b * c[2]! + cc * c[4]! + d * c[6]!;
+    y[i] = a * c[1]! + b * c[3]! + cc * c[5]! + d * c[7]!;
+    if (i > 0) s[i] = s[i - 1]! + Math.hypot(x[i]! - x[i - 1]!, y[i]! - y[i - 1]!);
+  }
+  const L = s[n]!;
+  for (let i = 0; i <= n; i++) s[i] = s[i]! / L;
+  return { x, y, s };
+}
+
+/** The point at arc-length fraction u of a sampled curve. */
+function samplesAt(
+  S: { x: Float64Array; y: Float64Array; s: Float64Array },
+  u: number,
+): { x: number; y: number } {
+  const n = S.s.length - 1;
+  let k = 0;
+  while (k < n && S.s[k + 1]! < u) k++;
+  return { x: S.x[k]!, y: S.y[k]! };
+}
+
+/**
+ * Paint the Witness in its rest pose: every region as its own matter map with its rig metadata (arms, membranes, fibres).
+ * Pure and deterministic in (seed, lighting).
+ */
+export function paintWitness(seed: number, lighting: StageLighting): WitnessBody {
+  const ramps = buildLitRamps(WITNESS_MATERIALS, lighting, 0.85);
+  const regions: WitnessRegion[] = [];
+  const add = (r: WitnessRegion): number => regions.push(r) - 1;
+  const eye = add(paintEyeCradle(ramps, lighting));
+  const car = add(paintCarapace(ramps, lighting, seed, eye));
+  add(paintInterior(ramps, lighting, seed, car, 1));
+  add(paintInterior(ramps, lighting, seed, car, 2));
+  add(paintInterior(ramps, lighting, seed, car, 3));
+  const shrine = add(paintShrine(ramps, lighting, seed, car));
+  for (let k = 0; k < HALO_ARCS.length; k++) add(paintHaloArc(ramps, lighting, seed, eye, k));
+  const arms: WitnessArm[] = [];
+  for (let a = 0; a < ARMS.length; a++) {
+    const def = ARMS[a]!;
+    const S = bezierSamples(def.c, 200);
+    const segs: number[] = [];
+    let parent = car;
+    for (let seg = 0; seg < def.joints.length; seg++) {
+      parent = add(paintArmSegment(ramps, lighting, seed, parent, a, seg));
+      segs.push(parent);
+    }
+    const points = def.joints.map((u) => samplesAt(S, u));
+    points.push({ x: S.x[200]!, y: S.y[200]! });
+    arms.push({ regions: segs, points, width: 4.8 * def.w, bladeSide: armTurn(S) });
+  }
+  // tension membranes: carapace ↔ the first and second joints of the three long arms; fibres: carapace → later joints
+  const membranes: WitnessBody['membranes'] = [];
+  const fibres: WitnessBody['fibres'] = [];
+  for (const arm of arms) {
+    if (arm.regions.length < 3) continue;
+    const root = arm.points[0]!;
+    const elbow = arm.points[1]!;
+    // the carapace anchor sits a little below and inside the arm root
+    const ang = Math.atan2(root.y - WE.carCY, root.x - WE.carCX) + (root.x > 0 ? 0.55 : -0.55);
+    const ca = {
+      region: car,
+      x: WE.carCX + Math.cos(ang) * (WE.carR - 3),
+      y: WE.carCY + Math.sin(ang) * (WE.carR - 3),
+    };
+    membranes.push([
+      { region: arm.regions[0]!, x: root.x, y: root.y },
+      { region: arm.regions[1]!, x: elbow.x, y: elbow.y },
+      ca,
+    ]);
+    for (let j = 2; j < arm.points.length - 1; j++)
+      fibres.push([ca, { region: arm.regions[j]!, x: arm.points[j]!.x, y: arm.points[j]!.y }]);
+  }
+  // the shrine hangs on fibres too
+  fibres.push([
+    { region: car, x: -24, y: WE.carCY + 36 },
+    { region: shrine, x: -20, y: WE.shrineY + 12 },
+  ]);
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  let cells = 0;
+  for (const r of regions) {
+    const m = r.map;
+    for (let y = 0; y < m.h; y++)
+      for (let x = 0; x < m.w; x++) {
+        if (m.material[y * m.w + x] === 0) continue;
+        cells++;
+        x0 = Math.min(x0, x + r.ox);
+        x1 = Math.max(x1, x + r.ox + 1);
+        y0 = Math.min(y0, y + r.oy);
+        y1 = Math.max(y1, y + r.oy + 1);
+      }
+  }
+  return { regions, materials: WITNESS_MATERIALS, arms, membranes, fibres, x0, y0, x1, y1, cells };
+}
+
+/** Which side the blade sits on: the side the curve turns toward near its hook (+1 = left of the direction of travel). */
+function armTurn(S: { x: Float64Array; y: Float64Array }): number {
+  const n = S.x.length - 1;
+  const mid = Math.round(n * 0.8);
+  const tx = S.x[mid + 1]! - S.x[mid - 1]!;
+  const ty = S.y[mid + 1]! - S.y[mid - 1]!;
+  const t2x = S.x[mid + 1]! - 2 * S.x[mid]! + S.x[mid - 1]!;
+  const t2y = S.y[mid + 1]! - 2 * S.y[mid]! + S.y[mid - 1]!;
+  return Math.sign(tx * t2y - ty * t2x) || 1;
+}
+
+/* ---------------------------------------------------------------- the eye (root, KO core) */
+
+function paintEyeCradle(ramps: number[][], lighting: StageLighting): WitnessRegion {
+  const R = WE.eyeR;
+  const rc = regionCanvas(-WE.rimR, -WE.rimR, WE.rimR, WE.rimR);
+  const { cv, ox, oy } = rc;
+  const sclera = WID('sclera');
+  const iris = WID('iris');
+  const pupil = WID('pupil');
+  const gold = WID('gold');
+  for (let y = 0; y < cv.h; y++)
+    for (let x = 0; x < cv.w; x++) {
+      const bx = x + ox + 0.5;
+      const by = y + oy + 0.5;
+      const rho = Math.hypot(bx, by);
+      const i = y * cv.w + x;
+      if (rho > WE.rimR) continue;
+      if (rho > R) {
+        // the socket rim: a raised ring of dead gold with notched inlays
+        cv.mat[i] = gold;
+        const t = (rho - R) / (WE.rimR - R);
+        cv.relief[i] = 12 + 4 * Math.sqrt(Math.max(0, 1 - (2 * t - 1) ** 2));
+        const th = Math.atan2(by, bx);
+        const notch = Math.abs((((th / (Math.PI * 2)) * 30 + 30) % 1) - 0.5) > 0.44;
+        if (notch) cv.tone[i] = -1.4;
+        continue;
+      }
+      // the iris and pupil are offset from the sclera's centre (it looks; it is not a target)
+      const q = rho / R;
+      const qi = Math.hypot(bx - WE.pupilDX, (by - WE.pupilDY) * 0.94) / R;
+      cv.mat[i] = qi < 0.27 ? pupil : qi < 0.66 ? iris : sclera;
+      cv.relief[i] = 10 + 8 * (1 - q * q);
+    }
+  return finishRegion(
+    rc,
+    ramps,
+    lighting,
+    (colors, c) => paintWitnessEye(colors, c, ox, oy, lighting),
+    WE.pupilDX,
+    WE.pupilDY,
+    9,
+    {
+      key: 'eye',
+      kind: 'eye',
+      pivotX: 0,
+      pivotY: 0,
+      parent: -1,
+      weld: false,
+      layer: -1,
+      z: 8,
+      arm: -1,
+      segment: -1,
+    },
+  );
+}
+
+/** Bone sclera shaded as a sphere, a celadon → tarnished-gold radial iris, an abyssal pupil, ONE sharp catchlight. */
+function paintWitnessEye(
+  colors: Uint32Array,
+  cv: ArtCanvas,
+  ox: number,
+  oy: number,
+  lighting: StageLighting,
+): void {
+  const R = WE.eyeR;
+  const bone = W_BONE.map(hex);
+  const irisR = W_IRIS.map(hex);
+  const pup = ['#010205', '#04060c', '#090c18', '#14182a'].map(hex);
+  const sclera = WID('sclera');
+  const iris = WID('iris');
+  const pupil = WID('pupil');
+  const lx = lighting.dir[0] * 0.7;
+  const ly = lighting.dir[1];
+  for (let y = 0; y < cv.h; y++)
+    for (let x = 0; x < cv.w; x++) {
+      const i = y * cv.w + x;
+      const m = cv.mat[i];
+      if (m !== sclera && m !== iris && m !== pupil) continue;
+      const bx = x + ox + 0.5;
+      const by = y + oy + 0.5;
+      const q = Math.hypot(bx, by) / R;
+      const ix = bx - WE.pupilDX;
+      const iy = (by - WE.pupilDY) * 0.94;
+      const qi = Math.hypot(ix, iy) / R;
+      const th = Math.atan2(iy, ix);
+      // sphere light: the side toward the key light is brighter
+      const nz = Math.sqrt(Math.max(0, 1 - q * q));
+      const lit = clamp01(
+        0.55 + (0.45 * ((bx / R) * lx + (by / R) * ly)) / Math.max(0.3, Math.hypot(lx, ly)) - 0.25 * (1 - nz),
+      );
+      const th8 = bayer8(x, y) / 64;
+      let c: number;
+      if (m === sclera) {
+        const v = 1.2 + lit * 3.6 - (q > 0.92 ? 1.2 : 0) - (by < -R * 0.55 ? 0.8 : 0);
+        const fl = Math.floor(v);
+        c = bone[clamp(fl + (v - fl > th8 ? 1 : 0), 1, 5)]!;
+      } else if (m === iris) {
+        const t = (qi - 0.27) / (0.66 - 0.27); // 0 at the pupil, 1 at the limbus
+        const fibre = ridged(th * 5.1 + 2, qi * 5.5, 4177, 2) - 0.5;
+        // a narrow tarnished-gold collarette round the pupil, celadon fibres outward, a dark limbal ring
+        let v = t < 0.2 ? 4.3 + fibre * 1.2 : 3.4 - t * 2.2 + fibre * 1.8 + (lit - 0.5) * 1.0;
+        if (t > 0.86) v = 0.2;
+        const fl = Math.floor(v);
+        c = irisR[clamp(fl + (v - fl > th8 ? 1 : 0), 0, 5)]!;
+      } else {
+        const v = qi < 0.18 ? 0 : qi < 0.24 ? 1 : 2;
+        c = pup[v]!;
+      }
+      colors[i] = c;
+    }
+  // ONE sharp catchlight, up toward the light
+  const white = hex('#ffffff');
+  const cx = Math.round(-R * 0.34 + (lighting.dir[0] < 0 ? 0 : R * 0.68)) - ox;
+  const cy = Math.round(-R * 0.36) - oy;
+  const dots: [number, number][] = [
+    [0, -1],
+    [-1, 0],
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, -1],
+  ];
+  for (const [dx, dy] of dots) {
+    const i = (cy + dy) * cv.w + cx + dx;
+    if (cv.mat[i] !== 0 && cv.mat[i] !== WID('gold')) colors[i] = white;
+  }
+}
+
+/* ---------------------------------------------------------------- the carapace stack */
+
+const carapaceSd = (bx: number, by: number, seed: number): number => {
+  const wx = bx + fbm(bx * 0.05, by * 0.05, seed + 3, 2) * 1.0;
+  const wy = by + fbm(bx * 0.05 + 4.1, by * 0.05, seed + 5, 2) * 1.0;
+  let d = sdCircle(wx, wy, WE.carCX, WE.carCY, WE.carR);
+  // a few weathered notches on the rim (sparse and uneven: it is ancient, not ruined)
+  for (const a of [-2.6, -1.95, -0.45, 0.4, 1.15, 2.35]) {
+    const r = WE.carR + 1;
+    d = ssub(
+      d,
+      sdCircle(
+        bx,
+        by,
+        WE.carCX + Math.cos(a) * r,
+        WE.carCY + Math.sin(a) * r,
+        1.8 + hash01(a * 10, 1, seed) * 1.6,
+      ),
+      1.5,
+    );
+  }
+  return d;
+};
+
+function paintCarapace(
+  ramps: number[][],
+  lighting: StageLighting,
+  seed: number,
+  parent: number,
+): WitnessRegion {
+  const R = WE.carR;
+  const rc = regionCanvas(-R - 2, WE.carCY - R - 2, R + 2, WE.carCY + R + 2);
+  const { cv, ox, oy } = rc;
+  const carapace = WID('carapace');
+  const vein = WID('vein');
+  const hairline = WID('hairline');
+  const worleyOut = makeWorley();
+  // fracture veins radiating from the socket (stress lines; their weak bonds crack first); three of them are hairline
+  // fractures that glow cyan, as if something inside were looking out
+  const veinSegs: number[] = [];
+  const veinGlow: number[] = [];
+  const rng = new Rng(seed ^ 0x3a11);
+  for (let k = 0; k < 9; k++) {
+    let a = (k / 9) * Math.PI * 2 + rng.range(-0.2, 0.2);
+    let r = WE.socketR + 0.5;
+    let px = Math.cos(a) * r;
+    let py = Math.sin(a) * r;
+    let branch = rng.int(3) + 2;
+    const glow = k === 1 || k === 4 || k === 6 ? 1 : 0;
+    while (r < R + 12) {
+      a += rng.range(-0.18, 0.18);
+      r += 3;
+      const nx = Math.cos(a) * r;
+      const ny = Math.sin(a) * r;
+      veinSegs.push(px, py, nx, ny);
+      veinGlow.push(glow && r < WE.socketR + 12 ? 1 : 0);
+      if (--branch === 0) {
+        // a short side crack
+        const ba = a + (rng.next() < 0.5 ? -0.5 : 0.5);
+        veinSegs.push(nx, ny, nx + Math.cos(ba) * 7, ny + Math.sin(ba) * 7);
+        veinGlow.push(0);
+      }
+      px = nx;
+      py = ny;
+    }
+  }
+  for (let y = 0; y < cv.h; y++)
+    for (let x = 0; x < cv.w; x++) {
+      const bx = x + ox + 0.5;
+      const by = y + oy + 0.5;
+      if (carapaceSd(bx, by, seed) > 0) continue;
+      const rho = Math.hypot(bx, by);
+      if (rho < WE.socketR) continue;
+      const i = y * cv.w + x;
+      cv.mat[i] = carapace;
+      const rr = Math.hypot(bx - WE.carCX, by - WE.carCY) / R;
+      let rel = 30 * Math.sqrt(Math.max(0, 1 - rr * rr)) + Math.max(0, WE.socketR + 5 - rho) * 1.3;
+      // large cracked plates with dark crevices; a little tone per plate
+      worley(bx / 14, by / 14, seed + 17, worleyOut, 0.85);
+      let tone = (worleyOut.id - 0.5) * 0.7;
+      if ((worleyOut.f2 - worleyOut.f1) * 14 < 0.65) {
+        tone -= 1.1;
+        rel -= 1.2;
+      }
+      for (let s = 0; s < veinSegs.length; s += 4)
+        if (sdSegment(bx, by, veinSegs[s]!, veinSegs[s + 1]!, veinSegs[s + 2]!, veinSegs[s + 3]!) < 0.62) {
+          cv.mat[i] = veinGlow[s >> 2] ? hairline : vein;
+          rel -= 0.8;
+          tone = 0.4;
+          break;
+        }
+      cv.relief[i] = Math.max(0.2, rel);
+      cv.tone[i] = tone;
+    }
+  const over = (colors: Uint32Array, c: ArtCanvas): void => {
+    const cyan = W_CYAN.map(hex);
+    for (let k = 0; k < colors.length; k++)
+      if (c.mat[k] === hairline) colors[k] = cyan[hash01(k, 9, seed) > 0.5 ? 3 : 2]!;
+  };
+  return finishRegion(rc, ramps, lighting, over, 0, WE.socketR + 5, 4, {
+    key: 'carapace',
+    kind: 'carapace',
+    pivotX: 0,
+    pivotY: 0,
+    parent,
+    weld: false,
+    layer: 0,
+    z: 7,
+    arm: -1,
+    segment: -1,
+  });
+}
+
+/**
+ * Interior layer `layer` (1 channels, 2 lattice, 3 abyss) behind the carapace, at the same place. Channels and lattice are
+ * sparse connected networks; the abyss is the full back wall with star specks and closed inner eyes.
+ */
+function paintInterior(
+  ramps: number[][],
+  lighting: StageLighting,
+  seed: number,
+  parent: number,
+  layer: 1 | 2 | 3,
+): WitnessRegion {
+  const R = WE.carR - 1;
+  const rc = regionCanvas(-R, WE.carCY - R, R, WE.carCY + R);
+  const { cv, ox, oy } = rc;
+  const channel = WID('channel');
+  const lattice = WID('lattice');
+  const abyss = WID('abyss');
+  const star = WID('star');
+  const sclera = WID('sclera');
+  const pupil = WID('pupil');
+  const inner = WE.socketR - 1.5;
+  const innerEyes: [number, number, number][] = [
+    [-17, 36, 7],
+    [1, 41, 8],
+    [18, 35, 6.5],
+    [-33, 16, 5],
+    [33, 18, 5],
+  ];
+  for (let y = 0; y < cv.h; y++)
+    for (let x = 0; x < cv.w; x++) {
+      const bx = x + ox + 0.5;
+      const by = y + oy + 0.5;
+      if (carapaceSd(bx, by, seed) > -1) continue;
+      const rho = Math.hypot(bx, by);
+      if (rho < inner) continue;
+      const i = y * cv.w + x;
+      const th = Math.atan2(by, bx);
+      const rr = Math.hypot(bx - WE.carCX, by - WE.carCY);
+      if (layer === 1) {
+        // luminous tension channels: radial veins of stress joined by two hoops
+        let on = false;
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2 + 0.12 + 0.07 * Math.sin(rho * 0.22 + k);
+          let d = th - a;
+          d -= Math.round(d / (Math.PI * 2)) * Math.PI * 2;
+          if (Math.abs(d) * rho < 0.95) on = true;
+        }
+        if (Math.abs(rr - (R - 10)) < 0.95 || Math.abs(rr - (R - 3)) < 0.95) on = true;
+        if (rho < inner + 1.5) on = true; // a collar around the socket keeps the network in one piece
+        if (!on) continue;
+        cv.mat[i] = channel;
+        cv.relief[i] = 3;
+      } else if (layer === 2) {
+        // sacred geometry: three hoops, six spokes, a ring of six overlapping circles
+        // (lines are ≥ 1.8 px wide so diagonals stay 4-connected: the lattice is one body)
+        let on =
+          Math.abs(rr - (R - 11)) < 0.95 ||
+          Math.abs(rr - (R - 5.5)) < 0.95 ||
+          Math.abs(rr - (R - 1.2)) < 0.95 ||
+          rho < inner + 1.2;
+        for (let k = 0; k < 6 && !on; k++) {
+          const a = (k / 6) * Math.PI * 2 + Math.PI / 6;
+          const cx = WE.carCX + Math.cos(a) * (R - 6);
+          const cy = WE.carCY + Math.sin(a) * (R - 6);
+          if (Math.abs(Math.hypot(bx - cx, by - cy) - 12) < 0.95) on = true;
+          let d = th - (a - Math.PI / 6);
+          d -= Math.round(d / (Math.PI * 2)) * Math.PI * 2;
+          if (Math.abs(d) * rho < 0.95) on = true;
+        }
+        if (!on) continue;
+        cv.mat[i] = lattice;
+        cv.relief[i] = 4;
+      } else {
+        cv.mat[i] = abyss;
+        cv.relief[i] = 1;
+        cv.tone[i] = -0.4 + 1.2 * smoothstep(R, R * 0.4, rr) * 0.5;
+        if (hash01(x * 3 + 1, y * 5 + 2, seed + 91) > 0.986) cv.mat[i] = star;
+        for (const [ex, ey, er] of innerEyes) {
+          // closed lids: a bone almond (pointed: two arcs) with a dark lash slit (Phase 2 opens them)
+          const half = er * 0.42 * Math.max(0, 1 - ((bx - ex) / er) ** 2);
+          if (Math.abs(bx - ex) < er && Math.abs(by - ey) < half + 0.5) {
+            cv.mat[i] = Math.abs(by - ey - half * 0.15) < 0.6 ? pupil : sclera;
+            cv.relief[i] = 3 + half;
+          }
+        }
+      }
+    }
+  const over =
+    layer === 1
+      ? (colors: Uint32Array, c: ArtCanvas): void => {
+          // channel light: brightest along the centre of each channel
+          const cyan = W_CYAN.map(hex);
+          const d = c.distance();
+          for (let k = 0; k < colors.length; k++)
+            if (c.mat[k] === channel) colors[k] = cyan[d[k]! >= 1.5 ? 4 : 2]!;
+        }
+      : layer === 3
+        ? (colors: Uint32Array, c: ArtCanvas): void => {
+            const sp = ['#7fd2d6', '#e9fbff', '#ffffff'].map(hex);
+            for (let k = 0; k < colors.length; k++)
+              if (c.mat[k] === star) colors[k] = sp[hash01(k, 3, seed) > 0.6 ? 2 : 1]!;
+          }
+        : null;
+  return finishRegion(rc, ramps, lighting, over, 0, inner + 0.5, 3, {
+    key: layer === 1 ? 'channels' : layer === 2 ? 'lattice' : 'abyss',
+    kind: 'interior',
+    pivotX: 0,
+    pivotY: 0,
+    parent,
+    weld: true,
+    layer,
+    z: 7 - layer,
+    arm: -1,
+    segment: -1,
+  });
+}
+
+/* ---------------------------------------------------------------- the shrine chandelier */
+
+/** x, length, root radius, snapped (0 = whole; else the fraction of the length that is left). Uneven; two have snapped. */
+const SPIRES: readonly [number, number, number, number][] = [
+  [-25, 14, 2.0, 0],
+  [-17, 24, 2.4, 0.45],
+  [-8, 33, 2.8, 0],
+  [1, 38, 3.4, 0],
+  [10, 29, 2.8, 0],
+  [18, 20, 2.4, 0],
+  [25, 13, 2.0, 0.55],
+];
+/** Where a spire hangs from the dome (the dome is lowest in the middle). */
+const spireRootY = (x: number): number => WE.shrineY + 7 + 11 * (1 - Math.min(1, Math.abs(x) / 31));
+
+function paintShrine(
+  ramps: number[][],
+  lighting: StageLighting,
+  seed: number,
+  parent: number,
+): WitnessRegion {
+  const top = WE.shrineY;
+  const rc = regionCanvas(-36, top - 2, 38, top + 72);
+  const { cv, ox, oy } = rc;
+  const gold = WID('gold');
+  const bone = WID('bone');
+  const bronze = WID('bronze');
+  for (let y = 0; y < cv.h; y++)
+    for (let x = 0; x < cv.w; x++) {
+      const bx = x + ox + 0.5;
+      const by = y + oy + 0.5;
+      const i = y * cv.w + x;
+      // crown: an inverted dome tucked under the carapace, narrowing to a hanging boss
+      const t = clamp01((by - top - 4) / 18);
+      const cone = smax(Math.abs(bx - 1) - lerp(27, 3, t * t), Math.max(top + 4 - by, by - (top + 23)), 2);
+      let d = smin(sdEllipse(bx, by, 0, top + 4, 27, 5.5), cone, 3);
+      let spire = -1;
+      let su = 0;
+      for (let k = 0; k < SPIRES.length; k++) {
+        const [sx, len0, r0, snap] = SPIRES[k]!;
+        const ry = spireRootY(sx);
+        const len = snap > 0 ? len0 * snap : len0;
+        // a snapped spire keeps its taper but ends in a jagged break
+        const rTip = snap > 0 ? r0 * (1 - snap) * 0.9 : 0.35;
+        let ds = sdTaperedCapsule(bx, by, sx, ry, r0, sx * 1.12, ry + len, rTip);
+        if (snap > 0) {
+          const cut = ry + len - 0.8 + (hash01(Math.floor(bx * 2), k, seed + 3) - 0.5) * 2.2;
+          ds = smax(ds, by - cut, 0.5);
+        }
+        if (ds < d) {
+          spire = k;
+          su = clamp01((by - ry) / len0);
+        }
+        d = smin(d, ds, 1.2);
+      }
+      // minor spires between the major ones
+      for (let k = 0; k < SPIRES.length - 1; k++) {
+        const mx = (SPIRES[k]![0] + SPIRES[k + 1]![0]) / 2;
+        const ml = 5 + 5 * hash01(k, 7, seed);
+        const ry = spireRootY(mx) - 1;
+        d = smin(d, sdTaperedCapsule(bx, by, mx, ry, 1.3, mx * 1.08, ry + ml, 0.3), 0.8);
+      }
+      if (d > 0) continue;
+      let m: number;
+      let rel: number;
+      if (spire >= 0 && su > 0.04) {
+        const [sx, , r0] = SPIRES[spire]!;
+        const across = Math.abs(bx - sx * (1 + 0.12 * su)) / Math.max(0.6, r0 * (1 - su));
+        rel = 7 * Math.sqrt(Math.max(0, 1 - across * across)) + 2;
+        // bone spires with gold collars; the centre spire is gold-tipped
+        const band = Math.abs(su - 0.24) < 0.04 || Math.abs(su - 0.5) < 0.03;
+        m = band || (spire === 3 && su > 0.82) ? gold : bone;
+      } else {
+        // the crown: a dark tarnished-bronze dome, ribbed with dead gold where the spires hang from it
+        const rib = Math.abs(((bx + 40) % 7) - 3.5) < 0.8 && by > top + 5;
+        m = rib ? gold : bronze;
+        rel = 9 - Math.abs(bx) * 0.15 + (rib ? 1 : 0);
+      }
+      cv.mat[i] = m;
+      cv.relief[i] = Math.max(0.5, rel);
+      cv.tone[i] = (hash01(x, y, seed + 31) - 0.5) * 0.3;
+    }
+  return finishRegion(rc, ramps, lighting, null, 0, top + 6, 3, {
+    key: 'shrine',
+    kind: 'shrine',
+    pivotX: 0,
+    pivotY: top,
+    parent,
+    weld: false,
+    layer: -1,
+    z: 6,
+    arm: -1,
+    segment: -1,
+  });
+}
+
+/* ---------------------------------------------------------------- the broken halo */
+
+function paintHaloArc(
+  ramps: number[][],
+  lighting: StageLighting,
+  seed: number,
+  parent: number,
+  k: number,
+): WitnessRegion {
+  const [a0d, a1d, dr] = HALO_ARCS[k]!;
+  const a0 = (a0d * Math.PI) / 180;
+  const a1 = (a1d * Math.PI) / 180;
+  const R = WE.haloR + dr;
+  const T = WE.haloT;
+  const sigil = a0 < -Math.PI / 2 && a1 > -Math.PI / 2;
+  // bounding box of the arc (plus the sigil above the top arc)
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (let s = 0; s <= 32; s++) {
+    const a = a0 + ((a1 - a0) * s) / 32;
+    for (const r of [R - T, R + T + 2]) {
+      x0 = Math.min(x0, Math.cos(a) * r);
+      x1 = Math.max(x1, Math.cos(a) * r);
+      y0 = Math.min(y0, Math.sin(a) * r);
+      y1 = Math.max(y1, Math.sin(a) * r);
+    }
+  }
+  if (sigil) y0 = Math.min(y0, -R - 20);
+  const rc = regionCanvas(x0, y0, x1, y1);
+  const { cv, ox, oy } = rc;
+  const gold = WID('gold');
+  const sy = -R - 10; // sigil centre
+  // angles are measured in (−π, π]; an arc that crosses ±π (the left one) is handled by unwrapping
+  const wrapNear = (th: number): number => {
+    let t = th;
+    while (t < a0 - Math.PI) t += Math.PI * 2;
+    while (t > a0 + Math.PI) t -= Math.PI * 2;
+    return t;
+  };
+  for (let y = 0; y < cv.h; y++)
+    for (let x = 0; x < cv.w; x++) {
+      const bx = x + ox + 0.5;
+      const by = y + oy + 0.5;
+      const i = y * cv.w + x;
+      const rho = Math.hypot(bx, by);
+      const th = wrapNear(Math.atan2(by, bx));
+      // broken ends: the angular limits wander with the radius
+      const rag = (hash01(Math.floor(rho), k, seed + 5) - 0.5) * 0.05;
+      let on = rho > R - T * 0.5 && rho < R + T * 0.5 && th > a0 + rag && th < a1 - rag;
+      let rel = 0;
+      if (on) {
+        const t = (rho - (R - T * 0.5)) / T;
+        rel = 4 + 4 * Math.sqrt(Math.max(0, 1 - (2 * t - 1) ** 2));
+      }
+      // tick marks: an astrolabe rim, every 5°; every fourth a raised stud
+      const deg = (th * 180) / Math.PI;
+      const tick = Math.abs(((deg + 720) % 5) - 2.5) > 2.1;
+      const stud = Math.abs(((deg + 720) % 20) - 10) > 9.3;
+      if (th > a0 + 0.03 && th < a1 - 0.03 && stud && rho >= R + T * 0.5 && rho < R + T * 0.5 + 2.2) {
+        on = true;
+        rel = 6;
+      }
+      if (sigil) {
+        // the crosshair sigil: a ring on a vertical spine, crossed
+        const ring = Math.abs(Math.hypot(bx, by - sy) - 5) < 1.1;
+        const vert = Math.abs(bx) < 0.9 && by > sy - 7 && by < -R + T * 0.5;
+        const hor = Math.abs(by - sy) < 0.8 && Math.abs(bx) < 10;
+        if (ring || vert || hor) {
+          on = true;
+          rel = ring ? 6 : 4;
+        }
+      }
+      if (!on) continue;
+      cv.mat[i] = gold;
+      cv.relief[i] = rel;
+      cv.tone[i] = tick && rho > R ? -1.3 : (hash01(x, y, seed + 13) - 0.5) * 0.4;
+    }
+  const mid = (a0 + a1) / 2;
+  return finishRegion(rc, ramps, lighting, null, Math.cos(mid) * R, Math.sin(mid) * R, 2, {
+    key: `halo${k}`,
+    kind: 'halo',
+    pivotX: 0,
+    pivotY: 0,
+    parent,
+    weld: false,
+    layer: -1,
+    z: 0,
+    arm: -1,
+    segment: -1,
+  });
+}
+
+/* ---------------------------------------------------------------- the scythe architectures */
+
+function paintArmSegment(
+  ramps: number[][],
+  lighting: StageLighting,
+  seed: number,
+  parent: number,
+  arm: number,
+  seg: number,
+): WitnessRegion {
+  const def = ARMS[arm]!;
+  const N = 200;
+  const S = bezierSamples(def.c, N);
+  const u0 = def.joints[seg]!;
+  const u1 = seg + 1 < def.joints.length ? def.joints[seg + 1]! : 1.0001;
+  const turn = armTurn(S);
+  const W = def.w;
+  const wo = (u: number): number => (1.6 + 3.2 * (1 - u)) * W; // spine half-width (outer side)
+  const wi = (u: number): number =>
+    ((1 + 7.5 * Math.sin(Math.PI * Math.min(1, u * 1.05))) * (1 - u ** 3) + 0.4) * W; // blade
+  const joint = samplesAt(S, u0);
+  const jointR = (seg === 0 ? 5.4 : 4.6 - 0.5 * seg) * W;
+  // bounding box of this segment's samples
+  let x0 = joint.x - jointR;
+  let y0 = joint.y - jointR;
+  let x1 = joint.x + jointR;
+  let y1 = joint.y + jointR;
+  for (let k = 0; k <= N; k++) {
+    if (S.s[k]! < u0 - 0.02 || S.s[k]! > u1 + 0.02) continue;
+    x0 = Math.min(x0, S.x[k]! - 11);
+    x1 = Math.max(x1, S.x[k]! + 11);
+    y0 = Math.min(y0, S.y[k]! - 11);
+    y1 = Math.max(y1, S.y[k]! + 11);
+  }
+  const rc = regionCanvas(x0, y0, x1, y1);
+  const { cv, ox, oy } = rc;
+  const bone = WID('bone');
+  const spine = WID('carapace');
+  const membrane = WID('membrane');
+  const bronze = WID('bronze');
+  const orb = WID('orb');
+  const iris = WID('iris');
+  const pupil = WID('pupil');
+  // the orb-eye on this segment's start joint (every joint after the root), on the outer side
+  let orbX = NaN;
+  let orbY = NaN;
+  if (seg > 0) {
+    const k = Math.round(u0 * N);
+    const nx = -(S.y[Math.min(N, k + 1)]! - S.y[Math.max(0, k - 1)]!);
+    const ny = S.x[Math.min(N, k + 1)]! - S.x[Math.max(0, k - 1)]!;
+    const nl = Math.hypot(nx, ny) || 1;
+    orbX = joint.x - (turn * nx * (wo(u0) + 2.2)) / nl;
+    orbY = joint.y - (turn * ny * (wo(u0) + 2.2)) / nl;
+  }
+  const ribStep = 0.11;
+  for (let y = 0; y < cv.h; y++)
+    for (let x = 0; x < cv.w; x++) {
+      const bx = x + ox + 0.5;
+      const by = y + oy + 0.5;
+      const i = y * cv.w + x;
+      // the joint (and its orb-eye) belongs to the segment that starts there
+      const dj = Math.hypot(bx - joint.x, by - joint.y);
+      if (seg > 0 && Math.hypot(bx - orbX, by - orbY) < 2.8) {
+        // dormant, but not quite closed: a gold lid with a thin slit of iris and a dark point
+        const slit = Math.abs(by - orbY) < 0.55;
+        cv.mat[i] = slit ? (Math.abs(bx - orbX) < 0.6 ? pupil : iris) : orb;
+        cv.relief[i] = 7;
+        continue;
+      }
+      if (dj < jointR) {
+        cv.mat[i] = bronze;
+        cv.relief[i] = 6 + 4 * Math.sqrt(1 - (dj / jointR) ** 2);
+        cv.tone[i] = dj > jointR - 1.2 ? -0.8 : 0;
+        continue;
+      }
+      // nearest centreline sample
+      let best = 0;
+      let bd = Infinity;
+      for (let k = 0; k <= N; k++) {
+        const d = (bx - S.x[k]!) ** 2 + (by - S.y[k]!) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = k;
+        }
+      }
+      const u = S.s[best]!;
+      if (u < u0 || u >= u1) continue;
+      const k0 = Math.max(0, best - 1);
+      const k1 = Math.min(N, best + 1);
+      const tdx = S.x[k1]! - S.x[k0]!;
+      const tdy = S.y[k1]! - S.y[k0]!;
+      const tl = Math.hypot(tdx, tdy) || 1;
+      // signed distance across: + toward the inner (concave) side
+      const s = (((bx - S.x[best]!) * -tdy + (by - S.y[best]!) * tdx) / tl) * turn;
+      const along = ((bx - S.x[best]!) * tdx + (by - S.y[best]!) * tdy) / tl;
+      if ((best === 0 || best === N) && Math.abs(along) > 0.8) continue;
+      if (s < -wo(u) || s > wi(u)) continue;
+      let m: number;
+      let rel: number;
+      let tone = 0;
+      if (s < 1.2) {
+        // the spine: jade-black carapace, ridged
+        m = spine;
+        rel = 6 + 3 * Math.sqrt(Math.max(0, 1 - ((s + wo(u) * 0.4) / (wo(u) + 1.2)) ** 2));
+      } else {
+        // the membrane blade: dark celadon, struts of bone across it, a brighter cutting edge
+        const rib = Math.abs((u % ribStep) - ribStep / 2) < 0.005 && s < wi(u) - 1.2;
+        m = rib ? bone : membrane;
+        rel = 3 + (rib ? 2 : 0);
+        tone = s > wi(u) - 1.1 ? 2.2 : -0.9 + 0.5 * (s / Math.max(1, wi(u)));
+      }
+      cv.mat[i] = m;
+      cv.relief[i] = rel;
+      cv.tone[i] = tone + (hash01(x, y, seed + arm * 7 + seg) - 0.5) * 0.25;
+    }
+  return finishRegion(rc, ramps, lighting, null, joint.x, joint.y, 2, {
+    key: `arm${arm}.${seg}`,
+    kind: 'arm',
+    pivotX: joint.x,
+    pivotY: joint.y,
+    parent,
+    weld: false,
+    layer: -1,
+    z: 3,
+    arm,
+    segment: seg,
+  });
 }

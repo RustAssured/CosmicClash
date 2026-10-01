@@ -188,7 +188,7 @@
         "ticks": 22
       },
       "seams": 9,
-      "tendrils": { "count": 24, "minLen": 20, "maxLen": 40 }
+      "tendrils": { "count": 24, "minLen": 18, "maxLen": 52 }
     }
   },
   "ai": {
@@ -793,7 +793,7 @@
       "frame": {
         "startup": 30,
         "active": 8,
-        "recovery": 46,
+        "recovery": 44,
         "cancelWindow": 0.4,
         "chargeMax": 0,
         "hitstop": 12
@@ -830,8 +830,9 @@
             }
           ],
           "movement": [
-            { "at": 0, "ix": -80, "iy": 0, "damp": 0.3 },
-            { "at": 30, "ix": 560, "iy": 0, "damp": 0.04 }
+            { "at": 0, "ix": -110, "iy": 20, "damp": 0.03 },
+            { "at": 22, "ix": 600, "iy": -160, "damp": 0.05 },
+            { "at": 42, "ix": -170, "iy": 12, "damp": 0.08 }
           ]
         },
         "forward": {
@@ -865,8 +866,9 @@
             }
           ],
           "movement": [
-            { "at": 0, "ix": -80, "iy": 0, "damp": 0.3 },
-            { "at": 30, "ix": 560, "iy": 0, "damp": 0.04 }
+            { "at": 0, "ix": -110, "iy": 14, "damp": 0.03 },
+            { "at": 22, "ix": 640, "iy": -22, "damp": 0.05 },
+            { "at": 42, "ix": -170, "iy": 12, "damp": 0.08 }
           ]
         },
         "down": {
@@ -900,8 +902,9 @@
             }
           ],
           "movement": [
-            { "at": 0, "ix": -80, "iy": 0, "damp": 0.3 },
-            { "at": 30, "ix": 560, "iy": 0, "damp": 0.04 }
+            { "at": 0, "ix": -110, "iy": -10, "damp": 0.03 },
+            { "at": 22, "ix": 610, "iy": 130, "damp": 0.05 },
+            { "at": 42, "ix": -170, "iy": 12, "damp": 0.08 }
           ]
         }
       },
@@ -910,10 +913,15 @@
       "tags": ["crack", "heavy"],
       "extra": {
         "pose": {
-          "startup": { "lean": -8 },
-          "active": { "lean": 11 },
+          "startup": { "lean": -6 },
+          "active": { "lean": 8 },
           "recovery": { "lean": 3 }
         },
+        "spinKeys": [
+          { "at": 0, "w": -0.6 },
+          { "at": 22, "w": 1.3 },
+          { "at": 42, "w": -0.8 }
+        ],
         "eyeFlare": true
       }
     },
@@ -1343,5 +1351,5 @@
       "idleRate": 2
     }
   },
-  "balance": { "power": 1.082, "durability": 0.924 }
+  "balance": { "power": 1.082, "durability": 1.1 }
 }

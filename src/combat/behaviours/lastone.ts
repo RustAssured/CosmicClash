@@ -17,9 +17,17 @@ import { blend, type LastOneRig } from '@/titans';
 import { Behaviour, type HitInfo, type InterceptResult } from '../behaviour';
 import type { FighterImpl } from '../fighter';
 import { Overlay } from '../fx/overlay';
+import { SplinePen, type SplineStyle } from '../fx/spline';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
-import { NODES, TendrilSystem, makeTendrilPalette, type Posture, type TendrilPalette } from './tendrils';
+import {
+  NODES,
+  TendrilSystem,
+  makeTendrilPalette,
+  makeTendrilStyle,
+  type Posture,
+  type TendrilPalette,
+} from './tendrils';
 
 const ALPHA_EYE = 0.75;
 const ease = (cur: number, target: number, rate: number): number => cur + (target - cur) * rate;
@@ -46,6 +54,8 @@ export class LastOneBehaviour extends Behaviour {
   private rig!: LastOneRig;
   private sys!: TendrilSystem;
   private pal!: TendrilPalette;
+  private style!: SplineStyle;
+  private pen!: SplinePen;
   private back!: Overlay;
   private front!: Overlay;
   private eye!: Overlay;
@@ -97,10 +107,13 @@ export class LastOneBehaviour extends Behaviour {
     const shell = f.def.materials.find((m) => m.key === 'shell')!.visual.ramp;
     const gilt = f.def.materials.find((m) => m.key === 'gilt')!.visual.ramp;
     this.pal = makeTendrilPalette(shell, gilt);
+    this.style = makeTendrilStyle(this.pal);
     this.shardRamp = this.pal.body.slice(3, 7);
     this.moteRamp = this.pal.tip.slice(2);
     this.back = new Overlay('lastone-tendrils-back', -1, 320, 300, 'normal', true);
     this.front = new Overlay('lastone-tendrils-front', 1, 320, 300, 'normal', true);
+    this.pen = new SplinePen(320, 300);
+    this.pen.setLight(f.lighting.dir);
     this.eye = new Overlay('lastone-eye', 0.5, 64, 64, 'normal');
     this.fx = new Overlay('lastone-fx', 20, 768, 560, 'add', true);
     f.resourceMax = this.sys.n;
@@ -386,46 +399,71 @@ export class LastOneBehaviour extends Behaviour {
     const decay = m.phase === 'active' ? 0.3 : 0.7;
     for (let i = 0; i < s.n; i++) s.tw[i] = s.tw[i]! * decay;
     if (!m.def || m.feint) return;
-    const t = f.body.transform;
     const isLash = m.def.id === 'lastone.lash' || m.def.id === 'lastone.lunge';
     const heavy = m.def.id === 'lastone.shatter';
     if (!isLash && !heavy) return;
-    if (m.phase === 'startup') {
-      // wind up: whips draw back behind the body
+    // the whips are released a few ticks BEFORE the first active tick, so the tips are arriving when the blow lands (and are
+    // already out there during the hit-stop that freezes the contact frame)
+    const lead = heavy ? 5 : 3;
+    const releasing = m.phase === 'startup' && m.phaseTick > m.startup - lead;
+    if (m.phase === 'startup' && !releasing) {
+      // wind up: whips draw back behind the body, each along its own slightly bowed arc (the lagging target staggers them)
       const w = clamp01(m.phaseTick / Math.max(3, m.startup * 0.8));
       for (let i = 0; i < s.n; i++) {
         const kind = s.roots[i]!.kind;
         if (kind === 'crown') continue;
-        s.tx[i] = t.x - dir * (40 + (i % 4) * 8);
-        s.ty[i] = t.y - 30 + (i % 4) * 22;
+        // each whip draws back from its OWN root (never across the body), bunched behind and below it
+        // ... at about its own length, so the chain is drawn taut rather than crumpled
+        const len = s.seg[i]! * (NODES - 1);
+        s.tx[i] = s.rx[i]! - dir * len * (0.8 + 0.05 * (i % 3));
+        s.ty[i] = s.ry[i]! + len * (0.15 + 0.1 * (i % 4));
+        s.tb[i] = (i % 2 === 0 ? 1 : -1) * (0.35 + 0.1 * (i % 3));
         s.tw[i] = Math.max(s.tw[i]!, 0.55 * w);
       }
-    } else if (m.phase === 'active') {
-      const at = m.phaseTick - 1;
+    } else if (m.phase === 'active' || releasing) {
+      const at = releasing ? 0 : m.phaseTick - 1;
       let group = 0;
       for (let k = 0; k < (m.variant?.hitboxes.length ?? 0); k++) {
         if (!f.liveHitShape(k, at, this.tmpShape)) continue;
         const sh = this.tmpShape;
         const hb = m.variant!.hitboxes[k]!;
         if (sh.kind === 'line' && at >= hb.from - 1 && at < hb.to + 2) {
+          // a lash: this hitbox's group of whips reaches for the far third of the line, bowing to one side, tips staggered
+          const lx = sh.x1 - sh.x0;
+          const ly = sh.y1 - sh.y0;
+          const ll = Math.hypot(lx, ly) || 1;
           for (let i = 0; i < s.n; i++) {
             const kind = s.roots[i]!.kind;
             if ((kind === 'hem' || kind === 'front') && i % 4 === group % 4) {
-              s.tx[i] = sh.x1;
-              s.ty[i] = sh.y1 + ((i >> 2) % 3) * 4 - 4;
+              const q = i >> 2;
+              const along = 0.74 + 0.13 * (q % 3);
+              const side = (q % 2 === 0 ? 1 : -1) * 3;
+              s.tx[i] = sh.x0 + lx * along + (-ly / ll) * side;
+              s.ty[i] = sh.y0 + ly * along + (lx / ll) * side;
+              s.tb[i] = (group % 2 === 0 ? 1 : -1) * (0.75 + 0.1 * (q % 3));
               s.tw[i] = 1;
             }
           }
           group++;
         } else if (sh.kind === 'cone') {
-          const tipX = sh.x + sh.dirX * sh.range;
-          const tipY = sh.y + sh.dirY * sh.range;
+          // a heavy blow: the veil fans across the whole cone, each whip on its own bearing and reach, bowing outward
+          let total = 0;
+          for (let i = 0; i < s.n; i++) if (s.roots[i]!.kind !== 'crown') total++;
+          const axis = Math.atan2(sh.dirY, sh.dirX);
+          let m2 = 0;
           for (let i = 0; i < s.n; i++) {
-            const kind = s.roots[i]!.kind;
-            if (kind === 'crown') continue;
-            s.tx[i] = tipX + ((i % 5) - 2) * 6;
-            s.ty[i] = tipY + ((i % 3) - 1) * 10;
+            if (s.roots[i]!.kind === 'crown') continue;
+            const span = total > 1 ? (2 * m2) / (total - 1) - 1 : 0;
+            const a = axis + sh.halfAngle * 0.9 * span;
+            const reach = sh.range * (0.62 + 0.38 * (((m2 * 5) % 7) / 6));
+            const px = sh.x + Math.cos(a) * reach;
+            const py = sh.y + Math.sin(a) * reach;
+            s.tx[i] = px;
+            s.ty[i] = py;
+            const cross = sh.dirX * (py - sh.y) - sh.dirY * (px - sh.x);
+            s.tb[i] = (cross >= 0 ? 1 : -1) * (0.75 + 0.1 * (m2 % 3));
             s.tw[i] = 0.9;
+            m2++;
           }
         }
       }
@@ -463,11 +501,11 @@ export class LastOneBehaviour extends Behaviour {
       this.trailCount === 0;
     if (!calm || (tick & 1) === 0 || !this.back.layer.visible) {
       this.back.begin(t.x, t.y);
-      this.sys.draw(this.back, false, this.pal, glow);
+      this.sys.draw(this.back, this.pen, false, this.style, glow);
       if (this.trailCount > 0) this.drawAfterimage(this.back, tick);
       this.back.end();
       this.front.begin(t.x, t.y);
-      this.sys.draw(this.front, true, this.pal, glow);
+      this.sys.draw(this.front, this.pen, true, this.style, glow);
       this.front.end();
     }
 
