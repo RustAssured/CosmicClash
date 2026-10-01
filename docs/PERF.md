@@ -81,6 +81,14 @@ The nursery (two GPU-baked pillar layers + 5 fbm layers) is the most expensive s
 
 Not measured: any real-GPU time; motion smoothness of the dithered scenery under camera pans (judged from stills only — see the Known issues in the final report).
 
+## Real GPU, real time — WJ's machine (slice Phase 0)
+
+Ryzen 5 5500U, integrated Radeon (Vega 7, ANGLE/D3D11), ~6 GB RAM, 1920×1080 @ 60 Hz, Edge full-screen, production build, tier `auto`.
+`npx tsx tools/lead/rtcapture.ts aivai --record=0 --lum=0` (Last One vs Planet, AI level 4, 60 s): **59.6 fps mean, 1 % low 28.2, 9 frames > 25 ms**
+(the worst is the first frame after start); **sim ms/tick mean 1.5, p99 4.9, max 37.7** (a 20 s run: p99 6.6). GC (GC-category trace only, 30 s): 190–194
+main-thread pauses, 6–8 over 4 ms, max 6.2–7.1 ms; **3-minute fight: 258 pauses, 6 over 4 ms, worst 14.0 ms** (`docs/gates/evidence/gate-a/baseline-gc.json`).
+Instrumentation costs are in DECISIONS D24. These numbers are the slice baseline; every gate re-measures them the same way.
+
 ## Lead: matter tail-latency note (final integration)
 
 B2's round-2 target was a saturated 22k-cell p99 ≤ 3.5 ms (measured 2.2 ms then). After the later visual/feel work (progressive fissure cuts, impact plume, debris depth

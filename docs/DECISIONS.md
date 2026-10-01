@@ -54,3 +54,11 @@ vs. a real GPU and are reported alongside sim ms/tick (which is representative).
 **D21 — Software-GL testing caveat** — The only GL in the sandbox is SwiftShader (~1–2 fps for the full pipeline). Sim ms/tick numbers are representative; frame times are not. E2E tests must *poll for state*, never sleep for fixed durations; UI timers that accumulate real `dt` advance slowly there. The Lead app uses the renderer's `'auto'` tier by default.
 
 **D22 — Menu scenery** — In menus the app drives a slow hand-made dolly over the stage (no sim); matches use the engine camera. UI is always the last screen-space layer.
+
+**D23 — Evidence runs on the real GPU, in real time (slice Phase 0)** — Feel, flash, sound and performance claims cite `tools/lead/rtcapture.ts` runs on WJ's machine (headed full-screen Edge, ANGLE/D3D11, Vega 7) or the headless `tools/lead/pacing.ts`; never stepped stills. SwiftShader (D14/D21) remains for CI only.
+
+**D24 — Instrumentation must not be the thing measured** — Measured costs on WJ's machine: telemetry ≈ −1.5 fps, recording ≈ −2 fps and +26 long frames/20 s, luminance read-back ≈ −12 fps, V8 tracing (all v8 categories) ≈ −10 fps. So: performance numbers come only from runs without recording or read-back; GC from a GC-category-only trace; flash metrics from dedicated runs; clips are recorded without the read-back. Telemetry is presentation-side only (`src/telemetry`), never read by the sim.
+
+**D25 — LF line endings everywhere** — `.gitattributes` `* text=auto eol=lf`. GitHub Desktop's bundled git defaults to `core.autocrlf=true`, which made Prettier (and so `npm run lint`) fail on every file on Windows.
+
+**D26 — Slice plan** — The two-titan vertical slice ("The Witness and the World") follows `docs/SLICE_PLAN.md`; its open architecture decisions (Witness region bodies + D4 amendment, camera push-in vs D5, hit-stop budget, two-hemisphere Planet, Gravity button) are recorded here once WJ answers Gate A (`docs/gates/GATE_A.md` §6).
