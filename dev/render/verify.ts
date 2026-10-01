@@ -43,6 +43,9 @@ const cam = (over: Partial<CameraState> = {}): CameraState => ({
   roll: 0,
   shakeX: 0,
   shakeY: 0,
+  dolly: 0,
+  kickX: 0,
+  kickY: 0,
   ...over,
 });
 const noFx = (): FrameFx => ({

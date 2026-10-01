@@ -85,6 +85,14 @@ export interface CameraState {
   /** Additional shake offset in px (already damped low-frequency). */
   shakeX: number;
   shakeY: number;
+  /**
+   * 0..1 scenery push-in (D27): the 3-D scenery dollies toward the fight and parallax layers scale with depth; sprites
+   * stay 1:1. Driven by heavy windups, released with lag after impact.
+   */
+  dolly: number;
+  /** Impact parallax kick in px at depth 1 (scenery layers move by kick × their parallax − 1). Decays in the camera. */
+  kickX: number;
+  kickY: number;
 }
 
 export interface CameraTarget {
@@ -236,6 +244,8 @@ export interface LightFx {
   intensity: number;
   /** Slot of the emitting fighter (its own sprite is not relit by it), or -1. */
   slot: number;
+  /** 'body' (a titan's own glow; owns sprite relight) or 'impact' (short local burst that replaces washes — D5). */
+  kind?: 'body' | 'impact';
 }
 
 export interface FrameFx {

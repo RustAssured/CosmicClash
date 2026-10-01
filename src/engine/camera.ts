@@ -169,7 +169,17 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
 
   const prev: Pose = { x: sx.x, y: sy.x, shakeX: 0, shakeY: 0, zoom: 1, roll: 0 };
   const cur: Pose = { x: sx.x, y: sy.x, shakeX: 0, shakeY: 0, zoom: 1, roll: 0 };
-  const outState: CameraState = { x: 0, y: 0, zoom: 1, roll: 0, shakeX: 0, shakeY: 0 };
+  const outState: CameraState = {
+    x: 0,
+    y: 0,
+    zoom: 1,
+    roll: 0,
+    shakeX: 0,
+    shakeY: 0,
+    dolly: 0,
+    kickX: 0,
+    kickY: 0,
+  };
   const outView: ViewRect = { x0: 0, y0: 0, w: W, h: H };
   const out = { state: outState, view: outView };
 

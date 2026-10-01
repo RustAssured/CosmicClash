@@ -105,6 +105,8 @@ export class Match implements MatchApi {
         x: this.startX(slot),
         y: deps.arena.restY,
         facing: slot === 0 ? 1 : -1,
+        footwork: config.footwork ?? 'classic',
+        zdepth: !!config.zdepth,
       });
     this.fighters = [mk(0), mk(1)];
 
@@ -226,6 +228,14 @@ export class Match implements MatchApi {
       ctx.foe = this.fighters[1 - s]!;
       ctx.rng = this.fighterRng[s]!;
       this.fighters[s]!.tick(ctx);
+    }
+    // symmetric contact resolution, owned by slot 0 so the alternating order (D17) cannot bias it
+    const f0 = this.fighters[0];
+    if (f0.resolvePair) {
+      ctx.input = this.frames[0];
+      ctx.foe = this.fighters[1];
+      ctx.rng = this.fighterRng[0];
+      f0.resolvePair(this.fighters[1], ctx);
     }
     // the world ticks AFTER both fighters have set their transforms and applied their hits
     this.world.tick();
@@ -376,6 +386,9 @@ export class Match implements MatchApi {
         q(v.meter, 1000),
         q(v.bodyStats.massFrac, 10000),
         v.ko ? 1 : 0,
+        q(v.angle, 4096),
+        q(v.spin, 4096),
+        q(v.z, 16),
       );
     }
     return h >>> 0;

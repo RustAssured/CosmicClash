@@ -62,6 +62,14 @@ export const REGION_GRID = 8;
 /** Sim performance budget (spec): ms per tick for two full bodies + debris on a mid-range laptop. */
 export const SIM_BUDGET_MS_PER_TICK = 5;
 
+/**
+ * The vertical slice ("The Witness and the World", D26/D27): menus, attract mode and random pairings use only these.
+ * Everything else keeps compiling and testing; `?full=1` shows it all again. The arenas join in Phase 2.
+ */
+export const SLICE = {
+  titans: ['lastone', 'planet'] as const,
+} as const;
+
 /** KO thresholds (spec: KO when core-anchor integrity or total mass falls below thresholds). */
 export const KO_CORE_INTEGRITY = 0.25;
 export const KO_MASS_FRAC = 0.22;

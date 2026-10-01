@@ -9,7 +9,13 @@ async function main(): Promise<void> {
   const app = new App();
   // preserveDrawingBuffer only for screenshot tooling: real-time evidence runs (tele) read frames right after drawing
   // and must pay exactly what a player's build pays
-  await app.start(canvas, { preserveDrawingBuffer: params.active && !params.tele, quality: params.q });
+  await app.start(canvas, {
+    preserveDrawingBuffer: params.active && !params.tele,
+    quality: params.q,
+    full: new URLSearchParams(location.search).get('full') === '1',
+    footwork: params.orbit ? 'orbit' : 'classic',
+    zdepth: params.zdepth,
+  });
   await installHarness(app, params);
 }
 

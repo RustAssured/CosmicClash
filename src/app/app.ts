@@ -2,6 +2,7 @@ import {
   LOGICAL_H,
   LOGICAL_W,
   ROUND_INTRO_TICKS,
+  SLICE,
   STAGE_IDS,
   TITAN_IDS,
   makeLayer,
@@ -56,6 +57,7 @@ interface Session {
 }
 
 const MENU_STAGE: StageId = 'nursery';
+const CURSOR_IDLE_MS = 1500;
 
 interface MatchOpts {
   attract?: boolean;
@@ -115,6 +117,11 @@ export class App {
   private nowMs = 0;
   private lastFrameMs = 0;
   private menuStage: StageId = MENU_STAGE;
+  /** Titans offered in menus / attract mode (the slice unless `?full=1`). */
+  private roster: TitanId[] = [];
+  /** Prototype flags from the URL (`orbit=1`, `zdepth=1`), applied to every match that does not set them itself. */
+  private footwork: 'classic' | 'orbit' = 'classic';
+  private zdepth = false;
   /** Per-tick sim cost samples for the harness benchmark. */
   simSamples: number[] = [];
   measureSim = false;
@@ -146,9 +153,22 @@ export class App {
    * ------------------------------------------------------------------------------------------------ */
   async start(
     canvas: HTMLCanvasElement,
-    opts: { quality?: 0 | 1 | 2 | 'auto'; preserveDrawingBuffer?: boolean } = {},
+    opts: {
+      quality?: 0 | 1 | 2 | 'auto';
+      preserveDrawingBuffer?: boolean;
+      full?: boolean;
+      footwork?: 'classic' | 'orbit';
+      zdepth?: boolean;
+    } = {},
   ): Promise<void> {
     this.canvas = canvas;
+    this.footwork = opts.footwork ?? 'classic';
+    this.zdepth = !!opts.zdepth;
+    // the vertical slice (D26/D27): only its titans in menus and attract mode unless `?full=1`
+    this.roster = opts.full
+      ? IMPLEMENTED_TITANS.slice()
+      : IMPLEMENTED_TITANS.filter((id) => (SLICE.titans as readonly TitanId[]).includes(id));
+    this.hideIdleCursor();
     await this.renderer.init(canvas, {
       quality: opts.quality ?? 'auto',
       preserveDrawingBuffer: opts.preserveDrawingBuffer ?? false,
@@ -157,7 +177,7 @@ export class App {
     this.audio.autoUnlock(document);
     this.ui = createUI({
       input: this.input,
-      titans: TITAN_IDS.map((id): TitanInfo => {
+      titans: (opts.full ? TITAN_IDS : this.roster).map((id): TitanInfo => {
         const d = TITAN_DEFS[id];
         return d ? titanInfoFromDef(d) : FIXTURE_TITANS.find((t) => t.id === id)!;
       }),
@@ -166,7 +186,7 @@ export class App {
         return fixturePortraitProvider(id);
       },
       stages: STAGE_IDS.map((id) => STAGES[id]),
-      implementedTitans: IMPLEMENTED_TITANS,
+      implementedTitans: this.roster,
       implementedStages: STAGE_IDS.filter((id) => isStageImplemented(id)),
       sound: (id) => this.audio.handle([{ t: 'ui', id }]),
       version: 'v0.1',
@@ -186,11 +206,25 @@ export class App {
   private async warm(): Promise<void> {
     await sleep0();
     warmUp();
-    for (const id of IMPLEMENTED_TITANS) {
+    for (const id of this.roster) {
       await sleep0();
       renderPortrait(id, 1, STAGES[this.menuStage].lighting);
     }
     this.ready = true;
+  }
+
+  /** D7: the mouse cursor disappears after 1.5 s without mouse movement and comes back on the next move. */
+  private hideIdleCursor(): void {
+    const root = document.documentElement;
+    let timer = 0;
+    const wake = (): void => {
+      root.style.cursor = '';
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => (root.style.cursor = 'none'), CURSOR_IDLE_MS);
+    };
+    window.addEventListener('mousemove', wake, { passive: true });
+    window.addEventListener('pointerdown', wake, { passive: true });
+    wake();
   }
 
   private readonly onResize = (): void => {
@@ -218,7 +252,12 @@ export class App {
   }
 
   /** Synchronous core of startMatch (the stage must already be prepared). Also used by the benchmark to chain fights. */
-  buildSession(config: MatchConfig, opts: MatchOpts = {}): Session {
+  buildSession(cfg: MatchConfig, opts: MatchOpts = {}): Session {
+    const config: MatchConfig = {
+      ...cfg,
+      footwork: cfg.footwork ?? this.footwork,
+      zdepth: cfg.zdepth ?? this.zdepth,
+    };
     const defs: [TitanDef, TitanDef] = [
       getTitanDef(config.slots[0].titan),
       getTitanDef(config.slots[1].titan),
@@ -681,7 +720,7 @@ export class App {
 
   /** AI-vs-AI attract loop with a random pairing on an implemented stage. */
   async startAttract(): Promise<void> {
-    const ids = IMPLEMENTED_TITANS;
+    const ids = this.roster;
     const a = ids[Math.floor(Math.random() * ids.length)]!;
     let b = ids[Math.floor(Math.random() * ids.length)]!;
     if (ids.length > 1) while (b === a) b = ids[Math.floor(Math.random() * ids.length)]!;

@@ -62,3 +62,17 @@ vs. a real GPU and are reported alongside sim ms/tick (which is representative).
 **D25 — LF line endings everywhere** — `.gitattributes` `* text=auto eol=lf`. GitHub Desktop's bundled git defaults to `core.autocrlf=true`, which made Prettier (and so `npm run lint`) fail on every file on Windows.
 
 **D26 — Slice plan** — The two-titan vertical slice ("The Witness and the World") follows `docs/SLICE_PLAN.md`; its open architecture decisions (Witness region bodies + D4 amendment, camera push-in vs D5, hit-stop budget, two-hemisphere Planet, Gravity button) are recorded here once WJ answers Gate A (`docs/gates/GATE_A.md` §6).
+
+**D27 — Gate A outcomes (WJ, 2026-10-01: "1–12 ok, Q10 speakers, ok to install")** — Plan approved as written. Each item below takes the recommendation in `docs/gates/GATE_A.md` §6:
+- **Witness rig:** one MatterBody per rigid region, with LUT-quantised rotation and a single cached rotated mask per (body, angle) shared by hit tests and rendering. **D4 is amended:** whole bodies keep integer row-shear lean, rig regions may rotate, and silhouette disagreement may be at most 1 px (tested).
+- **Camera push-in:** framing, a scenery dolly and parallax, with sprites staying 1:1. This amends D5 for scenery only. A sharp-bilinear sprite push (≤ 10 %) sits behind a flag for an A/B at Gate B.
+- **Hit-stop:** the heavy cap drops to about 8 ticks; real momentum and torque carry the weight.
+- **Planet rotation:** a two-hemisphere world.
+- **Gravity button:** R1 (L1 stays Feint); on a sideways Joy-Con, stick-click.
+- **Witness identity:** the id stays `lastone`, displayed as "The Witness".
+- **Witness art:** front-facing eye with a tracking pupil, and the eye is the KO core; 4 scythe arms; an authored abyss for the void cavity; white-gold/cyan wound light everywhere on the Witness.
+- **Aftermath:** freezes at KO + 1.0 s of the deciding round.
+- **Loudness:** −20 LUFS integrated, −1 dBTP. **WJ listens on laptop speakers.** Tune for small speakers: high-pass subs (~45–60 Hz on the output), carry weight with the 80–250 Hz "knock" and mid transients, and check on speakers before trusting headphones.
+- **Slice flag:** only the two slice titans and stages are shown; `?full=1` shows everything.
+- **Flash compliance:** the §4 numbers are the standard. No formal WCAG/Harding certification. Comfort sliders default to 100 %, and the §4 limits must hold at that default (Lead's reading of "ok" on Q12).
+- **ffmpeg:** installed (winget `Gyan.FFmpeg`) for MP4 conversion and trimmed clips.

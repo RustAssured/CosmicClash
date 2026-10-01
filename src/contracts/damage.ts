@@ -93,6 +93,11 @@ export interface DamageEvent {
   originY: number;
   flags: number;
   params: DamageParams;
+  /**
+   * Hit-stop ticks this blow will freeze the match for (the world is not ticked during them). Matter uses it to place
+   * the wound's shear beat 80–300 ms after impact in WALL time (SLICE_PLAN §6, D1). Absent = 0.
+   */
+  hitstop?: number;
 }
 
 /** What the caller (combat) learns immediately from an applied event. */

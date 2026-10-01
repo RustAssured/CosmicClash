@@ -74,7 +74,25 @@ export type SimEvent =
   /** amount is a fraction (0.1 = 10 % micro-zoom). */
   | { t: 'zoom'; amount: number }
   | { t: 'roll'; radians: number }
-  | { t: 'flash'; amount: number }
+  /**
+   * A burst of light. With x/y it is LOCAL (an impact light at that world point, never a full-screen wash — D5);
+   * without, presentation treats it as local to the frame centre. `amount` 0..1.
+   */
+  | { t: 'flash'; amount: number; x?: number; y?: number }
+  /**
+   * Feel instrumentation (always emitted; cheap). accept: a command was taken this tick (`cmd` = move slot, 'steer',
+   * 'feint', 'guard'). respond: the first tick on which that command changed a drawn pixel (`channel` says which:
+   * integer root position, pose/rotation, a light/emissive, or a detached fx), `ticks` since accept. settle: the body is
+   * back within rest thresholds, `ticks` since accept.
+   */
+  | {
+      t: 'feel';
+      slot: 0 | 1;
+      kind: 'accept' | 'respond' | 'settle';
+      cmd: string;
+      ticks: number;
+      channel?: 'root' | 'pose' | 'light' | 'fx';
+    }
   /** scale is a fraction of real speed (0.05..1) for `ticks` sim ticks. */
   | { t: 'timescale'; scale: number; ticks: number }
   | { t: 'ko'; slot: 0 | 1; x: number; y: number }
@@ -120,6 +138,9 @@ export type FighterState =
 
 export type MovePhase = 'startup' | 'charge' | 'active' | 'recovery';
 
+/** Readable orbital states (SLICE_PLAN §5): how a fighter is moving relative to its foe. */
+export type OrbitState = 'neutral' | 'orbit' | 'closing' | 'widening' | 'collision' | 'slingshot';
+
 /** A live or upcoming hit shape (world space) — read by the AI (telegraphs), Training overlay and probes. */
 export interface ThreatShape {
   shape: DamageShape;
@@ -146,6 +167,16 @@ export interface FighterView {
   vx: number;
   vy: number;
   facing: 1 | -1;
+  /**
+   * Whole-body angular state. `angle` (rad) is the visual orientation the body is drawn with (torsion/lean for the
+   * Witness, the surface phase for the Planet's spin); `spin` its angular velocity (rad/s). 0 for titans without it.
+   */
+  angle: number;
+  spin: number;
+  /** Depth offset from the combat plane in px (z-offset prototype, D27/§5); 0 = in plane. */
+  z: number;
+  /** Planar orbital footwork state relative to the foe (for AI, camera, telemetry); 'neutral' when orbit is off. */
+  orbit: OrbitState;
   /** World AABB of live matter (approximate, updated each tick). */
   boundsX0: number;
   boundsY0: number;
@@ -206,6 +237,9 @@ export interface FighterOptions {
   facing: 1 | -1;
   /** Reuse a generated body across rounds (damage persists as scars). */
   existingBody?: MatterBody;
+  /** From MatchConfig: locomotion model and depth-offset prototype. */
+  footwork?: 'classic' | 'orbit';
+  zdepth?: boolean;
 }
 
 export interface FighterTickCtx {
@@ -262,6 +296,11 @@ export interface Fighter {
   nextRound(x: number, y: number, facing: 1 | -1, healFraction: number, seed: number): void;
   /** Harness/training only: set the ultimate meter (0..1). Optional; fighters that support it implement it. */
   debugSetMeter?(v: number): void;
+  /**
+   * Symmetric pair resolution (collision, separation, momentum exchange). The Match calls it on fighter 0 ONLY, once per
+   * live tick, after both fighters ticked and before world.tick(), so neither slot's order (D17) biases contact.
+   */
+  resolvePair?(foe: Fighter, ctx: FighterTickCtx): void;
   /** Called by the match when the foe's KO is final/round decided (victory pose). */
   setVictory(): void;
   /** For the AI's short-horizon lookahead: frame data lookup by move id. */
@@ -295,6 +334,10 @@ export interface MatchConfig {
   infinite?: boolean;
   /** Distance in px between the fighters' anchors at each round start (default 380). The harness uses it to stage contact quickly. */
   startGap?: number;
+  /** Locomotion model (SLICE_PLAN §6): 'classic' (default, the current floor-less side view) or 'orbit' (planar orbital footwork). */
+  footwork?: 'classic' | 'orbit';
+  /** Shallow depth offset prototype (draw order, ±12 % scale, parallax; collision suppressed while |Δz| is large). */
+  zdepth?: boolean;
 }
 
 export type RoundPhase = 'intro' | 'fight' | 'ko' | 'timeover' | 'roundend' | 'matchend';

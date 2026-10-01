@@ -320,7 +320,7 @@ class PixelRenderer implements DebuggableRenderer {
     timeSec: 0,
     dtSec: 0,
     view: { x0: 0, y0: 0, w: LOGICAL_W, h: LOGICAL_H },
-    camera: { x: 0, y: 0, zoom: 1, roll: 0, shakeX: 0, shakeY: 0 },
+    camera: { x: 0, y: 0, zoom: 1, roll: 0, shakeX: 0, shakeY: 0, dolly: 0, kickX: 0, kickY: 0 },
     fx: { shockwaves: [], lenses: [], impulses: [], flash: 0, aberration: 0, intensity: 0, timeScale: 1 },
     forces: this.forces,
   };
