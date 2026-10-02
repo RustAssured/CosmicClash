@@ -23,11 +23,47 @@ const pt: WorldPoint = { x: 0, y: 0 };
  */
 export function findImpact(ctx: DamageCtx, out: Impact): boolean {
   const { core, body } = ctx;
+  const q = core.q;
+  // a blow asks twice (impact burst, then the crater): answer from the memo while nothing it read has changed
+  if (
+    ctx.impValid &&
+    ctx.impGen === core.covGen &&
+    ctx.impEpoch === body.cellEpoch &&
+    ctx.impN === ctx.n &&
+    ctx.impQx === q.originX() &&
+    ctx.impQy === q.originY()
+  ) {
+    out.fx = ctx.impFx;
+    out.fy = ctx.impFy;
+    out.nx = ctx.impNx;
+    out.ny = ctx.impNy;
+    out.hasNormal = ctx.impHas;
+    return ctx.impOk;
+  }
+  const ok = computeImpact(ctx, out);
+  ctx.impValid = true;
+  ctx.impOk = ok;
+  ctx.impGen = core.covGen;
+  ctx.impEpoch = body.cellEpoch;
+  ctx.impN = ctx.n;
+  ctx.impQx = q.originX();
+  ctx.impQy = q.originY();
+  ctx.impFx = out.fx;
+  ctx.impFy = out.fy;
+  ctx.impNx = out.nx;
+  ctx.impNy = out.ny;
+  ctx.impHas = out.hasNormal;
+  return ok;
+}
+
+function computeImpact(ctx: DamageCtx, out: Impact): boolean {
+  const { core, body } = ctx;
   const w = body.w;
   const mat = body.map.material;
   const q = core.q;
   const n0 = ctx.n;
   const idx0 = core.covIdx;
+  const dist = core.covD;
   const ox = q.originX();
   const oy = q.originY();
   let dmin = Infinity;
@@ -36,6 +72,7 @@ export function findImpact(ctx: DamageCtx, out: Impact): boolean {
     const x = i % w;
     body.cellWorld(x, (i - x) / w, pt);
     const d = (pt.x - ox) * (pt.x - ox) + (pt.y - oy) * (pt.y - oy);
+    dist[k] = d;
     if (d < dmin) dmin = d;
   }
   if (dmin === Infinity) return false;
@@ -47,8 +84,7 @@ export function findImpact(ctx: DamageCtx, out: Impact): boolean {
     const i = idx0[k]!;
     const x = i % w;
     const y = (i - x) / w;
-    body.cellWorld(x, y, pt);
-    const d = (pt.x - ox) * (pt.x - ox) + (pt.y - oy) * (pt.y - oy);
+    const d = dist[k]!;
     if (d > lim) continue;
     sx += x + 0.5;
     sy += y + 0.5;

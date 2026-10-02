@@ -19,7 +19,7 @@ import { K_CONE, K_LINE, type ShapeQ } from './shape';
 import { WoundBook } from './wound';
 import { isMolten } from './materials';
 import type { ShellFace } from './shell';
-import { RotBox, rotCellAtDirect, rotCellWorld, rotCollectDirect, rotWorldToLocal } from './rotation';
+import { RotBox, RotHitCache, rotCellAtCached, rotCollectDirect, rotWorldToLocal } from './rotation';
 
 export const TILE = 16;
 export const TILE_SHIFT = 4;
@@ -38,6 +38,16 @@ export const ACT_HEAT = 1;
 export const ACT_INFECT = 2;
 
 const R2 = REGION_GRID * REGION_GRID;
+const RG = REGION_GRID;
+/** The 16 core-exposure ray directions (computeCore), evaluated once. */
+const RAY_X = Float64Array.from({ length: 16 }, (_, a) => Math.cos((a * Math.PI) / 8 + 0.1));
+const RAY_Y = Float64Array.from({ length: 16 }, (_, a) => Math.sin((a * Math.PI) / 8 + 0.1));
+const LEAN = leanShift;
+/** Local copies of contract constants read per query (a bundler's live-binding getter per read is not free in hot paths). */
+const STEPS = ANGLE_STEPS;
+const ONE = ROT_ONE;
+const LUT_COS = ROT_LUT.cos;
+const LUT_SIN = ROT_LUT.sin;
 const MAX_FRONTS = 160;
 const MAX_FUSES = 96;
 
@@ -347,10 +357,8 @@ export class Body implements MatterBody {
 
     this.regionOfX = new Uint8Array(this.w);
     this.regionOfY = new Uint8Array(this.h);
-    for (let x = 0; x < this.w; x++)
-      this.regionOfX[x] = Math.min(REGION_GRID - 1, Math.floor((x * REGION_GRID) / this.w));
-    for (let y = 0; y < this.h; y++)
-      this.regionOfY[y] = Math.min(REGION_GRID - 1, Math.floor((y * REGION_GRID) / this.h));
+    for (let x = 0; x < this.w; x++) this.regionOfX[x] = Math.min(RG - 1, Math.floor((x * RG) / this.w));
+    for (let y = 0; y < this.h; y++) this.regionOfY[y] = Math.min(RG - 1, Math.floor((y * RG) / this.h));
     this.regionDirty = new Uint8Array(R2).fill(1);
     this.regionMass = new Float64Array(R2);
     this.regionCells = new Int32Array(R2);
@@ -385,13 +393,13 @@ export class Body implements MatterBody {
   /** Horizontal world shear of local row `j` (cosmetic lean). Rotated region bodies have none (amended D4). */
   rowShift(j: number): number {
     const t = this.transform;
-    return t.lean === 0 || (t.rot ?? 0) !== 0 ? 0 : leanShift(t.lean, j, t.anchorY);
+    return t.lean === 0 || (t.rot ?? 0) !== 0 ? 0 : LEAN(t.lean, j, t.anchorY);
   }
 
   /** The quantised rotation step of this body (0 = unrotated: every query takes the original fast path). */
   rotStep(): number {
     const r = this.transform.rot;
-    return r === undefined || r === 0 ? 0 : ((r % ANGLE_STEPS) + ANGLE_STEPS) % ANGLE_STEPS;
+    return r === undefined || r === 0 ? 0 : ((r % STEPS) + STEPS) % STEPS;
   }
 
   /**
@@ -407,13 +415,38 @@ export class Body implements MatterBody {
   /** Generation stamps for the rotated collect (cells drawn by several pixels are taken once). */
   private rotStamp: Uint32Array | null = null;
   private rotGen = 0;
+  /**
+   * Bumped by every cell mutation (`touch` / `touchPoint`, hence `killCell`) and every whole-map rebuild: the rotated hit memo
+   * (`RotHitCache`) is valid only while it and `map.version` are unchanged.
+   */
+  cellEpoch = 0;
+  private rotMemo: RotHitCache | null = null;
+  /** The rotated hit memo, validated for step `k` and the current state. */
+  private memoFor(k: number, box: RotBox): RotHitCache {
+    const m = this.rotMemo ?? (this.rotMemo = new RotHitCache());
+    m.begin(this, k, box, this.map.version, this.cellEpoch);
+    return m;
+  }
+
+  private cwStep = -1;
+  private cwC = 0;
+  private cwS = 0;
 
   /** World position of the CENTRE of local cell (i, j). */
   cellWorld(i: number, j: number, out: WorldPoint): void {
     const t = this.transform;
     const k = this.rotStep();
     if (k !== 0) {
-      rotCellWorld(this, k, i, j, out);
+      // rotation.ts rotCellWorld, with the step's cos / sin kept (same arithmetic, so the same doubles)
+      if (k !== this.cwStep) {
+        this.cwStep = k;
+        this.cwC = LUT_COS[k]! / ONE;
+        this.cwS = LUT_SIN[k]! / ONE;
+      }
+      const mx = (i + 0.5 - t.anchorX) * t.facing;
+      const my = j + 0.5 - t.anchorY;
+      out.x = Math.round(t.x) + this.cwC * mx - this.cwS * my;
+      out.y = Math.round(t.y) + this.cwS * mx + this.cwC * my;
       return;
     }
     out.x = t.x + (i + 0.5 - t.anchorX) * t.facing + this.rowShift(j);
@@ -424,7 +457,10 @@ export class Body implements MatterBody {
   cellAtWorld(wx: number, wy: number): number {
     const t = this.transform;
     const k = this.rotStep();
-    if (k !== 0) return rotCellAtDirect(this, k, this.rotBox.of(this, k), wx, wy);
+    if (k !== 0) {
+      const box = this.rotBox.of(this, k);
+      return rotCellAtCached(this, k, box, this.memoFor(k, box), wx, wy);
+    }
     const ly = wy - t.y + t.anchorY;
     const j = Math.floor(ly);
     if (j < 0 || j >= this.h) return -1;
@@ -452,8 +488,8 @@ export class Body implements MatterBody {
   dirToLocal(dx: number, dy: number, out: WorldPoint): void {
     const k = this.rotStep();
     if (k !== 0) {
-      const c = ROT_LUT.cos[k]! / ROT_ONE;
-      const s = ROT_LUT.sin[k]! / ROT_ONE;
+      const c = LUT_COS[k]! / ONE;
+      const s = LUT_SIN[k]! / ONE;
       const rx = c * dx + s * dy;
       out.y = -s * dx + c * dy;
       out.x = rx * this.transform.facing;
@@ -468,8 +504,8 @@ export class Body implements MatterBody {
     const k = this.rotStep();
     const mx = lx * this.transform.facing;
     if (k !== 0) {
-      const c = ROT_LUT.cos[k]! / ROT_ONE;
-      const s = ROT_LUT.sin[k]! / ROT_ONE;
+      const c = LUT_COS[k]! / ONE;
+      const s = LUT_SIN[k]! / ONE;
       out.x = c * mx - s * ly;
       out.y = s * mx + c * ly;
       return;
@@ -561,7 +597,8 @@ export class Body implements MatterBody {
       this.rotGen = 1;
     }
     const k = this.rotStep();
-    let n = rotCollectDirect(this, k, this.rotBox.of(this, k), q, idx, wgt, this.rotStamp, this.rotGen);
+    const box = this.rotBox.of(this, k);
+    let n = rotCollectDirect(this, k, box, q, idx, wgt, this.rotStamp, this.rotGen, this.memoFor(k, box));
     if (looseOnly) {
       const flags = this.map.flags;
       const mat = this.map.material;
@@ -693,8 +730,9 @@ export class Body implements MatterBody {
     const ry0 = this.regionOfY[y0]!;
     const ry1 = this.regionOfY[y1]!;
     for (let ry = ry0; ry <= ry1; ry++)
-      for (let rx = rx0; rx <= rx1; rx++) this.regionDirty[ry * REGION_GRID + rx] = 1;
+      for (let rx = rx0; rx <= rx1; rx++) this.regionDirty[ry * RG + rx] = 1;
     this.statsDirty = true;
+    this.cellEpoch++;
   }
 
   /**
@@ -714,8 +752,9 @@ export class Body implements MatterBody {
     if (ly === 0 && ty > 0) tv[(ty - 1) * tw + tx] = 1;
     else if (ly === TILE - 1 && ty < this.tilesY - 1) tv[(ty + 1) * tw + tx] = 1;
     this.visDirty = true;
-    this.regionDirty[this.regionOfY[y]! * REGION_GRID + this.regionOfX[x]!] = 1;
+    this.regionDirty[this.regionOfY[y]! * RG + this.regionOfX[x]!] = 1;
     this.statsDirty = true;
+    this.cellEpoch++;
   }
 
   touchCell(c: number): void {
@@ -781,12 +820,12 @@ export class Body implements MatterBody {
     const inf = map.infection;
     const dens = map.density;
     const w = this.w;
-    const rx = r % REGION_GRID;
-    const ry = (r / REGION_GRID) | 0;
-    const x0 = Math.ceil((rx * w) / REGION_GRID - 1e-9);
-    const x1 = Math.min(w, Math.ceil(((rx + 1) * w) / REGION_GRID - 1e-9));
-    const y0 = Math.ceil((ry * this.h) / REGION_GRID - 1e-9);
-    const y1 = Math.min(this.h, Math.ceil(((ry + 1) * this.h) / REGION_GRID - 1e-9));
+    const rx = r % RG;
+    const ry = (r / RG) | 0;
+    const x0 = Math.ceil((rx * w) / RG - 1e-9);
+    const x1 = Math.min(w, Math.ceil(((rx + 1) * w) / RG - 1e-9));
+    const y0 = Math.ceil((ry * this.h) / RG - 1e-9);
+    const y1 = Math.min(this.h, Math.ceil(((ry + 1) * this.h) / RG - 1e-9));
     let mass = 0;
     let cells = 0;
     let isum = 0;
@@ -885,9 +924,8 @@ export class Body implements MatterBody {
     let open = 0;
     const maxR = Math.max(this.w, this.h);
     for (let a = 0; a < 16; a++) {
-      const ang = (a * Math.PI) / 8 + 0.1;
-      const dx = Math.cos(ang);
-      const dy = Math.sin(ang);
+      const dx = RAY_X[a]!;
+      const dy = RAY_Y[a]!;
       let hit = false;
       for (let d = cr + 1.5; d < maxR; d += 1) {
         const x = Math.floor(cx + dx * d);
@@ -905,13 +943,13 @@ export class Body implements MatterBody {
 
   private computeRegionGrid(out: Float32Array): void {
     const flip = this.transform.facing === -1;
-    for (let ry = 0; ry < REGION_GRID; ry++) {
-      for (let rx = 0; rx < REGION_GRID; rx++) {
-        const r = ry * REGION_GRID + rx;
+    for (let ry = 0; ry < RG; ry++) {
+      for (let rx = 0; rx < RG; rx++) {
+        const r = ry * RG + rx;
         const p = this.regionPristine[r]!;
         const v = p > 0 ? Math.min(1, this.regionInteg[r]! / (255 * p)) : 1;
-        const col = flip ? REGION_GRID - 1 - rx : rx;
-        out[ry * REGION_GRID + col] = v;
+        const col = flip ? RG - 1 - rx : rx;
+        out[ry * RG + col] = v;
       }
     }
   }

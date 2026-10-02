@@ -81,6 +81,24 @@ export class DamageCtx {
   affY = 0;
   affW = 0;
 
+  /**
+   * Memo of `findImpact` (impact.ts) for this application: a blow asks for it twice (the impact burst, then the crater). Valid
+   * only while the covered list (`core.covGen`), the body's cells (`cellEpoch`) and the shape origin are those it was computed
+   * from; `beginDamage` clears it.
+   */
+  impValid = false;
+  impOk = false;
+  impGen = 0;
+  impEpoch = 0;
+  impN = 0;
+  impQx = 0;
+  impQy = 0;
+  impFx = 0;
+  impFy = 0;
+  impNx = 0;
+  impNy = 0;
+  impHas = false;
+
   has(flag: number): boolean {
     return (this.flags & flag) !== 0;
   }
@@ -156,8 +174,10 @@ export function beginDamage(
   ctx.covCx = 0;
   ctx.covCy = 0;
   body.revealCount = 0;
+  ctx.impValid = false;
 
   core.q.set(ev.shape);
+  core.covGen++;
   const n = body.collect(core.q, core.covIdx, core.covW, ev.type === 'TIDAL');
   ctx.n = n;
   if (n === 0) return null;

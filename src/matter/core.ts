@@ -180,6 +180,10 @@ export class WorldCore {
   readonly q = new ShapeQ();
   readonly covIdx = new Int32Array(MAX_BODY_DIM * MAX_BODY_DIM);
   readonly covW = new Float32Array(MAX_BODY_DIM * MAX_BODY_DIM);
+  /** Bumped by every writer of `covIdx` / `covW` (collect, the crater's candidate list, bodyToChunk): memos keyed on them. */
+  covGen = 0;
+  /** Scratch: squared distance of each covered cell to the shape origin (findImpact). */
+  readonly covD = new Float64Array(MAX_BODY_DIM * MAX_BODY_DIM);
   readonly cuts = new CutFinder();
   readonly stack = new IntStack(4096);
   readonly stack2 = new IntStack(4096);

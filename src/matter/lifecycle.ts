@@ -52,6 +52,7 @@ export function finishRebuild(body: Body): void {
   body.visDirty = true;
   body.visAll = true;
   body.statsDirty = true;
+  body.cellEpoch++;
   body.connDirty = CONN_NOW;
   body.connFull = true;
   body.lastConnTick = -100;

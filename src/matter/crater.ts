@@ -196,6 +196,7 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   // impact (no world-space shape query): live, non-immune cells within elliptical distance 1.75 (the crater is at most 1.07, the
   // lip reaches 1.75 x the threshold), in row-major order. `idx`/`dEff` hold the compacted list.
   localToWorldF(body, fx, fy, pt2);
+  core.covGen++; // the covered list is overwritten with the crater's candidates
   const idx = core.covIdx;
   const dEff = core.covW; // reuse the weight array to hold normalised elliptical distance
   bins.fill(0);

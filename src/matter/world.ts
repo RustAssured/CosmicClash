@@ -2,6 +2,8 @@ import {
   DamageFlag,
   MAX_BODY_DIM,
   MAX_PARTICLES,
+  ROT_LUT,
+  ROT_ONE,
   TICK_DT,
   type ArenaInfo,
   type BodySpec,
@@ -578,6 +580,7 @@ class MatterWorldImpl implements MatterWorldEx {
     if (!b) return -1;
     const mat = b.map.material;
     const cells = core.covIdx;
+    core.covGen++;
     let n = 0;
     for (let c = 0; c < b.n; c++) if (mat[c] !== 0) cells[n++] = c;
     let id = -1;
@@ -752,6 +755,7 @@ class MatterWorldImpl implements MatterWorldEx {
     const body = core.bodyById[bodyId];
     if (!body) return r;
     const q = core.q.set(shape);
+    core.covGen++;
     const n = body.collect(q, core.covIdx, core.covW);
     if (n === 0) return r;
     const ox = q.originX();
@@ -764,10 +768,23 @@ class MatterWorldImpl implements MatterWorldEx {
     let best = Infinity;
     let bx = 0;
     let by = 0;
+    // a rotated region: the same arithmetic as `cellWorld` (rotation.ts rotLocalToWorld), with the per-body terms hoisted
+    const k0 = body.rotStep();
+    const t = body.transform;
+    const rc = k0 !== 0 ? ROT_LUT.cos[k0]! / ROT_ONE : 0;
+    const rs = k0 !== 0 ? ROT_LUT.sin[k0]! / ROT_ONE : 0;
+    const rpx = Math.round(t.x);
+    const rpy = Math.round(t.y);
+    const cov = core.covIdx;
     for (let k = 0; k < n; k++) {
-      const i = core.covIdx[k]!;
+      const i = cov[k]!;
       const x = i % w;
-      body.cellWorld(x, (i - x) / w, pt);
+      if (k0 !== 0) {
+        const mx = (x + 0.5 - t.anchorX) * t.facing;
+        const my = (i - x) / w + 0.5 - t.anchorY;
+        pt.x = rpx + rc * mx - rs * my;
+        pt.y = rpy + rs * mx + rc * my;
+      } else body.cellWorld(x, (i - x) / w, pt);
       sx += pt.x;
       sy += pt.y;
       sI += integ[i]!;

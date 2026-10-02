@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // The renderer's own CPU twin of its GPU sampler (pure TS): the hit truth must be exactly what it draws.
 import { ANGLE_STEPS as RENDER_STEPS, rotSampleAt, rotWinner, type RotPartEx } from '@/render/rotsprite';
+import type { DamageShape } from '@/contracts';
 import { createMatterWorld } from './index';
 import type { Body } from './body';
 import { ShapeQ } from './shape';
@@ -8,6 +9,7 @@ import { celadonBody, ribbedSlab } from './testing/bodies';
 import {
   ANGLE_STEPS,
   RotBox,
+  RotHitCache,
   RotMaskCache,
   buildRotMask,
   drawnCell,
@@ -112,6 +114,76 @@ describe('rotation spike: one cached rotated mask per (body, angle) is the hit t
         expect(badDirect).toBe(0);
         expect(cache.builds).toBe(ANGLE_STEPS);
       }
+  }, 120_000);
+
+  it('the mask-free query equals the mask on a wounded body (dead cells, cleared pixels, colour ties) at every angle', () => {
+    for (const facing of [1, -1] as const) {
+      const b = body('slab', facing, 300.6, 200.2);
+      const { material, pixels } = b.map;
+      // deterministic damage: dead cells, cells whose pixel is cleared but still live, and runs of one colour (vote ties)
+      for (let c = 0; c < b.n; c++) {
+        const h = Math.imul(c + 7, 2654435761) >>> 0;
+        if (h % 11 === 0) material[c] = 0;
+        else if (h % 13 === 0) pixels[c] = pixels[c]! & 0x00ffffff;
+        else if (h % 5 === 0) pixels[c] = 0xff336699;
+      }
+      const box = new RotBox();
+      let bad = 0;
+      let drawn = 0;
+      for (let k = 0; k < ANGLE_STEPS; k++) {
+        const m = buildRotMask(b, k);
+        box.of(b, k);
+        for (let v = -1; v < m.h + 1; v++)
+          for (let u = -1; u < m.w + 1; u++) {
+            const c = drawnCell(b, m, u, v);
+            if (c >= 0) drawn++;
+            if (drawnCellAt(b, k, box, m.x0 + u, m.y0 + v) !== c) bad++;
+          }
+      }
+      expect(drawn).toBeGreaterThan(50000);
+      expect(bad).toBe(0);
+    }
+  }, 120_000);
+
+  it('the mask-free collect equals the mask collect for every shape kind, both facings, every angle (with the hit memo)', () => {
+    const shapes: DamageShape[] = [
+      { kind: 'point', x: 300, y: 200, r: 70 },
+      { kind: 'point', x: 288, y: 214, r: 11 },
+      { kind: 'cone', x: 250, y: 190, dirX: 1, dirY: 0.3, range: 90, halfAngle: 0.6 },
+      { kind: 'cone', x: 340, y: 240, dirX: -0.4, dirY: -1, range: 60, halfAngle: 1.2 },
+      { kind: 'line', x0: 240, y0: 170, x1: 360, y1: 235, width: 14 },
+      { kind: 'ring', x: 300, y: 205, r0: 10, r1: 26 },
+      { kind: 'field', x: 310, y: 190, r: 40, falloff: 2 },
+    ];
+    const q = new ShapeQ();
+    for (const facing of [1, -1] as const) {
+      const b = body('slab', facing, 300.4, 200.7);
+      const stamp = new Uint32Array(b.n);
+      const idx = new Int32Array(b.n);
+      const wgt = new Float32Array(b.n);
+      const idx2 = new Int32Array(b.n);
+      const wgt2 = new Float32Array(b.n);
+      const memo = new RotHitCache();
+      let gen = 1;
+      let total = 0;
+      for (let k = 0; k < ANGLE_STEPS; k += 3) {
+        const m = buildRotMask(b, k);
+        const box = new RotBox().of(b, k);
+        memo.begin(b, k, box, 0, 0);
+        for (const s of shapes)
+          for (let pass = 0; pass < 2; pass++) {
+            // pass 0 fills the memo, pass 1 reads it back
+            q.set(s);
+            const n = rotCollect(b, m, q, idx, wgt, stamp, ++gen);
+            const n2 = rotCollectDirect(b, k, box, q, idx2, wgt2, stamp, ++gen, memo);
+            total += n;
+            expect(n2).toBe(n);
+            expect(Array.from(idx2.subarray(0, n2))).toEqual(Array.from(idx.subarray(0, n)));
+            expect(Array.from(wgt2.subarray(0, n2))).toEqual(Array.from(wgt.subarray(0, n)));
+          }
+      }
+      expect(total).toBeGreaterThan(20000);
+    }
   }, 120_000);
 
   it('collect (the input of every damage model) is exactly the set of live cells drawn inside the shape', () => {
