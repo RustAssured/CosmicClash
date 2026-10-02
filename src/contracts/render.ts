@@ -296,7 +296,32 @@ export interface LightFx {
   kind?: 'body' | 'impact';
 }
 
+/** An arena comet for the scenery (proposal 165): a live nucleus, or a warning before it enters. World px, px/s. */
+export interface CometFx {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** Nucleus radius px (0 for a warning). */
+  r: number;
+  /** 0 free, 1 captured / shepherded. */
+  captured?: number;
+  /** > 0: not in play yet; warning progress 0..1 (comet-warn → comet-enter). */
+  warn?: number;
+}
+
+/** A gravity well the scenery bends toward (Planet's well, Tidal Draw). World px; strength 0..1. */
+export interface WellFx {
+  x: number;
+  y: number;
+  radius: number;
+  strength: number;
+}
+
 export interface FrameFx {
+  /** Arena comets (≤ 4 drawn) and gravity wells (≤ 2), filled by FxState. */
+  comets?: readonly CometFx[];
+  wells?: readonly WellFx[];
   lights?: LightFx[];
   shockwaves: ShockwaveFx[];
   lenses: LensFx[];

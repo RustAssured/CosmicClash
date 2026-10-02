@@ -153,3 +153,91 @@ export function rotRaster(part: RotPart): {
     for (let x = 0; x < w; x++) out[y * w + x] = rotSample(part, x + b.x0, y + b.y0);
   return { pixels: out, w, h, ox: -b.x0, oy: -b.y0 };
 }
+
+/* ---- proposal 161 (S4 + S5): ALPHA-FIRST vote with mirroring — the sampler matter and the renderer both use ---- */
+
+/** A part with the proposal-161 extras: mirroring and an origin inside a larger atlas. */
+export interface RotPartEx extends RotPart {
+  /** +1 as authored, −1 mirrored about the pivot corner before rotating. */
+  facing?: 1 | -1;
+}
+
+const votesAt = new Uint32Array(ROT_SUB * ROT_SUB);
+const vx = new Int32Array(ROT_SUB * ROT_SUB);
+const vy = new Int32Array(ROT_SUB * ROT_SUB);
+/** The source texel (x, y) of the winning sample of the last `rotSampleAt` call (meaningless when it returned 0). */
+export const rotWinner = { x: 0, y: 0 };
+
+/**
+ * Proposal 161 sampler: the colour drawn at destination pixel (dx, dy) relative to the destination pivot (0 = transparent),
+ * alpha-first vote, optional mirroring. The winning texel is left in `rotWinner`.
+ */
+export function rotSampleAt(part: RotPartEx, dx: number, dy: number): number {
+  const c = ROT_LUT.cos[part.step]!;
+  const s = ROT_LUT.sin[part.step]!;
+  const div = ROT_DEN * ROT_ONE;
+  const { pixels, w, h, px, py } = part;
+  const mirror = part.facing === -1;
+  let opaque = 0;
+  for (let sy = 0; sy < ROT_SUB; sy++) {
+    const Y = ROT_DEN * dy + 2 * sy + 1;
+    for (let sx = 0; sx < ROT_SUB; sx++) {
+      const X = ROT_DEN * dx + 2 * sx + 1;
+      let x = floorDiv(c * X + s * Y, div) + px;
+      const y = floorDiv(-s * X + c * Y, div) + py;
+      if (mirror) x = 2 * px - 1 - x;
+      const col = x >= 0 && y >= 0 && x < w && y < h ? pixels[y * w + x]! : 0;
+      const k = sy * ROT_SUB + sx;
+      votesAt[k] = col >>> 24 === 0 ? 0 : col;
+      vx[k] = x;
+      vy[k] = y;
+      if (votesAt[k] !== 0) opaque++;
+    }
+  }
+  // coverage first: the opaque majority decides whether anything is drawn at all
+  if (opaque < 5) return 0;
+  // then the colour among the opaque samples; ties keep the centre, then the first in scan order
+  const centre = votesAt[4]!;
+  let best = 0;
+  let bestN = 0;
+  let at = 4;
+  if (centre !== 0) {
+    best = centre;
+    for (let j = 0; j < 9; j++) if (votesAt[j] === centre) bestN++;
+  }
+  for (let i = 0; i < 9; i++) {
+    if (i === 4 || votesAt[i] === 0) continue;
+    let n = 0;
+    for (let j = 0; j < 9; j++) if (votesAt[j] === votesAt[i]) n++;
+    if (n > bestN) {
+      best = votesAt[i]!;
+      bestN = n;
+      at = i;
+    }
+  }
+  rotWinner.x = vx[at]!;
+  rotWinner.y = vy[at]!;
+  return best >>> 0;
+}
+
+/** Bounds of a (possibly mirrored) part: mirroring about the pivot corner equals a pivot at w − px. */
+export function rotBoundsEx(part: RotPartEx): { x0: number; y0: number; x1: number; y1: number } {
+  return rotBounds(part.facing === -1 ? { ...part, px: part.w - part.px } : part);
+}
+
+/** CPU twin of a whole part draw under proposal 161 (the pivot sits at (ox, oy) of the buffer). */
+export function rotRasterAt(part: RotPartEx): {
+  pixels: Uint32Array;
+  w: number;
+  h: number;
+  ox: number;
+  oy: number;
+} {
+  const b = rotBoundsEx(part);
+  const w = b.x1 - b.x0;
+  const h = b.y1 - b.y0;
+  const out = new Uint32Array(w * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) out[y * w + x] = rotSampleAt(part, x + b.x0, y + b.y0);
+  return { pixels: out, w, h, ox: -b.x0, oy: -b.y0 };
+}

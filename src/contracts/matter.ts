@@ -499,6 +499,8 @@ export interface MatterWorld {
    * Lead request to S4 (arena hazards); false if the id no longer exists.
    */
   retireChunk?(id: number): boolean;
+  /** The gravity source currently set for `slot` (null if none): read by presentation to bend scenery (FrameFx.wells). */
+  gravitySourceOf?(slot: 0 | 1): GravitySource | null;
   /** CRUSH fissure light of a body (packed RGBA; null = dark; undefined = default). */
   setFissureGlow?(bodyId: number, colour: number | null | undefined): void;
   /* ---- the two-hemisphere world ---- */
