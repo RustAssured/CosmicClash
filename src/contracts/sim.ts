@@ -115,7 +115,34 @@ export type SimEvent =
     }
   | { t: 'resource'; slot: 0 | 1; kind: 'gain' | 'spend' | 'break'; amount: number }
   /** Free-form cosmetic cue keyed per titan (e.g. 'tendril-sever', 'moon-lost', 'node-dark', 'disk-shed'). */
-  | { t: 'cue'; slot: 0 | 1; titan: TitanId; id: string; x: number; y: number; amount: number };
+  | { t: 'cue'; slot: 0 | 1; titan: TitanId; id: string; x: number; y: number; amount: number }
+  /**
+   * Arena hazards (src/sim/hazards.ts): `comet-warn` = a comet will enter at (x, y) heading (vx, vy) in `CometSchedule.warn`
+   * ticks (id −1); `comet-enter` = it is in play as matter chunk `id`; `comet-retire` = it left the arena uncaught.
+   */
+  | {
+      t: 'hazard';
+      kind: 'comet-warn' | 'comet-enter' | 'comet-retire';
+      id: number;
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+    };
+
+/** A live arena comet as fighters see it (read-only snapshot, refreshed every tick before the fighters tick). */
+export interface ArenaComet {
+  /** Matter chunk id (use it with the world's capture API). */
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  mass: number;
+  /** 0 free, 1 captured, 2 launched (chunkState mode); `owner` = capturing slot or −1. */
+  mode: number;
+  owner: number;
+}
 
 /* ------------------------------------------------------------------------------------------------ *
  *  FIGHTERS
@@ -254,6 +281,8 @@ export interface FighterTickCtx {
   events: SimEvent[];
   /** False during intro/outro: movement allowed, attacks ignored. */
   live: boolean;
+  /** Live arena comets (empty on stages without them). */
+  comets?: readonly ArenaComet[];
 }
 
 export interface HitResult {

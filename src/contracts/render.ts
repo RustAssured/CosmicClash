@@ -4,7 +4,16 @@ import type { SimEvent } from './sim';
  *  STAGES
  * ------------------------------------------------------------------------------------------------ */
 
-export const STAGE_IDS = ['nursery', 'rim', 'redgiant', 'quasar', 'tussenruimte'] as const;
+export const STAGE_IDS = [
+  'nursery',
+  'rim',
+  'redgiant',
+  'quasar',
+  'tussenruimte',
+  // the slice arenas (D26, Phase 2): registered by S5 at the Lead's request
+  'mausoleum',
+  'shearfield',
+] as const;
 export type StageId = (typeof STAGE_IDS)[number];
 
 /** The playable volume in world coordinates. */
@@ -17,6 +26,22 @@ export interface ArenaInfo {
   restY: number;
   /** Width of the soft wall zone at the arena edges. */
   softWall: number;
+  /** Arena comets (the Star-birth Shearfield): the deterministic sim spawns them; absent = none. */
+  comets?: CometSchedule;
+}
+
+/** A readable comet cadence (src/sim/hazards.ts). Ticks are sim ticks at 60 Hz. */
+export interface CometSchedule {
+  /** Ticks between one comet's entry and the next scheduled entry: uniform in [min, max]. */
+  every: [number, number];
+  /** Warning glint at the entry point this many ticks before the comet appears. */
+  warn: number;
+  /** Entry speed px/s, uniform in [min, max]. */
+  speed: [number, number];
+  /** Mass units of a nucleus. */
+  mass: number;
+  /** At most this many uncaught comets in play at once. */
+  maxLive: number;
 }
 
 /** Stage lighting: consumed by the titan generators (rim light, shading) and by the renderer. Vectors are unit length. */

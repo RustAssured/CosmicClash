@@ -230,6 +230,32 @@ export interface BodyTransform {
 
 export type BodyKind = 'titan' | 'moon' | 'part';
 
+/** A gravity owner's capture ring: centre (world px), radius (px), angular speed (rad/s, sign = direction). */
+export interface OrbitSpec {
+  x: number;
+  y: number;
+  radius: number;
+  omega: number;
+  /** Vertical scale of the ring (1 = circle). */
+  flatten?: number;
+}
+
+/** What `chunkState` reports. `mode`: 0 free, 1 captured (pinned), 2 launched. */
+export interface ChunkStateOut {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  spin: number;
+  mass: number;
+  radius: number;
+  mode: number;
+  owner: number;
+  origin: number;
+  temp: number;
+}
+
 export interface BodySpec {
   kind: BodyKind;
   /** 0/1 = player slot that owns it; -1 = neutral. */
@@ -441,7 +467,8 @@ export interface MatterWorld {
   /* ---- gravity fields, particles, chunks ---- */
   setGravitySource(slot: 0 | 1, src: GravitySource | null): void;
   spawnParticles(spec: ParticleSpawn): void;
-  spawnChunk(spec: ChunkSpawn): void;
+  /** Returns the new chunk's id (matter since proposal 142; test doubles may return nothing). */
+  spawnChunk(spec: ChunkSpawn): number | void;
   /**
    * A severed rig region leaves as ONE rigid chunk with this velocity (px/s) and spin (rad/s): every live cell moves to the
    * chunk (exact ledger transfer; nothing injected or deleted), the body is removed, the chunk id is returned (−1 if empty).
@@ -453,6 +480,31 @@ export interface MatterWorld {
    * counts as lost). Patch-sized and allocation-free; read by the XPBD rig to weaken or break a constraint.
    */
   jointHealth?(bodyId: number, cells: Int32Array | readonly number[]): number;
+
+  /* ---- capture, thrown debris, arena comets (proposals 132/142; implemented by matter) ---- */
+  /** A gravity owner's capture ring for `slot`; null clears it and releases every captured chunk. */
+  setOrbit?(slot: 0 | 1, spec: OrbitSpec | null): void;
+  /** Ids of free/captured chunks whose centre lies in a world-space shape; returns the count written to `out`. */
+  chunksInShape?(shape: DamageShape, out: Int32Array): number;
+  /** Read a chunk's state; false if the id no longer exists. */
+  chunkState?(id: number, out: ChunkStateOut): boolean;
+  captureChunk?(id: number, slot: 0 | 1): boolean;
+  releaseChunk?(id: number): boolean;
+  /** Knock a captured chunk out of the ring, splitting it into free pieces (ring armour). */
+  strikeChunk?(id: number, x: number, y: number, energy: number, dirX: number, dirY: number): boolean;
+  /** Throw a chunk: one uncapped KINETIC blow on contact, credited to `creditBodyId`; passes through `slot`'s own bodies. */
+  launchChunk?(id: number, vx: number, vy: number, creditBodyId: number, slot?: 0 | 1 | -1): boolean;
+  /**
+   * Remove a chunk from play (an arena comet that left the arena uncaught): its mass goes to the ledger's `dissipated`.
+   * Lead request to S4 (arena hazards); false if the id no longer exists.
+   */
+  retireChunk?(id: number): boolean;
+  /** CRUSH fissure light of a body (packed RGBA; null = dark; undefined = default). */
+  setFissureGlow?(bodyId: number, colour: number | null | undefined): void;
+  /* ---- the two-hemisphere world ---- */
+  defineShell?(bodyId: number, shell: number | Uint8Array): boolean;
+  swapShell?(bodyId: number): boolean;
+  shellFace?(bodyId: number): number;
 
   /* ---- rendering ---- */
   /** Stage lighting used to re-light freshly exposed surfaces and debris (call at match start; safe to call again). */

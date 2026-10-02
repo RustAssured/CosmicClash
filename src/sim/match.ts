@@ -12,6 +12,7 @@ import {
   emptyInput,
   hash32,
   type AIContext,
+  type ArenaComet,
   type ArenaInfo,
   type Fighter,
   type FighterFactory,
@@ -29,6 +30,9 @@ import {
   type TitanId,
 } from '@/contracts';
 import { accumulateInput, createNullSource } from './sources';
+import { ArenaHazards } from './hazards';
+
+const NO_COMETS: readonly ArenaComet[] = [];
 
 export interface MatchDeps {
   createWorld(seed: number): MatterWorld;
@@ -82,6 +86,8 @@ export class Match implements MatchApi {
   private tsTicks = 0;
   private roundWinner: 0 | 1 | -1 = -1;
   private infiniteKoTicks = 0;
+  /** Arena comets (stages whose ArenaInfo schedules them), else null. */
+  private readonly hazards: ArenaHazards | null;
 
   constructor(config: MatchConfig, deps: MatchDeps) {
     this.config = config;
@@ -119,6 +125,17 @@ export class Match implements MatchApi {
         this.world.carve(f.body.id, frac, this.rng.fork(`carve${f.slot}`).nextU32());
     }
 
+    // arena hazards only on stages that schedule them, forked last so every other stream is unchanged
+    this.hazards = deps.arena.comets
+      ? new ArenaHazards(
+          this.world,
+          deps.arena,
+          deps.lighting,
+          deps.getTitanDef('planet'),
+          this.rng.fork('hazards').nextU32(),
+        )
+      : null;
+
     this.ctx = {
       tick: 0,
       input: this.frames[0],
@@ -128,6 +145,7 @@ export class Match implements MatchApi {
       arena: this.arena,
       events: this.events,
       live: false,
+      comets: this.hazards ? this.hazards.comets : NO_COMETS,
     };
     this.emit({ t: 'round', phase: 'intro', round: 1, winner: -1 });
   }
@@ -194,6 +212,7 @@ export class Match implements MatchApi {
         break;
       case 'fight':
         this._roundTick++;
+        this.hazards?.step(this._roundTick, this.events);
         this.stepFighters(true);
         if (!this.config.infinite) this.roundTicksLeft--;
         this.checkRoundEnd();
@@ -341,6 +360,7 @@ export class Match implements MatchApi {
     this._roundTick = 0;
     this.roundWinner = -1;
     this.resetFighters(ROUND_HEAL_FRACTION);
+    this.hazards?.resetRound();
     this.phase = 'intro';
     this.phaseTick = 0;
     this.emit({ t: 'round', phase: 'intro', round: this.round, winner: -1 });
@@ -393,6 +413,7 @@ export class Match implements MatchApi {
       );
       if (f.stateHash) h = f.stateHash(h);
     }
+    if (this.hazards) h = this.hazards.hash(h);
     return h >>> 0;
   }
 }
