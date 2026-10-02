@@ -214,6 +214,57 @@ describe('capture API', () => {
   });
 });
 
+describe('debris wounds (D30)', () => {
+  const setOrigin = (world: MatterWorldEx, id: number, origin: number): void => {
+    const pool = world.core.chunks;
+    for (let i = 0; i < pool.hi; i++)
+      if (pool.list[i]!.alive && pool.list[i]!.id === id) pool.list[i]!.origin = origin;
+  };
+
+  it('wounds by the chunk own speed: a titan moving through still wreckage shoves it but is not wounded', () => {
+    // a still chunk, the body driven into it at 240 px/s
+    const world = createMatterWorld(7);
+    const body = world.createBody(layeredDisc({ size: 40, seed: 3, x: 470, y: 200, ownerSlot: 1 }).spec);
+    const m0 = world.stats(body.id).mass;
+    const id = rock(world, 400, 200, 10, 120);
+    for (let i = 0; i < 40; i++) {
+      body.transform.x -= 4;
+      world.tick();
+    }
+    const s = st();
+    expect(world.chunkState(id, s)).toBe(true);
+    expect(s.vx).toBeLessThan(-30); // the contact still shoves the wreckage
+    expect(world.stats(body.id).mass).toBeCloseTo(m0, 6);
+    // the same closing speed with the CHUNK moving wounds
+    const world2 = createMatterWorld(7);
+    const b2 = world2.createBody(layeredDisc({ size: 40, seed: 3, x: 470, y: 200, ownerSlot: 1 }).spec).id;
+    const m2 = world2.stats(b2).mass;
+    rock(world2, 340, 200, 10, 120, 240, 0);
+    run(world2, 40);
+    expect(world2.stats(b2).mass).toBeLessThan(m2 - 1);
+  });
+
+  it("a gravity owner is not wounded by its own well's in-fall; the foe's well and comets still wound", () => {
+    const hit = (wellSlot: 0 | 1 | -1, bodyBorn: boolean): number => {
+      const world = createMatterWorld(8);
+      const target = world.createBody(
+        layeredDisc({ size: 40, seed: 3, x: 420, y: 200, ownerSlot: 1 }).spec,
+      ).id;
+      if (wellSlot !== -1) world.setGravitySource(wellSlot, { x: 420, y: 200, strength: 0, radius: 400 });
+      const m0 = world.stats(target).mass;
+      const id = rock(world, 250, 200, 12, 160, 600, 0);
+      if (bodyBorn) setOrigin(world, id, 77); // debris that came off a body (spawned chunks are hazards: origin -1)
+      run(world, 50);
+      expect(Math.abs(world.ledger().error)).toBeLessThan(1e-3);
+      return m0 - world.stats(target).mass;
+    };
+    expect(hit(-1, true)).toBeGreaterThan(1); // no well: flying debris wounds
+    expect(hit(1, true)).toBe(0); // the target's own well is drawing it in
+    expect(hit(0, true)).toBeGreaterThan(1); // the foe's well
+    expect(hit(1, false)).toBeGreaterThan(1); // a comet inside the own well
+  });
+});
+
 describe('debris persistence', () => {
   it('slabs of a heavy blow leave glowing and cool to dark', () => {
     const world = createMatterWorld(6);

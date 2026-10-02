@@ -771,6 +771,22 @@ function buildGroupBoxes(core: WorldCore): void {
   }
 }
 
+/** Debris wounds only when the chunk ITSELF moves faster than this (px/s; D30), whatever the body's own speed. */
+export const DEBRIS_WOUND_SPEED = 120;
+
+/**
+ * D30: free debris inside an active gravity source of the body's own fighter is that well's in-fall, not a blow. Only matter
+ * that came off a body counts (`origin` ≥ 0): comets and other spawned hazards (`origin` −1) still wound inside the well.
+ */
+function ownInfall(core: WorldCore, b: { ownerSlot: number }, c: Chunk): boolean {
+  if (c.origin < 0 || (b.ownerSlot !== 0 && b.ownerSlot !== 1)) return false;
+  const g = core.gravity[b.ownerSlot];
+  if (!g.active) return false;
+  const dx = c.x - g.x;
+  const dy = c.y - g.y;
+  return dx * dx + dy * dy < g.radius * g.radius;
+}
+
 /** Chunk vs bodies: fast heavy chunks deal a capped KINETIC impact and bounce; slow ones are nudged out. */
 function collideBodies(core: WorldCore, c: Chunk): void {
   const r = c.radius;
@@ -849,9 +865,13 @@ function collideBodies(core: WorldCore, c: Chunk): void {
       return;
     }
     if (speed > 120 && c.mass > 1.2 && vn < 0 && core.tick >= b.debrisImmuneUntil) {
-      // A fresh wound slab is still the wound's matter, not a weapon: it bounces off whatever it meets for its first second.
-      if (!(c.fast && c.age < FRESH_SLAB_TICKS))
-        core.chunkImpact(b, c, hx, hy, rvx / speed, rvy / speed, speed);
+      // The bounce (the shove both ways) uses the relative speed; whether it WOUNDS is gated (D30):
+      //  - by the chunk's OWN speed: a titan moving through slow wreckage shoves it but is not wounded by it;
+      //  - a fresh wound slab is still the wound's matter, not a weapon: it bounces off whatever it meets for its first second;
+      //  - a gravity owner is not wounded by the body-born debris its own well is drawing in (comets still are).
+      const own = Math.sqrt(c.vx * c.vx + c.vy * c.vy);
+      if (own > DEBRIS_WOUND_SPEED && !(c.fast && c.age < FRESH_SLAB_TICKS) && !ownInfall(core, b, c))
+        core.chunkImpact(b, c, hx, hy, c.vx / own, c.vy / own, own);
       // Bounce with heavy loss, shed some spin.
       const e = 0.35;
       c.vx = c.vx - (1 + e) * vn * nx;
