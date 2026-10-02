@@ -85,3 +85,9 @@ vs. a real GPU and are reported alongside sim ms/tick (which is representative).
 - **Phase 2 is approved** ("move forward with what you can").
 
 **D29 — Between-round heal 0.6 → 0.85 (Lead, proposal 162).** With orbit pacing (~9 contacts/min), round 1 lasts ~48 s, but rounds 2–3 lasted ~15 s on 2 contacts because the loser started fragile. 0.85 keeps visible scars and structural memory ("damage persists as partially healed scars") while giving the loser a real round. Re-measured at Gate C.
+
+**D30 — Debris wounds by its own speed; a gravity owner is not wounded by its own in-fall (Lead, proposals 166 and 164).**
+S1 measured that two thirds of all lost matter came from drifting debris, not from blows. Rounds lasted 22–25 s at an on-target ~9 contacts per minute. The Planet's own well pulled wreckage into it, and it lost 24–59 % of a body per fight while charging Comet Shepherd. With debris wounds off, rounds land at 45–90 s, but the Planet wins 24–1, because the Witness's heavy blows remove 7–30× less matter per hit. The 50/50 balance rested on the Planet bleeding itself.
+- **(1) Own in-fall:** a body is not wounded by chunks its own fighter's gravity source is drawing in. Thrown or launched chunks, comets and the foe's well still wound.
+- **(2) Debris speed:** debris wounds by the chunk's own speed, not the relative speed. Moving through the arena's wreckage is not a wound; a flung slab still is. This keeps "the arena is occupied space" meaningful (debris is struck, shoved, launched) without slow attrition deciding rounds.
+- **(3) Rebalance after (1)–(2):** heavy-move damage per hit for the pair within about 2× of each other (164), with the match 45–55 %. S3 runs the balance pass across both definitions. S1 re-tunes the AI engagement gap so rounds sit inside 45–90 s without timeouts.
