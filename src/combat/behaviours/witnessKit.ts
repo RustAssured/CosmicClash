@@ -53,7 +53,7 @@ export interface WitnessKitHost {
 const MAX_MARKS = 24;
 /** The gaze marks what it crosses every MARK_EVERY ticks; each mark shears with this energy. */
 const MARK_EVERY = 12;
-const GAZE_MARK_ENERGY = 80;
+const GAZE_MARK_ENERGY = 25;
 /** Which move a fracture mark belongs to (meter and announcer bookkeeping). */
 const SLOT_SIG = 0;
 const SLOT_ULT = 1;

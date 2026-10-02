@@ -671,10 +671,11 @@ export class WitnessBehaviour extends Behaviour {
     const fr = this.fr;
     const s = this.facing;
     // the rig runs on the smooth root; the structure is drawn where the primary actually is (shudder, rounding)
-    const a = this.eyeCentre(false);
-    const b = this.eyeCentre(true);
-    const ox = a.x - b.x;
-    const oy = a.y - b.y;
+    // the rig ran on the smooth root as it was when it stepped; the structure is drawn hanging from where the primary IS now
+    // (its shudder, its rounding, and any contact push since the rig step)
+    const o = this.rigOffset(false);
+    const ox = o.x;
+    const oy = o.y;
     for (const r of this.regions) {
       if (r.lost) continue;
       this.wr.rig.frame(this.wr.bodyOf[r.index]!, fr);
@@ -833,19 +834,27 @@ export class WitnessBehaviour extends Behaviour {
   /** Arm tips and halo arcs (planet-scale parts) for `tools/feel/scale.ts`. */
   override trackPoints(out: number[]): number {
     const rig = this.wr.rig;
+    const o = this.rigOffset(true);
     let n = 0;
     for (const arm of this.wr.arms) {
       const tip = arm.chain[arm.chain.length - 1]!;
       rig.worldPoint(tip.body, tip.x, tip.y, this.pt);
-      out.push(this.pt.x * this.facing, this.pt.y);
+      out.push(this.pt.x * this.facing + o.x, this.pt.y + o.y);
       n++;
     }
     for (const a of this.host.halo) {
       rig.worldPoint(a.body, a.mx, a.my, this.pt);
-      out.push(this.pt.x * this.facing, this.pt.y);
+      out.push(this.pt.x * this.facing + o.x, this.pt.y + o.y);
       n++;
     }
     return n;
+  }
+
+  /** Where the eye is now (smooth root, or the drawn primary) minus where the rig's eye is (world px). */
+  private rigOffset(smooth: boolean): { x: number; y: number } {
+    const e = this.eyeCentre(smooth);
+    this.wr.rig.frame(this.wr.eye, this.fr);
+    return { x: e.x - this.fr.x * this.facing, y: e.y - this.fr.y };
   }
 
   /** The rig, for tests and tools. */

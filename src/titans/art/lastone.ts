@@ -1837,6 +1837,14 @@ export function witnessDef(def: TitanDef): TitanDef {
       params: { witness: true },
     },
   };
+  // a colossus answers the stick slowly and never overshoots (scale spec: the hanging arms must not be jerked by the root)
+  const base = (def as unknown as { feel?: Record<string, unknown> }).feel ?? {};
+  (w as unknown as { feel: Record<string, unknown> }).feel = {
+    ...base,
+    accelMul: 1.9,
+    glideMul: 1.5,
+    zeta: 0.95,
+  };
   WITNESS_DEFS.set(def, w);
   return w;
 }
@@ -1889,6 +1897,13 @@ export function witnessMoves(base: readonly MoveDef[]): MoveDef[] {
     ...(side.extra ?? {}),
     followUp: { button: 'strike', from: 6, to: 20, move: 'witness.charge' },
   };
+  // a colossus does not dart: the sidestep carries 70% of the Last One's speed (scale spec on the hanging arms)
+  for (const a of AIM_DIRS)
+    side.variants[a].movement = side.variants[a].movement.map((k) => ({
+      ...k,
+      ix: k.ix * 0.7,
+      iy: k.iy * 0.7,
+    }));
   // Signature — FRACTURE GAZE: the held beam marks the foe; each mark shears 0.3–0.8 s later
   const gaze = cloneMove(by('lastone.gaze'), 'witness.gaze', 'Fracture Gaze', '균열의 시선');
   gaze.extra = { ...(gaze.extra ?? {}), witness: 'gaze' };

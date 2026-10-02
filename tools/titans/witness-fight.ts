@@ -2,7 +2,8 @@
  * Filmstrip of a scripted fight with the Last One played as the WITNESS (what `witness=1` selects), on the real matter world,
  * composited with the software blitter (rig parts drawn by the shared rotation sampler).
  *   npx tsx tools/titans/witness-fight.ts [out.png] [--b=planet] [--gap=260] [--script0="4:crush"] [--script1=""]
- *       [--ticks=0,20,40,60] [--w=320] [--h=240] [--scale=2]
+ *       [--ticks=0,20,40,60] [--w=320] [--h=240] [--scale=2] [--meter=1]
+ * --meter fills the Witness's super meter first (the Ultimate needs it).
  */
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -18,8 +19,8 @@ import {
 } from '@/contracts';
 import { createMatterWorld } from '@/matter';
 import { createMatch, createScriptSource } from '@/sim';
-import { getTitanDef, witnessDef } from '@/titans';
-import { createFighter } from '@/combat';
+import { getTitanDef } from '@/titans';
+import { createFighter, type FighterImpl } from '@/combat';
 import { skipIntro } from '@/combat/testing/harness';
 import { blitLayers, makeFrame, paintBackdrop } from '../../dev/titans/blit';
 import { writePng } from '../lead/png';
@@ -36,11 +37,12 @@ const cfg: MatchConfig = {
     { titan: 'lastone', controller: 'human' },
     { titan: opt('b', 'planet') as TitanId, controller: 'human' },
   ],
+  witness: true,
 };
 const m = createMatch(cfg, {
   createWorld: (s) => createMatterWorld(s),
   createFighter,
-  getTitanDef: (id) => (id === 'lastone' ? witnessDef(getTitanDef('lastone')) : getTitanDef(id)),
+  getTitanDef,
   arena: DEFAULT_ARENA,
   lighting: DEFAULT_LIGHTING,
 });
@@ -49,6 +51,7 @@ const fa = m.fighters[0] as unknown as { px: number; py: number };
 const fb = m.fighters[1] as unknown as { px: number; py: number };
 fb.px = fa.px + +opt('gap', '260');
 fb.py = fa.py;
+if (opt('meter', '0') !== '0') (m.fighters[0] as FighterImpl).debugSetMeter(+opt('meter', '1'));
 const t0 = m.tick;
 m.setSources(
   createScriptSource(parseScript(opt('script0', '')), t0 + 1),
