@@ -9,7 +9,6 @@ import {
   type MatterBody,
   type MatterMap,
   type MatterWorld,
-  type OverlapResult,
   type RenderLayer,
   type RenderPart,
   type ViewRect,
@@ -20,6 +19,7 @@ import { addDamageResult, type DamageSum } from '../damageSum';
 import type { FighterImpl } from '../fighter';
 import { buildWitnessRig, setWitnessHeading, type WitnessRig } from '../rig/witnessRig';
 import { WitnessKit, type WitnessKitHost } from './witnessKit';
+import { shapeBounds, type Bounds } from '../shapes';
 
 /**
  * THE WITNESS in game (Phase 2, behind `witness=1`): one matter body per rigid region (D27), driven by the XPBD rig, drawn as
@@ -57,6 +57,9 @@ interface Region {
   /** Joint patch (map cell indices) and whether the region left the Witness. */
   anchor: Int32Array;
   lost: boolean;
+  /** Reveal-stack layer (0 carapace, 1–3 interiors; −1 = not in the stack) and the radius round the pivot holding the map. */
+  layer: number;
+  reach: number;
   /** Consecutive ticks its joint patch has been (nearly) gone. */
   failing: number;
 }
@@ -89,6 +92,8 @@ const FAIL = {
   eyeOut: 210,
 } as const;
 
+/** A blow covering at least this share of its shape with a stack layer's matter stops at that layer. */
+const STACK_EXPOSED = 0.3;
 /** A joint fails once its patch health stays below this for this many ticks. */
 const JOINT_FAIL_HEALTH = 0.15;
 const JOINT_FAIL_TICKS = 30;
@@ -138,14 +143,7 @@ export class WitnessBehaviour extends Behaviour {
   private pupilY = 0;
   private readonly fr = { x: 0, y: 0, a: 0 };
   private readonly pt = { x: 0, y: 0 };
-  private readonly ov: OverlapResult = {
-    cells: 0,
-    x: NaN,
-    y: NaN,
-    nearestX: NaN,
-    nearestY: NaN,
-    coverage: 0,
-  };
+  private readonly bounds: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private readonly ev2: DamageEvent = {
     type: 'FRACTURE',
     shape: { kind: 'point', x: 0, y: 0, r: 1 } as DamageShape,
@@ -266,6 +264,8 @@ export class WitnessBehaviour extends Behaviour {
       z: r.z,
       anchor,
       lost: false,
+      layer: r.layer,
+      reach: liveReach(map, ax, ay),
       failing: 0,
     };
     const old = this.byIndex[i];
@@ -738,16 +738,23 @@ export class WitnessBehaviour extends Behaviour {
     let any = false;
     let hx = NaN;
     let hy = NaN;
+    const b = shapeBounds(ev.shape, this.bounds);
+    const area = Math.max(1, shapeArea(ev.shape));
+    let stackHit = false;
     for (let k = -1; k < this.frontToBack.length; k++) {
       if (remaining < 0.05) break;
-      if (k >= 0 && this.frontToBack[k]!.lost) continue;
-      const id = k < 0 ? f.body.id : this.frontToBack[k]!.body.id;
-      f.world.overlap(id, ev.shape, this.ov);
-      if (this.ov.cells <= 0) continue;
-      if (Number.isNaN(hx)) {
-        hx = this.ov.x;
-        hy = this.ov.y;
+      const r = k >= 0 ? this.frontToBack[k]! : null;
+      if (r) {
+        if (r.lost) continue;
+        // the carapace stack (carapace + reveal layers, one frame): only the EXPOSED layer under the blow takes it
+        if (r.layer >= 0 && stackHit) continue;
+        // cheap rejection: the blow's box against a circle round the region's pivot that holds all of its matter
+        const t = r.body.transform;
+        const cx = Math.max(b.x0, Math.min(t.x, b.x1));
+        const cy = Math.max(b.y0, Math.min(t.y, b.y1));
+        if ((cx - t.x) ** 2 + (cy - t.y) ** 2 > r.reach * r.reach) continue;
       }
+      const id = r ? r.body.id : f.body.id;
       const e2 = this.ev2;
       e2.type = ev.type;
       e2.shape = ev.shape;
@@ -762,9 +769,19 @@ export class WitnessBehaviour extends Behaviour {
       e2.originX = ev.originX;
       e2.originY = ev.originY;
       e2.hitstop = ev.hitstop;
-      addDamageResult(out, f.world.applyDamage(id, e2));
+      // no separate overlap probe: the damage call reports what it touched (a probe per body per blow cost as much again)
+      const res = f.world.applyDamage(id, e2);
+      if (res.cellsTouched <= 0) continue;
+      addDamageResult(out, res);
       any = true;
-      remaining *= 1 - Math.min(0.85, this.ov.coverage * 1.5);
+      if (Number.isNaN(hx)) {
+        hx = res.contactX;
+        hy = res.contactY;
+      }
+      const coverage = Math.min(1, res.cellsTouched / area);
+      // a blow that lands mostly on a hole of a stack layer goes on to the layer behind; otherwise the stack is done
+      if (r && r.layer >= 0 && coverage >= STACK_EXPOSED) stackHit = true;
+      remaining *= 1 - Math.min(0.85, coverage * 1.5);
     }
     if (any && this.dying < 0) this.redistribute(ev.energy, hx, hy, ev.dirX, ev.dirY);
     return any;
@@ -943,6 +960,35 @@ function anchorPatch(map: MatterMap): Int32Array {
       if (map.material[i] !== 0 && (x - map.coreX) ** 2 + (y - map.coreY) ** 2 <= r * r) out.push(i);
     }
   return Int32Array.from(out);
+}
+
+/** Radius round the pivot (map corner ax, ay) holding every live cell (matter only shrinks: it stays conservative). */
+function liveReach(map: MatterMap, ax: number, ay: number): number {
+  let r2 = 0;
+  for (let y = 0; y < map.h; y++)
+    for (let x = 0; x < map.w; x++) {
+      if (map.material[y * map.w + x] === 0) continue;
+      const dx = Math.max(Math.abs(x - ax), Math.abs(x + 1 - ax));
+      const dy = Math.max(Math.abs(y - ay), Math.abs(y + 1 - ay));
+      r2 = Math.max(r2, dx * dx + dy * dy);
+    }
+  return Math.sqrt(r2) + 1;
+}
+
+/** Area (px²) of a damage shape: what a body's touched cells are a share of (its coverage). */
+function shapeArea(s: DamageShape): number {
+  switch (s.kind) {
+    case 'point':
+    case 'field':
+      return Math.PI * s.r * s.r;
+    case 'line':
+      return Math.hypot(s.x1 - s.x0, s.y1 - s.y0) * s.width + 1;
+    case 'cone':
+      return s.range * s.range * s.halfAngle;
+    case 'ring':
+      return Math.PI * (s.r1 * s.r1 - s.r0 * s.r0);
+  }
+  return 1;
 }
 
 /** Centroids (map cells) of the 8-connected clusters of the materials `mats` (≥ 3 cells). */

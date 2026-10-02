@@ -103,7 +103,8 @@ describe('the Witness in game (witness=1)', () => {
       return W.regions.findIndex((q) => q.key === key) - 1;
     };
     expect(lost[bodyIndex('carapace')]!).toBeGreaterThan(0);
-    expect(lost[bodyIndex('abyss')]!).toBeLessThanOrEqual(lost[bodyIndex('carapace')]!);
+    // only the EXPOSED layer of the stack takes the blow: behind intact carapace the reveal layers are untouched
+    for (const key of ['channels', 'lattice', 'abyss']) expect(lost[bodyIndex(key)]!).toBe(0);
   });
 
   it('a blow sways the structure and the load reaches the arms later: the carapace peaks first, no part flung past 1 rad', () => {
