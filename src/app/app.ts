@@ -1,13 +1,17 @@
 import {
   LOGICAL_H,
   LOGICAL_W,
+  ROUNDS_TO_WIN,
   ROUND_INTRO_TICKS,
   SLICE,
+  emptyInput,
   STAGE_IDS,
   TITAN_IDS,
   makeLayer,
   rgba,
   type AudioScene,
+  type CameraState,
+  type InputFrame,
   type DebugOverlayMode,
   type DebugShape,
   type Difficulty,
@@ -41,6 +45,7 @@ import type { StripRecorder } from '@/telemetry/strips';
 import { Telemetry } from '@/telemetry/telemetry';
 import { fillHudState } from './announcer';
 import { createDebugLayer, drawDebugShapes } from './debugDraw';
+import { Aftermath } from './aftermath';
 import { FxState, buildAudioScene } from './fx';
 import { createGuardDummy, tapSource, type TappedSource } from './tap';
 
@@ -58,6 +63,8 @@ interface Session {
 
 const MENU_STAGE: StageId = 'nursery';
 const CURSOR_IDLE_MS = 1500;
+/** The aftermath opens this many sim ticks after the deciding KO (1 s; KO slow-motion stretches it in wall time). */
+const AFTERMATH_DELAY_TICKS = 60;
 
 interface MatchOpts {
   attract?: boolean;
@@ -121,6 +128,28 @@ export class App {
   private roster: TitanId[] = [];
   /** Prototype flags from the URL (`orbit=1`, `zdepth=1`), applied to every match that does not set them itself. */
   private footwork: 'classic' | 'orbit' = 'classic';
+  /** The aftermath view while it is open, the tick it opens at (-1 = not scheduled), and whether it was already shown. */
+  aftermath: Aftermath | null = null;
+  private aftermathAt = -1;
+  private aftermathDone = false;
+  private saveNext = false;
+  private uiHiddenBefore = false;
+  private afterTick = 0;
+  private readonly afterInput: InputFrame = emptyInput();
+  private readonly aftCam: CameraState = {
+    x: 0,
+    y: 0,
+    zoom: 1,
+    roll: 0,
+    shakeX: 0,
+    shakeY: 0,
+    dolly: 0,
+    kickX: 0,
+    kickY: 0,
+  };
+  private dragX = 0;
+  private dragY = 0;
+  private wheel = 0;
   private zdepth = false;
   private witness = false;
   /** Per-tick sim cost samples for the harness benchmark. */
@@ -172,6 +201,7 @@ export class App {
       ? IMPLEMENTED_TITANS.slice()
       : IMPLEMENTED_TITANS.filter((id) => (SLICE.titans as readonly TitanId[]).includes(id));
     this.hideIdleCursor();
+    this.attachAftermathMouse(canvas);
     await this.renderer.init(canvas, {
       quality: opts.quality ?? 'auto',
       preserveDrawingBuffer: opts.preserveDrawingBuffer ?? false,
@@ -214,6 +244,103 @@ export class App {
       renderPortrait(id, 1, STAGES[this.menuStage].lighting);
     }
     this.ready = true;
+  }
+
+  /* ------------------------------------------------------------------------------------------------ *
+   *  aftermath (SLICE_PLAN §8, D27): freeze at the deciding KO + 1 s; pan / zoom / orbit / HUD / save PNG
+   * ------------------------------------------------------------------------------------------------ */
+  private enterAftermath(m: Match): void {
+    this.aftermathAt = -1;
+    const a = m.arena;
+    this.aftermath = new Aftermath(this.frame.camera.x, this.frame.camera.y, {
+      minX: a.minX + LOGICAL_W / 4,
+      maxX: a.maxX - LOGICAL_W / 4,
+      minY: a.minY + LOGICAL_H / 4,
+      maxY: a.maxY - LOGICAL_H / 4,
+    });
+    this.uiHiddenBefore = this.hideUi;
+    this.hideUi = true;
+    this.renderer.setInspect(true);
+  }
+
+  private exitAftermath(): void {
+    this.aftermath = null;
+    this.aftermathDone = true;
+    this.hideUi = this.uiHiddenBefore;
+    this.renderer.setInspect(false);
+  }
+
+  /** Read the first human's input (pad or keyboard layout) plus the mouse, and apply it to the aftermath view. */
+  private updateAftermath(s: Session, dtSec: number): void {
+    const a = this.aftermath!;
+    const inp = this.afterInput;
+    let tap: TappedSource | null = null;
+    for (const t of s.taps) if (t && !tap) tap = t;
+    let edges = { pause: false, training: false };
+    if (tap) {
+      tap.poll(++this.afterTick, inp);
+      edges = tap.take();
+    } else {
+      Object.assign(inp, emptyInput());
+    }
+    const act = a.update(inp, dtSec, { dragX: this.dragX, dragY: this.dragY, wheel: this.wheel });
+    this.dragX = this.dragY = this.wheel = 0;
+    if (act.toggleHud || edges.training) {
+      a.hud = !a.hud;
+      this.hideUi = !a.hud;
+    }
+    if (act.save) {
+      a.hideHintsOnce = true;
+      this.saveNext = true;
+    }
+    if (act.exit || edges.pause) this.exitAftermath();
+  }
+
+  /** Save exactly what is on screen (full display resolution) as a PNG download. */
+  private savePng(): void {
+    this.canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `adeuk-aftermath-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      this.aftermath?.noteSaved();
+    }, 'image/png');
+  }
+
+  /** Mouse drag pans and the wheel zooms the aftermath view (ignored otherwise). */
+  private attachAftermathMouse(canvas: HTMLCanvasElement): void {
+    let down = false;
+    let lx = 0;
+    let ly = 0;
+    const toLogical = (): number => canvas.clientWidth / LOGICAL_W || 1;
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!this.aftermath) return;
+      down = true;
+      lx = e.clientX;
+      ly = e.clientY;
+    });
+    window.addEventListener('pointerup', () => (down = false));
+    window.addEventListener('pointermove', (e) => {
+      if (!down || !this.aftermath) return;
+      const k = toLogical();
+      // dragging moves the picture with the pointer, so the camera goes the other way
+      this.dragX -= (e.clientX - lx) / k;
+      this.dragY -= (e.clientY - ly) / k;
+      lx = e.clientX;
+      ly = e.clientY;
+    });
+    canvas.addEventListener(
+      'wheel',
+      (e) => {
+        if (!this.aftermath) return;
+        e.preventDefault();
+        this.wheel += Math.sign(e.deltaY);
+      },
+      { passive: false },
+    );
   }
 
   /** D7: the mouse cursor disappears after 1.5 s without mouse movement and comes back on the next move. */
@@ -292,6 +419,9 @@ export class App {
     }
     this.bindSources(session, defs, opts.scripts);
     this.fx.reset();
+    if (this.aftermath) this.exitAftermath();
+    this.aftermathAt = -1;
+    this.aftermathDone = false;
     const v0 = match.fighters[0].view;
     const v1 = match.fighters[1].view;
     this.camera.reset((v0.x + v1.x) / 2, (v0.y + v1.y) / 2);
@@ -370,7 +500,8 @@ export class App {
    * ------------------------------------------------------------------------------------------------ */
   tick(): void {
     const s = this.session;
-    if (!s || this.paused) return;
+    // the aftermath freezes the arena: the match is simply not stepped until the player leaves it
+    if (!s || this.paused || this.aftermath) return;
     const m = s.match;
     const timed = this.measureSim || this.telemetry !== null;
     const t0 = timed ? performance.now() : 0;
@@ -397,9 +528,20 @@ export class App {
       if (e.t === 'rumble' && s.config.slots[e.slot].controller === 'human')
         this.input.rumble(e.slot, e.strong, e.weak, e.ms);
       this.eventLog.push(e);
+      // the KO that decides the match opens the aftermath 1 s (sim time) later
+      if (
+        e.t === 'round' &&
+        e.phase === 'ko' &&
+        e.winner !== -1 &&
+        !s.attract &&
+        !this.aftermathDone &&
+        m.wins[e.winner] + 1 >= ROUNDS_TO_WIN
+      )
+        this.aftermathAt = m.tick + AFTERMATH_DELAY_TICKS;
     }
     if (this.eventLog.length > 600) this.eventLog.splice(0, this.eventLog.length - 400);
     this.loop.timeScale = m.timeScale;
+    if (this.aftermathAt >= 0 && m.tick >= this.aftermathAt) this.enterAftermath(m);
     if (m.phase === 'matchend' && m.phaseTick === 1) this.onMatchEnd(s);
   }
 
@@ -449,8 +591,9 @@ export class App {
     this.handleUiActions();
     const s = this.session;
 
+    if (s && this.aftermath) this.updateAftermath(s, dtSec);
     // pause / training toggles from the players' own buttons
-    if (s && !s.attract) {
+    else if (s && !s.attract) {
       for (const tap of s.taps) {
         if (!tap) continue;
         const e = tap.take();
@@ -467,9 +610,19 @@ export class App {
     f.alpha = this.paused ? 0 : alpha;
 
     if (s) {
+      const a = this.aftermath;
+      if (a) {
+        this.camera.reset(a.x, a.y);
+        f.alpha = 0;
+      }
       const cam = this.camera.sample(f.alpha);
       f.camera = cam.state;
       f.view = cam.view;
+      if (a) {
+        // whole-number zoom and free orbit are applied in the final pass (renderer inspect mode)
+        Object.assign(this.aftCam, cam.state, { zoom: a.zoom, roll: a.roll, shakeX: 0, shakeY: 0 });
+        f.camera = this.aftCam;
+      }
       f.stage = s.config.stage;
       const m = s.match;
       for (const fighter of m.fighters) {
@@ -512,7 +665,13 @@ export class App {
       this.drawTelemetry();
       this.layers.push(this.teleLayer);
     }
+    if (this.aftermath && this.aftermath.drawHints()) this.layers.push(this.aftermath.layer);
     this.renderer.draw(f);
+    if (this.saveNext) {
+      // toBlob snapshots the canvas NOW (same task as the draw), so no preserveDrawingBuffer is needed
+      this.saveNext = false;
+      this.savePng();
+    }
     if (s && (this.telemetry || this.strips)) {
       const done = performance.now();
       this.telemetry?.afterDraw(done, this.layers, f.fx, f.view, f.alpha, this.canvas);
