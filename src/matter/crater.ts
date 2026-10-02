@@ -253,8 +253,9 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   thr = Math.max(thr, 0.06);
 
   /* ---- 5. remove: chunks from the bulk, dust from the centre and from soft matter ---- */
-  const nOutWx = nx * body.transform.facing;
-  const nOutWy = ny;
+  body.dirToWorld(nx, ny, pt);
+  const nOutWx = pt.x;
+  const nOutWy = pt.y;
   const dirTx = ctx.dirX - (ctx.dirX * nOutWx + ctx.dirY * nOutWy) * nOutWx;
   const dirTy = ctx.dirY - (ctx.dirX * nOutWx + ctx.dirY * nOutWy) * nOutWy;
   const powerBoost = Math.pow(Math.max(0.2, budget / 300), 0.25) * o.speedMul;

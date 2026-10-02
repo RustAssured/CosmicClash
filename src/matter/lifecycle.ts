@@ -44,7 +44,8 @@ function clearTransients(body: Body): void {
   clearWounds(body);
 }
 
-function finishRebuild(body: Body): void {
+/** After a wholesale change of a body's cells: re-derive surfaces, regions, visuals, stats and connectivity. */
+export function finishRebuild(body: Body): void {
   refreshSurfaceRect(body, 0, 0, body.w - 1, body.h - 1);
   body.regionDirty.fill(1);
   body.tileVis.fill(1);

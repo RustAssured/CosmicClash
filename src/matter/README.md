@@ -28,6 +28,11 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 | `diagnostics()` | live chunk/particle counts and masses, pending jobs (multi-tick slices + deferred chisels) |
 | `settleBody(id)` | run the connectivity pass now (tests, carve) |
 | `core` | internal state (tests/bench only; `core.clock` + `core.prof` enable the section profiler; `core.forceFullConn = true` disables the local connectivity shortcut) |
+| `bodyToChunk`, `jointHealth` | rig regions (proposal 140): a severed region leaves as one chunk; health of a joint patch |
+| `spawnChunk` → id, `chunksInShape`, `chunkState`, `setOrbit`, `captureChunk`, `releaseChunk`, `launchChunk`, `strikeChunk`, `retireChunk` | Tidal Draw / comets / ring armour (proposal 142): captured chunks are pinned, launched ones land an uncapped KINETIC blow credited to the thrower |
+| `defineShell`, `swapShell`, `shellFace` | the Planet's two-hemisphere world (`shell.ts`, proposal 142): exact half-turn swap of the shell, core shared |
+| `setFissureGlow(bodyId, colour)` | the light in a body's CRUSH fissures (default: molten rock only on a magma-bearing body) |
+| `renderExport(view, k)` | aftermath PNG: the debris/particle layers supersampled k× from any view of the frozen world |
 
 `warmUp(ticks = 100)` runs a small private scene through every damage type once (~0.4 s, no shared state, hashes of real worlds unaffected — tested) so V8 has optimised code before the first real fight. Call it once while loading / on the title screen; without it the first ~20 ticks of a fight cost 13–26 ms instead of 3–9 ms.
 
@@ -66,7 +71,8 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 | `visual.ts` | `map.pixels`/`emissive` refresh (lighting, heat glow, crack lines, lattice…) |
 | `lifecycle.ts` | restore / heal / grow / shed / carve |
 | `wound.ts` | wounds and held slabs: hairline outlines, shear schedule, wound momentum and lever-arm spin (DESTRUCTION Round 8) |
-| `rotation.ts` | rotation spike: quantised rotated hit masks matching the renderer's sampler (not wired; proposal 140) |
+| `rotation.ts` | rotated region bodies (`BodyTransform.rot`): hit masks matching the contract sampler's alpha-first vote (proposal 140/161) |
+| `shell.ts` | the two-hemisphere shell: far face storage, exact swap, restore |
 | `materials.ts`, `archetypes.ts` | `buildMaterialTable`, `MATERIAL_ARCHETYPES` |
 | `debug.ts`, `hash.ts`, `shape.ts`, `dmg.ts`, `core.ts`, `util.ts` | overlays, state hash, shape queries, damage context/result, shared world state, helpers |
 | `testing/bodies.ts` | synthetic test bodies (layered disc, ribbed slab, lattices, planets, star, black hole, bridge, uniform disc) |
@@ -83,12 +89,13 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 
 ## Testing & tooling
 ```
-npx vitest run src/matter tools/matter             # 109 tests: contract behaviour, determinism (incl. jobs in flight, connectivity shortcut == full flood), ledger, per-model behaviour, lifecycle, render, perf guard
+npx vitest run src/matter tools/matter             # 170+ tests: contract behaviour, determinism (incl. jobs in flight, connectivity shortcut == full flood), ledger, per-model behaviour, lifecycle, render, perf guard
 npx tsx tools/matter/bench.ts                      # step ms (load-robust min-of-5 replays + raw wall + cpu), section breakdown, pools full, 22k and 10k bodies, applyDamage per call
 node --expose-gc --import tsx tools/matter/bench.ts   # forces GC around the allocation check
 npx tsx tools/matter/calibrate.ts                  # % of a titan-size disc removed by a Strike (300) / Crush (1500), per archetype x damage type
 npx tsx tools/matter/wounds.ts                     # D1 wound sequencing of the slice's heavy blows on the real titans (shear, momentum, FX clear)
-npx tsx tools/matter/rotbench.ts                   # rotation spike: mask build / hit-test cost, undrawn cells per angle
+npx tsx tools/matter/rotbench.ts                   # rotation: mask build / hit-test cost, undrawn cells per angle
+npx tsx tools/matter/gc.ts                         # 3-minute fight, GC pauses (target: none > 4 ms)
 npx tsx tools/matter/gallery.ts all                # contact sheets into .scratch/
 npx vite --port 5202 --strictPort  ->  http://localhost:5202/dev/matter/   # interactive sandbox
 ```

@@ -1,6 +1,9 @@
 import {
+  ANGLE_STEPS,
   KO_CORE_INTEGRITY,
   REGION_GRID,
+  ROT_LUT,
+  ROT_ONE,
   Rng,
   leanShift,
   type BodyKind,
@@ -14,6 +17,9 @@ import {
 } from '@/contracts';
 import { K_CONE, K_LINE, type ShapeQ } from './shape';
 import { WoundBook } from './wound';
+import { isMolten } from './materials';
+import type { ShellFace } from './shell';
+import { RotMaskCache, rotCellAt, rotCellWorld, rotCollect, rotWorldToLocal, type RotMask } from './rotation';
 
 export const TILE = 16;
 export const TILE_SHIFT = 4;
@@ -87,6 +93,8 @@ export class Body implements MatterBody {
   readonly seed: number;
   readonly rng: Rng;
   takesDebrisImpacts: boolean;
+  /** Rig regions: the connectivity anchor cells (joint patch) used instead of the core disc (BodySpec.anchorCells). */
+  readonly anchorCells: Int32Array | null;
 
   /** Mass per cell at density 128, by material id. */
   readonly matDensity: Float32Array;
@@ -110,6 +118,8 @@ export class Body implements MatterBody {
   readonly surfaceMat: Uint8Array;
   /** Interned particle ramp ids per material: index m*5 + {0 dust, 1 shard, 2 ember, 3 gas, 4 infect}. Filled at creation. */
   readonly rampIds: Int32Array;
+  /** Interned ramp of each material's vapour (steam off its own glow colour, then soot): see debris.buildRamps. */
+  readonly vaporRamp = new Int32Array(256);
   /** Count of interior-only materials exposed since the last read (drives DamageResult.revealedInterior). */
   revealCount = 0;
 
@@ -211,8 +221,18 @@ export class Body implements MatterBody {
   slowPos = 0;
   /** Wounds and the held slabs they will shed (see wound.ts). Slab tags live in `map.detached`. */
   readonly wounds: WoundBook;
-  /** A CRUSH has cracked this body: fissures glow with magma from then on (visual only). */
+  /** A CRUSH has cracked this body: its fissures glow with `fissureGlow` from then on (visual only; set only if it has one). */
   magma = false;
+  /**
+   * Light in this body's CRUSH fissures, per material (packed RGBA, 0 = a dark crack). Default: a body holding molten rock (a
+   * magma-archetype material) shows that material's glow ramp in every non-gas material's fissures; any other body shows none.
+   * `MatterWorldEx.setFissureGlow` overrides it (the Witness: white-gold / cyan wound light).
+   */
+  readonly fissureGlow = new Uint32Array(256);
+  /** The two-hemisphere shell (the Planet): its far face, or null (shell.ts). */
+  shell: ShellFace | null = null;
+  /** Some material has fissure light (`fissureGlow` non-zero). */
+  fissureLit = false;
   /** After a heal (round reset) the body is not pelted by the previous round's debris until this world tick. */
   debrisImmuneUntil = 0;
   /** Debris-impact energy this body has taken on world tick `debrisTick` (a shower of debris hurts like one heavy chunk). */
@@ -277,6 +297,7 @@ export class Body implements MatterBody {
     this.h = spec.map.h;
     this.n = this.w * this.h;
     this.takesDebrisImpacts = spec.takesDebrisImpacts ?? spec.kind === 'titan';
+    this.anchorCells = spec.anchorCells ? spec.anchorCells.slice() : null;
 
     this.matDensity = new Float32Array(256);
     for (let i = 0; i < spec.materials.length; i++) this.matDensity[i] = spec.materials[i]!.density;
@@ -299,6 +320,7 @@ export class Body implements MatterBody {
     for (let i = 0; i < spec.materials.length; i++) this.matEmissive[i] = spec.materials[i]!.emissive;
     this.matFluid = new Uint8Array(256);
     for (let i = 0; i < spec.materials.length; i++) this.matFluid[i] = spec.materials[i]!.fluid ? 1 : 0;
+    this.setFissureGlow(undefined);
     this.surfaceMat = new Uint8Array(256);
     this.rampIds = new Int32Array(256 * 5).fill(0);
 
@@ -360,22 +382,45 @@ export class Body implements MatterBody {
    *  Coordinates (all consistent with contracts/space.ts, evaluated per integer row)
    * -------------------------------------------------------------------------------------------- */
 
-  /** Horizontal world shear of local row `j` (cosmetic lean). */
+  /** Horizontal world shear of local row `j` (cosmetic lean). Rotated region bodies have none (amended D4). */
   rowShift(j: number): number {
     const t = this.transform;
-    return t.lean === 0 ? 0 : leanShift(t.lean, j, t.anchorY);
+    return t.lean === 0 || (t.rot ?? 0) !== 0 ? 0 : leanShift(t.lean, j, t.anchorY);
+  }
+
+  /** The quantised rotation step of this body (0 = unrotated: every query takes the original fast path). */
+  rotStep(): number {
+    const r = this.transform.rot;
+    return r === undefined || r === 0 ? 0 : ((r % ANGLE_STEPS) + ANGLE_STEPS) % ANGLE_STEPS;
+  }
+
+  private rotCache: RotMaskCache | null = null;
+  /** Generation stamps for the rotated collect (cells drawn by several pixels are taken once). */
+  private rotStamp: Uint32Array | null = null;
+  private rotGen = 0;
+
+  /** The cached rotated mask for the current step and facing (built once per (body, angle, facing)). */
+  rotMask(): RotMask {
+    if (!this.rotCache) this.rotCache = new RotMaskCache(this);
+    return this.rotCache.get(this.rotStep());
   }
 
   /** World position of the CENTRE of local cell (i, j). */
   cellWorld(i: number, j: number, out: WorldPoint): void {
     const t = this.transform;
+    const k = this.rotStep();
+    if (k !== 0) {
+      rotCellWorld(this, k, i, j, out);
+      return;
+    }
     out.x = t.x + (i + 0.5 - t.anchorX) * t.facing + this.rowShift(j);
     out.y = t.y + (j + 0.5 - t.anchorY);
   }
 
-  /** Local cell index containing world point, or -1 if outside the map. */
+  /** Local cell index containing world point, or -1 if outside the map (rotated: the cell DRAWN there, or -1). */
   cellAtWorld(wx: number, wy: number): number {
     const t = this.transform;
+    if (this.rotStep() !== 0) return rotCellAt(this, this.rotMask(), wx, wy);
     const ly = wy - t.y + t.anchorY;
     const j = Math.floor(ly);
     if (j < 0 || j >= this.h) return -1;
@@ -388,9 +433,44 @@ export class Body implements MatterBody {
   /** Continuous local coordinates of a world point (row shear evaluated at the containing row). */
   worldToLocalF(wx: number, wy: number, out: WorldPoint): void {
     const t = this.transform;
+    const k = this.rotStep();
+    if (k !== 0) {
+      rotWorldToLocal(this, k, wx, wy, out);
+      return;
+    }
     const ly = wy - t.y + t.anchorY;
     const dx = wx - t.x - this.rowShift(Math.floor(ly));
     out.x = dx * t.facing + t.anchorX;
+    out.y = ly;
+  }
+
+  /** A world direction in the map frame (mirror, and the inverse rotation for rotated regions). */
+  dirToLocal(dx: number, dy: number, out: WorldPoint): void {
+    const k = this.rotStep();
+    if (k !== 0) {
+      const c = ROT_LUT.cos[k]! / ROT_ONE;
+      const s = ROT_LUT.sin[k]! / ROT_ONE;
+      const rx = c * dx + s * dy;
+      out.y = -s * dx + c * dy;
+      out.x = rx * this.transform.facing;
+      return;
+    }
+    out.x = dx * this.transform.facing;
+    out.y = dy;
+  }
+
+  /** A map-frame direction in the world (inverse of `dirToLocal`). */
+  dirToWorld(lx: number, ly: number, out: WorldPoint): void {
+    const k = this.rotStep();
+    const mx = lx * this.transform.facing;
+    if (k !== 0) {
+      const c = ROT_LUT.cos[k]! / ROT_ONE;
+      const s = ROT_LUT.sin[k]! / ROT_ONE;
+      out.x = c * mx - s * ly;
+      out.y = s * mx + c * ly;
+      return;
+    }
+    out.x = mx;
     out.y = ly;
   }
 
@@ -434,6 +514,7 @@ export class Body implements MatterBody {
    * deterministic. `idx`/`wgt` must have capacity >= w*h.
    */
   collect(q: ShapeQ, idx: Int32Array, wgt: Float32Array, looseOnly = false): number {
+    if (this.rotStep() !== 0) return this.collectRotated(q, idx, wgt, looseOnly);
     const map = this.map;
     const mat = map.material;
     const integ = map.integrity;
@@ -464,6 +545,30 @@ export class Body implements MatterBody {
           n++;
         }
       }
+    }
+    return n;
+  }
+
+  /** `collect` for a rotated region: the live cells DRAWN inside the shape (rotation.ts `rotCollect`), same output contract. */
+  private collectRotated(q: ShapeQ, idx: Int32Array, wgt: Float32Array, looseOnly: boolean): number {
+    if (!this.rotStamp) this.rotStamp = new Uint32Array(this.n);
+    if (++this.rotGen > 0x7ffffff0) {
+      this.rotStamp.fill(0);
+      this.rotGen = 1;
+    }
+    let n = rotCollect(this, this.rotMask(), q, idx, wgt, this.rotStamp, this.rotGen);
+    if (looseOnly) {
+      const flags = this.map.flags;
+      const mat = this.map.material;
+      let m = 0;
+      for (let k = 0; k < n; k++) {
+        const c = idx[k]!;
+        if ((flags[c]! & 32) === 0 && this.looseMat[mat[c]!] === 0) continue;
+        idx[m] = c;
+        wgt[m] = wgt[k]!;
+        m++;
+      }
+      n = m;
     }
     return n;
   }
@@ -636,6 +741,23 @@ export class Body implements MatterBody {
     }
   }
 
+  /**
+   * Fissure light: `undefined` = the default (molten rock's glow if the body holds any, else none), `null` = none, a packed RGBA
+   * colour = that light in every non-gas material's fissures.
+   */
+  setFissureGlow(colour: number | null | undefined): void {
+    const mats = this.materials;
+    let c = 0;
+    if (colour === undefined) {
+      for (let i = 1; i < mats.length && c === 0; i++)
+        if (isMolten(mats[i]!)) c = mats[i]!.glowRamp[0]! >>> 0;
+    } else if (colour !== null) c = colour >>> 0;
+    this.fissureGlow.fill(0);
+    for (let i = 1; i < mats.length; i++) if (mats[i]!.debris !== 'gas') this.fissureGlow[i] = c;
+    this.fissureLit = c !== 0;
+    if (c === 0) this.magma = false;
+  }
+
   /** Mass of live cell `c` (0 for void). */
   cellMass(c: number): number {
     const m = this.map.material[c]!;
@@ -709,15 +831,25 @@ export class Body implements MatterBody {
       crack += this.regionCrack[r]!;
     }
     mass += this.pool;
+    // a two-hemisphere body is the whole world: its far face counts too (shell.ts)
+    const sh = this.shell;
+    let im = this.map.initialMass;
+    let ic = this.map.initialCells;
+    if (sh !== null) {
+      mass += sh.farMass;
+      cells += sh.farCells;
+      im += sh.farInitialMass;
+      ic += sh.farInitialCells;
+    }
     const map = this.map;
     map.mass = mass;
     map.liveCells = cells;
     const s = this.stats;
     s.mass = mass;
-    s.initialMass = map.initialMass;
-    s.massFrac = map.initialMass > 0 ? mass / map.initialMass : 0;
+    s.initialMass = im;
+    s.massFrac = im > 0 ? mass / im : 0;
     s.cells = cells;
-    s.initialCells = map.initialCells;
+    s.initialCells = ic;
     s.burningCells = burn;
     s.infectedCells = infect;
     s.crackedCells = crack;

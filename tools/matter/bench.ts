@@ -10,7 +10,8 @@
  * pooled raw wall-clock samples and the main-thread CPU time per tick (process.threadCpuUsage, averaged: the OS counter only
  * ticks every ~4 ms) are printed next to it.
  */
-import { MAX_DEBRIS_CHUNKS, MAX_PARTICLES, Rng } from '@/contracts';
+import { MAX_PARTICLES, Rng } from '@/contracts';
+import { DEBRIS_CHUNK_CAP as MAX_DEBRIS_CHUNKS } from '@/matter/chunks';
 import {
   SECTION_NAMES,
   TYPES,
@@ -71,7 +72,7 @@ const scenarios: { name: string; o: FightOpts }[] = [
   },
   { name: '22k cells: saturated, a hit every 4 ticks', o: { ticks: 1800, everyN: 4, seed: 2 } },
   {
-    name: '22k cells: pools full (400 chunks + 6000 particles), a hit every 4 ticks',
+    name: `22k cells: pools full (${MAX_DEBRIS_CHUNKS} chunks + ${MAX_PARTICLES} particles), a hit every 4 ticks`,
     o: { ticks: 900, everyN: 4, seed: 4, prefill: true },
   },
   { name: '10k cells (real titan size): 60 s fight', o: { ticks: 3600, everyN: 24, seed: 1, radius: 55 } },

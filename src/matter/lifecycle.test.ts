@@ -11,6 +11,7 @@ import {
 } from '@/contracts';
 import { createMatterWorld, type MatterWorldEx } from './index';
 import { DEBUG_MODES } from './debug';
+import { DEBRIS_CHUNK_CAP } from './chunks';
 import {
   blackHole,
   celadonBody,
@@ -592,19 +593,19 @@ describe('render layers, particles, chunks and gravity', () => {
   it('chunks are capped: overflow degrades the oldest/smallest to dust without losing mass', () => {
     const { world } = make(3, []);
     const px = new Uint32Array(9).fill(rgba(200, 200, 200, 255));
-    for (let i = 0; i < 450; i++)
+    for (let i = 0; i < DEBRIS_CHUNK_CAP + 50; i++)
       world.spawnChunk({
         pixels: px,
         w: 3,
         h: 3,
-        x: 200 + (i % 30) * 8,
-        y: 100 + Math.floor(i / 30) * 8,
+        x: 120 + (i % 50) * 8,
+        y: 60 + Math.floor(i / 50) * 8,
         vx: 0,
         vy: 0,
         spin: 0,
         mass: 1 + (i % 5),
       });
-    expect(world.diagnostics().chunks).toBe(400);
+    expect(world.diagnostics().chunks).toBe(DEBRIS_CHUNK_CAP);
     conserved(world);
     run(world, 300);
     conserved(world);

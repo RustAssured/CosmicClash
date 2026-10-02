@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // The renderer's own CPU twin of its GPU sampler (pure TS): the hit truth must be exactly what it draws.
-import { ANGLE_STEPS as RENDER_STEPS, rotSample, type RotPart } from '@/render/rotsprite';
+import { ANGLE_STEPS as RENDER_STEPS, rotSampleAt, rotWinner, type RotPartEx } from '@/render/rotsprite';
 import { createMatterWorld } from './index';
 import type { Body } from './body';
 import { ShapeQ } from './shape';
@@ -16,11 +16,11 @@ import {
 } from './rotation';
 
 /**
- * Rotation spike: a region body with a quantised rotation is hit EXACTLY where the renderer draws it. The reference is S5's
- * `rotSample` (src/render/rotsprite.ts, the bit-exact CPU twin of the GPU clean-edge sampler, checked on the real GPU in
- * dev/render/verify.ts): for every angle, both facings and every destination pixel of the rotated map, the colour it draws must
- * be the colour of the cell matter's cached mask says is drawn there (and nothing where matter says nothing), and every
- * sub-pixel point of a dense grid inside that pixel must hit that cell.
+ * A region body with a quantised rotation is hit EXACTLY where the renderer draws it. The reference is S5's `rotSampleAt`
+ * (src/render/rotsprite.ts: the alpha-first sampler of proposal 161, bit-exact CPU twin of the compositor's GLSL, checked on the
+ * real GPU in dev/render/verify.ts): for every angle, both facings and every destination pixel of the rotated map, the texel
+ * that wins the renderer's vote must be the cell matter says is drawn there (and nothing where matter says nothing), and every
+ * sub-pixel point inside that pixel must hit that cell.
  */
 
 function body(kind: 'celadon' | 'slab', facing: 1 | -1, x: number, y: number): Body {
@@ -32,19 +32,10 @@ function body(kind: 'celadon' | 'slab', facing: 1 | -1, x: number, y: number): B
   return world.core.bodyById[world.createBody(tb.spec).id]!;
 }
 
-/** The body as the renderer receives it: its displayed pixels (mirrored about the pivot for facing -1), pivot = map anchor. */
-function asPart(b: Body, step: number): RotPart {
-  const { w, h } = b;
+/** The body as the renderer receives it: its displayed pixels, pivot = the map anchor, mirrored by the sampler for facing -1. */
+function asPart(b: Body, step: number): RotPartEx {
   const t = b.transform;
-  if (t.facing === 1) return { pixels: b.map.pixels, w, h, px: t.anchorX, py: t.anchorY, step };
-  // mirror about the pivot corner: texel x' shows texel 2·anchorX − 1 − x' (texels beyond the map are void)
-  const pixels = new Uint32Array(w * h);
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const sx = 2 * t.anchorX - 1 - x;
-      if (sx >= 0 && sx < w) pixels[y * w + x] = b.map.pixels[y * w + sx]!;
-    }
-  return { pixels, w, h, px: t.anchorX, py: t.anchorY, step };
+  return { pixels: b.map.pixels, w: b.w, h: b.h, px: t.anchorX, py: t.anchorY, step, facing: t.facing };
 }
 
 describe('rotation spike: one cached rotated mask per (body, angle) is the hit truth', () => {
@@ -87,11 +78,11 @@ describe('rotation spike: one cached rotated mask per (body, angle) is the hit t
             for (let u = -2; u < m.w + 2; u++) {
               const dx = m.x0 + u;
               const dy = m.y0 + v;
-              const col = rotSample(part, dx, dy);
+              const col = rotSampleAt(part, dx, dy);
               const c = drawnCell(b, m, u, v);
               pixelsChecked++;
               if (col >>> 24 !== 0) drawnPx++;
-              if (col >>> 24 === 0 ? c !== -1 : c < 0 || b.map.pixels[c] !== col) bad++;
+              if (col >>> 24 === 0 ? c !== -1 : c !== rotWinner.y * b.w + rotWinner.x) bad++;
               // a few sub-pixel points of the pixel hit the same cell
               if ((u + v) % 7 === 0)
                 for (const [sx, sy] of [

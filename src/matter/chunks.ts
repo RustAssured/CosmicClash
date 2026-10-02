@@ -52,6 +52,87 @@ export class Chunk {
   fast = false;
   /** Interned particle ramp its dust uses when it wears away or is degraded (-1 = the shared generic rock-dust ramp). */
   dustRamp = -1;
+  /** CHUNK_FREE, CHUNK_ORBIT (captured by a gravity owner: pinned, never degraded) or CHUNK_LAUNCHED (a thrown projectile). */
+  mode = 0;
+  /** Gravity owner slot of a captured / launched chunk (-1 = none). */
+  owner = -1;
+  /** Captured: its angle and radius on the owner's ring. */
+  phase = 0;
+  ring = 0;
+  /** Launched: the body credited with its impact (sourceBodyId) and spared by it. */
+  credit = -1;
+  /** 0..1 how hot it still glows (white-gold / magma → dark as it cools; sim state, hashed). */
+  temp = 0;
+  /** Its glow at birth (0 = born cold): molten emissive pixels dim as `temp` falls below it. */
+  temp0 = 0;
+  /** Glow ramp (cool → white-hot, packed RGBA) its heat shows: its dominant material's authored glowRamp (visual only). */
+  glowRamp: readonly number[] = WHITE_GOLD;
+}
+
+/** Glow of matter with no material of its own (spawned comets): white-gold. */
+const WHITE_GOLD: readonly number[] = [0xff26546b, 0xff448aa8, 0xff7ec7e2, 0xffc9f1ff, 0xffffffff];
+
+export const CHUNK_FREE = 0;
+export const CHUNK_ORBIT = 1;
+export const CHUNK_LAUNCHED = 2;
+
+/** A gravity owner's capture ring (Tidal Draw): captured chunks are steered onto it and carried round. */
+/**
+ * Debris chunk cap (D28 persistence): the contract's MAX_DEBRIS_CHUNKS raised to 640 within the frame budget (bench pools-full;
+ * proposal 142 asks the Lead to raise the contract constant to match).
+ */
+export const DEBRIS_CHUNK_CAP = Math.max(MAX_DEBRIS_CHUNKS, 640);
+
+export interface OrbitState {
+  active: boolean;
+  x: number;
+  y: number;
+  radius: number;
+  /** Angular speed of the ring, rad/s (sign = direction). */
+  omega: number;
+  /** Vertical scale of the ring (1 = circle; 0.26 = the moons' tilted plane seen edge-on). */
+  flatten: number;
+}
+
+/* ---- sprite buffers: pooled by power-of-two capacity, so debris does not allocate in a fight (GC pauses) ---- */
+const SPRITE_BUCKETS = 18;
+const free32: Uint32Array[][] = Array.from({ length: SPRITE_BUCKETS }, () => []);
+const free8: Uint8Array[][] = Array.from({ length: SPRITE_BUCKETS }, () => []);
+const bucketOf = (n: number): number => Math.max(4, 32 - Math.clz32(Math.max(1, n) - 1));
+/** A zeroed Uint32 sprite buffer holding at least `n` pixels (pooled; give it back with `putSprite32`). */
+export function getSprite32(n: number): Uint32Array {
+  const b = bucketOf(n);
+  const list = b < SPRITE_BUCKETS ? free32[b]! : null;
+  const buf = list && list.length > 0 ? list.pop()! : new Uint32Array(1 << b);
+  buf.fill(0, 0, n);
+  return buf;
+}
+/** A zeroed Uint8 buffer holding at least `n` bytes (pooled). */
+export function getSprite8(n: number): Uint8Array {
+  const b = bucketOf(n);
+  const list = b < SPRITE_BUCKETS ? free8[b]! : null;
+  const buf = list && list.length > 0 ? list.pop()! : new Uint8Array(1 << b);
+  buf.fill(0, 0, n);
+  return buf;
+}
+function putSprite32(buf: Uint32Array): void {
+  if (buf.length === 0) return;
+  const b = 31 - Math.clz32(buf.length);
+  if (b < SPRITE_BUCKETS && 1 << b === buf.length && free32[b]!.length < 256) free32[b]!.push(buf);
+}
+function putSprite8(buf: Uint8Array): void {
+  if (buf.length === 0) return;
+  const b = 31 - Math.clz32(buf.length);
+  if (b < SPRITE_BUCKETS && 1 << b === buf.length && free8[b]!.length < 256) free8[b]!.push(buf);
+}
+/** Return a chunk's buffers to the sprite pool (the chunk must not be read afterwards). */
+function recycleSprites(c: Chunk): void {
+  putSprite32(c.pixels);
+  if (c.hasEmis) putSprite8(c.emis);
+  putSprite8(c.nrm);
+  c.pixels = EMPTY32;
+  c.emis = EMPTY8;
+  c.nrm = EMPTY8;
 }
 
 /** Chunks younger than this (ticks) are never degraded to make room: fresh slabs are the wound being read. */
@@ -70,7 +151,7 @@ export class ChunkPool {
   nextId = 1;
   massLive = 0;
 
-  constructor(cap = MAX_DEBRIS_CHUNKS) {
+  constructor(cap = DEBRIS_CHUNK_CAP) {
     this.cap = cap;
     this.list = new Array<Chunk>(cap);
     for (let i = 0; i < cap; i++) this.list[i] = new Chunk();
@@ -88,9 +169,7 @@ export class ChunkPool {
       degradeToDust(core, v);
       v.alive = false;
       this.massLive -= v.mass;
-      v.pixels = EMPTY32;
-      v.emis = EMPTY8;
-      v.nrm = EMPTY8;
+      recycleSprites(v);
       this.count--;
     }
     this.count++;
@@ -104,11 +183,15 @@ export class ChunkPool {
   private pickVictim(): number {
     let best = -1;
     let bestScore = Infinity;
-    let young = 0;
+    let young = -1;
     let youngScore = Infinity;
+    let any = 0;
     for (let i = 0; i < this.hi; i++) {
       const c = this.list[i]!;
       if (!c.alive) continue;
+      any = i;
+      // captured (pinned) chunks are a gravity owner's ammunition and armour: never degraded
+      if (c.mode === CHUNK_ORBIT) continue;
       if (c.age < YOUNG_TICKS) {
         if (c.mass < youngScore) {
           youngScore = c.mass;
@@ -122,16 +205,14 @@ export class ChunkPool {
         best = i;
       }
     }
-    return best >= 0 ? best : young;
+    return best >= 0 ? best : young >= 0 ? young : any;
   }
 
   private release(c: Chunk, slot: number): void {
     if (!c.alive) return;
     c.alive = false;
     this.massLive -= c.mass;
-    c.pixels = EMPTY32;
-    c.emis = EMPTY8;
-    c.nrm = EMPTY8;
+    recycleSprites(c);
     this.freeList[this.freeTop++] = slot;
     this.count--;
   }
@@ -195,25 +276,33 @@ export class ChunkPool {
     c.noHitUntil = 0;
     c.fast = false;
     c.dustRamp = -1;
+    c.mode = CHUNK_FREE;
+    c.owner = -1;
+    c.phase = 0;
+    c.ring = 0;
+    c.credit = -1;
+    c.temp = 0;
+    c.temp0 = 0;
+    c.glowRamp = WHITE_GOLD;
     c.refX = NaN;
     c.refY = NaN;
-    c.launchNear = pxCount(pixels) >= 20 && vx * vx + vy * vy >= 140 * 140;
+    c.launchNear = pxCount(pixels, w * h) >= 20 && vx * vx + vy * vy >= 140 * 140;
     this.massLive += mass;
     computeChunkGeometry(c);
     return c;
   }
 }
 
-function pxCount(pixels: Uint32Array): number {
+function pxCount(pixels: Uint32Array, len: number): number {
   let n = 0;
-  for (let i = 0; i < pixels.length; i++) if (pixels[i]! >>> 24 !== 0) n++;
+  for (let i = 0; i < len; i++) if (pixels[i]! >>> 24 !== 0) n++;
   return n;
 }
 
 /** Radius, opaque cell count, edge normals and (uniform-density) moment of inertia from the sprite. */
 function computeChunkGeometry(c: Chunk): void {
   const { w, h, pixels } = c;
-  const nrm = new Uint8Array(w * h);
+  const nrm = getSprite8(w * h);
   let cells = 0;
   let r2 = 0;
   let i2 = 0;
@@ -269,11 +358,12 @@ export function degradeToDust(core: WorldCore, c: Chunk): void {
   const per = c.mass / n;
   const rid = c.dustRamp >= 0 ? c.dustRamp : genericDust(core);
   let k = 0;
-  const step = Math.max(1, Math.floor(c.pixels.length / (n + 1)));
-  for (let i = 0; i < c.pixels.length && k < n; i += step) {
+  const len = c.w * c.h;
+  const step = Math.max(1, Math.floor(len / (n + 1)));
+  for (let i = 0; i < len && k < n; i += step) {
     let j = i;
-    while (j < c.pixels.length && c.pixels[j]! >>> 24 === 0) j++;
-    if (j >= c.pixels.length) break;
+    while (j < len && c.pixels[j]! >>> 24 === 0) j++;
+    if (j >= len) break;
     const ang = core.rng.next() * Math.PI * 2;
     const sp = 10 + core.rng.next() * 30;
     p.spawn(
@@ -305,6 +395,30 @@ export function degradeToDust(core: WorldCore, c: Chunk): void {
  * Split a chunk into `k` shards by a jittered Voronoi partition of its opaque pixels (impact fracture). Momentum
  * conserving: shards inherit the parent velocity plus a radial burst from (ix, iy). Mass is split by pixel share.
  */
+const SPLIT_MAX = 4;
+const seedX = new Int32Array(SPLIT_MAX);
+const seedY = new Int32Array(SPLIT_MAX);
+const counts = new Int32Array(SPLIT_MAX);
+const minX = new Int32Array(SPLIT_MAX);
+const minY = new Int32Array(SPLIT_MAX);
+const maxX = new Int32Array(SPLIT_MAX);
+const maxY = new Int32Array(SPLIT_MAX);
+const splitParent = {
+  x: 0,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  spin: 0,
+  mass: 0,
+  origin: -1,
+  brittle: 0,
+  heat: 0,
+  dustRamp: -1,
+  temp: 0,
+  temp0: 0,
+  glowRamp: WHITE_GOLD,
+};
+
 export function splitChunk(
   core: WorldCore,
   pool: ChunkPool,
@@ -318,24 +432,25 @@ export function splitChunk(
   const rng = core.rng;
   const w = c.w;
   const h = c.h;
-  const seedX: number[] = [];
-  const seedY: number[] = [];
+  k = Math.min(k, SPLIT_MAX);
+  let kk = 0;
   let guard = 0;
-  while (seedX.length < k && guard++ < 64) {
+  while (kk < k && guard++ < 64) {
     const sx = rng.int(w);
     const sy = rng.int(h);
     if (c.pixels[sy * w + sx]! >>> 24 === 0) continue;
-    seedX.push(sx);
-    seedY.push(sy);
+    seedX[kk] = sx;
+    seedY[kk] = sy;
+    kk++;
   }
-  if (seedX.length < 2) return false;
-  const kk = seedX.length;
-  const owner = new Int8Array(w * h).fill(-1);
-  const counts = new Int32Array(kk);
-  const minX = new Int32Array(kk).fill(1 << 20);
-  const minY = new Int32Array(kk).fill(1 << 20);
-  const maxX = new Int32Array(kk).fill(-1);
-  const maxY = new Int32Array(kk).fill(-1);
+  if (kk < 2) return false;
+  const owner = getSprite8(w * h);
+  owner.fill(255, 0, w * h);
+  counts.fill(0);
+  minX.fill(1 << 20);
+  minY.fill(1 << 20);
+  maxX.fill(-1);
+  maxY.fill(-1);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       if (c.pixels[y * w + x]! >>> 24 === 0) continue;
@@ -361,22 +476,30 @@ export function splitChunk(
   const parentAngle = c.angle;
   const cos = Math.cos(c.angle);
   const sin = Math.sin(c.angle);
-  const parent = {
-    x: c.x,
-    y: c.y,
-    vx: c.vx,
-    vy: c.vy,
-    spin: c.spin,
-    mass: c.mass,
-    origin: c.origin,
-    brittle: c.brittle,
-    heat: c.heat,
-    dustRamp: c.dustRamp,
-  };
+  const parent = splitParent;
+  parent.x = c.x;
+  parent.y = c.y;
+  parent.vx = c.vx;
+  parent.vy = c.vy;
+  parent.spin = c.spin;
+  parent.mass = c.mass;
+  parent.origin = c.origin;
+  parent.brittle = c.brittle;
+  parent.heat = c.heat;
+  parent.dustRamp = c.dustRamp;
+  parent.temp = c.temp;
+  parent.temp0 = c.temp0;
+  parent.glowRamp = c.glowRamp;
   const cxp = c.cx;
   const cyp = c.cy;
+  // The parent's buffers are read below: detach them from it before freeing it, recycle them at the end.
   const srcPix = c.pixels;
   const srcEmi = c.hasEmis ? c.emis : null;
+  const srcNrm = c.nrm;
+  c.pixels = EMPTY32;
+  c.emis = EMPTY8;
+  c.hasEmis = false;
+  c.nrm = EMPTY8;
   // Free the parent first so the pool has room and ledger masses stay consistent.
   pool.free(c);
   let massLeft = parent.mass;
@@ -386,8 +509,8 @@ export function splitChunk(
     if (n === 0) continue;
     const bw = maxX[s]! - minX[s]! + 1;
     const bh = maxY[s]! - minY[s]! + 1;
-    const pix = new Uint32Array(bw * bh);
-    const emi = srcEmi ? new Uint8Array(bw * bh) : null;
+    const pix = getSprite32(bw * bh);
+    const emi = srcEmi ? getSprite8(bw * bh) : null;
     let sx = 0;
     let sy = 0;
     for (let y = minY[s]!; y <= maxY[s]!; y++)
@@ -435,6 +558,9 @@ export function splitChunk(
     ch.angle = parentAngle;
     ch.grace = 12;
     ch.dustRamp = parent.dustRamp;
+    ch.temp = parent.temp;
+    ch.temp0 = parent.temp0;
+    ch.glowRamp = parent.glowRamp;
     lastChunk = ch;
   }
   // Rounding remainder (and the share of any empty group) stays with the last shard so mass is conserved exactly.
@@ -442,6 +568,10 @@ export function splitChunk(
     lastChunk.mass += massLeft;
     pool.massLive += massLeft;
   } else if (massLeft !== 0) core.ledger.dissipated += massLeft;
+  putSprite32(srcPix);
+  if (srcEmi) putSprite8(srcEmi);
+  putSprite8(srcNrm);
+  putSprite8(owner);
   return true;
 }
 
@@ -450,6 +580,10 @@ export function splitChunk(
  * ---------------------------------------------------------------------------------------------- */
 
 const CHUNK_DRAG = 0.32; // per second: slow drift, long persistence ("the arena is a record of the fight")
+/** Speed (px/s) of settled debris drifting through the arena. */
+const DRIFT_SPEED = 2.5;
+/** Per-tick cooling of a chunk's glow (`Chunk.temp`): ~1.6 s half-life, dark after ~5 s. */
+const TEMP_DECAY = 0.993;
 const SPIN_DRAG = 0.22;
 
 export function stepChunks(core: WorldCore): void {
@@ -467,19 +601,38 @@ export function stepChunks(core: WorldCore): void {
     if (!c.alive) continue;
     c.age++;
     if (c.heat > 0) c.heat = c.heat * 0.985 - 0.05 > 0 ? c.heat * 0.985 - 0.05 : 0;
+    // Cooling: white-gold / magma glow fades to dark over ~5 s.
+    if (c.temp > 0) c.temp = c.temp * TEMP_DECAY - 0.0003 > 0 ? c.temp * TEMP_DECAY - 0.0003 : 0;
+    if (c.mode === CHUNK_ORBIT) {
+      stepOrbit(core, c, dt);
+      continue;
+    }
     // Gravel wears away: small old chunks degrade to dust so big remains stay the record of the fight.
-    if (c.mass < 5 && c.age > 1500) {
+    if (c.mass < 5 && c.age > GRAVEL_TICKS) {
       degradeToDust(core, c);
       pool.freeAt(s);
       continue;
     }
     if (c.asleep && !anyField) {
+      // Settled debris still drifts (slowly, deterministically): the arena is occupied space, not a still life.
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.angle += c.spin * dt;
+      if ((c.x < a.minX + wall && c.vx < 0) || (c.x > a.maxX - wall && c.vx > 0)) c.vx = -c.vx;
+      if ((c.y < a.minY + wall && c.vy < 0) || (c.y > a.maxY - wall && c.vy > 0)) c.vy = -c.vy;
       if (core.tick % 8 === 0) collideBodies(core, c);
       continue;
     }
+    const launched = c.mode === CHUNK_LAUNCHED;
+    // a throw that has lost its speed is ordinary debris again
+    if (launched && c.vx * c.vx + c.vy * c.vy < 60 * 60) {
+      c.mode = CHUNK_FREE;
+      c.owner = -1;
+      c.credit = -1;
+    }
     let vx = c.vx;
     let vy = c.vy;
-    if (anyField) {
+    if (anyField && !launched) {
       if (g0.active) {
         const dx = g0.x - c.x;
         const dy = g0.y - c.y;
@@ -539,15 +692,53 @@ export function stepChunks(core: WorldCore): void {
     c.x += vx * dt * mv;
     c.y += vy * dt * mv;
     c.angle += c.spin * dt * ms;
-    if (!anyField && vx * vx + vy * vy < 3 && Math.abs(c.spin) < 0.08) {
-      c.vx = 0;
-      c.vy = 0;
-      c.spin = 0;
+    if (!anyField && !launched && vx * vx + vy * vy < 3 && Math.abs(c.spin) < 0.08) {
+      // settle into a slow drift (direction and spin from the chunk id: deterministic)
+      const h = (Math.imul(c.id, 2654435761) >>> 0) / 4294967296;
+      const ang = h * Math.PI * 2;
+      c.vx = Math.cos(ang) * DRIFT_SPEED;
+      c.vy = Math.sin(ang) * DRIFT_SPEED;
+      c.spin = (h - 0.5) * 0.12;
       c.asleep = true;
     }
     if (c.age >= c.noHitUntil) collideBodies(core, c);
   }
 }
+
+/**
+ * A captured chunk rides its owner's ring: its own phase advances at the ring's angular speed, and it is steered (a damped
+ * spring plus the ring's tangential velocity) onto its slot — so a fresh capture spirals in rather than snapping. No wells, no
+ * walls, no body impacts while captured (the ring is the owner's ammunition and armour; combat queries it with chunksInShape).
+ */
+function stepOrbit(core: WorldCore, c: Chunk, dt: number): void {
+  const o = core.orbits[c.owner as 0 | 1];
+  if (c.owner < 0 || !o || !o.active) {
+    c.mode = CHUNK_FREE;
+    c.owner = -1;
+    return;
+  }
+  c.phase += o.omega * dt;
+  const R = c.ring;
+  const cs = Math.cos(c.phase);
+  const sn = Math.sin(c.phase);
+  const F = o.flatten;
+  const tx = o.x + cs * R;
+  const ty = o.y + sn * R * F;
+  const dvx = (tx - c.x) * ORBIT_K - sn * R * o.omega;
+  const dvy = (ty - c.y) * ORBIT_K + cs * R * F * o.omega;
+  const blend = Math.min(1, ORBIT_GRIP * dt);
+  c.vx += (dvx - c.vx) * blend;
+  c.vy += (dvy - c.vy) * blend;
+  c.x += c.vx * dt;
+  c.y += c.vy * dt;
+  c.spin *= 1 - SPIN_DRAG * dt;
+  c.angle += c.spin * dt;
+  c.asleep = false;
+}
+
+/** Ring steering: position gain (1/s) and how fast the velocity follows it (1/s). */
+const ORBIT_K = 3;
+const ORBIT_GRIP = 5;
 
 function consumeChunk(core: WorldCore, pool: ChunkPool, c: Chunk, slot: number, creditBody: number): void {
   const m = c.mass;
@@ -559,10 +750,13 @@ function consumeChunk(core: WorldCore, pool: ChunkPool, c: Chunk, slot: number, 
 /** Chunk vs bodies: fast heavy chunks deal a capped KINETIC impact and bounce; slow ones are nudged out. */
 function collideBodies(core: WorldCore, c: Chunk): void {
   const bl = core.bodyList;
+  const launched = c.mode === CHUNK_LAUNCHED;
   for (let bi = 0; bi < bl.length; bi++) {
     const b = bl[bi]!;
     if (!b.takesDebrisImpacts) continue;
-    if (b.id === c.origin && c.age < c.grace + 40) continue;
+    if (b.id === c.origin && c.age < c.grace + 40 && !launched) continue;
+    // a launched projectile never hits its thrower (any of its bodies)
+    if (launched && (b.id === c.credit || (c.owner >= 0 && b.ownerSlot === c.owner))) continue;
     const r = c.radius;
     if (c.x + r < b.aabbX0 || c.x - r > b.aabbX1 || c.y + r < b.aabbY0 || c.y - r > b.aabbY1) continue;
     // Probe the centre and four points at 0.55 radius on the chunk's rotated axes.
@@ -602,6 +796,20 @@ function collideBodies(core: WorldCore, c: Chunk): void {
     nx /= nl;
     ny /= nl;
     const vn = rvx * nx + rvy * ny;
+    if (launched && vn < 0 && speed > 30) {
+      // A thrown chunk: an UNCAPPED kinetic blow credited to its thrower, then it is ordinary debris again.
+      core.launchImpact(b, c, hx, hy, rvx / speed, rvy / speed, speed);
+      c.mode = CHUNK_FREE;
+      c.owner = -1;
+      c.credit = -1;
+      const e = 0.25;
+      c.vx = c.vx - (1 + e) * vn * nx;
+      c.vy = c.vy - (1 + e) * vn * ny;
+      c.noHitUntil = c.age + 18;
+      c.x += nx * 2;
+      c.y += ny * 2;
+      return;
+    }
     if (speed > 120 && c.mass > 1.2 && vn < 0 && core.tick >= b.debrisImmuneUntil) {
       // A fresh wound slab is still the wound's matter, not a weapon: it bounces off whatever it meets for its first second.
       if (!(c.fast && c.age < FRESH_SLAB_TICKS))
@@ -637,6 +845,17 @@ function collideBodies(core: WorldCore, c: Chunk): void {
  * ---------------------------------------------------------------------------------------------- */
 
 const LIT = new Int32Array(8);
+/** Gravel (< 5 mass) lives this long (60 s) before it wears to dust; bigger remains persist until the cap needs the slot. */
+const GRAVEL_TICKS = 3600;
+
+/** Glow colour at temperature t (0..1) along a cool → white-hot ramp (the chunk's material glowRamp). */
+function hotColour(t: number, ramp: readonly number[]): number {
+  const n = ramp.length;
+  if (n === 1) return ramp[0]! | 0;
+  const f = Math.max(0, Math.min(1, t)) * (n - 1);
+  const k = Math.min(n - 2, f | 0);
+  return lerpPx(ramp[k]! | 0, ramp[k + 1]! | 0, ((f - k) * 256) | 0);
+}
 
 /** Depth classes: 0 = behind the titans (hazy, 1x), 1 = the fight plane (1x, over the titans), 2 = near the camera (2x pixel doubling). */
 export const DEPTH_BACK = 0;
@@ -672,11 +891,21 @@ export interface ChunkTargets {
 /** Cap on 2x chunks drawn per frame (they are large: keeps fill cost and clutter bounded). */
 const MAX_NEAR_DRAWN = 24;
 
-/** Rasterise all visible chunks into the back, front (fight plane) and near (2x) screen layers. */
-export function rasterChunks(core: WorldCore, view: ViewRect, alpha: number, t: ChunkTargets): void {
+/**
+ * Rasterise all visible chunks into the back, front (fight plane) and near (2x) screen layers. `scale` > 1 is the supersampled
+ * export path (PNG of the aftermath): targets are (scale·LOGICAL_W)×(scale·LOGICAL_H) and every chunk is resampled at that
+ * resolution (sub-pixel placement, finer rotation), never upscaled.
+ */
+export function rasterChunks(
+  core: WorldCore,
+  view: ViewRect,
+  alpha: number,
+  t: ChunkTargets,
+  scale = 1,
+): void {
   const pool = core.chunks;
-  const W = LOGICAL_W;
-  const H = LOGICAL_H;
+  const W = LOGICAL_W * scale;
+  const H = LOGICAL_H * scale;
   const ext = alpha * TICK_DT;
   // Edge-lighting LUT: outward normal index k (0..7 => angle k*45° from +x, clockwise on screen) vs the stage light.
   const L = core.lighting;
@@ -695,14 +924,14 @@ export function rasterChunks(core: WorldCore, view: ViewRect, alpha: number, t: 
     // out); it keeps its class parallax so it does not jump.
     if (depth === DEPTH_NEAR && nearDrawn >= MAX_NEAR_DRAWN) depth = DEPTH_MID;
     const par = PARALLAX[cls];
-    const sc = depth === DEPTH_NEAR ? 2 : 1;
+    const sc = (depth === DEPTH_NEAR ? 2 : 1) * scale;
     // Screen position: about the view centre, scaled by the class parallax (integer view origin => stable, pixel-clean).
     if (c.refX !== c.refX) {
       c.refX = view.x0;
       c.refY = view.y0;
     }
-    const sx = c.x + c.vx * ext - view.x0 + (1 - par) * (view.x0 - c.refX);
-    const sy = c.y + c.vy * ext - view.y0 + (1 - par) * (view.y0 - c.refY);
+    const sx = (c.x + c.vx * ext - view.x0 + (1 - par) * (view.x0 - c.refX)) * scale;
+    const sy = (c.y + c.vy * ext - view.y0 + (1 - par) * (view.y0 - c.refY)) * scale;
     const R = (c.radius + 1) * sc;
     if (sx + R < 0 || sy + R < 0 || sx - R >= W || sy - R >= H) continue;
     if (depth === DEPTH_NEAR) nearDrawn++;
@@ -723,7 +952,14 @@ export function rasterChunks(core: WorldCore, view: ViewRect, alpha: number, t: 
     const hasE = c.hasEmis;
     const emis = c.emis;
     const heat = c.heat;
-    const heatE = heat > 6 ? Math.min(255, heat) : 0;
+    // Cooling glow: white-gold → orange → dull red → the chunk's own colour; molten (emissive) pixels darken as they cool.
+    const tmp = c.temp;
+    const hotW = tmp > 0.02 && !hasE ? Math.min(220, (tmp * 250) | 0) : 0;
+    const hotCol = hotW > 0 ? hotColour(tmp, c.glowRamp) : 0;
+    const cool = c.temp0 > 0 ? Math.min(1, tmp / c.temp0) : 1;
+    const emiK = (cool * 256) | 0;
+    const moltenDim = (120 + cool * 136) | 0;
+    const heatE = Math.max(heat > 6 ? Math.min(255, heat) : 0, hotW > 0 ? (tmp * 230) | 0 : 0);
     const inv = 1 / sc;
     if (y0 < range.a) range.a = y0;
     if (y1 > range.b) range.b = y1;
@@ -762,9 +998,14 @@ export function rasterChunks(core: WorldCore, view: ViewRect, alpha: number, t: 
           p = scalePx(p, depthDim);
           p = lerpPx(p, 0xff3a2a40, 34); // aerial haze: cool, dark
         }
+        let e = hasE ? emis[si]! : 0;
+        if (e > 0 && emiK < 256) {
+          e = (e * emiK) >> 8;
+          p = scalePx(p, moltenDim);
+        }
+        if (hotW > 0) p = lerpPx(p, hotCol, hotW);
         const o = dy * W + dx;
         pix[o] = p;
-        let e = hasE ? emis[si]! : 0;
         if (heatE > e) e = heatE;
         if (e > 0) emi[o] = e;
       }

@@ -181,8 +181,9 @@ function burst(core: WorldCore, body: Body, c: number, energy: number, dirX: num
   // The burst is a small radial blow for any chunks it frees.
   const blow = body.blow;
   blow.tick = core.tick;
-  blow.dirX = dirX * body.transform.facing;
-  blow.dirY = dirY;
+  body.dirToWorld(dirX, dirY, pt);
+  blow.dirX = pt.x;
+  blow.dirY = pt.y;
   blow.energy = energy * 1.4;
   blow.x = bx;
   blow.y = by;

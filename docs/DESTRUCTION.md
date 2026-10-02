@@ -303,7 +303,7 @@ dither), and are weakened (bonds ×0.65, integrity ≤ 210). With `params.harves
 | tidal cost factor / cadence / per-application cap | `tidal.ts`, `world.ts` | 1.5 / 3 ticks / 260 | how fast fields strip matter |
 | infection spread rate, vein noise | `assimilation.ts` | see §3.6 | creep speed |
 | `body.cohesionScale`, `body.heatScale` (LIVE, fighter-owned) | `MatterBody` | 1 | scale every bond / thermal threshold at runtime |
-| `MAX_DEBRIS_CHUNKS`, `MAX_PARTICLES` | `contracts/constants.ts` | 400 / 6000 | pool caps |
+| `DEBRIS_CHUNK_CAP` (`chunks.ts`, = max(`MAX_DEBRIS_CHUNKS`, 640)), `MAX_PARTICLES` | `chunks.ts` / `contracts/constants.ts` | 640 / 6000 | pool caps |
 | `SHEAR_TARGET_MS` | `wound.ts` | 140 ms | when a wound's slabs begin to shear (wall time, hit-stop included) |
 | `SHED_PER_TICK`, grain per type | `wound.ts`, crater/fracture opts | 8 %; FRACTURE 8, KINETIC 20, CRUSH 18 | how a wound sheds: budget per tick, pieces per hold |
 | `CORE_FRAC`, `HOLD_MIN` | `crater.ts` | 0.2 of the bowl radius, 40 cells | pulverised-at-once core of a crater; smaller bowls go at once |
@@ -415,3 +415,35 @@ Impact or Shatter emptied a hemisphere into "small embers" between two frames. N
   one-tick loss fell from 48 % to 12 % of its 1.5 s loss on the Planet (that tick: 98 % → 58 % particles) and from 36 % to 6 % on
   the Witness. What still leaves in bulk as particles: the Last Light beam's PIERCE channel (every tick, by design), fluids and
   gas, pulverised cores, and settled debris degraded when the 400-chunk pool overflows.
+
+## Round 9 (slice Phase 2): rotation, capture, persistence, the two-face shell
+
+- **Rotated regions** (proposal 140/161). `BodyTransform.rot` routes every hit test, collection and chunk extraction
+  through the contract sampler's alpha-first vote (`@/contracts/rotation`). The matter-drawn cell equals the renderer's
+  winner: 0 mismatches over the parity test. `rot` 0 or absent is byte-identical (hash test).
+- **Joint patches and severed regions.** `anchorCells` replaces the core disc as connectivity seeds. `jointHealth` and
+  `bodyToChunk` were added.
+- **Parallel wounds.** The shear budget and the slow-cut quota are now per wound. Five overlapping blows each shear on
+  their own beat (impact + 1 + shearDelay). The spread is ≤ 22 ticks, where before the five blows queued for ~2 s.
+- **Capture** (proposal 142).
+  - Owner rings (`setOrbit`, with `flatten`). Captured chunks are pinned and never degraded.
+  - `launchChunk` gives an uncapped KINETIC blow of ½·m·(v/60)², credited to the thrower and passing through its bodies.
+    In the test, a thrown 160-mass rock removes more than 3× the mass the same rock does flying in freely.
+  - `strikeChunk` breaks a ring chunk into free pieces. `retireChunk` books the chunk's mass as dissipated.
+- **Persistence.**
+  - The chunk cap is 640, with no measurable bench cost.
+  - Gravel lives 60 s, up from 25.
+  - `Chunk.temp` cools along the chunk's dominant material `glowRamp`: a molten chunk dims its emissive pixels, and a
+    heavy blow's slabs leave glowing at min(0.7, E/2000).
+  - Settled chunks drift at 2.5 px/s.
+- **Wound light belongs to the body.** CRUSH fissures glow only with `Body.fissureGlow` (molten rock by default on a
+  magma-bearing body, or `setFissureGlow`). The blow flash and sparks, vapour and streak heat follow the struck
+  material's `glowRamp`; there are no fixed orange ramps left.
+- **Two-face shell** (`shell.ts`). The far face is the pristine body mirrored about the core column. It is stored in its
+  post-turn coordinates, so a swap is an exact per-cell exchange and two swaps are the identity. Edge bonds swap with
+  their face. Ledger and stats count both faces. A swap settles wounds in flight first. swap + tick takes 7.9 ms p50 on
+  a 216² map with 44.7k shell cells; the cost is the full rebuild, paid once per half-turn.
+- **Aftermath.** Rendering never steps the world (test: three views, same hash, the same view gives the same pixels).
+  `renderExport(view, k)` resamples chunks at k×; particles are upscaled nearest.
+- **GC** (`tools/matter/gc.ts`, 3 minutes, render every tick): 2 minor pauses, max 0.46 ms, none over 4 ms. This came from
+  int32 colour arithmetic in `visual.ts` and render targets built once.

@@ -163,6 +163,59 @@ describe('wound sequencing on a synthetic body', () => {
     expect(tagged).toBe(0);
   });
 
+  it('overlapping wounds shed in parallel: each keeps its own beat and budget', () => {
+    const tb = layeredDisc({ size: 60, seed: 4, x: 400, y: 290 });
+    const { world, id } = make(3, tb);
+    const body = world.core.bodyById[id]!;
+    const book = body.wounds;
+    const impacts: { tick: number; wound: number }[] = [];
+    const firstShear = new Map<number, number>();
+    const lastShear = new Map<number, number>();
+    let lastRelease = -1;
+    for (let t = 0; t < 160; t++) {
+      if (t % 6 === 0 && t < 30) {
+        const y = 250 + (t / 6) * 20;
+        world.applyDamage(
+          id,
+          ev({
+            type: 'KINETIC',
+            shape: { kind: 'point', x: 346, y, r: 10 },
+            energy: 900,
+            params: { crater: 10 },
+            hitstop: 8,
+          }),
+        );
+        let w = -1;
+        for (let k = 0; k < book.tick.length; k++) if (book.tick[k] === world.core.tick) w = k;
+        impacts.push({ tick: world.core.tick, wound: w });
+      }
+      // every held slab's scheduled shear, per wound
+      for (let s = 1; s < book.state.length; s++) {
+        if (book.state[s] !== SLAB_HELD) continue;
+        const w = book.woundOf[s]!;
+        firstShear.set(w, Math.min(firstShear.get(w) ?? Infinity, book.shearAt[s]!));
+        lastShear.set(w, Math.max(lastShear.get(w) ?? -Infinity, book.shearAt[s]!));
+      }
+      const before = world.diagnostics().chunks;
+      world.tick();
+      if (world.diagnostics().chunks > before) lastRelease = world.core.tick;
+    }
+    expect(impacts.length).toBe(5);
+    for (const im of impacts) {
+      expect(im.wound).toBeGreaterThanOrEqual(0); // every blow opened a wound and held its bowl
+      const f = firstShear.get(im.wound)!;
+      const l = lastShear.get(im.wound)!;
+      // its own beat: 8 frozen frames + shearDelay(8) world ticks after its impact frame (150 ms wall)
+      expect(f - (im.tick + 1)).toBe(shearDelay(8));
+      // and its own budget: a wound's pieces (KINETIC grain 20, 8 % per tick) go within ~20 ticks of its first shear, not queued
+      // behind the other wounds' pieces
+      expect(l - f).toBeLessThanOrEqual(22);
+    }
+    // five blows over 24 ticks have all shed ~0.5 s after the last one (was ~2 s with one shared queue)
+    expect(lastRelease - impacts[4]!.tick).toBeLessThan(30);
+    expect(Math.abs(world.ledger().error)).toBeLessThan(1e-3);
+  });
+
   it('restore and heal drop every wound and held slab', () => {
     const tb = layeredDisc({ size: 50, seed: 4, x: 400, y: 290 });
     const { world, id } = make(3, tb);

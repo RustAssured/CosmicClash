@@ -9,7 +9,7 @@ import {
   type StageLighting,
 } from '@/contracts';
 import type { Body } from './body';
-import { ChunkPool, type Chunk } from './chunks';
+import { ChunkPool, type Chunk, type OrbitState } from './chunks';
 import { CutFinder } from './cuts';
 import { ParticlePool } from './particles';
 import { ShapeQ } from './shape';
@@ -183,6 +183,23 @@ export class WorldCore {
   readonly cuts = new CutFinder();
   readonly stack = new IntStack(4096);
   readonly stack2 = new IntStack(4096);
+
+  /** Capture rings of the two gravity owners (Tidal Draw), by slot. */
+  readonly orbits: [OrbitState, OrbitState] = [
+    { active: false, x: 0, y: 0, radius: 0, omega: 0, flatten: 1 },
+    { active: false, x: 0, y: 0, radius: 0, omega: 0, flatten: 1 },
+  ];
+
+  /** Hook: a launched chunk hit a body (set by the world; applies an UNCAPPED KINETIC event credited to the thrower). */
+  launchImpact: (
+    body: Body,
+    chunk: Chunk,
+    x: number,
+    y: number,
+    dirX: number,
+    dirY: number,
+    speed: number,
+  ) => void = () => {};
 
   /** Hook: a chunk hit a body (set by the world; applies a capped KINETIC event). */
   chunkImpact: (

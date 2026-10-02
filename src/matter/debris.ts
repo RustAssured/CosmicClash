@@ -1,5 +1,7 @@
+import { ANGLE_STEPS } from '@/contracts';
+import { rotLocalToWorld } from './rotation';
 import type { Body } from './body';
-import type { Chunk } from './chunks';
+import { getSprite32, getSprite8, type Chunk } from './chunks';
 import type { WorldCore } from './core';
 import { killCell } from './cells';
 import { PK } from './particles';
@@ -33,6 +35,10 @@ export function buildRamps(core: WorldCore, body: Body): void {
     const ember: number[] = [];
     for (let k = g.length - 1; k >= 0 && ember.length < 7; k--) ember.push(g[k]!);
     body.rampIds[m * 5 + RAMP_EMBER] = P.internRamp(ember);
+    // Vapour: steam off the material's own glow (white-hot, its glow, a darkened glow), then soot.
+    const gh = g[g.length - 1]!;
+    const gm = g[Math.max(0, g.length - 3)]!;
+    body.vaporRamp[m] = P.internRamp([lerpPx(gh, 0xffffffff, 60), gm, lerpPx(g[0]!, D, 140), SOOT]);
     body.rampIds[m * 5 + RAMP_GAS] = P.internRamp([lerpPx(M, L, 90), M, lerpPx(M, D, 100)]);
     body.rampIds[m * 5 + RAMP_INFECT] = P.internRamp([
       lerpPx(md.infect, 0xffffffff, 150),
@@ -190,7 +196,7 @@ export function sprayCell(
   core.sprayVy = vy;
   core.sprayKind = kind;
   core.sprayRamp = body.rampIds[m * 5 + rk]!;
-  if (mode === MODE_VAPOR && kind === PK.gas) core.sprayRamp = hotGasRamp(core);
+  if (mode === MODE_VAPOR && kind === PK.gas) core.sprayRamp = body.vaporRamp[m]!;
   if (rng.next() < prob) {
     spawnMassParticle(core, kind, core.sprayRamp, x, y, vx, vy, core.sprayMass);
     core.sprayMass = 0;
@@ -201,6 +207,7 @@ export function sprayCell(
  *  Chunk extraction
  * --------------------------------------------------------------------------------------------- */
 
+const tmpW = { x: 0, y: 0 };
 /** Scratch: cells per material of the piece being extracted. */
 const matCount = new Int32Array(256);
 const matSeen = new Uint8Array(256);
@@ -228,6 +235,7 @@ export function extractChunk(
   const X = Math.round(t.x);
   const Y = Math.round(t.y);
   const f = t.facing;
+  const rot = body.rotStep();
   let minWX = 1 << 20;
   let minWY = 1 << 20;
   let maxWX = -(1 << 20);
@@ -240,8 +248,14 @@ export function extractChunk(
     const c = cells[k]!;
     const i = c % w;
     const j = (c - i) / w;
-    const wx = (f === 1 ? X + (i - t.anchorX) : X - (i - t.anchorX) - 1) + body.rowShift(j);
-    const wy = Y + (j - t.anchorY);
+    // (a rotated region builds its sprite in the mirrored map frame; the chunk then carries the region's angle)
+    const wx =
+      rot !== 0
+        ? f === 1
+          ? i
+          : -i - 1
+        : (f === 1 ? X + (i - t.anchorX) : X - (i - t.anchorX) - 1) + body.rowShift(j);
+    const wy = rot !== 0 ? j : Y + (j - t.anchorY);
     if (wx < minWX) minWX = wx;
     if (wx > maxWX) maxWX = wx;
     if (wy < minWY) minWY = wy;
@@ -253,7 +267,7 @@ export function extractChunk(
   }
   const sw = maxWX - minWX + 1;
   const sh = maxWY - minWY + 1;
-  const pix = new Uint32Array(sw * sh);
+  const pix = getSprite32(sw * sh);
   let emi: Uint8Array | null = null;
   let mass = 0;
   let sx = 0;
@@ -261,20 +275,28 @@ export function extractChunk(
   let brit = 0;
   let heatSum = 0;
   let heatN = 0;
+  let emN = 0;
   for (let k = 0; k < n; k++) {
     const c = cells[k]!;
     const i = c % w;
     const j = (c - i) / w;
-    const wx = (f === 1 ? X + (i - t.anchorX) : X - (i - t.anchorX) - 1) + body.rowShift(j);
-    const wy = Y + (j - t.anchorY);
+    // (a rotated region builds its sprite in the mirrored map frame; the chunk then carries the region's angle)
+    const wx =
+      rot !== 0
+        ? f === 1
+          ? i
+          : -i - 1
+        : (f === 1 ? X + (i - t.anchorX) : X - (i - t.anchorX) - 1) + body.rowShift(j);
+    const wy = rot !== 0 ? j : Y + (j - t.anchorY);
     const o = (wy - minWY) * sw + (wx - minWX);
     let col = map.pixels[c]!;
     if (col >>> 24 === 0) col = (map.baseColor[c]! | 0xff000000) >>> 0;
     pix[o] = col;
     const e = map.emissive[c]!;
     if (e > 0) {
-      if (emi === null) emi = new Uint8Array(sw * sh);
+      if (emi === null) emi = getSprite8(sw * sh);
       emi[o] = e;
+      emN++;
     }
     const cm = body.cellMass(c);
     mass += cm;
@@ -305,6 +327,13 @@ export function extractChunk(
   for (let k = 0; k < n; k++) killCell(body, cells[k]!);
   body.touch(lx0, ly0, lx1, ly1);
   const heat = heatN > 0 ? Math.min(255, (heatSum / heatN) * 0.28) : 0;
+  let cwx = minWX + sx;
+  let cwy = minWY + sy;
+  if (rot !== 0) {
+    rotLocalToWorld(body, rot, f === 1 ? cwx : -cwx, cwy, tmpW);
+    cwx = tmpW.x;
+    cwy = tmpW.y;
+  }
   const ch = core.chunks.add(
     core,
     pix,
@@ -313,8 +342,8 @@ export function extractChunk(
     sh,
     sx,
     sy,
-    minWX + sx,
-    minWY + sy,
+    cwx,
+    cwy,
     vx,
     vy,
     spin,
@@ -325,6 +354,11 @@ export function extractChunk(
   );
   ch.grace = 30;
   ch.dustRamp = body.rampIds[dom * 5 + RAMP_DUST]!;
+  ch.glowRamp = body.materials[dom]!.glowRamp;
+  if (rot !== 0) ch.angle = (rot * 2 * Math.PI) / ANGLE_STEPS;
+  // Glow at birth: molten matter (emissive cells) starts fully lit and crusts over; heated rock glows by its heat.
+  ch.temp = emN > 0 ? 1 : Math.min(1, heat / 255);
+  ch.temp0 = ch.temp;
   return ch;
 }
 
@@ -410,14 +444,5 @@ export function detachVelocity(
   out.spin = Math.max(-9, Math.min(9, s));
 }
 
-const HOT_GAS = [0xffc8f0ff, 0xff3c96ff, 0xff28508c, 0xff3c3c46];
-const hotGasIds = new WeakMap<object, number>();
-/** Shared warm steam/smoke ramp for vaporised matter (white-orange, ember red, then soot grey). */
-function hotGasRamp(core: WorldCore): number {
-  let id = hotGasIds.get(core.particles);
-  if (id === undefined) {
-    id = core.particles.internRamp(HOT_GAS);
-    hotGasIds.set(core.particles, id);
-  }
-  return id;
-}
+/** Soot grey: where every vapour ramp ends. */
+const SOOT = 0xff3c3c46;

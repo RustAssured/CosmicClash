@@ -533,6 +533,12 @@ function releaseIsland(
       // Wound pieces tumble from the lever arm of their push, with the inertia of their own cells.
       ch.spin = woundSpin(body, w, ch.x, ch.y, ch.vx, ch.vy, ch.mass, ch.radius, ch.inertia);
       ch.fast = true;
+      // A heavy blow's slabs leave white-hot at the shear and cool as they fly.
+      const glow = Math.min(0.7, body.wounds.energy[w]! / 2000);
+      if (glow > ch.temp) {
+        ch.temp = glow;
+        if (ch.temp0 < glow) ch.temp0 = glow;
+      }
       // ... and stay in the fight plane: a slab is the wound's matter, not an occluder thrown across it at the viewer.
       ch.launchNear = false;
     }

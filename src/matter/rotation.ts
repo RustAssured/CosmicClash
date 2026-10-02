@@ -1,15 +1,16 @@
+import { ANGLE_STEPS, ROT_BIAS_PX, ROT_DEN, ROT_LUT, ROT_ONE } from '@/contracts';
 import type { WorldPoint } from './body';
 import type { ShapeQ } from './shape';
 
 /**
- * ROTATION SPIKE (Phase 1, matter side; not wired into contracts or Body yet — see docs/proposals/140-S4-rotation-contract.md).
+ * ROTATED REGION BODIES (proposal 140, D27). Body routes every coordinate query through here when `transform.rot` is non-zero.
  *
- * A rig region body (the Witness's arms, halo, cradle: SLICE_PLAN §4.1, D27) may carry a quantised rotation. Hit truth is
- * WHAT THE RENDERER DRAWS: S5's clean-edge sampler (`src/render/rotsprite.ts`, proposal 151) — `ANGLE_STEPS` steps per turn,
- * a Q14 integer LUT exact at the quadrants, 3×3 integer sub-samples per destination pixel mapped back with an exact (biased)
- * floor division, the MAJORITY colour of the nine kept (ties → the centre sample), transparent texels voting as one "empty"
- * colour. Matter cannot import `src/render` (purity), so the integer rule is reproduced here bit for bit until it moves to
- * `src/contracts` (151); `rotation.test.ts` checks every destination pixel of every angle against S5's own `rotSample`.
+ * A rig region body (the Witness's arms, halo, cradle: SLICE_PLAN §4.1) carries a quantised rotation. Hit truth is WHAT THE
+ * RENDERER DRAWS: the shared clean-edge sampler (`@/contracts/rotation`) — `ANGLE_STEPS` steps per turn, a Q14 integer LUT
+ * exact at the quadrants, 3×3 integer sub-samples per destination pixel mapped back with an exact (biased) floor division, the
+ * MAJORITY colour of the nine kept (ties → the centre sample), transparent texels voting as one "empty" colour. The cached mask
+ * below uses the contract's LUT and constants; `rotation.test.ts` checks every destination pixel of every angle against the
+ * contract's own `rotSample`.
  *
  * Body mapping: the source pivot is the map anchor (a pixel corner) drawn at the integer world pixel
  * (round(t.x), round(t.y)); `facing = -1` mirrors the map about the pivot BEFORE rotating; row-shear lean does not apply to
@@ -21,23 +22,14 @@ import type { ShapeQ } from './shape';
  * whose sub-samples straddle texels run the 9-sample vote.
  */
 
-export const ANGLE_STEPS = 256;
-const ROT_ONE = 1 << 14;
-const SUB = 3;
-const DEN = 2 * SUB;
-const DIV = DEN * ROT_ONE;
-const BIAS_PX = 4096;
+export { ANGLE_STEPS };
+const DEN = ROT_DEN;
+const DIV = ROT_DEN * ROT_ONE;
+const BIAS_PX = ROT_BIAS_PX;
 
-/** Q14 cos / sin per quantised step (exact quadrants first, so 90° turns are exact transposes). */
-export const ROT_COS = new Int32Array(ANGLE_STEPS);
-export const ROT_SIN = new Int32Array(ANGLE_STEPS);
-for (let i = 0; i < ANGLE_STEPS; i++) {
-  const q = i % (ANGLE_STEPS / 4);
-  const a = (2 * Math.PI * i) / ANGLE_STEPS;
-  const quad = i / (ANGLE_STEPS / 4);
-  ROT_COS[i] = q === 0 ? [ROT_ONE, 0, -ROT_ONE, 0][quad]! : Math.round(Math.cos(a) * ROT_ONE);
-  ROT_SIN[i] = q === 0 ? [0, ROT_ONE, 0, -ROT_ONE][quad]! : Math.round(Math.sin(a) * ROT_ONE);
-}
+/** Q14 cos / sin per quantised step: THE shared LUT (`@/contracts/rotation`, the renderer samples the same table). */
+export const ROT_COS = ROT_LUT.cos;
+export const ROT_SIN = ROT_LUT.sin;
 
 /** Wrap any integer step to 0..ANGLE_STEPS-1. */
 export const rotStep = (k: number): number => ((k % ANGLE_STEPS) + ANGLE_STEPS) % ANGLE_STEPS;
@@ -195,25 +187,26 @@ export function drawnCell(b: RotBody, m: RotMask, u: number, v: number): number 
     voteCell[k] = c;
     voteCol[k] = colourOf(b, c);
   }
-  // S5's vote: the centre colour wins with >= 5 of 9; otherwise the colour with the most votes (first found on ties beats
-  // the others, the centre beats an equal count).
+  // The renderer's vote (proposal 161, ALPHA FIRST): coverage is the opaque majority of the nine — so a hit never depends on
+  // a cell's colour — then the colour among the opaque samples (the centre keeps ties, then the first in scan order); the
+  // winning sample's cell is the one drawn (and hit) there.
+  let opaque = 0;
+  for (let j = 0; j < 9; j++) if (voteCol[j] !== 0) opaque++;
+  if (opaque < 5) return -1;
   const centreCol = voteCol[4]!;
-  let nc = 0;
-  for (let j = 0; j < 9; j++) if (voteCol[j] === centreCol) nc++;
   let best = 4;
-  if (nc < 5) {
-    let bestN = nc;
-    for (let i = 0; i < 9; i++) {
-      if (i === 4) continue;
-      let n = 0;
-      for (let j = 0; j < 9; j++) if (voteCol[j] === voteCol[i]) n++;
-      if (n > bestN) {
-        best = i;
-        bestN = n;
-      }
+  let bestN = 0;
+  if (centreCol !== 0) for (let j = 0; j < 9; j++) if (voteCol[j] === centreCol) bestN++;
+  for (let i = 0; i < 9; i++) {
+    if (i === 4 || voteCol[i] === 0) continue;
+    let n = 0;
+    for (let j = 0; j < 9; j++) if (voteCol[j] === voteCol[i]) n++;
+    if (n > bestN) {
+      best = i;
+      bestN = n;
     }
   }
-  return voteCol[best] === 0 ? -1 : voteCell[best]!;
+  return voteCell[best]!;
 }
 
 /** The cell drawn at world point (wx, wy) of the rotated body, or -1 (the renderer's pixel there). */
@@ -228,13 +221,29 @@ export function rotSolidAt(b: RotBody, m: RotMask, wx: number, wy: number): bool
 
 /** World position of the CENTRE of local cell (i, j) under the rotation (float geometry for the damage models). */
 export function rotCellWorld(b: RotBody, step: number, i: number, j: number, out: WorldPoint): void {
+  rotLocalToWorld(b, step, i + 0.5, j + 0.5, out);
+}
+
+/** World position of continuous map-local point (lx, ly) under the rotation. */
+export function rotLocalToWorld(b: RotBody, step: number, lx: number, ly: number, out: WorldPoint): void {
   const t = b.transform;
   const c = ROT_COS[step]! / ROT_ONE;
   const s = ROT_SIN[step]! / ROT_ONE;
-  const lx = (i + 0.5 - t.anchorX) * t.facing;
-  const ly = j + 0.5 - t.anchorY;
-  out.x = pivotX(b) + c * lx - s * ly;
-  out.y = pivotY(b) + s * lx + c * ly;
+  const mx = (lx - t.anchorX) * t.facing;
+  const my = ly - t.anchorY;
+  out.x = pivotX(b) + c * mx - s * my;
+  out.y = pivotY(b) + s * mx + c * my;
+}
+
+/** Continuous map-local coordinates of world point (wx, wy) under the rotation (inverse of `rotCellWorld`). */
+export function rotWorldToLocal(b: RotBody, step: number, wx: number, wy: number, out: WorldPoint): void {
+  const t = b.transform;
+  const c = ROT_COS[step]! / ROT_ONE;
+  const s = ROT_SIN[step]! / ROT_ONE;
+  const dx = wx - pivotX(b);
+  const dy = wy - pivotY(b);
+  out.x = t.anchorX + (c * dx + s * dy) * t.facing;
+  out.y = t.anchorY + (-s * dx + c * dy);
 }
 
 /**

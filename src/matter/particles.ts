@@ -398,15 +398,14 @@ export function rasterParticles(
       // Streak along the velocity: spaghettified matter. Length grows with speed.
       const sp = Math.sqrt(pvx * pvx + pvy * pvy);
       const n = Math.min(7, 1 + Math.floor(sp / 55));
-      // Falling matter heats up with speed (tidal friction): tint toward white-hot, then orange-hot, as it nears the sink.
+      // Falling matter heats up with speed (tidal friction): its own colour tints toward white-hot as it nears the sink (never a
+      // fixed orange: the hue stays the matter's own, so the Witness's streaks stay white-gold / cyan). Sparks already carry their
+      // material's glow ramp.
       let scol = col;
       let se = e8;
-      if (sp > 150 && !(flags[s]! & PF_HARVEST)) {
+      if (sp > 150 && k !== PK.spark && !(flags[s]! & PF_HARVEST)) {
         const hh = Math.min(1, (sp - 150) / 260);
-        scol =
-          hh < 0.5
-            ? lerpPx(col, 0xffe6f8ff, (hh * 2 * 230) | 0)
-            : lerpPx(0xffe6f8ff, 0xff3c96ff, ((hh - 0.5) * 2 * 210) | 0);
+        scol = lerpPx(col, 0xffe6f8ff, (hh * 200) | 0);
         if (se < 150) se = 150;
       }
 

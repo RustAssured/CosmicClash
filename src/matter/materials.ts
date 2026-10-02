@@ -7,6 +7,12 @@ import {
 } from '@/contracts';
 import { DEFAULT_GLOW_RAMP, DEFAULT_INFECT, DEFAULT_VISUALS, MATERIAL_ARCHETYPES } from './archetypes';
 
+/** Archetypes that are molten rock: a body holding one shows molten light in its CRUSH fissures (Body.fissureGlow). */
+const MOLTEN_BASES: ReadonlySet<string> = new Set(['magma']);
+const molten = new WeakSet<MaterialDef>();
+/** True if md was resolved from a molten archetype (magma). */
+export const isMolten = (md: MaterialDef): boolean => molten.has(md);
+
 /** The reserved EMPTY material (id 0): void. */
 function emptyMaterial(): MaterialDef {
   return {
@@ -78,7 +84,9 @@ export function buildMaterialTable(specs: readonly MaterialSpec[]): MaterialDef[
     const s = specs[i]!;
     if (byKey.has(s.key)) throw new Error(`matter: duplicate material key "${s.key}"`);
     byKey.set(s.key, i + 1);
-    table.push(makeDef(i + 1, s.key, resolvePhysics(s), s.visual));
+    const def = makeDef(i + 1, s.key, resolvePhysics(s), s.visual);
+    if (MOLTEN_BASES.has(s.base)) molten.add(def);
+    table.push(def);
   }
   // Resolve ashTo, appending default archetypes where needed. Newly appended materials may themselves reference ashTo.
   for (let i = 1; i < table.length; i++) {

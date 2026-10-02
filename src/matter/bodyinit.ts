@@ -103,6 +103,17 @@ export function initBody(core: WorldCore, body: Body): void {
       if (mat[i] !== 0) corePristine++;
     }
   }
+  if (body.anchorCells) {
+    // A rig region anchors at its joint patch (BodySpec.anchorCells), not at a core disc.
+    disc.length = 0;
+    corePristine = 0;
+    for (let k = 0; k < body.anchorCells.length; k++) {
+      const c = body.anchorCells[k]!;
+      if (c < 0 || c >= n || disc.includes(c)) continue;
+      disc.push(c);
+      if (mat[c] !== 0) corePristine++;
+    }
+  }
   body.coreDiscIdx = Int32Array.from(disc);
   body.coreMask.fill(0);
   for (const c of disc) body.coreMask[c] = 1;

@@ -250,57 +250,67 @@ export function queueSlowEdge(body: Body, cx: number, cy: number, d: number, wou
   }
 }
 
+/** Per-wound edge quota / cut flag of the current tick (scratch). */
+const quota = new Int32Array(8);
+const cutThisTick = new Uint8Array(8);
+
 export function stepSlowCuts(core: WorldCore, body: Body): void {
   if (body.slowPos >= body.slowN) return;
   const rng = body.rng;
   const book = body.wounds;
   let broke = false;
-  while (body.slowPos < body.slowN) {
-    // The wound at the head of the queue: sever its share so its last edge goes on its shear tick.
-    const w = (body.slowEdges[body.slowPos]! >> 22) & 7;
+  // Every wound gets its own quota this tick (its last edge goes on ITS shear tick): overlapping wounds cut in parallel.
+  for (let w = 0; w < quota.length; w++) {
     const left = book.shear[w]! - core.tick + 1;
-    const quota = left <= 1 ? Infinity : Math.max(1, Math.ceil(book.pending[w]! / left));
-    let n = 0;
-    while (n < quota && body.slowPos < body.slowN) {
-      const e = body.slowEdges[body.slowPos]!;
-      if (((e >> 22) & 7) !== w) break;
-      body.slowPos++;
-      n++;
-      if (book.pending[w]! > 0) book.pending[w]!--;
-      const cx = e & 1023;
-      const cy = (e >> 10) & 1023;
-      const d = (e >> 20) & 3;
-      if (edgeBond(body, cx, cy, d) <= 0) continue;
-      breakEdge(body, cx, cy, d);
-      broke = true;
-      body.touch(cx - 2, cy - 2, cx + 2, cy + 2);
-      localToWorldF(body, cx, cy, pt);
-      if (rng.next() < 0.5) {
-        const ci = edgeCells(body, cx, cy, d, cellsTmp) ? cellsTmp[0]! : 0;
-        const rid = body.rampIds[(body.map.material[ci] || 1) * 5 + RAMP_SHARD]!;
-        core.particles.spawn(
-          core,
-          PK.glint,
-          pt.x,
-          pt.y,
-          (rng.next() - 0.5) * 30,
-          (rng.next() - 0.5) * 30 - 6,
-          8 + rng.int(8),
-          1,
-          255,
-          rid,
-          0,
-          2,
-          0,
-        );
-      }
-      if ((body.slowPos & 3) === 0) core.emitMatter('crack', pt.x, pt.y, 0, body.ownerSlot);
-    }
-    // The wound's cut is complete: the slab it isolates shears now.
-    if (book.pending[w] === 0) body.connDirty = CONN_NOW;
-    // Quota spent: the edges behind (later wounds, later deadlines) wait for the next tick.
-    if (n >= quota) break;
+    quota[w] = left <= 1 ? 1 << 30 : Math.max(1, Math.ceil(book.pending[w]! / left));
+    cutThisTick[w] = 0;
   }
+  // One pass over the queue in order; edges whose wound has used its quota are kept (compacted to the front).
+  const edges = body.slowEdges;
+  let keep = body.slowPos;
+  for (let k = body.slowPos; k < body.slowN; k++) {
+    const e = edges[k]!;
+    const w = (e >> 22) & 7;
+    if (quota[w]! <= 0) {
+      edges[keep++] = e;
+      continue;
+    }
+    quota[w]!--;
+    cutThisTick[w] = 1;
+    if (book.pending[w]! > 0) book.pending[w]!--;
+    const cx = e & 1023;
+    const cy = (e >> 10) & 1023;
+    const d = (e >> 20) & 3;
+    if (edgeBond(body, cx, cy, d) <= 0) continue;
+    breakEdge(body, cx, cy, d);
+    broke = true;
+    body.touch(cx - 2, cy - 2, cx + 2, cy + 2);
+    localToWorldF(body, cx, cy, pt);
+    if (rng.next() < 0.5) {
+      const ci = edgeCells(body, cx, cy, d, cellsTmp) ? cellsTmp[0]! : 0;
+      const rid = body.rampIds[(body.map.material[ci] || 1) * 5 + RAMP_SHARD]!;
+      core.particles.spawn(
+        core,
+        PK.glint,
+        pt.x,
+        pt.y,
+        (rng.next() - 0.5) * 30,
+        (rng.next() - 0.5) * 30 - 6,
+        8 + rng.int(8),
+        1,
+        255,
+        rid,
+        0,
+        2,
+        0,
+      );
+    }
+    if ((k & 3) === 0) core.emitMatter('crack', pt.x, pt.y, 0, body.ownerSlot);
+  }
+  body.slowN = keep;
+  // A wound whose cut is complete: the slab it isolates shears now.
+  for (let w = 0; w < quota.length; w++)
+    if (cutThisTick[w] === 1 && book.pending[w] === 0) body.connDirty = CONN_NOW;
   if (broke) body.connDirty = Math.max(body.connDirty, CONN_STEADY);
   if (body.slowPos >= body.slowN) {
     body.slowPos = 0;

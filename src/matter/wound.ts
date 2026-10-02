@@ -69,9 +69,12 @@ export class WoundBook {
   readonly grain = new Uint8Array(MAX_WOUNDS).fill(16);
   next = 0;
 
-  /** Mass scheduled to shear on each upcoming tick (ring by tick & SCHED_MASK; `schedTick` says which tick a slot holds). */
-  readonly schedMass = new Float64Array(SCHED);
-  readonly schedTick = new Int32Array(SCHED).fill(-1);
+  /**
+   * Mass each wound has scheduled to shear on each upcoming tick (index wound·SCHED + (tick & SCHED_MASK); `schedTick` says which
+   * tick a slot holds). Per wound: overlapping wounds shed in parallel, each on its own beat and budget.
+   */
+  readonly schedMass = new Float64Array(SCHED * MAX_WOUNDS);
+  readonly schedTick = new Int32Array(SCHED * MAX_WOUNDS).fill(-1);
 
   /* ---- slabs (index 1..MAX_SLABS) ---- */
   readonly state = new Uint8Array(MAX_SLABS + 1);
@@ -140,9 +143,9 @@ export function openWound(
   const w = b.next;
   b.grain[w] = grain;
   b.next = (b.next + 1) % MAX_WOUNDS;
-  const f = body.transform.facing;
-  let nwx = nx * f;
-  let nwy = ny;
+  body.dirToWorld(nx, ny, pt);
+  let nwx = pt.x;
+  let nwy = pt.y;
   const nl = Math.sqrt(nwx * nwx + nwy * nwy);
   if (nl > 1e-6) {
     nwx /= nl;
@@ -192,7 +195,10 @@ export function openDriftWound(core: WorldCore, body: Body, cx: number, cy: numb
     ny = -1;
   }
   body.worldToLocalF(cx, cy, pt);
-  const w = openWound(core, body, pt.x, pt.y, nx * t.facing, ny, nx, ny, 0, 1, 1, 0, 10);
+  const lx = pt.x;
+  const ly = pt.y;
+  body.dirToLocal(nx, ny, pt);
+  const w = openWound(core, body, lx, ly, pt.x, pt.y, nx, ny, 0, 1, 1, 0, 10);
   body.wounds.shear[w] = core.tick + 1;
   return w;
 }
@@ -681,12 +687,12 @@ export function holdCells(
     const p = order[r]!;
     const pm = pMass[p]!;
     for (let guard = 0; guard < SCHED - 2; guard++) {
-      const q = t & SCHED_MASK;
+      const q = w * SCHED + (t & SCHED_MASK);
       const used = b.schedTick[q] === t ? b.schedMass[q]! : 0;
       if (used === 0 || used + pm <= cap) break;
       t++;
     }
-    const q = t & SCHED_MASK;
+    const q = w * SCHED + (t & SCHED_MASK);
     if (b.schedTick[q] !== t) {
       b.schedTick[q] = t;
       b.schedMass[q] = 0;

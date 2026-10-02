@@ -1,5 +1,5 @@
 import { LOGICAL_H, LOGICAL_W, makeLayer, type RenderLayer, type ViewRect } from '@/contracts';
-import { rasterChunks } from './chunks';
+import { rasterChunks, type ChunkTargets } from './chunks';
 import type { WorldCore } from './core';
 import { rasterParticles } from './particles';
 
@@ -26,6 +26,8 @@ export class MatterRender {
   private readonly backRange = { a: 0, b: -1 };
   private readonly frontRange = { a: 0, b: -1 };
   private version = 0;
+  /** The chunk rasteriser's targets (built once: no per-frame garbage). */
+  private targets: ChunkTargets | null = null;
 
   private ensure(): void {
     if (this.back) return;
@@ -54,17 +56,6 @@ export class MatterRender {
     const front = this.front!;
     const backEmi = this.backEmi!;
     const frontEmi = this.frontEmi!;
-    // Clear only the rows drawn last frame.
-    const clear = (l: RenderLayer, emi: Uint8Array, r: { a: number; b: number }): void => {
-      if (r.b >= r.a) {
-        const a = Math.max(0, r.a) * LOGICAL_W;
-        const b = (Math.min(LOGICAL_H - 1, r.b) + 1) * LOGICAL_W;
-        l.pixels.fill(0, a, b);
-        emi.fill(0, a, b);
-      }
-      r.a = LOGICAL_H;
-      r.b = -1;
-    };
     const near = this.near!;
     const nearEmi = this.nearEmi!;
     clear(back, backEmi, this.backRange);
@@ -73,17 +64,19 @@ export class MatterRender {
     const mid = this.mid!;
     const midEmi = this.midEmi!;
     clear(mid, midEmi, this.midRange);
-    rasterChunks(core, view, alpha, {
-      backPix: back.pixels,
-      backEmi,
-      frontPix: mid.pixels,
-      frontEmi: midEmi,
-      nearPix: near.pixels,
-      nearEmi,
-      backRange: this.backRange,
-      frontRange: this.midRange,
-      nearRange: this.nearRange,
-    });
+    if (this.targets === null)
+      this.targets = {
+        backPix: back.pixels,
+        backEmi,
+        frontPix: mid.pixels,
+        frontEmi: midEmi,
+        nearPix: near.pixels,
+        nearEmi,
+        backRange: this.backRange,
+        frontRange: this.midRange,
+        nearRange: this.nearRange,
+      };
+    rasterChunks(core, view, alpha, this.targets);
     rasterParticles(
       core.particles,
       view,
@@ -110,4 +103,92 @@ export class MatterRender {
     near.visible = this.nearRange.b >= this.nearRange.a;
     return this.out;
   }
+
+  /**
+   * Supersampled export (aftermath PNG): the same four layers at (k·LOGICAL_W)×(k·LOGICAL_H), freshly allocated (export is
+   * rare; the per-frame pool above is untouched). Chunks are resampled at k× (sub-pixel placement, finer rotation); particles
+   * are pixel-art and are drawn at 1× then nearest-upscaled so they keep their dithered look. Reads the world, never steps it.
+   */
+  exportLayers(core: WorldCore, view: ViewRect, alpha: number, k: number): RenderLayer[] {
+    const s = Math.max(1, Math.min(8, Math.floor(k)));
+    const W = LOGICAL_W * s;
+    const H = LOGICAL_H * s;
+    const mk = (id: string, z: number): RenderLayer => {
+      const l = makeLayer(id, 'screen', z, W, H);
+      l.emissive = new Uint8Array(W * H);
+      return l;
+    };
+    const back = mk('debris-back', -20);
+    const mid = mk('debris-mid', 9);
+    const front = mk('fx-front', 10);
+    const near = mk('debris-near', 15);
+    const r = (): { a: number; b: number } => ({ a: H, b: -1 });
+    rasterChunks(
+      core,
+      view,
+      alpha,
+      {
+        backPix: back.pixels,
+        backEmi: back.emissive!,
+        frontPix: mid.pixels,
+        frontEmi: mid.emissive!,
+        nearPix: near.pixels,
+        nearEmi: near.emissive!,
+        backRange: r(),
+        frontRange: r(),
+        nearRange: r(),
+      },
+      s,
+    );
+    const n1 = LOGICAL_W * LOGICAL_H;
+    const fp = new Uint32Array(n1);
+    const fe = new Uint8Array(n1);
+    const np = new Uint32Array(n1);
+    const ne = new Uint8Array(n1);
+    rasterParticles(core.particles, view, alpha, fp, fe, { a: LOGICAL_H, b: -1 }, np, ne, {
+      a: LOGICAL_H,
+      b: -1,
+    });
+    upscaleOver(fp, fe, front, s);
+    upscaleOver(np, ne, near, s);
+    for (const l of [back, mid, front, near]) {
+      l.version = 1;
+      l.dirty = null;
+      l.visible = true;
+    }
+    return [back, mid, front, near];
+  }
+}
+
+/** Clear only the rows a layer had drawn last frame, and reset its row range. */
+function clear(l: RenderLayer, emi: Uint8Array, r: { a: number; b: number }): void {
+  if (r.b >= r.a) {
+    const a = Math.max(0, r.a) * LOGICAL_W;
+    const b = (Math.min(LOGICAL_H - 1, r.b) + 1) * LOGICAL_W;
+    l.pixels.fill(0, a, b);
+    emi.fill(0, a, b);
+  }
+  r.a = LOGICAL_H;
+  r.b = -1;
+}
+
+/** Nearest-upscale a 1× screen layer by `s` and draw its opaque pixels over `dst` (pixels + emissive). */
+function upscaleOver(pix: Uint32Array, emi: Uint8Array, dst: RenderLayer, s: number): void {
+  const W = LOGICAL_W * s;
+  const dp = dst.pixels;
+  const de = dst.emissive!;
+  for (let y = 0; y < LOGICAL_H; y++)
+    for (let x = 0; x < LOGICAL_W; x++) {
+      const i = y * LOGICAL_W + x;
+      const p = pix[i]!;
+      if (p >>> 24 === 0) continue;
+      const e = emi[i]!;
+      for (let yy = 0; yy < s; yy++) {
+        const o = (y * s + yy) * W + x * s;
+        for (let xx = 0; xx < s; xx++) {
+          dp[o + xx] = p;
+          if (e > de[o + xx]!) de[o + xx] = e;
+        }
+      }
+    }
 }

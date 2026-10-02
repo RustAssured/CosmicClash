@@ -97,8 +97,9 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         emi[i] = 0;
         continue;
       }
-      let col = base[i]!;
-      if (col >>> 24 === 0) col = (col | 0xff000000) >>> 0;
+      // (int32 colour arithmetic throughout: a uint32 above 2^31 would be boxed as a heap number on every cell)
+      let col = base[i]! | 0;
+      if (col >>> 24 === 0) col |= 0xff000000;
       const fl = flags[i]!;
       const ig = integ[i]!;
       const T = temp[i]!;
@@ -215,15 +216,17 @@ function refreshRect(core: WorldCore, body: Body, x0: number, y0: number, x1: nu
         // at 640x360.
         if (strong) {
           col = lerpPx(scalePx(col, 150), md.crack | 0, 250);
-          if (body.magma && md.debris !== 'gas') {
-            // Tectonic fissure: molten rock shows through the crack.
-            col = lerpPx(col, 0xff2a8cff, 200);
+          const fg = body.fissureGlow[m]!;
+          if (body.magma && fg !== 0) {
+            // Tectonic fissure: the body's own fissure light (molten rock on the Planet) shows through the crack.
+            col = lerpPx(col, fg | 0, 200);
             if (em < 110) em = 110;
           }
         } else if (weak && w >= 90) {
           col = lerpPx(scalePx(col, 170), md.crack | 0, 150);
-          if (body.magma && md.debris !== 'gas') {
-            col = lerpPx(col, 0xff2a8cff, 110);
+          const fg = body.fissureGlow[m]!;
+          if (body.magma && fg !== 0) {
+            col = lerpPx(col, fg | 0, 110);
             if (em < 60) em = 60;
           }
         } else if (weak) {

@@ -56,7 +56,8 @@ export const STAGE_PALETTE_MIN = 40;
 export const STAGE_PALETTE_MAX = 64;
 
 /** Debris budget defaults (B2 may tune inside these caps). */
-export const MAX_DEBRIS_CHUNKS = 400;
+/** Raised 400 → 640 in slice Phase 2 (debris is combat history; measured: no p99 cost on WJ's machine, proposal 142). */
+export const MAX_DEBRIS_CHUNKS = 640;
 export const MAX_PARTICLES = 6000;
 
 /** Number of cells per side of the coarse "region grid" used for targeting, AI and HUD (8x8). */

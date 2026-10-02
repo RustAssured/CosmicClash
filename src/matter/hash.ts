@@ -84,6 +84,20 @@ function hashBody(h: number, b: Body): number {
   h = mixF(h, b.debrisEnergy);
   h = mix32(h, b.lastTidalTick);
   h = mixF(h, b.tidalCarry);
+  // The far face of a two-hemisphere body (shell.ts).
+  const sh = b.shell;
+  if (sh !== null) {
+    h = mix32(h, sh.face | (sh.cells.length << 1));
+    h = hashBytes(h, sh.material);
+    h = hashBytes(h, sh.density);
+    h = hashBytes(h, sh.integrity);
+    h = hashBytes(h, sh.temperature);
+    h = hashBytes(h, sh.infection);
+    h = hashBytes(h, sh.flags);
+    h = hashBytes(h, sh.bondR);
+    h = hashBytes(h, sh.bondD);
+    h = mixF(h, sh.farMass);
+  }
   const s = b.rng.getState();
   h = mix32(h, s[0]);
   h = mix32(h, s[1]);
@@ -116,7 +130,21 @@ export function hashWorld(core: WorldCore, extra: (h: number) => number): number
     h = mix32(h, c.age);
     h = mix32(h, c.grace | (c.noHitUntil << 12) | (c.asleep ? 1 << 30 : 0) | (c.fast ? 1 << 29 : 0));
     h = mix32(h, c.origin + 1);
-    h = hashBytes(h, c.pixels);
+    h = mix32(h, c.mode | ((c.owner + 1) << 4) | ((c.credit + 1) << 8));
+    h = mixF(h, c.phase);
+    h = mixF(h, c.ring);
+    h = mixF(h, c.temp);
+    h = mixF(h, c.temp0);
+    h = hashBytes(h, c.pixels.subarray(0, c.w * c.h));
+  }
+  // Gravity owners' capture rings (Tidal Draw).
+  for (const o of core.orbits) {
+    h = mix32(h, o.active ? 1 : 0);
+    h = mixF(h, o.x);
+    h = mixF(h, o.y);
+    h = mixF(h, o.radius);
+    h = mixF(h, o.omega);
+    h = mixF(h, o.flatten);
   }
   // Shock rings / blast waves in flight.
   for (let k = 0; k < core.waves.length; k++) {

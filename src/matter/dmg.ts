@@ -10,6 +10,7 @@ import type { Body, WorldPoint } from './body';
 import { killCell } from './cells';
 import type { WorldCore } from './core';
 import { sprayCell } from './debris';
+import { rotLocalToWorld } from './rotation';
 
 /** Index of each damage type in Body.resistTab (DAMAGE_TYPES order). */
 export const T_FRACTURE = 0;
@@ -130,8 +131,9 @@ export function beginDamage(
   const dl = Math.sqrt(ev.dirX * ev.dirX + ev.dirY * ev.dirY);
   ctx.dirX = dl > 1e-6 ? ev.dirX / dl : 1;
   ctx.dirY = dl > 1e-6 ? ev.dirY / dl : 0;
-  ctx.ldx = ctx.dirX * body.transform.facing;
-  ctx.ldy = ctx.dirY;
+  body.dirToLocal(ctx.dirX, ctx.dirY, tmpPt);
+  ctx.ldx = tmpPt.x;
+  ctx.ldy = tmpPt.y;
   ctx.flags = ev.flags;
   ctx.params = ev.params;
   ctx.sourceMass = ev.sourceMass;
@@ -185,6 +187,11 @@ export function beginDamage(
 /** Local (float) cell coordinates -> world, using the same row-shear rule as space.ts (evaluated at the containing row). */
 export function localToWorldF(body: Body, lx: number, ly: number, out: WorldPoint): void {
   const t = body.transform;
+  const k = body.rotStep();
+  if (k !== 0) {
+    rotLocalToWorld(body, k, lx, ly, out);
+    return;
+  }
   out.x = t.x + (lx - t.anchorX) * t.facing + body.rowShift(Math.floor(ly));
   out.y = t.y + (ly - t.anchorY);
 }

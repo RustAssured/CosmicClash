@@ -1,4 +1,4 @@
-import { RAMP_DUST, RAMP_SHARD } from './debris';
+import { RAMP_DUST, RAMP_EMBER, RAMP_SHARD } from './debris';
 import { localToWorldF, type DamageCtx } from './dmg';
 import { findImpact, type Impact } from './impact';
 import { PF_NEAR, PF_STRETCH, PK } from './particles';
@@ -6,10 +6,7 @@ import type { WorldPoint } from './body';
 
 const imp: Impact = { fx: 0, fy: 0, nx: 1, ny: 0, hasNormal: false };
 const pt: WorldPoint = { x: 0, y: 0 };
-
-/** Hot ramps (packed RGBA): white-hot -> pale yellow -> orange -> dull red. */
-const HOT = [0xffffffff, 0xffa0ecff, 0xff3296ff, 0xff1e3296];
-const FLASH = [0xffffffff, 0xffffffff, 0xffc8f0ff, 0xff50a0ff, 0xff2860c8];
+const pt2: WorldPoint = { x: 0, y: 0 };
 
 /**
  * The read-at-a-glance moment of a blow: a white-hot flash disc, a starburst of streaking sparks fanned around the outward
@@ -22,17 +19,18 @@ export function impactBurst(ctx: DamageCtx): void {
   if (ctx.energy < 8) return;
   if (!findImpact(ctx, imp)) return;
   localToWorldF(body, imp.fx, imp.fy, pt);
-  const f = body.transform.facing;
-  let nx = imp.nx * f;
-  let ny = imp.ny;
+  body.dirToWorld(imp.nx, imp.ny, pt2);
+  let nx = pt2.x;
+  let ny = pt2.y;
   const bx = pt.x;
   const by = pt.y;
   const k = Math.max(0.3, Math.min(2.6, ctx.energy / 320));
   const P = core.particles;
   const rng = body.rng;
-  const hot = P.internRamp(HOT);
-  const flash = P.internRamp(FLASH);
   const m = body.map.material[Math.floor(imp.fy) * body.w + Math.floor(imp.fx)] || 1;
+  // The flash and sparks are the struck material's own wound light (its glowRamp, white-hot first): ember orange on rock,
+  // white-gold and cyan on the Witness.
+  const hot = body.rampIds[m * 5 + RAMP_EMBER]!;
   const dust = body.rampIds[m * 5 + RAMP_DUST]!;
   const shard = body.rampIds[m * 5 + RAMP_SHARD]!;
   const nl = Math.sqrt(nx * nx + ny * ny) || 1;
@@ -54,7 +52,7 @@ export function impactBurst(ctx: DamageCtx): void {
     4 + Math.round(1.5 * k),
     fs,
     255,
-    flash,
+    hot,
     0,
     5,
     0,

@@ -24,11 +24,20 @@ import {
 } from '@/contracts';
 import { Body, type WorldPoint, CONN_NOW, CONN_STEADY } from './body';
 import { initBody } from './bodyinit';
-import { stepChunks } from './chunks';
+import {
+  CHUNK_FREE,
+  CHUNK_LAUNCHED,
+  CHUNK_ORBIT,
+  getSprite32,
+  getSprite8,
+  splitChunk,
+  stepChunks,
+  type Chunk,
+} from './chunks';
 import { runConnectivity } from './connectivity';
 import { stepFronts, stepSlowCuts } from './cracks';
 import { WorldCore } from './core';
-import { beginDamage, DamageCtx } from './dmg';
+import { beginDamage, DamageCtx, localToWorldF } from './dmg';
 import { CHISEL_DELAY, applyFracture, chisel } from './fracture';
 import { hashWorld } from './hash';
 import { applyKinetic, stepFuses } from './kinetic';
@@ -44,7 +53,9 @@ import { applyTidal } from './tidal';
 import { applyAssimilation, stepInfection } from './assimilation';
 import { debugOverlay } from './debug';
 import { impactBurst } from './blowfx';
-import { finishReleases, shearDelay, stepWounds } from './wound';
+import { HAIRLINE, finishReleases, shearDelay, stepWounds } from './wound';
+import { extractChunk } from './debris';
+import { defineShell, restoreShell, swapShell } from './shell';
 
 /** A multi-tick damage application waiting to deliver its remaining slices. */
 class Job {
@@ -142,6 +153,67 @@ export interface MatterWorldEx extends MatterWorld {
   settleBody(bodyId: number): void;
   /** Internal state access for tests. */
   readonly core: WorldCore;
+  /** Implemented (the contract still marks them optional until the Lead makes them required). */
+  bodyToChunk(bodyId: number, vx: number, vy: number, spin: number): number;
+  jointHealth(bodyId: number, cells: Int32Array | readonly number[]): number;
+  /**
+   * Light in a body's CRUSH fissures (packed RGBA; `null` = dark cracks; `undefined` = the default: molten rock's glow if the
+   * body holds a magma-archetype material, else none). The Witness sets its white-gold / cyan wound light here.
+   */
+  setFissureGlow(bodyId: number, colour: number | null | undefined): void;
+  /**
+   * Aftermath export: the debris/particle layers supersampled k× ((k·LOGICAL_W)×(k·LOGICAL_H), k 1..8, fresh buffers). Reads the
+   * frozen world from any view; never steps or mutates the simulation.
+   */
+  renderExport(view: ViewRect, k: number): RenderLayer[];
+  /* ---- the two-hemisphere world (proposal 142, with S3) ---- */
+  /**
+   * Give a body a far face: every cell farther than `shell` cells from its core centre (the Planet: magmaR), or every cell of a
+   * map-sized mask with `shell[i] = 1`, exists twice; the far face is the pristine body mirrored about the core column. False if
+   * it already has one.
+   */
+  defineShell(bodyId: number, shell: number | Uint8Array): boolean;
+  /** Commit a half-turn: exact swap of the near and far shell faces (the core stays). Settles wounds/cuts in flight first. */
+  swapShell(bodyId: number): boolean;
+  /** Which face is toward the viewer: 0 the original, 1 the other; -1 if the body has no shell. */
+  shellFace(bodyId: number): number;
+  /** Returns the new chunk's id (comets, lost moons). */
+  spawnChunk(spec: ChunkSpawn): number;
+  /* ---- capture (Tidal Draw), thrown debris (proposal 142) ---- */
+  setOrbit(slot: 0 | 1, spec: OrbitSpec | null): void;
+  chunksInShape(shape: DamageShape, out: Int32Array): number;
+  chunkState(id: number, out: ChunkStateOut): boolean;
+  captureChunk(id: number, slot: 0 | 1): boolean;
+  releaseChunk(id: number): boolean;
+  retireChunk(id: number): boolean;
+  strikeChunk(id: number, x: number, y: number, energy: number, dirX: number, dirY: number): boolean;
+  launchChunk(id: number, vx: number, vy: number, creditBodyId: number, slot?: 0 | 1 | -1): boolean;
+}
+
+/** A gravity owner's capture ring: centre (world px), radius (px) and angular speed (rad/s, sign = direction). */
+export interface OrbitSpec {
+  x: number;
+  y: number;
+  radius: number;
+  omega: number;
+  /** Vertical scale of the ring (default 1 = circle; S3's debris ring: 0.26, the moons' plane). */
+  flatten?: number;
+}
+
+/** What `chunkState` reports. `mode`: 0 free, 1 captured (pinned), 2 launched. */
+export interface ChunkStateOut {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  spin: number;
+  mass: number;
+  radius: number;
+  mode: number;
+  owner: number;
+  origin: number;
+  temp: number;
 }
 
 const EMPTY_STATS: BodyStats = Object.freeze({
@@ -186,6 +258,21 @@ class MatterWorldImpl implements MatterWorldEx {
   private readonly jobs: Job[] = [];
   private readonly render = new MatterRender();
   private readonly overlays = new Map<string, RenderLayer>();
+  /** Reused event of a thrown chunk's impact. */
+  private readonly launchEv: DamageEvent = {
+    type: 'KINETIC',
+    shape: { kind: 'point', x: 0, y: 0, r: 2 },
+    energy: 0,
+    dirX: 1,
+    dirY: 0,
+    duration: 1,
+    sourceMass: 1,
+    sourceBodyId: -1,
+    originX: 0,
+    originY: 0,
+    flags: 0,
+    params: { scatter: 1 },
+  };
 
   constructor(seed: number) {
     this.core = new WorldCore(seed);
@@ -219,6 +306,194 @@ class MatterWorldImpl implements MatterWorldEx {
       this.applySlice(body, ev, energy, true, newResult());
       this.core.emitMatter('impact', x, y, chunk.mass, body.ownerSlot);
     };
+    this.core.launchImpact = (body, chunk, x, y, dx, dy, speed) => {
+      // A thrown chunk (Tidal Draw ammunition, a slung comet): uncapped, credited to the thrower.
+      const v = speed / 60;
+      const energy = 0.5 * chunk.mass * v * v;
+      if (energy < 2) return;
+      const ev = this.launchEv;
+      const sh = ev.shape as { kind: 'point'; x: number; y: number; r: number };
+      sh.x = x;
+      sh.y = y;
+      sh.r = Math.max(2, Math.min(14, Math.sqrt(chunk.cells) * 0.55));
+      ev.energy = energy;
+      ev.dirX = dx;
+      ev.dirY = dy;
+      ev.sourceMass = Math.max(0.5, Math.min(12, chunk.mass / 20));
+      ev.sourceBodyId = chunk.credit;
+      ev.originX = x;
+      ev.originY = y;
+      this.applySlice(body, ev, energy, true, newResult());
+      this.core.emitMatter('impact', x, y, chunk.mass, body.ownerSlot);
+    };
+  }
+
+  /* ------------------------------------------------------------------ capture: Tidal Draw, thrown debris, comets */
+
+  /** Set (or clear) a gravity owner's capture ring. Clearing it lets its captured chunks go (they keep their velocity). */
+  setOrbit(slot: 0 | 1, spec: OrbitSpec | null): void {
+    const o = this.core.orbits[slot];
+    if (spec === null) {
+      o.active = false;
+      return;
+    }
+    o.active = true;
+    o.x = spec.x;
+    o.y = spec.y;
+    o.radius = Math.max(1, spec.radius);
+    o.omega = spec.omega;
+    o.flatten = spec.flatten ?? 1;
+  }
+
+  /** Ids of the live chunks whose centre lies in the shape (or, for a point shape, whose disc touches it). Returns the count. */
+  chunksInShape(shape: DamageShape, out: Int32Array): number {
+    const core = this.core;
+    const q = core.q.set(shape);
+    const pool = core.chunks;
+    let n = 0;
+    for (let i = 0; i < pool.hi && n < out.length; i++) {
+      const c = pool.list[i]!;
+      if (!c.alive) continue;
+      let hit = q.weight(c.x, c.y) > 0;
+      if (!hit && shape.kind === 'point') {
+        const dx = c.x - shape.x;
+        const dy = c.y - shape.y;
+        const rr = shape.r + c.radius;
+        hit = dx * dx + dy * dy <= rr * rr;
+      }
+      if (hit) out[n++] = c.id;
+    }
+    return n;
+  }
+
+  private chunkById(id: number): Chunk | null {
+    const pool = this.core.chunks;
+    for (let i = 0; i < pool.hi; i++) {
+      const c = pool.list[i]!;
+      if (c.alive && c.id === id) return c;
+    }
+    return null;
+  }
+
+  /** Read a chunk's state into `out`. False if the chunk no longer exists (degraded, consumed, split). */
+  chunkState(id: number, out: ChunkStateOut): boolean {
+    const c = this.chunkById(id);
+    if (!c) return false;
+    out.x = c.x;
+    out.y = c.y;
+    out.vx = c.vx;
+    out.vy = c.vy;
+    out.angle = c.angle;
+    out.spin = c.spin;
+    out.mass = c.mass;
+    out.radius = c.radius;
+    out.mode = c.mode;
+    out.owner = c.owner;
+    out.origin = c.origin;
+    out.temp = c.temp;
+    return true;
+  }
+
+  /**
+   * Capture a chunk into `slot`'s ring (any chunk: severed enemy matter included). A captured chunk is pinned — never degraded
+   * to make room — and rides the ring until released, launched, or the ring is cleared. False if the chunk is gone or the
+   * owner has no ring.
+   */
+  captureChunk(id: number, slot: 0 | 1): boolean {
+    const o = this.core.orbits[slot];
+    const c = this.chunkById(id);
+    if (!c || !o.active) return false;
+    c.mode = CHUNK_ORBIT;
+    c.owner = slot;
+    c.credit = -1;
+    c.phase = Math.atan2((c.y - o.y) / Math.max(0.05, o.flatten), c.x - o.x);
+    // each chunk gets its own lane in a band around the ring radius (deterministic from its id)
+    c.ring = o.radius + ((Math.imul(c.id, 2654435761) >>> 0) % 13) - 6;
+    c.asleep = false;
+    return true;
+  }
+
+  /**
+   * A blow lands on a chunk (a ring chunk soaking a hit as armour, a comet struck): it is knocked out of any ring and, if big
+   * enough, breaks into 2-3 free pieces flung along (dirX, dirY) from the hit point (x, y). Mass is conserved. False if gone.
+   */
+  strikeChunk(id: number, x: number, y: number, energy: number, dirX: number, dirY: number): boolean {
+    const c = this.chunkById(id);
+    if (!c) return false;
+    const pool = this.core.chunks;
+    c.mode = CHUNK_FREE;
+    c.owner = -1;
+    c.credit = -1;
+    c.asleep = false;
+    const dl = Math.hypot(dirX, dirY) || 1;
+    const push = Math.sqrt(Math.max(0, energy) / Math.max(1, c.mass)) * 40;
+    c.vx += (dirX / dl) * push;
+    c.vy += (dirY / dl) * push;
+    const k = energy > 600 ? 3 : 2;
+    if (energy >= 60 && pool.count < pool.cap - k)
+      splitChunk(this.core, pool, c, k, x, y, Math.min(240, Math.sqrt(energy) * 4));
+    return true;
+  }
+
+  /** Remove a chunk from play (an uncaught comet leaving the arena): its mass is booked as dissipated. False if it is gone. */
+  retireChunk(id: number): boolean {
+    const c = this.chunkById(id);
+    if (!c) return false;
+    this.core.ledger.dissipated += c.mass;
+    this.core.chunks.free(c);
+    return true;
+  }
+
+  /** Let a captured chunk go (it keeps its velocity and is ordinary debris again). */
+  releaseChunk(id: number): boolean {
+    const c = this.chunkById(id);
+    if (!c) return false;
+    c.mode = CHUNK_FREE;
+    c.owner = -1;
+    c.credit = -1;
+    return true;
+  }
+
+  /**
+   * Throw a chunk: it flies at (vx, vy) px/s (no wells, no capture) until it hits a body other than its thrower's, where it
+   * lands an UNCAPPED KINETIC blow (energy ½·m·(v/60)², credited to `creditBodyId`), then becomes ordinary debris. `slot` is the
+   * thrower's slot (its bodies are never hit), -1 for none.
+   */
+  launchChunk(id: number, vx: number, vy: number, creditBodyId: number, slot: 0 | 1 | -1 = -1): boolean {
+    const c = this.chunkById(id);
+    if (!c) return false;
+    c.mode = CHUNK_LAUNCHED;
+    c.owner = slot;
+    c.credit = creditBodyId;
+    c.vx = vx;
+    c.vy = vy;
+    c.asleep = false;
+    c.noHitUntil = 0;
+    c.fast = true; // no slow heaviness ramp: it was thrown
+    return true;
+  }
+
+  setFissureGlow(bodyId: number, colour: number | null | undefined): void {
+    const b = this.core.bodyById[bodyId];
+    if (!b) return;
+    b.setFissureGlow(colour);
+    b.visAll = true;
+    b.visDirty = true;
+  }
+
+  defineShell(bodyId: number, shell: number | Uint8Array): boolean {
+    const b = this.core.bodyById[bodyId];
+    return b ? defineShell(this.core, b, shell) : false;
+  }
+
+  swapShell(bodyId: number): boolean {
+    const b = this.core.bodyById[bodyId];
+    return b ? swapShell(this.core, b) : false;
+  }
+
+  shellFace(bodyId: number): number {
+    const b = this.core.bodyById[bodyId];
+    return b && b.shell !== null ? b.shell.face : -1;
   }
 
   get tickCount(): number {
@@ -249,6 +524,56 @@ class MatterWorldImpl implements MatterWorldEx {
     core.bodyById[id] = undefined;
     const i = core.bodyList.indexOf(b);
     if (i >= 0) core.bodyList.splice(i, 1);
+  }
+
+  /**
+   * A severed rig region leaves as ONE rigid chunk: every live cell moves into it (exact ledger transfer: cells → chunk mass),
+   * the body is removed (only its accretion pool, if any, is booked as deleted). Returns the chunk id, or -1 if the body is
+   * gone or empty. A rotated region's chunk starts at the region's angle, exactly where it was drawn.
+   */
+  bodyToChunk(bodyId: number, vx: number, vy: number, spin: number): number {
+    const core = this.core;
+    const b = core.bodyById[bodyId];
+    if (!b) return -1;
+    const mat = b.map.material;
+    const cells = core.covIdx;
+    let n = 0;
+    for (let c = 0; c < b.n; c++) if (mat[c] !== 0) cells[n++] = c;
+    let id = -1;
+    if (n > 0) {
+      const ch = extractChunk(core, b, cells, n, vx, vy, spin);
+      if (ch) {
+        ch.spin = spin;
+        id = ch.id;
+        core.emitMatter('detach', ch.x, ch.y, ch.mass, b.ownerSlot);
+      }
+    }
+    this.removeBody(bodyId);
+    return id;
+  }
+
+  /**
+   * 0..1 health of a joint patch: Σ integrity of its live cells that are still bonded (at least one intact, non-hairline bond to
+   * a live neighbour, and not held by a shearing wound) over the patch's pristine Σ (255 per cell). Allocation-free.
+   */
+  jointHealth(bodyId: number, cells: Int32Array | readonly number[]): number {
+    const b = this.core.bodyById[bodyId];
+    if (!b || cells.length === 0) return 0;
+    const { material: mat, integrity: integ, bondR, bondD, detached: det } = b.map;
+    const w = b.w;
+    let sum = 0;
+    for (let k = 0; k < cells.length; k++) {
+      const c = cells[k]!;
+      if (c < 0 || c >= b.n || mat[c] === 0 || det[c] !== 0) continue;
+      const x = c % w;
+      const bonded =
+        (x < w - 1 && mat[c + 1] !== 0 && bondR[c]! > HAIRLINE) ||
+        (x > 0 && mat[c - 1] !== 0 && bondR[c - 1]! > HAIRLINE) ||
+        (c + w < b.n && mat[c + w] !== 0 && bondD[c]! > HAIRLINE) ||
+        (c >= w && mat[c - w] !== 0 && bondD[c - w]! > HAIRLINE);
+      if (bonded) sum += integ[c]!;
+    }
+    return sum / (255 * cells.length);
   }
 
   getBody(id: number): MatterBody | undefined {
@@ -428,6 +753,18 @@ class MatterWorldImpl implements MatterWorldEx {
     }
     b.lastX = t.x;
     b.lastY = t.y;
+    if (b.rotStep() !== 0) {
+      // A rotated region: the disc around its pivot that holds the map at any angle.
+      const r =
+        Math.sqrt(Math.max(t.anchorX, b.w - t.anchorX) ** 2 + Math.max(t.anchorY, b.h - t.anchorY) ** 2) + 2;
+      const px = Math.round(t.x);
+      const py = Math.round(t.y);
+      b.aabbX0 = px - r;
+      b.aabbX1 = px + r;
+      b.aabbY0 = py - r;
+      b.aabbY1 = py + r;
+      return;
+    }
     const xa = t.x + (0 - t.anchorX) * t.facing;
     const xb = t.x + (b.w - t.anchorX) * t.facing;
     const pad = Math.abs(t.lean);
@@ -566,6 +903,7 @@ class MatterWorldImpl implements MatterWorldEx {
     if (!b) return;
     this.cancelProcesses(bodyId);
     life.restore(this.core, b);
+    restoreShell(this.core, b);
   }
 
   /** Between rounds: multi-tick damage jobs and shock rings aimed at this body must not leak into the next round. */
@@ -631,13 +969,24 @@ class MatterWorldImpl implements MatterWorldEx {
     }
   }
 
-  spawnChunk(spec: ChunkSpawn): void {
+  /**
+   * Inject a chunk (comets, a lost moon): its mass is booked as injected. Returns the chunk id (the arena module keeps it to
+   * steer, capture or launch the chunk later). The pixels are copied into a pooled sprite buffer.
+   */
+  spawnChunk(spec: ChunkSpawn): number {
     const core = this.core;
     core.ledger.injected += spec.mass;
-    const emi = spec.emissive ? spec.emissive.slice() : null;
-    core.chunks.add(
+    const n = spec.w * spec.h;
+    const pix = getSprite32(n);
+    pix.set(spec.pixels.subarray(0, n));
+    let emi: Uint8Array | null = null;
+    if (spec.emissive) {
+      emi = getSprite8(n);
+      emi.set(spec.emissive.subarray(0, n));
+    }
+    const ch = core.chunks.add(
       core,
-      spec.pixels.slice(),
+      pix,
       emi,
       spec.w,
       spec.h,
@@ -653,6 +1002,7 @@ class MatterWorldImpl implements MatterWorldEx {
       0.5,
       0,
     );
+    return ch.id;
   }
 
   /* ------------------------------------------------------------------ rendering */
@@ -663,6 +1013,10 @@ class MatterWorldImpl implements MatterWorldEx {
 
   renderLayers(view: ViewRect, alpha: number): RenderLayer[] {
     return this.render.render(this.core, view, alpha);
+  }
+
+  renderExport(view: ViewRect, k: number): RenderLayer[] {
+    return this.render.exportLayers(this.core, view, 0, k);
   }
 
   debugOverlay(bodyId: number, mode: DebugOverlayMode): RenderLayer | null {
@@ -717,7 +1071,7 @@ class MatterWorldImpl implements MatterWorldEx {
         const mm = mat[i]!;
         if (mm !== 0) m += (md[mm]! * den[i]!) / 128;
       }
-      cell += m;
+      cell += m + (b.shell !== null ? b.shell.farMass : 0);
       pool += b.pool;
     }
     const l = core.ledger;
@@ -768,6 +1122,21 @@ class MatterWorldImpl implements MatterWorldEx {
     }
     if (x1 < 0) return false;
     const t = b.transform;
+    if (b.rotStep() !== 0) {
+      // the rotated corners of the live box
+      out.x0 = Infinity;
+      out.y0 = Infinity;
+      out.x1 = -Infinity;
+      out.y1 = -Infinity;
+      for (let k = 0; k < 4; k++) {
+        localToWorldF(b, k & 1 ? x1 + 1 : x0, k & 2 ? y1 + 1 : y0, pt);
+        out.x0 = Math.min(out.x0, pt.x);
+        out.x1 = Math.max(out.x1, pt.x);
+        out.y0 = Math.min(out.y0, pt.y);
+        out.y1 = Math.max(out.y1, pt.y);
+      }
+      return true;
+    }
     const wa = t.x + (x0 - t.anchorX) * t.facing;
     const wb = t.x + (x1 + 1 - t.anchorX) * t.facing;
     out.x0 = Math.min(wa, wb) - Math.abs(t.lean);

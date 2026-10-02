@@ -251,8 +251,9 @@ function lineCut(ctx: DamageCtx, E: number, cutB: number, grindB: number, pierce
   const ey = (firstCell - ex) / w;
   const xx = lastCell % w;
   const xy = (lastCell - xx) / w;
-  const lux = q.ux * body.transform.facing;
-  const luy = q.uy;
+  body.dirToLocal(q.ux, q.uy, nrm);
+  const lux = nrm.x;
+  const luy = nrm.y;
   const finder = core.cuts;
   const w1 = w + 1;
   let sC = finder.startCorner(body, ex, ey, lux, luy);
