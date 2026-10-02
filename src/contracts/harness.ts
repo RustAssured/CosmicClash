@@ -49,7 +49,7 @@ export interface HarnessParams {
   tele: 0 | 1 | 2;
   /** Telemetry's full-frame luminance metering (the renderer's async GPU read-back); `lum=0` turns it off. */
   lum: boolean;
-  /** `orbit=1`: planar orbital footwork; `zdepth=1`: the depth-offset prototype (MatchConfig.footwork / zdepth). */
+  /** Planar orbital footwork (default since D28; `orbit=0` = classic); `zdepth=1`: the depth-offset prototype. */
   orbit: boolean;
   zdepth: boolean;
   /** True if ANY harness param was present (the app skips the title and boots straight in). */
@@ -165,7 +165,8 @@ export function parseHarnessParams(search: string): HarnessParams {
     freeze: q.get('freeze') === '1' || (has('t') && q.get('freeze') !== '0'),
     tele: q.get('tele') === '1' ? 1 : q.get('tele') === '2' ? 2 : 0,
     lum: q.get('lum') !== '0',
-    orbit: q.get('orbit') === '1',
+    // D28: orbital footwork is the slice's combat space; `orbit=0` brings back classic for comparison
+    orbit: q.get('orbit') !== '0',
     zdepth: q.get('zdepth') === '1',
     active: keys.some(has),
   };

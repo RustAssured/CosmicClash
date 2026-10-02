@@ -159,6 +159,29 @@ export interface RenderLayer {
   alpha: number;
   blend: 'normal' | 'add';
   visible: boolean;
+  /**
+   * Rig parts (D27, proposal 151): when present the layer's pixels are an atlas and each part is drawn rotated by the shared
+   * sampler (contracts/rotation.ts) instead of the whole layer being placed with facing/lean. `facing` mirrors each part about
+   * its pivot before rotating; `lean` does not apply.
+   */
+  parts?: RenderPart[];
+}
+
+export interface RenderPart {
+  /** Sub-rectangle of the layer's pixels holding this part (layer-local cells). */
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+  /** Pivot corner inside the sub-rect, and the WORLD pixel (integer) it lands on. */
+  px: number;
+  py: number;
+  wx: number;
+  wy: number;
+  /** Quantised angle step, 0..ANGLE_STEPS−1 (clockwise). */
+  step: number;
+  /** Draw order inside the layer (low first). */
+  z: number;
 }
 
 /** Convenience constructor for a hidden/empty layer object (callers keep and mutate it — no per-frame allocation). */

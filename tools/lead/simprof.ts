@@ -18,7 +18,7 @@ const opt = (k: string, d: string): string =>
 const TICKS = +opt('ticks', '3600');
 const SEED = +opt('seed', '21');
 const REPS = +opt('reps', '3');
-const FOOT: 'classic' | 'orbit' = args.includes('--orbit') ? 'orbit' : 'classic';
+const FOOT: 'classic' | 'orbit' = args.includes('--classic') ? 'classic' : 'orbit';
 
 type Sec = 'f0' | 'f0.beh' | 'f1' | 'f1.beh' | 'pair' | 'world' | 'step';
 const SECS: Sec[] = ['step', 'f0', 'f0.beh', 'f1', 'f1.beh', 'pair', 'world'];

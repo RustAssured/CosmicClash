@@ -76,3 +76,10 @@ vs. a real GPU and are reported alongside sim ms/tick (which is representative).
 - **Slice flag:** only the two slice titans and stages are shown; `?full=1` shows everything.
 - **Flash compliance:** the §4 numbers are the standard. No formal WCAG/Harding certification. Comfort sliders default to 100 %, and the §4 limits must hold at that default (Lead's reading of "ok" on Q12).
 - **ffmpeg:** installed (winget `Gyan.FFmpeg`) for MP4 conversion and trimmed clips.
+
+**D28 — Gate B outcomes (WJ, 2026-10-02)**
+- **Orbital footwork is the slice's combat space.** WJ: "an absolute banger… a unique feeling of freedom… reminiscent of classic shooter style gameplay on the 2D arcades". `footwork='orbit'` becomes the default; classic stays behind `orbit=0` for comparison only. AI, balance, pacing and audio calibration are tuned for orbit from now on.
+- **Top-priority defect: scale of motion (D9 — "critters, not planets").** Tendrils and certain moves wobble fast, as if much smaller creatures were fighting. Motion must read at moon and planet scale: lower natural frequencies, slower secondary motion, heavier follow-through, no high-frequency jitter. Input must stay immediate (the accept-tick response stays). This pass outranks new content.
+- **Depth offset and sprite push:** no verdict; they are subtle. Both stay behind their flags (off by default), to be shown again at Gate C with clips that isolate the moment they matter.
+- **Controller mapping:** not yet confirmed. Re-ask at Gate C.
+- **Phase 2 is approved** ("move forward with what you can").

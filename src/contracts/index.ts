@@ -8,6 +8,7 @@ export * from './matter';
 export * from './titan';
 export * from './input';
 export * from './render';
+export * from './rotation';
 export * from './audio';
 export * from './ai';
 export * from './sim';

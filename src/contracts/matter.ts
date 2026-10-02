@@ -221,6 +221,11 @@ export interface BodyTransform {
   facing: 1 | -1;
   /** Cosmetic integer-row shear in px (see space.ts leanShift). Also used by hit-testing. */
   lean: number;
+  /**
+   * Rig regions only (D27): quantised rotation step 0..ANGLE_STEPS−1 (contracts/rotation.ts) about the anchor corner. Absent /
+   * 0 = unrotated (every titan body today). A rotated body keeps `lean = 0`; hit-tests use the same sampler as the renderer.
+   */
+  rot?: number;
 }
 
 export type BodyKind = 'titan' | 'moon' | 'part';
@@ -239,6 +244,11 @@ export interface BodySpec {
   transform: BodyTransform;
   /** Whether the body's cells may be pulled/tossed as debris by fields, and whether it takes debris impacts. */
   takesDebrisImpacts?: boolean;
+  /**
+   * Rig regions (D27): the connectivity seeds of this body (its joint patch) instead of the core disc, so a region does not
+   * shed matter merely for having no "core". Map-local cell indices.
+   */
+  anchorCells?: Int32Array;
 }
 
 export interface MatterBody {
@@ -432,6 +442,17 @@ export interface MatterWorld {
   setGravitySource(slot: 0 | 1, src: GravitySource | null): void;
   spawnParticles(spec: ParticleSpawn): void;
   spawnChunk(spec: ChunkSpawn): void;
+  /**
+   * A severed rig region leaves as ONE rigid chunk with this velocity (px/s) and spin (rad/s): every live cell moves to the
+   * chunk (exact ledger transfer; nothing injected or deleted), the body is removed, the chunk id is returned (−1 if empty).
+   * Wound sequencing applies when the sever comes from a blow. Optional until matter implements it (Phase 2, proposal 140).
+   */
+  bodyToChunk?(bodyId: number, vx: number, vy: number, spin: number): number;
+  /**
+   * 0..1 health of a joint patch: Σ integrity of its live, still-bonded cells / their pristine Σ (a held, shearing cell
+   * counts as lost). Patch-sized and allocation-free; read by the XPBD rig to weaken or break a constraint.
+   */
+  jointHealth?(bodyId: number, cells: Int32Array | readonly number[]): number;
 
   /* ---- rendering ---- */
   /** Stage lighting used to re-light freshly exposed surfaces and debris (call at match start; safe to call again). */

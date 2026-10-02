@@ -10,5 +10,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo Starting the game at http://localhost:4173 ...
-start "" "http://localhost:4173/?orbit=1"
+start "" "http://localhost:4173"
 call npx vite preview --port 4173 --strictPort

@@ -37,8 +37,8 @@ const SEED = +opt('seed', '1');
 const LA = +opt('la', '3') as Difficulty;
 const LB = +opt('lb', '3') as Difficulty;
 const OUT = opt('out', '');
-/** `--orbit` / `--zdepth`: the Phase 1 locomotion prototypes (MatchConfig.footwork / zdepth). */
-const FOOTWORK: 'classic' | 'orbit' = args.includes('--orbit') ? 'orbit' : 'classic';
+/** Orbit is the slice's footwork (D28); `--classic` for comparison; `--zdepth` adds the depth-offset prototype. */
+const FOOTWORK: 'classic' | 'orbit' = args.includes('--classic') ? 'classic' : 'orbit';
 const ZDEPTH = args.includes('--zdepth');
 
 interface RoundRec {
