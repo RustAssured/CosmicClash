@@ -126,6 +126,8 @@ export class App {
   private menuStage: StageId = MENU_STAGE;
   /** Titans offered in menus / attract mode (the slice unless `?full=1`). */
   private roster: TitanId[] = [];
+  /** Stages offered in menus / attract mode (the slice's two arenas unless `?full=1`). */
+  private stageRoster: StageId[] = [];
   /** Prototype flags from the URL (`orbit=1`, `zdepth=1`), applied to every match that does not set them itself. */
   private footwork: 'classic' | 'orbit' = 'classic';
   /** The aftermath view while it is open, the tick it opens at (-1 = not scheduled), and whether it was already shown. */
@@ -202,6 +204,10 @@ export class App {
     this.roster = opts.full
       ? IMPLEMENTED_TITANS.slice()
       : IMPLEMENTED_TITANS.filter((id) => (SLICE.titans as readonly TitanId[]).includes(id));
+    this.stageRoster = STAGE_IDS.filter(
+      (id) => isStageImplemented(id) && (opts.full || (SLICE.stages as readonly StageId[]).includes(id)),
+    );
+    if (!this.stageRoster.includes(this.menuStage)) this.menuStage = this.stageRoster[0] ?? MENU_STAGE;
     this.hideIdleCursor();
     this.attachAftermathMouse(canvas);
     await this.renderer.init(canvas, {
@@ -220,9 +226,9 @@ export class App {
         if (TITAN_DEFS[id]) return renderPortrait(id, 1, STAGES[this.menuStage].lighting);
         return fixturePortraitProvider(id);
       },
-      stages: STAGE_IDS.map((id) => STAGES[id]),
+      stages: (opts.full ? STAGE_IDS : this.stageRoster).map((id) => STAGES[id]),
       implementedTitans: this.roster,
-      implementedStages: STAGE_IDS.filter((id) => isStageImplemented(id)),
+      implementedStages: this.stageRoster,
       sound: (id) => this.audio.handle([{ t: 'ui', id }]),
       version: 'v0.1',
     });
@@ -927,7 +933,7 @@ export class App {
     const a = ids[Math.floor(Math.random() * ids.length)]!;
     let b = ids[Math.floor(Math.random() * ids.length)]!;
     if (ids.length > 1) while (b === a) b = ids[Math.floor(Math.random() * ids.length)]!;
-    const stages = STAGE_IDS.filter((id) => isStageImplemented(id));
+    const stages = this.stageRoster;
     const stage = stages[Math.floor(Math.random() * stages.length)]!;
     await this.startMatch(
       {

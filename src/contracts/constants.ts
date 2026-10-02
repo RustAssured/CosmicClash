@@ -68,10 +68,11 @@ export const SIM_BUDGET_MS_PER_TICK = 5;
 
 /**
  * The vertical slice ("The Witness and the World", D26/D27): menus, attract mode and random pairings use only these.
- * Everything else keeps compiling and testing; `?full=1` shows it all again. The arenas join in Phase 2.
+ * Everything else keeps compiling and testing; `?full=1` shows it all again. Its two arenas joined in Phase 2.
  */
 export const SLICE = {
   titans: ['lastone', 'planet'] as const,
+  stages: ['mausoleum', 'shearfield'] as const,
 } as const;
 
 /** KO thresholds (spec: KO when core-anchor integrity or total mass falls below thresholds). */
