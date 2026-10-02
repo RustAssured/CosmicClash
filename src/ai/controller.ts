@@ -27,6 +27,20 @@ const PASSIVE_FROM = 360;
 const PASSIVE_RAMP = 360;
 /** Orbit footwork: the mean gap (ticks) between one AI's own attacks. */
 const ENGAGE_GAP_TICKS = 480;
+/**
+ * Orbit: a blow that takes this share of the AI's own mass (within ~0.5 s of the stagger) makes it regroup for
+ * REGROUP_TICKS (+ jitter) before it commits again.
+ */
+const REGROUP_LOSS = 0.05;
+const REGROUP_TICKS = 80;
+/**
+ * Orbit, no stalling: once neither side has been staggered for STALE_FROM ticks the engagement gap shrinks, down to
+ * (1 − STALE_CUT) of itself STALE_RAMP ticks later; in the last LATE_TICKS of a round it is halved as well.
+ */
+const STALE_FROM = 480;
+const STALE_RAMP = 600;
+const STALE_CUT = 0.6;
+const LATE_TICKS = 25 * 60;
 
 interface Cand {
   score: number;
@@ -43,6 +57,7 @@ interface Cand {
     | 'guard'
     | 'ultimate'
     | 'feint'
+    | 'probe'
     | 'escape';
   info: MoveInfo | null;
   /** The model's own damage estimate for the move, before any learned correction (for the after-the-fact comparison). */
@@ -171,6 +186,30 @@ export class UtilityAI implements AIController {
   private stunAge = 0;
 
   /**
+   * What a move costs its user (proprioception, levels that model the foe): own matter lost while performing it, beyond the
+   * background bleed of the same body, per move (all aims together). A move that wounds its user (a well that drags debris
+   * into its own body) stops being worth it unless the foe pays more.
+   */
+  private readonly selfSum: Float32Array;
+  private readonly selfN: Float32Array;
+  private readonly moveKey: Int16Array;
+  private readonly moveIndex = new Map<string, number>();
+  private ownMoveId: string | null = null;
+  private ownKey = -1;
+  private ownTicks = 0;
+  private ownLoss = 0;
+  private ownTail = 0;
+  private ownMass = 1;
+  private bgLoss = 0;
+  private bgTicks = 0;
+  /** Own matter lost recently (decaying sum) and the tick until which the AI regroups after a heavy blow (orbit). */
+  private hurt = 0;
+  private regroupUntil = 0;
+  private struckTick = -1e9;
+  /** Last tick either side was seen staggered (round start counts): the engagement gap shrinks in a long lull. */
+  private exchangeTick = 0;
+
+  /**
    * Planar orbital footwork (SLICE_PLAN §6): the stick is 2-D thrust and attacks aim straight at the foe. Set by the option, or
    * latched the first time the AI's OWN view reports an orbital state (proprioception; the foe's view is never consulted).
    */
@@ -201,6 +240,10 @@ export class UtilityAI implements AIController {
     this.obsSum = new Float32Array(this.infos.length);
     this.modelSum = new Float32Array(this.infos.length);
     for (const mi of this.infos) (this.bySlot[mi.slot] ??= []).push(mi);
+    this.selfSum = new Float32Array(def.moves.length);
+    this.selfN = new Float32Array(def.moves.length);
+    this.moveKey = Int16Array.from(this.infos, (mi) => def.moves.indexOf(mi.def));
+    def.moves.forEach((m, i) => this.moveIndex.set(m.id, i));
     this.surgeDist = surgeDistance(def);
     const guard = def.moves.find((m) => m.slot === 'guard');
     this.guardAbsorb = ((
@@ -239,6 +282,76 @@ export class UtilityAI implements AIController {
     this.lastSurgeTick = -1e9;
     this.stunAge = 0;
     this.nextAttackTick = 0;
+    this.selfSum.fill(0);
+    this.selfN.fill(0);
+    this.ownKey = -1;
+    this.ownMoveId = null;
+    this.ownMass = 1;
+    this.bgLoss = 0;
+    this.bgTicks = 0;
+    this.hurt = 0;
+    this.regroupUntil = 0;
+    this.struckTick = -1e9;
+    this.exchangeTick = 0;
+  }
+
+  /**
+   * Own matter bookkeeping, every tick: the background bleed while not attacking, and the loss during (and just after) each
+   * own move. Ticks in which the foe's blow has us staggered or guarding are not the move's fault and are skipped.
+   */
+  private trackSelf(S: FighterView): void {
+    const mf = S.bodyStats.massFrac;
+    const d = this.ownMass - mf;
+    this.ownMass = mf;
+    // a new round heals: never book a gain, and a jump that large is not a bleed
+    if (d < 0 || d > 0.2) return;
+    const struck = S.state === 'hitstun' || S.state === 'guardbreak' || S.state === 'guard';
+    // matter a blow took over the last ~half second (staggered, or just out of it): a heavy one sends a colossus back to
+    // re-balance. A slow bleed (burning, drifting debris) does not count: it is no reason to give ground.
+    if (S.state === 'hitstun' || S.state === 'guardbreak') this.struckTick = this.exchangeTick = this.nowTick;
+    this.hurt = this.hurt * 0.96 + (this.nowTick - this.struckTick <= 20 ? d : 0);
+    if (this.orbit && this.hurt > REGROUP_LOSS && this.nowTick >= this.regroupUntil) {
+      this.regroupUntil = this.nowTick + REGROUP_TICKS + this.jitter() * 6;
+      this.pushLog(this.nowTick, `regroup: lost ${(this.hurt * 100).toFixed(1)}% of my mass`);
+    }
+    if (S.moveId !== null && S.moveId !== this.ownMoveId) {
+      // a new own move began (a cancel closes the previous one's books early)
+      if (this.ownKey >= 0) this.closeOwn();
+      this.ownKey = this.moveIndex.get(S.moveId) ?? -1;
+      this.ownLoss = 0;
+      this.ownTicks = 0;
+      this.ownTail = 0;
+    }
+    this.ownMoveId = S.moveId;
+    if (this.ownKey >= 0) {
+      if (!struck) {
+        this.ownLoss += d;
+        this.ownTicks++;
+      }
+      if (S.moveId === null && ++this.ownTail > 24) this.closeOwn();
+    } else if (!struck && S.moveId === null) {
+      this.bgLoss += d;
+      this.bgTicks++;
+      // a slow average: the bleed of the last ~20 s
+      if (this.bgTicks > 1200) {
+        this.bgLoss *= 0.5;
+        this.bgTicks *= 0.5;
+      }
+    }
+  }
+
+  private closeOwn(): void {
+    const bg = this.bgTicks > 60 ? this.bgLoss / this.bgTicks : 0;
+    this.selfSum[this.ownKey]! += Math.max(0, this.ownLoss - bg * this.ownTicks);
+    this.selfN[this.ownKey]!++;
+    this.ownKey = -1;
+  }
+
+  /** Own matter fraction a move is expected to cost its user (shrunk toward 0 by one pseudo-use). */
+  private selfCost(mi: MoveInfo): number {
+    if (!this.P.predicts) return 0;
+    const k = this.moveKey[mi.idx]!;
+    return k < 0 ? 0 : this.selfSum[k]! / (this.selfN[k]! + 1);
   }
 
   /* ================================================================================================
@@ -252,6 +365,7 @@ export class UtilityAI implements AIController {
     this.nowTick = ctx.tick;
     const S = ctx.self;
     if (S.orbit !== 'neutral') this.orbit = true;
+    this.trackSelf(S);
     this.ring.push(ctx.foe, ctx.tick);
     const Fw = this.ring.delayed(ctx.tick, this.P.reactionTicks);
     const age = ctx.tick - Fw.tick;
@@ -267,6 +381,10 @@ export class UtilityAI implements AIController {
     if (S.state === 'ko' || S.state === 'victory' || S.state === 'intro' || ctx.roundTick <= 0) {
       this.plan.cancel();
       this.pendIdx = -1;
+      // between rounds: a fresh round starts without a lull or a blow to recover from
+      this.exchangeTick = ctx.tick;
+      this.regroupUntil = 0;
+      this.hurt = 0;
       return;
     }
     if (this.pendIdx >= 0 && ctx.tick >= this.pendUntil) this.settleAttack(F, ctx.tick);
@@ -409,6 +527,8 @@ export class UtilityAI implements AIController {
     if (Number.isNaN(this.foeActedTick) || F.moveId !== null || F.state === 'guard' || F.state === 'surge')
       this.foeActedTick = F.tick;
     if (this.pendIdx >= 0 && F.state === 'hitstun') this.pendSaw = true;
+    if (F.state === 'hitstun' || F.state === 'guardbreak')
+      this.exchangeTick = Math.max(this.exchangeTick, F.tick);
     let tok: Token | null = null;
     if (F.moveId !== null && F.moveId !== this.prevMoveId) {
       tok = (F.moveSlot as Token | null) ?? 'idle';
@@ -764,8 +884,12 @@ export class UtilityAI implements AIController {
 
     // orbit pacing (D28): colossi trade blows, then circle and breathe. Between its own attacks the AI waits out an
     // engagement gap; an opening (punish) may cut it short by half, never more.
-    const resting = this.orbit && ctx.tick < this.nextAttackTick;
-    const restingHard = this.orbit && ctx.tick < this.nextAttackTick - this.engageGap * 0.5;
+    // A heavy blow just taken: the colossus gives ground and re-balances before it commits again (only a long, sure opening
+    // tempts it back early).
+    const regroup = this.orbit && ctx.tick < this.regroupUntil;
+    const resting = this.orbit && (ctx.tick < this.nextAttackTick || regroup);
+    const restingHard =
+      this.orbit && (ctx.tick < this.nextAttackTick - this.engageGap * 0.5 || (regroup && vuln < 30));
 
     /* ---- punish ---- */
     if (vuln > 6 && !restingHard) {
@@ -804,6 +928,13 @@ export class UtilityAI implements AIController {
     const range = this.attackRange(S) + pers.patience * 40 + pers.zoning * 30;
     const approachNeed = clamp((dist - this.attackRange(S) * 0.95) / 200, 0, 1.4);
     const tooClose = clamp((this.attackRange(S) * 0.3 - dist) / 50, 0, 1);
+    // orbit: the foe is winding up something heavy and we stand where it lands; respect it (step off its line, do not walk in)
+    const foeWindup =
+      this.orbit &&
+      vuln <= 0 &&
+      (F.phase === 'startup' || F.phase === 'charge') &&
+      (F.moveSlot === 'crush' || F.moveSlot === 'signature' || F.moveSlot === 'ultimate') &&
+      dist < range + 120;
     const a = this.add(
       'approach',
       'space',
@@ -814,7 +945,8 @@ export class UtilityAI implements AIController {
         (behind && late ? 0.3 : 0) -
         (ahead && late ? 0.25 : 0) -
         // resting between exchanges: hold the standoff instead of crowding in
-        (resting && dist < range + 60 ? 0.3 : 0),
+        (resting && dist < range + 60 ? 0.3 : 0) -
+        (foeWindup || regroup ? 0.3 : 0),
       'close the gap',
     );
     a.ticks = 10 + Math.round(this.rng.next() * 12);
@@ -846,8 +978,10 @@ export class UtilityAI implements AIController {
         (lowHp ? 0.5 : 0) +
         (ahead && late ? 0.25 : 0) +
         (dist < range * 0.8 && vuln <= 0 ? 0.08 * pers.retreat : 0) +
-        (vuln <= 0 && F.phase === 'startup' ? 0.12 * pers.patience : 0),
-      'make room',
+        (vuln <= 0 && F.phase === 'startup' ? 0.12 * pers.patience : 0) +
+        (regroup && dist < range + 80 ? 0.4 : 0) +
+        (foeWindup ? 0.12 : 0),
+      regroup ? 'regroup' : 'make room',
     );
     r.ticks = 10 + Math.round(this.rng.next() * 14);
     if (pers.fuelCare > 0) {
@@ -873,17 +1007,29 @@ export class UtilityAI implements AIController {
       const l = Math.hypot(this.realDx, this.realDy) || 1;
       const vt = (-S.vx * this.realDy + S.vy * this.realDx) / l;
       const ci = this.add(
-        'circle',
+        foeWindup ? 'off the line' : 'circle',
         'space',
         'strafe',
         0.16 +
           0.25 * pers.zoning +
           (F.phase === 'startup' || F.phase === 'charge' ? 0.12 : 0) +
-          (resting ? 0.15 : 0),
-        'circle the foe',
+          (resting ? 0.15 : 0) +
+          (foeWindup ? 0.2 : 0),
+        foeWindup ? "step out of the windup's line" : 'circle the foe',
       );
       ci.dirY = Math.sign(vt) || (this.rng.chance(0.5) ? 1 : -1);
       ci.ticks = 12 + Math.round(this.rng.next() * 12);
+      // sizing up: while it breathes, a skilled colossus feints a step in and settles back, to draw a windup it can punish
+      if (this.P.predicts && resting && !regroup && !foeWindup && dist > range - 40 && dist < range + 220) {
+        const pr = this.add(
+          'probe',
+          'space',
+          'probe',
+          0.12 + 0.25 * pers.trap + 0.1 * pers.patience,
+          'feint a step in',
+        );
+        pr.ticks = 10 + Math.round(this.rng.next() * 8);
+      }
     } else {
       const st = this.add('strafe', 'space', 'strafe', 0.16 + (Math.abs(dy) / 260) * 0.4, 'line up height');
       st.dirY = Math.sign(dy) || (this.rng.chance(0.5) ? 1 : -1);
@@ -1001,6 +1147,9 @@ export class UtilityAI implements AIController {
         // rams hurt the ram too: value the blow net of what comes back
         const rawDmg = this.ev.dmg;
         let dmg = this.ev.dmg * wf * this.damageLearned(mi) * (1 - 0.75 * mi.recoil);
+        // what it has cost us to throw it, in the same currency (the foe's matter per unit of modelled energy)
+        const own = this.selfCost(mi);
+        if (own > 0 && this.modelAll >= 1 && this.obsAll > 1e-4) dmg -= own / (this.obsAll / this.modelAll);
         if (mi.latch || mi.harvest) {
           // an infection is a setup and a harvest its payoff: the tearing is worth what is already infected, the latch what is not
           const f = clamp(F.infectFrac / 0.1, 0, 1);
@@ -1134,6 +1283,11 @@ export class UtilityAI implements AIController {
       case 'retreat':
         p.add(0, Steer.Away, Math.max(6, c.ticks));
         break;
+      case 'probe':
+        // a committed-looking step in, then back out to the standoff
+        p.add(0, Steer.Toward, c.ticks, 0, 0, 1);
+        p.add(0, Steer.Away, c.ticks + 4);
+        break;
       case 'strafe':
         if (this.orbit) p.add(0, Steer.Circle, Math.max(6, c.ticks), c.dirY);
         else p.add(0, Steer.Fixed, Math.max(6, c.ticks), 0, c.dirY);
@@ -1162,7 +1316,13 @@ export class UtilityAI implements AIController {
         if (this.orbit) {
           // a foe that has done nothing for a long while cannot punish: the breath shortens (to a quarter)
           const quiet = clamp((F.tick - this.foeActedTick - PASSIVE_FROM) / PASSIVE_RAMP, 0, 1);
-          const gap = this.engageGap * (1 - 0.75 * (Number.isFinite(quiet) ? quiet : 0));
+          // no stalling: a long lull, or the clock running out, shortens the breath
+          const stale = clamp((ctx.tick - this.exchangeTick - STALE_FROM) / STALE_RAMP, 0, 1);
+          const gap =
+            this.engageGap *
+            (1 - 0.75 * (Number.isFinite(quiet) ? quiet : 0)) *
+            (1 - STALE_CUT * stale) *
+            (ctx.roundTicksLeft < LATE_TICKS ? 0.5 : 1);
           this.nextAttackTick = ctx.tick + Math.round(gap * (0.75 + 0.5 * this.rng.next()));
         }
         this.pendIdx = mi.idx;
