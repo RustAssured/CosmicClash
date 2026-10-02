@@ -1,4 +1,13 @@
-import { ANGLE_STEPS, ROT_BIAS_PX, ROT_DEN, ROT_LUT, ROT_ONE } from '@/contracts';
+import {
+  ANGLE_STEPS,
+  ROT_BIAS_PX,
+  ROT_DEN,
+  ROT_LUT,
+  ROT_ONE,
+  rotSampleAt,
+  rotWinner,
+  type RotPartEx,
+} from '@/contracts';
 import type { WorldPoint } from './body';
 import type { ShapeQ } from './shape';
 
@@ -7,10 +16,10 @@ import type { ShapeQ } from './shape';
  *
  * A rig region body (the Witness's arms, halo, cradle: SLICE_PLAN §4.1) carries a quantised rotation. Hit truth is WHAT THE
  * RENDERER DRAWS: the shared clean-edge sampler (`@/contracts/rotation`) — `ANGLE_STEPS` steps per turn, a Q14 integer LUT
- * exact at the quadrants, 3×3 integer sub-samples per destination pixel mapped back with an exact (biased) floor division, the
- * MAJORITY colour of the nine kept (ties → the centre sample), transparent texels voting as one "empty" colour. The cached mask
- * below uses the contract's LUT and constants; `rotation.test.ts` checks every destination pixel of every angle against the
- * contract's own `rotSample`.
+ * exact at the quadrants, 3×3 integer sub-samples per destination pixel mapped back with an exact (biased) floor division and
+ * the proposal-161 ALPHA-FIRST vote (coverage = an opaque majority, then the colour among the opaque samples). The cached mask
+ * below uses the contract's LUT and constants; edge pixels call the contract's own `rotSampleAt` (one implementation), and
+ * `rotation.test.ts` checks every destination pixel of every angle against it.
  *
  * Body mapping: the source pivot is the map anchor (a pixel corner) drawn at the integer world pixel
  * (round(t.x), round(t.y)); `facing = -1` mirrors the map about the pivot BEFORE rotating; row-shear lean does not apply to
@@ -163,52 +172,33 @@ export class RotMaskCache {
 const pivotX = (b: RotBody): number => Math.round(b.transform.x);
 const pivotY = (b: RotBody): number => Math.round(b.transform.y);
 
-/** Colour the renderer draws for a cell (alpha 0 = empty: off-map and dead cells all vote as one "empty" colour). */
-function colourOf(b: RotBody, c: number): number {
-  if (c < 0 || b.map.material[c] === 0) return 0;
-  const col = b.map.pixels[c]!;
-  return col >>> 24 === 0 ? 0 : col >>> 0;
-}
-
-const voteCell = new Int32Array(9);
-const voteCol = new Uint32Array(9);
+/** The part view handed to the contract sampler (reused: no per-query garbage). */
+const part: RotPartEx = { pixels: new Uint32Array(0), w: 0, h: 0, px: 0, py: 0, step: 0, facing: 1 };
 
 /**
- * The cell DRAWN at destination pixel (u, v) of mask `m` (the cell of the winning sub-sample: the centre's if its colour wins,
- * else the first sub-sample with the winning colour), or -1 where the renderer draws nothing.
+ * The cell DRAWN at destination pixel (u, v) of mask `m`, or -1 where the renderer draws nothing. Interior pixels (all nine
+ * sub-samples read one texel) are answered from the mask; edge pixels run THE renderer's sampler (`rotSampleAt`, proposal 161:
+ * alpha-first vote, mirroring) and take its winning texel. A drawn texel whose cell is already dead (its pixel not yet
+ * refreshed) is not hit.
  */
 export function drawnCell(b: RotBody, m: RotMask, u: number, v: number): number {
   if (u < 0 || v < 0 || u >= m.w || v >= m.h) return -1;
   const o = v * m.w + u;
   const cc = m.centre[o]!;
-  if (m.uniform[o] === 1) return colourOf(b, cc) === 0 ? -1 : cc;
-  for (let k = 0; k < 9; k++) {
-    const c = k === 4 ? cc : subCell(b, m.step, m.facing, m.x0 + u, m.y0 + v, k % 3, (k / 3) | 0);
-    voteCell[k] = c;
-    voteCol[k] = colourOf(b, c);
-  }
-  // The renderer's vote (proposal 161, ALPHA FIRST): coverage is the opaque majority of the nine — so a hit never depends on
-  // a cell's colour — then the colour among the opaque samples (the centre keeps ties, then the first in scan order); the
-  // winning sample's cell is the one drawn (and hit) there.
-  let opaque = 0;
-  for (let j = 0; j < 9; j++) if (voteCol[j] !== 0) opaque++;
-  if (opaque < 5) return -1;
-  const centreCol = voteCol[4]!;
-  let best = 4;
-  let bestN = 0;
-  if (centreCol !== 0) for (let j = 0; j < 9; j++) if (voteCol[j] === centreCol) bestN++;
-  for (let i = 0; i < 9; i++) {
-    if (i === 4 || voteCol[i] === 0) continue;
-    let n = 0;
-    for (let j = 0; j < 9; j++) if (voteCol[j] === voteCol[i]) n++;
-    if (n > bestN) {
-      best = i;
-      bestN = n;
-    }
-  }
-  return voteCell[best]!;
+  if (m.uniform[o] === 1)
+    return cc < 0 || b.map.material[cc] === 0 || b.map.pixels[cc]! >>> 24 === 0 ? -1 : cc;
+  const t = b.transform;
+  part.pixels = b.map.pixels;
+  part.w = b.w;
+  part.h = b.h;
+  part.px = t.anchorX;
+  part.py = t.anchorY;
+  part.step = m.step;
+  part.facing = m.facing;
+  if (rotSampleAt(part, m.x0 + u, m.y0 + v) === 0) return -1;
+  const c = rotWinner.y * b.w + rotWinner.x;
+  return b.map.material[c] === 0 ? -1 : c;
 }
-
 /** The cell drawn at world point (wx, wy) of the rotated body, or -1 (the renderer's pixel there). */
 export function rotCellAt(b: RotBody, m: RotMask, wx: number, wy: number): number {
   return drawnCell(b, m, Math.floor(wx) - pivotX(b) - m.x0, Math.floor(wy) - pivotY(b) - m.y0);

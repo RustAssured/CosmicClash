@@ -976,6 +976,26 @@ class MatterWorldImpl implements MatterWorldEx {
     g.creditBodyId = src.creditBodyId ?? -1;
   }
 
+  /** Reused read-outs of the gravity sources (presentation reads them every frame: no garbage). */
+  private readonly gravOut: [GravitySource, GravitySource] = [
+    { x: 0, y: 0, strength: 0, radius: 1, consumeRadius: 0, creditBodyId: -1 },
+    { x: 0, y: 0, strength: 0, radius: 1, consumeRadius: 0, creditBodyId: -1 },
+  ];
+
+  /** The source currently set for `slot`, or null (read-only: a copy, refreshed per call; never touches sim state). */
+  gravitySourceOf(slot: 0 | 1): GravitySource | null {
+    const g = this.core.gravity[slot];
+    if (!g.active) return null;
+    const o = this.gravOut[slot];
+    o.x = g.x;
+    o.y = g.y;
+    o.strength = g.strength;
+    o.radius = g.radius;
+    o.consumeRadius = g.consumeRadius;
+    o.creditBodyId = g.creditBodyId;
+    return o;
+  }
+
   spawnParticles(spec: ParticleSpawn): void {
     const core = this.core;
     const P = core.particles;

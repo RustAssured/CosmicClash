@@ -109,6 +109,27 @@ describe('capture API', () => {
     expect(Math.abs(world.ledger().error)).toBeLessThan(1e-6);
   });
 
+  it('gravitySourceOf reads back the source set for a slot, and reading it never changes the hash', () => {
+    const world = createMatterWorld(10);
+    expect(world.gravitySourceOf(0)).toBeNull();
+    world.setGravitySource(1, {
+      x: 300,
+      y: 200,
+      strength: 250,
+      radius: 180,
+      consumeRadius: 12,
+      creditBodyId: 4,
+    });
+    const h = world.hash();
+    const g = world.gravitySourceOf(1)!;
+    expect(g).toEqual({ x: 300, y: 200, strength: 250, radius: 180, consumeRadius: 12, creditBodyId: 4 });
+    g.strength = 9999; // a copy: editing it does not touch the world
+    expect(world.gravitySourceOf(1)!.strength).toBe(250);
+    expect(world.hash()).toBe(h);
+    world.setGravitySource(1, null);
+    expect(world.gravitySourceOf(1)).toBeNull();
+  });
+
   it('releaseChunk lets one chunk go and leaves the others captured', () => {
     const world = createMatterWorld(3);
     world.setOrbit(1, { x: 300, y: 200, radius: 50, omega: -1.5 });
