@@ -112,6 +112,7 @@ export const ACTIONS = [
   'feint',
   'pause',
   'training',
+  'gravity',
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 

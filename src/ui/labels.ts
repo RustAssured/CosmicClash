@@ -57,6 +57,7 @@ export const ACTION_TEXT: Record<Action, { en: string; ko: string }> = {
   feint: { en: 'FEINT', ko: '취소' },
   pause: { en: 'PAUSE', ko: '일시정지' },
   training: { en: 'TRAINING', ko: '연습' },
+  gravity: { en: 'GRAVITY', ko: '중력' },
 };
 
 export const ATTRIBUTE_LABELS: readonly {

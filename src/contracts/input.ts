@@ -15,6 +15,8 @@ export const Btn = {
   PAUSE: 1 << 7,
   /** '−' button: toggle training overlay. */
   TRAINING: 1 << 8,
+  /** R1 (D27): the second hold button — the Planet's Tidal Draw. Stick-click on a single sideways Joy-Con. */
+  GRAVITY: 1 << 9,
 } as const;
 export type BtnMask = number;
 

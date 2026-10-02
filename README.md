@@ -91,7 +91,7 @@ over; only the printed letters on the on-screen prompts change.
 ```
     ZL ▄▄▄  L                             R  ▄▄▄ ZR
    ┌────────────────────────────────────────────┐
-   │   ( left stick )     −   +        (X)      │      Y  Strike            L / R  Feint (cancel)
+   │   ( left stick )     −   +        (X)      │      Y  Strike            L  Feint · R  Gravity
    │                      ◘   ⌂      (Y)  (A)   │      X  Crush             ZL     Guard
    │      ▲                            (B)      │      B  Surge             ZR     Ultimate
    │    ◄   ►             ( right stick )       │      A  Signature         +      Pause
@@ -108,11 +108,12 @@ over; only the printed letters on the on-screen prompts change.
 | Signature | A (right) | B | Circle |
 | Ultimate | ZR | RT | R2 |
 | Guard | ZL | LT | L2 |
-| Feint | L / R | LB / RB | L1 / R1 |
+| Feint | L | LB | L1 |
+| Gravity (Planet's Tidal Draw) | R | RB | R1 |
 | Pause / Training | + / − | Menu / View | Options / Share |
 
 **Single Joy-Con, held sideways** (one player per Joy-Con): the stick is rotated for you, and since ZL/ZR are out of reach
-**SL = Guard** and **SR = Ultimate**; L/R still feint, and the small − / + / Capture / Home buttons pause and toggle training.
+**SL = Guard** and **SR = Ultimate**; L/R still feint, the stick click is Gravity, and the small − / + / Capture / Home buttons pause and toggle training.
 
 **Keyboard**, two players on one board. Keys are matched by physical position, so AZERTY, QWERTZ and Dvorak get the same shape.
 

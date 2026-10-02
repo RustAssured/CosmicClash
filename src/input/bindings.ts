@@ -12,13 +12,14 @@ export const ACTION_BIT: Record<Action, number> = {
   feint: Btn.FEINT,
   pause: Btn.PAUSE,
   training: Btn.TRAINING,
+  gravity: Btn.GRAVITY,
 };
 
 export type PadBindingTable = Record<Action, readonly number[]>;
 
 /**
  * Default layout, in Nintendo POSITIONS (Y left = Strike · X top = Crush · B bottom = Surge · A right = Signature ·
- * ZR Ultimate · ZL Guard · L/R feint-cancel · + pause · − training). Xbox and PlayStation pads use the same physical
+ * ZR Ultimate · ZL Guard · L feint-cancel · R Gravity · + pause · − training). Xbox and PlayStation pads use the same physical
  * positions, so muscle memory transfers; only the printed labels differ (see labels.ts).
  */
 export const DEFAULT_PAD_BINDINGS: PadBindingTable = {
@@ -28,9 +29,11 @@ export const DEFAULT_PAD_BINDINGS: PadBindingTable = {
   signature: [Pad.EAST],
   ultimate: [Pad.R2],
   guard: [Pad.L2],
-  feint: [Pad.L1, Pad.R1],
+  // D27: R1 is the second hold button (the Planet's Tidal Draw); L1 alone stays Feint
+  feint: [Pad.L1],
   pause: [Pad.START],
   training: [Pad.SELECT],
+  gravity: [Pad.R1],
 };
 
 /**
@@ -47,6 +50,8 @@ export const SIDEWAYS_PAD_BINDINGS: PadBindingTable = {
   feint: [Pad.L1, Pad.R1],
   pause: [Pad.START, Pad.SELECT],
   training: [Pad.CAPTURE, Pad.HOME],
+  // a sideways Joy-Con has no spare shoulder: the stick click (D27)
+  gravity: [Pad.L3],
 };
 
 export function defaultBindingsFor(kind: ProfileKind): PadBindingTable {

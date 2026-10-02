@@ -783,5 +783,7 @@ function actionBit(a: Action): number {
       return Btn.PAUSE;
     case 'training':
       return Btn.TRAINING;
+    case 'gravity':
+      return Btn.GRAVITY;
   }
 }

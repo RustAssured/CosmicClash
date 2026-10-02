@@ -9,8 +9,8 @@ import { ACTIONS } from './types';
  * Design: left hand moves, right hand acts. The right-hand action keys copy the Nintendo diamond (Y left · X top ·
  * B bottom · A right) so the muscle memory matches the pad:
  *
- *   P1  move W A S D    ·  J Strike · I Crush · K Surge · L Signature · O Ultimate · Shift/Space Guard · Q/E Feint · Esc pause · Tab training
- *   P2  move ← ↑ ↓ →    ·  Numpad 4 Strike · 8 Crush · 2 Surge · 6 Signature · 9 Ultimate · 0 Guard · 7/1 Feint · Enter pause · − training
+ *   P1  move W A S D    ·  J Strike · I Crush · K Surge · L Signature · O Ultimate · Shift/Space Guard · Q/E Feint · U Gravity · Esc pause · Tab training
+ *   P2  move ← ↑ ↓ →    ·  Numpad 4 Strike · 8 Crush · 2 Surge · 6 Signature · 9 Ultimate · 0 Guard · 7/1 Feint · 3 Gravity · Enter pause · − training
  *
  * Ghosting: most keyboards can register at least any three simultaneous letter keys; the sets above keep the busiest
  * combination (a direction + two actions + Guard on a modifier) inside that, and modifiers/numpad sit on separate
@@ -43,6 +43,7 @@ export const KEY_LAYOUT_P1: KeyLayout = {
     feint: ['KeyQ', 'KeyE'],
     pause: ['Escape'],
     training: ['Tab'],
+    gravity: ['KeyU'],
   },
   nav: {
     confirm: ['Space', 'KeyJ', 'KeyL'],
@@ -68,6 +69,7 @@ export const KEY_LAYOUT_P2: KeyLayout = {
     feint: ['Numpad7', 'Numpad1'],
     pause: ['Enter', 'NumpadEnter'],
     training: ['NumpadSubtract'],
+    gravity: ['Numpad3'],
   },
   nav: {
     confirm: ['Enter', 'NumpadEnter', 'Numpad6', 'Numpad4'],

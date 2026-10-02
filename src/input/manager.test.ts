@@ -84,7 +84,7 @@ describe('Switch Pro (standard mapping) → InputFrame', () => {
     expect(p.connected).toBe(true);
   });
 
-  it('maps the default layout: Y Strike · X Crush · B Surge · A Signature · ZR Ultimate · ZL Guard · L/R Feint · + Pause · − Training', () => {
+  it('maps the default layout: Y Strike · X Crush · B Surge · A Signature · ZR Ultimate · ZL Guard · L Feint · R Gravity · + Pause · − Training', () => {
     const r = rig();
     const p = r.pads.plug(proStandard());
     const table: [number, number][] = [
@@ -95,7 +95,7 @@ describe('Switch Pro (standard mapping) → InputFrame', () => {
       [Pad.R2, Btn.ULTIMATE], // ZR
       [Pad.L2, Btn.GUARD], // ZL
       [Pad.L1, Btn.FEINT], // L
-      [Pad.R1, Btn.FEINT], // R
+      [Pad.R1, Btn.GRAVITY], // R (D27: the second hold button)
       [Pad.START, Btn.PAUSE], // +
       [Pad.SELECT, Btn.TRAINING], // −
     ];
@@ -207,7 +207,7 @@ describe('Switch Pro (non-standard mapping, Firefox-style)', () => {
       [DI.ZR, Btn.ULTIMATE],
       [DI.ZL, Btn.GUARD],
       [DI.L, Btn.FEINT],
-      [DI.R, Btn.FEINT],
+      [DI.R, Btn.GRAVITY],
       [DI.PLUS, Btn.PAUSE],
       [DI.MINUS, Btn.TRAINING],
     ];

@@ -96,6 +96,7 @@ const BTN = {
   FEINT: 64,
   PAUSE: 128,
   TRAINING: 256,
+  GRAVITY: 512,
 } as const;
 
 async function region(page: Page): Promise<number[]> {
@@ -148,7 +149,7 @@ test.describe('Switch Pro Controller, W3C standard mapping (Linux hid-nintendo, 
     expect(errorsOf(page)).toEqual([]);
   });
 
-  test('default Nintendo layout in game: Y strike, X crush, B surge, A signature, ZR ultimate, ZL guard, L/R feint, + pause, − training', async ({
+  test('default Nintendo layout in game: Y strike, X crush, B surge, A signature, ZR ultimate, ZL guard, L feint, R gravity, + pause, − training', async ({
     page,
   }) => {
     await open(page, 'screen=title');
@@ -163,7 +164,7 @@ test.describe('Switch Pro Controller, W3C standard mapping (Linux hid-nintendo, 
       [CANON.R2, BTN.ULTIMATE, 'ZR'],
       [CANON.L2, BTN.GUARD, 'ZL'],
       [CANON.L1, BTN.FEINT, 'L'],
-      [CANON.R1, BTN.FEINT, 'R'],
+      [CANON.R1, BTN.GRAVITY, 'R'],
       [CANON.START, BTN.PAUSE, '+'],
       [CANON.SELECT, BTN.TRAINING, '−'],
     ];
@@ -190,6 +191,7 @@ test.describe('Switch Pro Controller, W3C standard mapping (Linux hid-nintendo, 
               64: 'feint',
               128: 'pause',
               256: 'training',
+              512: 'gravity',
             };
             return window.__sandbox!.input.actionLabel('pad:0', map[b!] as never);
           },
