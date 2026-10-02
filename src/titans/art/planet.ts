@@ -113,16 +113,20 @@ function periodic(x: number, y: number, w: number, seed: number, oct: number): n
   return a * (1 - t) + b * t;
 }
 
+/** Cloud textures by noise seed (the texture depends on `seed & 0xfff` only), a few kept; the float scratch is shared. */
 const cloudCache = new Map<number, Uint8Array>();
+const CLOUD_RAW = new Float32Array(256 * 128);
+const CLOUD_SORT = new Float32Array(256 * 128);
 /** The cloud texture: latitude bands, cumulus clumps and one large cyclone; seamless in longitude. */
 function buildClouds(seed: number): Uint8Array {
-  const hit = cloudCache.get(seed);
+  const key = seed & 0xfff;
+  const hit = cloudCache.get(key);
   if (hit) return hit;
   const W = 256;
   const H = 128;
   const out = new Uint8Array(W * H);
-  const raw = new Float32Array(W * H);
-  const s = (seed & 0xfff) + 77;
+  const raw = CLOUD_RAW;
+  const s = key + 77;
   const stormX = 0.42 * W;
   const stormY = 0.62 * H;
   for (let y = 0; y < H; y++)
@@ -146,12 +150,14 @@ function buildClouds(seed: number): Uint8Array {
       raw[y * W + x] = d;
     }
   // normalise: the densest ~38% of the sphere becomes cloud, with soft edges
-  const sorted = Float32Array.from(raw).sort();
+  CLOUD_SORT.set(raw);
+  const sorted = CLOUD_SORT.sort();
   const thr = sorted[Math.floor(sorted.length * 0.68)]!;
   const top = sorted[Math.floor(sorted.length * 0.95)]!;
   for (let i = 0; i < raw.length; i++)
     out[i] = Math.round(smoothstep(thr - 0.03 * (top - thr), thr + 0.35 * (top - thr), raw[i]!) * 255);
-  cloudCache.set(seed, out);
+  if (cloudCache.size >= 8) cloudCache.delete(cloudCache.keys().next().value as number);
+  cloudCache.set(key, out);
   return out;
 }
 

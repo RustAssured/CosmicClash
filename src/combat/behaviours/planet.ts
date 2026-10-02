@@ -27,7 +27,7 @@ import type { FighterImpl } from '../fighter';
 import { BodyOverlay } from '../fx/bodyOverlay';
 import { TrackedBodyLayer } from '../fx/bodyLayer';
 import { GlowSprite } from '../fx/glowSprite';
-import { bayer, glowD, rampAt, rampDither, ribbon, ringBand, streak, tn } from '../fx/lib';
+import { bayer, glowD, rampAt, ribbon, ringBand, streak, tn } from '../fx/lib';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
 import { spinKeysOf } from '../pose';
@@ -114,6 +114,7 @@ const AURORA_BETA = 0.4;
 const AURORA_STEPS = 72;
 /** Aurora colours from faint to bright: violet fringe, blue, green body, pale-green crest, white-hot. */
 const AURORA_RAMP = ['#2a1a58', '#3048b0', '#28b888', '#78f0a8', '#e0fff0'].map(hex);
+const AURORA_TOP = AURORA_RAMP.length - 1;
 
 /*
  * DAMAGE PHASES (geological, monotonic within a round). 1 Intact World; 2 Fractured Crust (craters and faults; a bigger debris
@@ -320,12 +321,62 @@ function farFaceOf(def: TitanDef, seed: number, lighting: StageLighting): FarFac
   return hit;
 }
 
-/** Cloud density 0..1 of the wrapping 256-wide cloud texture row `row` (= lat·256) at fractional longitude `lx` (texture px). */
-function cloudAt(clouds: Uint8Array, row: number, lx: number): number {
-  const l0 = Math.floor(lx);
-  const lf = lx - l0;
-  return (clouds[row + (l0 & 255)]! * (1 - lf) + clouds[row + ((l0 + 1) & 255)]! * lf) / 255;
+/**
+ * Per-cell constants of the skin painter (static noise, dither thresholds, cloud-band rates, limb foreshortening), computed once
+ * per rig and shared by every fighter on it: the skin loop then reads tables instead of calling noise per cell per redraw.
+ */
+interface SkinTables {
+  /** Exposed crust value, dead-strata value, mantle band (static part), 4×4 Bayer threshold. */
+  crustV: Float64Array;
+  deadV: Float64Array;
+  mantleB: Float64Array;
+  bay: Float64Array;
+  /** Cloud deck: latitude band rate, limb foreshortening, longitude in texture px, row offset (lat·256). */
+  band: Float64Array;
+  fore: Float64Array;
+  lon: Float64Array;
+  row: Int32Array;
 }
+const SKIN_TABLES = new Map<string, SkinTables>();
+function skinTablesOf(rig: PlanetRig, w: number, h: number): SkinTables {
+  // the rig's geometry (sphere, tilt, core) is the def's, not the seed's: one table set serves every match of the same world
+  const key = `${w}x${h}|${rig.radius}|${rig.tilt}|${rig.core.x},${rig.core.y}`;
+  let t = SKIN_TABLES.get(key);
+  if (t) return t;
+  const n = w * h;
+  t = {
+    crustV: new Float64Array(n),
+    deadV: new Float64Array(n),
+    mantleB: new Float64Array(n),
+    bay: new Float64Array(n),
+    band: new Float64Array(n),
+    fore: new Float64Array(n),
+    lon: new Float64Array(n),
+    row: new Int32Array(n),
+  };
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      t.crustV[i] = 0.25 + 0.5 * tn(x * 0.5, y * 0.9 + 3) + 0.15 * (((x + y) & 3) === 0 ? 1 : 0);
+      t.deadV[i] = 0.12 + 0.2 * tn(x * 0.4, y * 0.4);
+      t.mantleB[i] =
+        0.5 + 0.5 * Math.sin(Math.hypot(x - rig.core.x, y - rig.core.y) * 0.55 + 2.2 * tn(x * 0.3, y * 0.3));
+      t.bay[i] = bayer(x, y);
+      const lat = rig.lat[i]!;
+      // latitude bands turn at slightly different rates (the equator leads)
+      t.band[i] = 1 + 0.5 * Math.cos((lat / 127 - 0.5) * Math.PI);
+      const nz = rig.nz[i]!;
+      t.fore[i] = (0.45 + 0.55 * (nz / 255)) * Math.min(1, Math.max(0, (nz - 70) / 90));
+      t.lon[i] = rig.lon[i]! / 256;
+      t.row[i] = lat * 256;
+    }
+  if (SKIN_TABLES.size > 3) SKIN_TABLES.delete(SKIN_TABLES.keys().next().value as string);
+  SKIN_TABLES.set(key, t);
+  return t;
+}
+
+/** A full-circle arc for `ringBand` (shared: the default argument would allocate one per call). */
+const FULL_ARC: [number, number] = [0, Math.PI * 2];
 
 const INTERIOR = (r: PlanetRig['ids'], m: number): boolean =>
   m === r.crust || m === r.mantle || m === r.magma || m === r.core;
@@ -519,6 +570,8 @@ export class PlanetBehaviour extends Behaviour {
     this.haloCore = new GlowSprite('planet-halo-core', -0.4, 96, [190, 64, 20], 0.35, 6);
     this.fx = new Overlay('planet-fx', 20, 800, 560, 'add', true);
     this.expo = new Uint8Array(map.w * map.h);
+    // the skin painter's per-cell constants, built here (match creation) rather than on the first painted frame
+    this.skinT = skinTablesOf(r, map.w, map.h);
     // light on every face cell (0..255), from the same key the painter used
     const L = f.lighting;
     const kx = L.dir[0] * 0.8;
@@ -2248,7 +2301,7 @@ export class PlanetBehaviour extends Behaviour {
     f.resource = clamp(f.resource, 0, this.moonsAlive);
     f.view.parts = this.moonsAlive;
 
-    this.draw(tick, m);
+    this.drawGate(tick);
   }
 
   private monitor(): void {
@@ -2322,21 +2375,40 @@ export class PlanetBehaviour extends Behaviour {
    *  drawing
    * ---------------------------------------------------------------------------------------------- */
 
-  private draw(tick: number, m: ActiveMove): void {
-    const f = this.f;
-    const map = f.body.map;
+  /**
+   * The sim side of drawing (runs in `update`): decide whether the skin and glow are due this tick and refresh the exposure scan
+   * there, because the Exposed Mantle phase reads it. The pixels themselves are painted at render time (`paint`, from
+   * `renderLayers`), once per sim tick that a frame shows — purely visual work stays out of the tick.
+   */
+  private drawGate(tick: number): void {
+    const map = this.f.body.map;
     // skin + glow every third tick while the day drifts calmly; every tick while the cloud deck streaks (spin, a half-turn), on a
     // command's input tick and while the core goes out; the reveal only changes with the map
     const fast = Math.abs(this.cloudSpin) > 0.6 || this.forceSkin;
     if (fast || tick % 3 === 0 || map.version !== this.lastVer) {
       if (fast || tick % 3 === 0 || this.redraw++ % 2 === 0) {
-        this.drawSkin(tick);
-        if (!fast || tick % 3 === 0 || map.version !== this.lastVer || this.failT >= 0) this.drawGlow(tick);
+        this.stampExposure();
+        this.skinDue = true;
+        if (!fast || tick % 3 === 0 || map.version !== this.lastVer || this.failT >= 0) this.glowDue = true;
         this.lastVer = map.version;
       }
     }
     this.forceSkin = false;
-    this.drawFx(tick, m);
+  }
+  private skinDue = true;
+  private glowDue = true;
+  private paintedTick = -1;
+
+  /** Render side: paint what the last sim tick made due (skin, glow) and the fx overlay; nothing here feeds the sim. */
+  private paint(): void {
+    const tick = this.tickLast;
+    if (tick === this.paintedTick) return;
+    this.paintedTick = tick;
+    if (this.skinDue) this.drawSkin(tick);
+    if (this.glowDue) this.drawGlow(tick);
+    this.skinDue = false;
+    this.glowDue = false;
+    this.drawFx(tick, this.f.mv);
   }
 
   /** Mark interior cells that damage has brought within 3 cells of the surface; cached per map version. */
@@ -2392,7 +2464,21 @@ export class PlanetBehaviour extends Behaviour {
     const mat = map.material;
     const ids = this.rig.ids;
     const rig = this.rig;
-    const anyExpo = this.stampExposure();
+    // the exposure scan is the sim's (drawGate): the painter only reads it
+    const anyExpo = this.expoAny;
+    const expo = this.expo;
+    const T = this.skinT;
+    const crustV = T.crustV;
+    const deadV = T.deadV;
+    const mantleB = T.mantleB;
+    const bay = T.bay;
+    const bandT = T.band;
+    const foreT = T.fore;
+    const lonT = T.lon;
+    const rowT = T.row;
+    const nzT = rig.nz;
+    const latT = rig.lat;
+    const lit = this.lit;
     const clouds = rig.clouds;
     const px = S.px;
     const em = S.emis!;
@@ -2408,68 +2494,93 @@ export class PlanetBehaviour extends Behaviour {
     // the core going out: the exposed deep strata darken and stop glowing, dithered in from the outside
     const out = this.coreOut;
     const heat = 1 - out;
+    const crustR = this.crustR;
+    const mantleR = this.mantle;
+    const magmaR = this.magma;
+    const coreC = rampAt(magmaR, (0.92 + 0.08 * Math.sin(tick * 0.035)) * heat);
+    const emMantle = Math.round(80 * heat);
+    const emMagma = Math.round(190 * heat);
+    const emCore = Math.round(240 * heat);
+    const mx = tick * 0.012;
+    const my = -tick * 0.008;
+    const cTop = cn.length - 1;
+    const clouded = density >= 0.05;
+    const streaks = smear >= 1;
+    const sk = (sdir * smear) / 3;
+    const crust = ids.crust;
+    const mantle = ids.mantle;
+    const magma = ids.magma;
+    const atmo = ids.atmosphere;
+    const cloud = ids.cloud;
     let any = false;
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
         const mm = mat[i]!;
         if (mm === 0) continue;
-        if (anyExpo && this.expo[i] === 1) {
+        if (anyExpo && expo[i] === 1) {
           // the strata the damage exposed: crust, banded mantle, slowly flowing magma, white-hot core
-          if (mm === ids.crust) {
-            const v = 0.25 + 0.5 * tn(x * 0.5, y * 0.9 + 3) + 0.15 * (((x + y) & 3) === 0 ? 1 : 0);
-            px[i] = rampDither(this.crustR, v, x, y);
+          // ordered-dither ramp lookups inlined (lib `rampDither`, same threshold): no call per exposed cell
+          let ramp: readonly number[] | null = null;
+          let v = 0;
+          if (mm === crust) {
+            ramp = crustR;
+            v = crustV[i]!;
             em[i] = 0;
+          } else if (out > 0 && out >= bay[i]!) {
+            ramp = crustR;
+            v = deadV[i]!;
+            em[i] = 0;
+          } else if (mm === mantle) {
+            ramp = mantleR;
+            v = 0.45 + 0.5 * mantleB[i]! * heat;
+            em[i] = emMantle;
+          } else if (mm === magma) {
+            ramp = magmaR;
+            v = (0.45 + 0.5 * tn(x * 0.35 + mx, y * 0.35 + my)) * heat + 0.1;
+            em[i] = emMagma;
+          }
+          if (ramp !== null) {
+            const top = ramp.length - 1;
+            const s = (v < 0 ? 0 : v > 1 ? 1 : v) * top;
+            const fl = Math.floor(s);
+            const idx = fl + (s - fl > bay[i]! ? 1 : 0);
+            px[i] = ramp[idx < top ? idx : top]!;
           } else {
-            const dead = out > 0 && out >= bayer(x, y);
-            if (dead) {
-              px[i] = rampDither(this.crustR, 0.12 + 0.2 * tn(x * 0.4, y * 0.4), x, y);
-              em[i] = 0;
-            } else if (mm === ids.mantle) {
-              const band =
-                0.5 +
-                0.5 *
-                  Math.sin(Math.hypot(x - rig.core.x, y - rig.core.y) * 0.55 + 2.2 * tn(x * 0.3, y * 0.3));
-              px[i] = rampDither(this.mantle, 0.45 + 0.5 * band * heat, x, y);
-              em[i] = Math.round(80 * heat);
-            } else if (mm === ids.magma) {
-              const v = 0.45 + 0.5 * tn(x * 0.35 + tick * 0.012, y * 0.35 - tick * 0.008);
-              px[i] = rampDither(this.magma, v * heat + 0.1, x, y);
-              em[i] = Math.round(190 * heat);
-            } else {
-              px[i] = rampAt(this.magma, (0.92 + 0.08 * Math.sin(tick * 0.035)) * heat);
-              em[i] = Math.round(240 * heat);
-            }
+            px[i] = coreC;
+            em[i] = emCore;
           }
           any = true;
           continue;
         }
-        const nz = rig.nz[i]!;
-        if (nz === 0 || density < 0.05) continue;
-        if (mm === ids.atmosphere || mm === ids.cloud) continue;
+        if (!clouded || nzT[i] === 0) continue;
+        if (mm === atmo || mm === cloud) continue;
         // drifting clouds over the face, lit like the surface, thinning as the atmosphere is stripped
-        const lat = rig.lat[i]!;
-        // latitude bands turn at slightly different rates (the equator leads)
-        const band = 1 + 0.5 * Math.cos((lat / 127 - 0.5) * Math.PI);
-        const lx = rig.lon[i]! / 256 - phase * band;
-        const row = lat * 256;
-        let d = cloudAt(clouds, row, lx);
-        if (smear >= 1) {
+        const band = bandT[i]!;
+        const lx = lonT[i]! - phase * band;
+        const row = rowT[i]!;
+        // cloudAt, inlined: the deck is a wrapping 256-wide texture row
+        let l0 = Math.floor(lx);
+        let lf = lx - l0;
+        let d = (clouds[row + (l0 & 255)]! * (1 - lf) + clouds[row + ((l0 + 1) & 255)]! * lf) / 255;
+        if (streaks) {
           // motion streak: what passed over this point in the last moment still shows, fading along the band
           for (let k = 1; k <= 3; k++) {
-            const s = cloudAt(clouds, row, lx + (sdir * smear * band * k) / 3) * (1 - 0.18 * k);
+            const lk = lx + sk * band * k;
+            l0 = Math.floor(lk);
+            lf = lk - l0;
+            const s =
+              ((clouds[row + (l0 & 255)]! * (1 - lf) + clouds[row + ((l0 + 1) & 255)]! * lf) / 255) *
+              (1 - 0.18 * k);
             if (s > d) d = s;
           }
         }
-        if (cover > 0) d += (1 - d) * cover * (0.55 + 0.35 * tn(lx * 0.07, lat * 0.21));
-        const foreshorten = (0.45 + 0.55 * (nz / 255)) * Math.min(1, Math.max(0, (nz - 70) / 90));
-        const a = d * density * foreshorten * 0.72;
-        const thr = 0.12 + 0.55 * bayer(x, y);
-        if (a <= thr) continue;
-        const lit = this.lit[i]! / 255;
-        const v = 0.2 + 0.75 * lit * (0.6 + 0.4 * a);
-        px[i] =
-          0xff000000 | (cn[Math.min(cn.length - 1, Math.round(clamp01(v) * (cn.length - 1)))]! & 0xffffff);
+        if (cover > 0) d += (1 - d) * cover * (0.55 + 0.35 * tn(lx * 0.07, latT[i]! * 0.21));
+        const a = d * density * foreT[i]! * 0.72;
+        if (a <= 0.12 + 0.55 * bay[i]!) continue;
+        const v = 0.2 + 0.75 * (lit[i]! / 255) * (0.6 + 0.4 * a);
+        const vc = v < 0 ? 0 : v > 1 ? 1 : v;
+        px[i] = 0xff000000 | (cn[Math.min(cTop, Math.round(vc * cTop))]! & 0xffffff);
         any = true;
       }
     if (any) S.mark();
@@ -2610,16 +2721,19 @@ export class PlanetBehaviour extends Behaviour {
         const ux = ox / ol;
         const uy = oy / ol;
         const h = height * (0.5 + 0.5 * shimmer);
+        const sx = ux * rf;
         for (let j = 0; j < h; j++) {
           const r = R * ol + j;
           const fade = v * (1 - j / (h + 1));
           // dithered per curtain sample (k, j), so the pattern travels with the curtain instead of flickering on the screen
           if (fade <= ((((k * 5 + j * 11) % 16) + 0.5) / 16) * 0.85) continue;
+          const fc = fade > 1 ? 1 : fade;
+          // int32 arguments (| 0): a rounded double handed to a call is boxed per pixel
           X.set(
-            Math.round(t.x + ux * r * rf),
-            Math.round(t.y + uy * r),
-            rampAt(AURORA_RAMP, clamp01(fade)),
-            Math.round(200 * clamp01(fade)),
+            Math.floor(t.x + sx * r + 0.5) | 0,
+            Math.floor(t.y + uy * r + 0.5) | 0,
+            AURORA_RAMP[(fc * AURORA_TOP + 0.5) | 0]!,
+            (200 * fc + 0.5) | 0,
           );
         }
       }
@@ -2648,6 +2762,26 @@ export class PlanetBehaviour extends Behaviour {
     streak(X, c.x, c.y, c.x + bx * len * 0.7, c.y + by * len * 0.7, 255, 210, 150, 0.4 * glow);
     glowD(X, c.x, c.y, c.r * 2, 170, 220, 255, 0.35 * glow);
   }
+
+  // drawFx's scratch: its own shape (the sim's `tmp` is never touched at render time) and the ribbon paths, bound once
+  private readonly fxTmp = makeFatShape();
+  private skinT!: SkinTables;
+  private ribMoon: Moon | null = null;
+  private readonly moonPath = (u: number, out: { x: number; y: number }): void => {
+    const mo = this.ribMoon!;
+    const q = clamp(u, 0, 1) * 12;
+    const k = Math.min(12, Math.floor(q));
+    const fr = q - k;
+    out.x = mo.tx[k]! + (mo.tx[k + 1]! - mo.tx[k]!) * fr;
+    out.y = mo.ty[k]! + (mo.ty[k + 1]! - mo.ty[k]!) * fr;
+  };
+  /** Magma Vent jet: mouth (x, y) and full-length vector (dx, dy). */
+  private readonly jet = new Float64Array(4);
+  private readonly jetPath = (u: number, out: { x: number; y: number }): void => {
+    const j = this.jet;
+    out.x = j[0]! + j[2]! * (1 - u);
+    out.y = j[1]! + j[3]! * (1 - u);
+  };
 
   private drawFx(tick: number, m: ActiveMove): void {
     const f = this.f;
@@ -2687,14 +2821,8 @@ export class PlanetBehaviour extends Behaviour {
         glowD(X, mo.x, mo.y, mo.radius * (1.6 + 1.2 * u), 255, 170, 90, 0.25 + 0.4 * u);
         continue;
       }
-      const pos = (u: number, out: { x: number; y: number }): void => {
-        const q = clamp(u, 0, 1) * 12;
-        const k = Math.min(12, Math.floor(q));
-        const fr = q - k;
-        out.x = mo.tx[k]! + (mo.tx[k + 1]! - mo.tx[k]!) * fr;
-        out.y = mo.ty[k]! + (mo.ty[k + 1]! - mo.ty[k]!) * fr;
-      };
-      ribbon(X, pos, 1, 0, 60, 1, mo.radius * 0.55, tick, this.flame);
+      this.ribMoon = mo;
+      ribbon(X, this.moonPath, 1, 0, 60, 1, mo.radius * 0.55, tick, this.flame);
       glowD(X, mo.x, mo.y, mo.radius * 2.2, 200, 190, 230, 0.35);
     }
     if (id === 'planet.impact') {
@@ -2710,8 +2838,8 @@ export class PlanetBehaviour extends Behaviour {
             200,
           );
         }
-      } else if (m.phase === 'active' && f.liveHitShape(0, at, this.tmp)) {
-        const s = this.tmp;
+      } else if (m.phase === 'active' && f.liveHitShape(0, at, this.fxTmp)) {
+        const s = this.fxTmp;
         const q = at / 8;
         ringBand(
           X,
@@ -2722,7 +2850,7 @@ export class PlanetBehaviour extends Behaviour {
           tick,
           this.magma,
           1.1 - 0.6 * q,
-          [0, Math.PI * 2],
+          FULL_ARC,
           0.34,
         );
         glowD(X, s.x, s.y, 50 * (1 - q) + 10, 255, 190, 110, 0.6 * (1 - q));
@@ -2745,9 +2873,9 @@ export class PlanetBehaviour extends Behaviour {
             0.25 + 0.4 * q,
           );
         }
-      } else if (m.phase === 'active' && f.liveHitShape(0, at, this.tmp)) {
-        const s = this.tmp;
-        ringBand(X, s.x, s.y, s.r0, s.r1, tick, this.crustR, 1 - 0.5 * (at / 14), [0, Math.PI * 2], 0.62);
+      } else if (m.phase === 'active' && f.liveHitShape(0, at, this.fxTmp)) {
+        const s = this.fxTmp;
+        ringBand(X, s.x, s.y, s.r0, s.r1, tick, this.crustR, 1 - 0.5 * (at / 14), FULL_ARC, 0.62);
       }
     }
     if (id === 'planet.magmavent') {
@@ -2763,11 +2891,12 @@ export class PlanetBehaviour extends Behaviour {
       } else if (m.phase === 'active') {
         // the jet: a tapered magma column out of the wound, its length breathing slowly
         const len = 200 * (0.85 + 0.15 * Math.sin(tick * 0.05));
-        const pos = (u: number, out: { x: number; y: number }): void => {
-          out.x = mx + dx * len * (1 - u);
-          out.y = my + dy * len * (1 - u);
-        };
-        ribbon(X, pos, 0, 1, len, 2, 9, tick, this.flame);
+        const jet = this.jet;
+        jet[0] = mx;
+        jet[1] = my;
+        jet[2] = dx * len;
+        jet[3] = dy * len;
+        ribbon(X, this.jetPath, 0, 1, len, 2, 9, tick, this.flame);
         glowD(X, mx, my, 24, 255, 160, 70, 0.55);
       }
     }
@@ -2776,9 +2905,9 @@ export class PlanetBehaviour extends Behaviour {
         // the core swells through the broken world
         const q = clamp01(m.phaseTick / m.startup);
         glowD(X, t.x, t.y, R * (0.4 + 1.1 * q), 255, 220, 150, 0.25 + 0.55 * q);
-      } else if (m.phase === 'active' && f.liveHitShape(0, at, this.tmp)) {
-        const s = this.tmp;
-        ringBand(X, s.x, s.y, s.r0, s.r1, tick, this.magma, 1.3 - 0.7 * (at / 24), [0, Math.PI * 2], 0.85);
+      } else if (m.phase === 'active' && f.liveHitShape(0, at, this.fxTmp)) {
+        const s = this.fxTmp;
+        ringBand(X, s.x, s.y, s.r0, s.r1, tick, this.magma, 1.3 - 0.7 * (at / 24), FULL_ARC, 0.85);
       }
     }
     if (id === 'planet.moonslam' && (m.phase === 'startup' || m.phase === 'charge')) {
@@ -2819,7 +2948,7 @@ export class PlanetBehaviour extends Behaviour {
             tick + k * 5,
             this.mantle,
             0.4 + 0.8 * q,
-            [0, Math.PI * 2],
+            FULL_ARC,
             0.7,
           );
         }
@@ -2836,12 +2965,12 @@ export class PlanetBehaviour extends Behaviour {
               tick + k * 5,
               this.magma,
               1,
-              [0, Math.PI * 2],
+              FULL_ARC,
               0.7,
             );
           }
-        } else if (f.liveHitShape(1, Math.min(at, 61), this.tmp)) {
-          const s = this.tmp;
+        } else if (f.liveHitShape(1, Math.min(at, 61), this.fxTmp)) {
+          const s = this.fxTmp;
           const q = clamp01((at - 52) / 12);
           ringBand(
             X,
@@ -2852,7 +2981,7 @@ export class PlanetBehaviour extends Behaviour {
             tick,
             this.magma,
             1.2 - 0.7 * q,
-            [0, Math.PI * 2],
+            FULL_ARC,
             0.36,
           );
           glowD(X, s.x, s.y, 80 * (1 - q) + 12, 255, 200, 120, 0.8 * (1 - q));
@@ -2890,7 +3019,7 @@ export class PlanetBehaviour extends Behaviour {
       root.y - Math.cos(tilt) * (R + 2 + 7 * level),
     );
     const a = R * (RING_LOOSE + (RING_TIGHT - RING_LOOSE) * this.ringTight);
-    for (const k of [0, 11]) {
+    for (let k = 0; k <= 11; k += 11) {
       const phi = (k / RING_MOTES) * Math.PI * 2 + this.ringPhase;
       out.push(root.x + Math.cos(phi) * a, root.y + Math.sin(phi) * a * RING_FLAT);
     }
@@ -2903,6 +3032,7 @@ export class PlanetBehaviour extends Behaviour {
 
   override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
     const f = this.f;
+    this.paint();
     const body = out[out.length - 1]!;
     this.skin.follow(body);
     this.glow.follow(body);
