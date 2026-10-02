@@ -371,7 +371,10 @@ export interface MatchConfig {
   footwork?: 'classic' | 'orbit';
   /** Shallow depth offset prototype (draw order, ±12 % scale, parallax; collision suppressed while |Δz| is large). */
   zdepth?: boolean;
-  /** The Last One is played as the rebuilt Witness (rig regions, new kit) — Phase 2, behind `witness=1` until it plays. */
+  /**
+   * The Last One is played as the rebuilt Witness (rig regions, new kit). The app turns it on by default since Phase 2
+   * (`witness=0` in the URL for the old Last One); sim configs, tests and tools leave it off unless they ask for it.
+   */
   witness?: boolean;
 }
 

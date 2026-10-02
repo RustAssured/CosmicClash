@@ -224,10 +224,11 @@ export class App {
       input: this.input,
       titans: (opts.full ? TITAN_IDS : this.roster).map((id): TitanInfo => {
         const d = TITAN_DEFS[id];
+        if (d && this.witness && id === 'lastone') return titanInfoFromDef(witnessDef(d));
         return d ? titanInfoFromDef(d) : FIXTURE_TITANS.find((t) => t.id === id)!;
       }),
       portrait: (id) => {
-        if (TITAN_DEFS[id]) return renderPortrait(id, 1, STAGES[this.menuStage].lighting);
+        if (TITAN_DEFS[id]) return renderPortrait(id, 1, STAGES[this.menuStage].lighting, this.witness);
         return fixturePortraitProvider(id);
       },
       stages: (opts.full ? STAGE_IDS : this.stageRoster).map((id) => STAGES[id]),
@@ -253,7 +254,7 @@ export class App {
     warmUp();
     for (const id of this.roster) {
       await sleep0();
-      renderPortrait(id, 1, STAGES[this.menuStage].lighting);
+      renderPortrait(id, 1, STAGES[this.menuStage].lighting, this.witness);
     }
     this.ready = true;
   }

@@ -52,7 +52,7 @@ export interface HarnessParams {
   /** Planar orbital footwork (default since D28; `orbit=0` = classic); `zdepth=1`: the depth-offset prototype. */
   orbit: boolean;
   zdepth: boolean;
-  /** `witness=1`: play the Last One as the rebuilt Witness (Phase 2, until it becomes the default). */
+  /** The Last One plays as the rebuilt Witness (the slice's default since Phase 2); `witness=0` brings back the old Last One. */
   witness: boolean;
   /** `aftermath=0`: skip the aftermath screen after the deciding KO (automated captures and tests run straight to results). */
   aftermath: boolean;
@@ -172,7 +172,7 @@ export function parseHarnessParams(search: string): HarnessParams {
     // D28: orbital footwork is the slice's combat space; `orbit=0` brings back classic for comparison
     orbit: q.get('orbit') !== '0',
     zdepth: q.get('zdepth') === '1',
-    witness: q.get('witness') === '1',
+    witness: q.get('witness') !== '0',
     aftermath: q.get('aftermath') !== '0',
     active: keys.some(has),
   };
