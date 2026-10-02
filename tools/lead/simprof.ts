@@ -10,7 +10,8 @@ import { createAI } from '@/ai';
 import { createFighter } from '@/combat';
 import { createMatterWorld } from '@/matter';
 import { createAiSource, createMatch } from '@/sim';
-import { getTitanDef } from '@/titans';
+import { STAGE_INFO } from '@/stages/info';
+import { getTitanDef, witnessDef } from '@/titans';
 
 const args = process.argv.slice(2);
 const opt = (k: string, d: string): string =>
@@ -19,6 +20,10 @@ const TICKS = +opt('ticks', '3600');
 const SEED = +opt('seed', '21');
 const REPS = +opt('reps', '3');
 const FOOT: 'classic' | 'orbit' = args.includes('--classic') ? 'classic' : 'orbit';
+/** `--witness`: the Last One plays as the Witness (the slice default in the app); `--stage=shearfield` uses that arena (comets). */
+const WITNESS = args.includes('--witness');
+const STAGE = opt('stage', 'nursery') as MatchConfig['stage'];
+const lastOneDef = WITNESS ? witnessDef(getTitanDef('lastone')) : getTitanDef('lastone');
 
 type Sec = 'f0' | 'f0.beh' | 'f1' | 'f1.beh' | 'pair' | 'world' | 'step';
 const SECS: Sec[] = ['step', 'f0', 'f0.beh', 'f1', 'f1.beh', 'pair', 'world'];
@@ -26,9 +31,10 @@ const SECS: Sec[] = ['step', 'f0', 'f0.beh', 'f1', 'f1.beh', 'pair', 'world'];
 function run(): Record<Sec, Float64Array> {
   const cfg: MatchConfig = {
     seed: SEED,
-    stage: 'nursery',
+    stage: STAGE,
     mode: 'aivai',
     footwork: FOOT,
+    witness: WITNESS,
     slots: [
       { titan: 'lastone', controller: 'ai', aiLevel: 4 },
       { titan: 'planet', controller: 'ai', aiLevel: 4 },
@@ -38,11 +44,11 @@ function run(): Record<Sec, Float64Array> {
     createWorld: createMatterWorld,
     createFighter,
     getTitanDef,
-    arena: DEFAULT_ARENA,
-    lighting: DEFAULT_LIGHTING,
+    arena: STAGE_INFO[STAGE]?.arena ?? DEFAULT_ARENA,
+    lighting: STAGE_INFO[STAGE]?.lighting ?? DEFAULT_LIGHTING,
   });
   m.setSources(
-    createAiSource(m, 0, createAI(4, getTitanDef('lastone'), SEED * 7 + 1, { footwork: FOOT })),
+    createAiSource(m, 0, createAI(4, lastOneDef, SEED * 7 + 1, { footwork: FOOT })),
     createAiSource(m, 1, createAI(4, getTitanDef('planet'), SEED * 7 + 2, { footwork: FOOT })),
   );
   const t: Record<Sec, Float64Array> = Object.fromEntries(

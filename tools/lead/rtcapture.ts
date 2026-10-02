@@ -219,7 +219,10 @@ const extra = opt('flags', '')
   .filter(Boolean)
   .map((f) => `&${f}`)
   .join('');
-const url = `${base}/?${sc.params}&freeze=1&aftermath=0&tele=${tele}&q=${quality}${lum ? '' : '&lum=0'}${extra}`;
+// --stage=mausoleum swaps the scenario's arena (the slice's arenas; scenarios default to the nursery)
+const stage = opt('stage', '');
+const params = stage ? sc.params.replace(/stage=[a-z]+/, `stage=${stage}`) : sc.params;
+const url = `${base}/?${params}&freeze=1&aftermath=0&tele=${tele}&q=${quality}${lum ? '' : '&lum=0'}${extra}`;
 console.log(`${name}: ${url}`);
 const browser = await launchRealtime();
 const { page, errors } = await openGame(browser, url, null);
