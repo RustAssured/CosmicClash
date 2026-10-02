@@ -67,8 +67,11 @@ const POLYPHONY = 28;
 /* ---- D6 mix constants (calibrated with tools/ui/audio-verify.ts --round: −20 LUFS integrated, ≤ −1 dBTP at default faders) ---- */
 /** Output high-pass (Hz, 24 dB/oct): laptop speakers cannot play below it, so it would only eat limiter headroom (D27). */
 export const OUTPUT_HIGHPASS_HZ = 50;
-/** Gain before the limiter that puts a typical round at −20 LUFS integrated with the default faders. */
-export const CALIBRATION_DB = 1.3;
+/**
+ * Gain before the limiter (default faders). Phase 2 re-stage: the live orbit capture read −27 LUFS against −21.3 offline, so the
+ * mix went up +3 dB here and the bed +2 dB (BED_LEVEL_DB): offline orbit −17.9 LUFS, the live one should land ≈ −24..−23.
+ */
+export const CALIBRATION_DB = 4.3;
 /** Menu / UI sounds sit this far under the calibrated impacts (they were authored against the old, quieter master). */
 const UI_LEVEL_DB = -9;
 /** Reverb returns: the impacts' space and the bed's. */
@@ -79,13 +82,14 @@ export const BED_GLUE = { threshold: -18, knee: 10, ratio: 2, attack: 0.03, rele
 /** The score at neutral sits this many dB under its full, committed level. */
 export const SCORE_NEUTRAL_DB = 8;
 /** The whole bed sits this far under the impacts (dB): the floor a blow rises from. */
-export const BED_LEVEL_DB = -4.5;
+export const BED_LEVEL_DB = -2.5;
 /**
  * Bed duck under heavy blows: gain depth (dB) and time held (s) from the lightest to the heaviest qualifying event. Telemetry
- * reads the duck through 400 ms momentary loudness, which smooths it: these gains read as ≈ 4–8 dB for 300–600 ms there.
+ * reads the duck through 400 ms momentary loudness. Phase 2: the live meter read the old 6.5–10 dB gains as a 12 dB median dip, so
+ * they were halved toward 4–6.5 dB (offline orbit: 5.3 dB median, 300 ms).
  */
-export const DUCK_DB: readonly [number, number] = [6.5, 10];
-export const DUCK_SEC: readonly [number, number] = [0.45, 0.65];
+export const DUCK_DB: readonly [number, number] = [4, 6.5];
+export const DUCK_SEC: readonly [number, number] = [0.35, 0.55];
 /** Smallest blow that ducks the bed (the same line telemetry draws for a heavy hit). */
 export const DUCK_MIN_ENERGY = 400;
 
