@@ -1826,7 +1826,23 @@ export function witnessDef(def: TitanDef): TitanDef {
     ...def,
     name: 'The Witness',
     materials: WITNESS_MATERIALS.map((m) => ({ ...m })),
-    resource: { ...def.resource, max: HALO_ARCS.length, start: HALO_ARCS.length },
+    // the pips count the halo arcs still bound to it (the id stays the contract's 'tendrils': ResourceId is a contract union)
+    resource: {
+      ...def.resource,
+      name: 'Halo',
+      nameKo: '후광',
+      max: HALO_ARCS.length,
+      start: HALO_ARCS.length,
+    },
+    passive: {
+      name: 'Opened Eyes',
+      text: 'Where its carapace breaks, inner eyes open. Every open eye adds a beam to its gaze.',
+    },
+    failureMode: {
+      name: 'The Structure Fails',
+      text: 'Joints give one by one: a severed arm shortens its reach, a broken halo arc weakens its Guard. The eye goes out last.',
+    },
+    ui: { ...def.ui, tagline: 'The more it breaks, the more it sees.' },
     moves: witnessMoves(def.moves),
     art: {
       w: eye.w,
