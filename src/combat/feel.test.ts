@@ -152,7 +152,8 @@ describe('input → response (pixels, not state)', () => {
     expect(leanAfter).toBeLessThan(0);
   });
 
-  it('reaches ~70% of top speed within 0.2 s and then keeps accelerating toward top speed', () => {
+  // D28 scale of motion: the root's velocity builds over ≥ 0.25 s after the first pixel (it used to be ~70 % at 0.2 s)
+  it('builds speed like a colossus: well under 70 % of top speed at 0.2 s, ~70 % by 0.35 s, then on toward top speed', () => {
     const { a, f0, step } = duel({ gap: 420 });
     step(2);
     const top = topSpeed(f0.def, f0.stats);
@@ -160,9 +161,11 @@ describe('input → response (pixels, not state)', () => {
     const v0 = Math.abs(f0.vx);
     expect(v0).toBeLessThan(2);
     step(12); // 0.2 s
-    const frac = Math.abs(f0.vx) / top;
-    expect(frac).toBeGreaterThan(0.66);
-    expect(frac).toBeLessThan(0.74);
+    const early = Math.abs(f0.vx) / top;
+    expect(early).toBeGreaterThan(0.3);
+    expect(early).toBeLessThan(0.6);
+    step(9); // 0.35 s
+    expect(Math.abs(f0.vx) / top).toBeGreaterThan(0.64);
     step(60);
     expect(Math.abs(f0.vx) / top).toBeGreaterThan(0.97);
   });
@@ -191,7 +194,8 @@ describe('input → response (pixels, not state)', () => {
     expect(lean1).toBeGreaterThanOrEqual(3); // top leans toward +x, into the motion
     a.moveX = -1;
     let sawFlip = false;
-    for (let i = 0; i < 30; i++) {
+    // a slow, heavy swing (D28): the lean comes over within about a second, not a quarter of one
+    for (let i = 0; i < 60; i++) {
       step();
       if (f0.body.transform.lean < 0) sawFlip = true;
     }

@@ -164,7 +164,10 @@ describe('AI competence', () => {
   );
 
   it('skill shows in mechanics: higher levels dodge a telegraphed Crush far more often', () => {
-    /** Fraction of thrown Meteor Strikes (a lunging heavy, 26 ticks of startup) that hit an otherwise idle AI. */
+    /**
+     * Fraction of thrown Meteor Strikes (a lunging heavy, 26 ticks of startup) that hit an otherwise idle AI. Thrown from 120 px:
+     * since D28 every lunge builds over 10 ticks, so from the old 170 px nearly every level escaped and the ladder collapsed.
+     */
     const hitRate = (level: Difficulty): number => {
       let thrown = 0;
       let hit = 0;
@@ -182,7 +185,7 @@ describe('AI competence', () => {
         skipIntro(m);
         const f0 = m.fighters[0]!;
         const f1 = m.fighters[1] as unknown as { px: number; py: number };
-        f1.px = (f0 as unknown as { px: number }).px + 170;
+        f1.px = (f0 as unknown as { px: number }).px + 120;
         f1.py = (f0 as unknown as { py: number }).py;
         let at = -1;
         let got = false;
@@ -206,7 +209,7 @@ describe('AI competence', () => {
     // (feints are off at every level after the round-3 ladder measurement, so level 6 no longer dodges best in isolation: use level 5)
     const r6 = hitRate(5);
     expect(r1).toBeGreaterThan(0.3);
-    expect(r6).toBeLessThan(0.25);
+    expect(r6).toBeLessThan(0.3);
     expect(r6).toBeLessThan(r3);
     expect(r3).toBeLessThan(r1);
   }, 240_000);

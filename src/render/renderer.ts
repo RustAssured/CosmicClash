@@ -39,8 +39,11 @@ import {
 import { STAGES } from '@/stages';
 import { createScenery } from '@/stages/scenery';
 import {
+  MAX_COMETS,
   MAX_IMPULSES,
   MAX_SHOCKS,
+  MAX_WELLS,
+  type FrameFxExt,
   type PrepareStep,
   type SceneryForces,
   type SceneryFrame,
@@ -172,6 +175,8 @@ export const DEFAULT_FIGHT_BAND = { top: -130, bottom: 110, feather: 50, ceiling
 export const DEFAULT_GLOW_DAMP: readonly [number, number] = [0.6, 0.9];
 
 const ROLL_LIMIT = (1.5 * Math.PI) / 180;
+/** Aftermath inspect mode: largest whole-number zoom of the final frame. */
+const INSPECT_MAX_ZOOM = 4;
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 class RollingAverage {
@@ -231,6 +236,8 @@ export interface DebuggableRenderer extends Renderer {
   debugLumaReadback(diag: boolean): { available: boolean; skipped: number; errors: string[]; pollMs: number };
   /** Switch the sharp-bilinear sprite push (push=1) at run time. */
   debugSetSpritePush(on: boolean): void;
+  /** Aftermath screen: camera zoom becomes a whole-number nearest zoom (1–4×) and roll is unclamped; off in play. */
+  setInspect(on: boolean): void;
 }
 
 export function createRenderer(): DebuggableRenderer {
@@ -324,6 +331,8 @@ class PixelRenderer implements DebuggableRenderer {
   private lumaRead: LumaReadback | null = null;
   private comfort = 1;
   private spritePush = false;
+  /** Aftermath inspect mode: whole-number zoom and free rotation of the final frame. */
+  private inspect = false;
 
   // passes
   private ditherPass!: FullscreenPass;
@@ -361,6 +370,11 @@ class PixelRenderer implements DebuggableRenderer {
     impulse: new Float32Array(MAX_IMPULSES * 4),
     impulse2: new Float32Array(MAX_IMPULSES * 4),
     nImpulse: 0,
+    well: new Float32Array(MAX_WELLS * 4),
+    nWell: 0,
+    comet: new Float32Array(MAX_COMETS * 4),
+    comet2: new Float32Array(MAX_COMETS * 4),
+    nComet: 0,
   };
   private readonly postShock = new Float32Array(MAX_SHOCKS * 4);
   /**
@@ -941,6 +955,31 @@ class PixelRenderer implements DebuggableRenderer {
       m++;
     }
     f.nImpulse = m;
+    // proposed FrameFx additions (proposal 165): gravity wells bend the scenery's matter, the arena comets get tails and paths
+    const ext = fx as FrameFxExt;
+    let nw = 0;
+    for (const w of ext.wells ?? []) {
+      if (nw >= MAX_WELLS || !(w.radius > 1) || !(w.strength > 0)) continue;
+      f.well[nw * 4] = w.x - vx;
+      f.well[nw * 4 + 1] = w.y - vy;
+      f.well[nw * 4 + 2] = w.radius;
+      f.well[nw * 4 + 3] = Math.min(1, w.strength) * 18;
+      nw++;
+    }
+    f.nWell = nw;
+    let nc = 0;
+    for (const c of ext.comets ?? []) {
+      if (nc >= MAX_COMETS) break;
+      f.comet[nc * 4] = c.x - vx;
+      f.comet[nc * 4 + 1] = c.y - vy;
+      f.comet[nc * 4 + 2] = c.vx;
+      f.comet[nc * 4 + 3] = c.vy;
+      f.comet2[nc * 4] = c.r;
+      f.comet2[nc * 4 + 1] = c.captured ?? 0;
+      f.comet2[nc * 4 + 2] = c.warn ?? 0;
+      nc++;
+    }
+    f.nComet = nc;
     const lens = this.lens;
     let k = 0;
     for (let i = 0; i < fx.lenses.length && k < 4; i++) {
@@ -1345,16 +1384,26 @@ class PixelRenderer implements DebuggableRenderer {
     this.spritePush = on;
   }
 
+  setInspect(on: boolean): void {
+    this.inspect = on;
+  }
+
   private present(frame: RenderFrame): void {
     const r = this.three;
     const fu = this.finalPass.uniforms;
     const cam = frame.camera;
-    // D27: sprites stay 1:1 unless the sprite-push A/B (push=1) is on; then zoom resamples sharp-bilinearly
-    const zoom = this.spritePush ? Math.max(1, Math.min(SPRITE_PUSH_MAX, cam.zoom)) : 1;
+    // D27: sprites stay 1:1 unless the sprite-push A/B (push=1) is on; then zoom resamples sharp-bilinearly.
+    // Inspect mode (the aftermath screen): whole-number zoom with nearest sampling (pixel-exact) and free rotation.
+    const zoom = this.inspect
+      ? Math.max(1, Math.min(INSPECT_MAX_ZOOM, Math.round(cam.zoom)))
+      : this.spritePush
+        ? Math.max(1, Math.min(SPRITE_PUSH_MAX, cam.zoom))
+        : 1;
+    const push = this.spritePush && !this.inspect;
     fu.uZoom!.value = zoom;
-    fu.uPush!.value = this.spritePush ? 1 : 0;
+    fu.uPush!.value = push ? 1 : 0;
     fu.uSharp!.value = this.layout.scale * zoom;
-    fu.uRoll!.value = Math.max(-ROLL_LIMIT, Math.min(ROLL_LIMIT, cam.roll));
+    fu.uRoll!.value = this.inspect ? cam.roll : Math.max(-ROLL_LIMIT, Math.min(ROLL_LIMIT, cam.roll));
     if (frame.ui && frame.ui.visible) {
       fu.uUi!.value = this.layers.acquire(frame.ui).tex;
       fu.uHasUi!.value = 1;

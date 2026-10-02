@@ -75,6 +75,45 @@ describe('AI with orbital footwork (minimal 2-D spacing)', () => {
     }, 60_000);
   }
 
+  it('paces like colossi (D28): between its own attacks it breathes, so moves per minute stay low', () => {
+    const cfg: MatchConfig = {
+      seed: 21,
+      stage: 'nursery',
+      mode: 'aivai',
+      footwork: 'orbit',
+      infinite: true,
+      slots: [
+        { titan: 'lastone', controller: 'ai', aiLevel: 3 },
+        { titan: 'planet', controller: 'ai', aiLevel: 3 },
+      ],
+    };
+    const m = createMatch(cfg, {
+      createWorld: (s) => createFakeWorld(s),
+      createFighter,
+      getTitanDef,
+      arena: DEFAULT_ARENA,
+      lighting: DEFAULT_LIGHTING,
+    });
+    m.setSources(
+      createAiSource(m, 0, createAI(3, getTitanDef('lastone'), 1, { footwork: 'orbit' })),
+      createAiSource(m, 1, createAI(3, getTitanDef('planet'), 2, { footwork: 'orbit' })),
+    );
+    let attacks = 0;
+    const T = 60 * 60;
+    for (let t = 0; t < T; t++) {
+      m.step();
+      for (const e of m.events)
+        if (
+          e.t === 'move' &&
+          (e.moveSlot === 'strike' || e.moveSlot === 'crush' || e.moveSlot === 'signature')
+        )
+          attacks++;
+    }
+    // two fighters, an ~8 s breath each (punishes may cut it in half): well under the ~25 contacts a minute of Gate B
+    expect(attacks).toBeGreaterThan(4);
+    expect(attacks).toBeLessThan(22);
+  }, 60_000);
+
   it('latches orbit footwork from its own view when nobody told it', () => {
     const r = vsDummy('lastone', 'planet', 5, 60 * 12, false);
     expect(r.hits).toBeGreaterThan(0);

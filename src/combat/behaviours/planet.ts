@@ -1,4 +1,5 @@
 import {
+  Btn,
   CellFlag,
   DamageFlag,
   TICK_DT,
@@ -9,20 +10,24 @@ import {
   type DamageEvent,
   type DamageShape,
   type DebugShape,
+  type EffectiveStats,
   type FighterTickCtx,
   type MatterBody,
   type OverlapResult,
   type RenderLayer,
+  type StageLighting,
+  type TitanDef,
   type ViewRect,
 } from '@/contracts';
-import { generateMoonBody } from '@/titans/art/planet';
+import { generateCometBody } from '@/titans/art/comet';
+import { generateMoonBody, paintPlanet } from '@/titans/art/planet';
 import type { PlanetRig } from '@/titans';
 import { Behaviour, type HitInfo, type InterceptResult } from '../behaviour';
 import type { FighterImpl } from '../fighter';
 import { BodyOverlay } from '../fx/bodyOverlay';
 import { TrackedBodyLayer } from '../fx/bodyLayer';
 import { GlowSprite } from '../fx/glowSprite';
-import { bayer, glowD, rampAt, rampDither, ribbon, ringBand, tn } from '../fx/lib';
+import { bayer, glowD, rampAt, rampDither, ribbon, ringBand, streak, tn } from '../fx/lib';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
 import { spinKeysOf } from '../pose';
@@ -35,6 +40,13 @@ const RETURN = 2;
 const DRIFT = 3;
 const GONE = 4;
 
+/** Comet modes: none, falling in under the shepherd's pull, captured and spun up, slung at the foe, let go. */
+const C_NONE = 0;
+const C_INBOUND = 1;
+const C_ORBIT = 2;
+const C_FLY = 3;
+const C_LOOSE = 4;
+
 /** Share of a blow a moon in its way takes for the planet, and the most all moons together can soak. */
 const MOON_SHARE = 0.22;
 const SOAK_MAX = 0.3;
@@ -43,15 +55,22 @@ const KNOCK_LIMIT = 170;
 const BREAK_FRAC = 0.28;
 /** A drifting moon further than this from the planet is lost for good. */
 const LOST_RADIUS = 300;
-const GRAVITY_STRENGTH = 12;
-const GRAVITY_RADIUS = 250;
 
 /*
- * SPIN. The world turns about its tilted polar axis: ω (rad/s, + = the visible surface moves toward the body's local +x) and the
- * surface phase θ (rad, FighterView.angle). Spin is never coupled to travel (it is the world's own day, always prograde), so it
- * cannot read as a rolling ball. It is shown by what turns with the world: cloud bands (dragged behind the surface), aurora, the
- * moons (which lag a spin-up) and the debris ring. A commanded change is a target the spin is pulled toward by an under-damped
- * spring, so a hard stop overshoots below the day rate before the day carries on; blows add angular impulse through their lever arm.
+ * SCALE (D28, docs/briefs/scale-spec.md). Everything here moves like weather and orbit: slow, continuous, lagging. Springs on
+ * parts stay at ω ≤ 4 rad/s with ζ ≥ 0.45, impulses are ramped over IMPULSE_TICKS, no pattern changes per tick (dither masks
+ * are fixed in space; shimmer runs below 0.5 Hz). Commands still change a pixel on their accept tick: through light (an aurora
+ * flare, the debris ring brightening), never through a jump of anything big.
+ */
+/** Ticks over which an angular impulse (a blow's torque, a move's spin key, the world's own kicks) is fed into the spin. */
+const IMPULSE_TICKS = 10;
+
+/*
+ * SPIN. The world turns about its tilted polar axis: ω (rad/s) and the surface phase θ (rad, FighterView.angle). Spin is never
+ * coupled to travel (it is the world's own day, always prograde), so it cannot read as a rolling ball. It is shown by what turns
+ * with the world: cloud bands (dragged behind the surface), aurora, the moons (which lag a spin-up) and the debris ring. A
+ * commanded change is a target the spin is pulled toward by an under-damped spring, so a hard stop overshoots below the day rate
+ * before the day carries on; blows add angular impulse through their lever arm (the fighter's impact model).
  */
 /**
  * World sense of the Planet's own rotation, in the sign convention of the fighters' angular state (+ = clockwise on screen; for the
@@ -61,25 +80,27 @@ const GRAVITY_RADIUS = 250;
 const PROGRADE = -1;
 /** The world's own day (rad/s): clouds drift even when nothing happens. */
 const SPIN_BASE = 0.14;
-/** Spin a committed Impact winds up to, and the Cataclysm's. */
+/** Spin a committed Tidal Rush winds up to (without authored spin keys), and the Cataclysm's / Core Pulse's. */
 const SPIN_COMMIT = 2.4;
 const SPIN_MAX = 4;
-/** Spring of ω toward its target: stiffness (1/s²) and damping ratio (< 1: overshoot on stops). */
-const SPIN_K = 9;
-const SPIN_ZETA = 0.72;
-/** How fast the atmosphere catches up with the surface (1/s): cloud bands lag a spin-up and trail a stop. */
-const CLOUD_DRAG = 3.2;
-/** Moons lag behind a spinning-up world (rad of orbit per rad/s² of spin acceleration), on a spring (stiffness 1/s², damping). */
-const MOON_LAG_GAIN = 0.022;
-const MOON_LAG_K = 26;
-const MOON_LAG_ZETA = 0.5;
-/** Rotational Brace: a half-turn takes this many ticks; it happens only if the far face is this much more intact. */
-const TURN_TICKS = 16;
+/** Spring of ω toward its target: ω0 = 2 rad/s (0.32 Hz), ζ 0.75 (one slow overshoot on stops). */
+const SPIN_K = 4;
+const SPIN_ZETA = 0.75;
+/** How fast the atmosphere catches up with the surface (1/s): cloud bands lag a spin-up and trail a stop by ~0.7 s. */
+const CLOUD_DRAG = 1.4;
+/** Moons lag behind a spinning-up world (rad of orbit per rad/s² of spin acceleration) on a slow spring (ω0 1.7 rad/s). */
+const MOON_LAG_GAIN = 0.03;
+const MOON_LAG_K = 3;
+const MOON_LAG_ZETA = 0.6;
+/** Rotational Brace: a half-turn (with a counter-swing first) takes this many ticks; only if the far face is this much better. */
+const TURN_TICKS = 36;
 const BRACE_MARGIN = 0.04;
+/** How fast the moons swing into the Guard's shield position and back: a critically damped spring of this ω (rad/s; ~0.7 s). */
+const GUARD_OMEGA = 3;
 /** Cloud-texture px of smear per rad/s of atmospheric spin (bands streak), capped. */
 const SMEAR_PER_SPIN = 2.6;
 const SMEAR_MAX = 14;
-/** Debris ring: motes, radius (planet radii) slack and tight, and its flattening (seen nearly edge-on, like the moon orbits). */
+/** Debris ring: motes (more as the crust breaks), radius (planet radii) slack and tight, flattening, tilt (the moons' plane). */
 const RING_MOTES = 44;
 const RING_LOOSE = 2.05;
 const RING_TIGHT = 1.3;
@@ -91,14 +112,63 @@ const AURORA_STEPS = 72;
 /** Aurora colours from faint to bright: violet fringe, blue, green body, pale-green crest, white-hot. */
 const AURORA_RAMP = ['#2a1a58', '#3048b0', '#28b888', '#78f0a8', '#e0fff0'].map(hex);
 
+/*
+ * DAMAGE PHASES (geological, monotonic within a round). 1 Intact World; 2 Fractured Crust (craters and faults; a bigger debris
+ * ring = more Tidal Draw ammunition; the axis starts to wander); 3 Exposed Mantle (magma shows, the air is torn; Magma Vent; hotter,
+ * harder blows; the Brace holds less); 4 Core Crisis (the moons are shaken loose, the core glows through; Core Pulse; fragile).
+ * The wounded world is MORE dangerous: outgoing damage rises with the phase.
+ */
+const PHASE_POWER = [1, 1, 1.07, 1.16, 1.3];
+const PHASE_BRACE = [1, 1, 0.94, 0.8, 0.64];
+const PHASE_GRAVITY = [12, 12, 18, 22, 26];
+const PHASE_MOTES = [44, 44, 64, 72, 84];
+/** Axis wander (precession wobble of aurora/ring, rad) per phase: a fractured world no longer turns true. */
+const PHASE_WANDER = [0, 0, 0.05, 0.08, 0.12];
+/** Most extra ticks a Moon Slam whip may run past its windup while it waits for its path to point at the foe. */
+const WHIP_EXTRA = 50;
+/** Ticks over which a moon caught back into orbit settles onto it (a slow glide instead of a snap). */
+const SETTLE_TICKS = 40;
+/** Holding Crush this many ticks into Tidal Rush turns it into the phase move. */
+const HOLD_TICKS = 10;
+
+/** Tidal Draw (R1): extra pull while held (px/s² at half radius), reach, and the armour it builds from what it draws in. */
+const DRAW_PULL = 150;
+const DRAW_REACH = 90;
+const DRAW_IN = 0.5;
+const DRAW_OUT = 0.8;
+/**
+ * The debris ring (matter capture, proposal 142): its radius (planet radii), the most chunks it holds, how often Tidal Draw
+ * reaches for more, the share of a blow each ring chunk in its way soaks (armour), and the speed a ring chunk is thrown at
+ * (Moon Slam with no moon in orbit: the world throws its debris).
+ */
+const RING_R = 1.75;
+const RING_CAP = 12;
+const CAPTURE_EVERY = 6;
+const RING_SOAK = 0.1;
+const RING_THROW = 540;
+
+/** Failure (KO): the 2–4 s process, in ticks after the KO. */
+const FAIL_VENT_END = 96;
+const FAIL_MOONS_AT = 14;
+const FAIL_SLAB_FROM = 40;
+const FAIL_SLAB_EVERY = 14;
+const FAIL_SLABS = 8;
+const FAIL_CORE_FROM = 110;
+const FAIL_CORE_OUT = 196;
+
 interface SlamCfg {
   speed: number;
+  accel: number;
+  windup: number;
+  turn: number;
+  curve: number;
   energy: number;
   crater: number;
   compress: number;
   shock: number;
   recoil: number;
   life: number;
+  breakFrac: number;
 }
 interface BarrageCfg {
   from: number;
@@ -109,6 +179,24 @@ interface BarrageCfg {
   compress: number;
   shock: number;
 }
+interface CometCfg {
+  spawnDist: number;
+  spawnRise: number;
+  entrySpeed: number;
+  orbit: number;
+  w0: number;
+  w1: number;
+  spinUp: number;
+  vRef: number;
+  energy: number;
+  life: number;
+  /** Mass of a called-in nucleus (the throw's energy follows from it and the launch speed). */
+  mass: number;
+}
+interface DriftCfg {
+  curve: number;
+  spin: number;
+}
 
 class Moon {
   body!: MatterBody;
@@ -118,7 +206,7 @@ class Moon {
   y = 0;
   vx = 0;
   vy = 0;
-  /** Orbit angle, and the current orbital angular speed multiplier. */
+  /** Orbit angle. */
   ang = 0;
   age = 0;
   radius = 12;
@@ -131,6 +219,102 @@ class Moon {
   /** Phase offset from the nominal orbit (rad): the moon lags a spin-up, swings ahead when called on; a spring brings it home. */
   lag = 0;
   lagV = 0;
+  /* the strike in flight: whip-round ticks left (and total), top speed, curve side, blow */
+  windup = 0;
+  windupMax = 1;
+  speedMax = 9;
+  accel = 0.45;
+  turn = 0.07;
+  curve = 0;
+  energy = 0;
+  crater = 14;
+  compress = 8;
+  shock = 1.2;
+  life = 70;
+  /** Set free by the world's failure: it drifts off and never comes home. */
+  free = false;
+  /** Ticks left of the glide back onto the orbit after a capture. */
+  settle = 0;
+}
+
+/**
+ * The comet: a debris chunk of the matter world (a nucleus the Planet calls in; later an arena comet), moved by the world's
+ * gravity well while it falls in, by the Planet's capture ring once caught, and thrown with `launchChunk`.
+ */
+class Comet {
+  /** Chunk id in the matter world (−1 = none). */
+  id = -1;
+  mode = C_NONE;
+  /** Last read position and velocity (px, px/s). */
+  x = 0;
+  y = 0;
+  vx = 0;
+  vy = 0;
+  /** Ring spin while it is held in orbit (rad/s, prograde). */
+  w = 0;
+  age = 0;
+  r = 10;
+  /** Released: it will leave its orbit where its path points at the foe; ticks waited for that. */
+  sling = false;
+  slingWait = 0;
+}
+
+/** What `chunkState` reports (MatterWorldEx, proposal 142). `mode`: 0 free, 1 captured, 2 launched. */
+interface ChunkInfo {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  spin: number;
+  mass: number;
+  radius: number;
+  mode: number;
+  owner: number;
+  origin: number;
+  temp: number;
+}
+
+/** The far face of the shell, as it will be drawn after the next half-turn (map-sized arrays). */
+interface FarFace {
+  material: Uint8Array;
+  density: Uint8Array;
+  height: Uint8Array;
+  baseColor: Uint32Array;
+}
+
+/**
+ * The matter world's shell and capture API (MatterWorldEx, proposal 142; the far-face argument is proposal 135). Optional: the
+ * combat test double has none of it, and then the Planet turns its sky only and keeps no ring.
+ */
+interface WorldExtras {
+  defineShell?(bodyId: number, shell: number | Uint8Array, far?: FarFace): boolean;
+  swapShell?(bodyId: number): boolean;
+  shellFace?(bodyId: number): number;
+  setOrbit?(
+    slot: 0 | 1,
+    spec: { x: number; y: number; radius: number; omega: number; flatten?: number } | null,
+  ): void;
+  chunksInShape?(shape: DamageShape, out: Int32Array): number;
+  chunkState?(id: number, out: ChunkInfo): boolean;
+  captureChunk?(id: number, slot: 0 | 1): boolean;
+  releaseChunk?(id: number): boolean;
+  strikeChunk?(id: number, x: number, y: number, energy: number, dirX: number, dirY: number): boolean;
+  launchChunk?(id: number, vx: number, vy: number, creditBodyId: number, slot?: 0 | 1 | -1): boolean;
+}
+
+/** The far side of the world, painted once per seed and light (paintPlanet with the world turned by π). */
+const FAR_CACHE = new Map<string, FarFace>();
+function farFaceOf(def: TitanDef, seed: number, lighting: StageLighting): FarFace {
+  const key = `${seed >>> 0}|${lighting.dir.join(',')}|${lighting.color}|${lighting.ambient}`;
+  let hit = FAR_CACHE.get(key);
+  if (!hit) {
+    const { map } = paintPlanet(def, seed, lighting, Math.PI);
+    hit = { material: map.material, density: map.density, height: map.height, baseColor: map.baseColor };
+    if (FAR_CACHE.size > 4) FAR_CACHE.delete(FAR_CACHE.keys().next().value as string);
+    FAR_CACHE.set(key, hit);
+  }
+  return hit;
 }
 
 /** Cloud density 0..1 of the wrapping 256-wide cloud texture row `row` (= lat·256) at fractional longitude `lx` (texture px). */
@@ -142,26 +326,48 @@ function cloudAt(clouds: Uint8Array, row: number, lx: number): number {
 
 const INTERIOR = (r: PlanetRig['ids'], m: number): boolean =>
   m === r.crust || m === r.mantle || m === r.magma || m === r.core;
+const DEEP = (r: PlanetRig['ids'], m: number): boolean => m === r.mantle || m === r.magma || m === r.core;
+
+/** Half-turn ease with a counter-swing: the face first rocks back a little, then comes round and settles (0 → 1). */
+function turnEase(u: number): number {
+  const s = smoothstep(0, 1, u);
+  return s - 0.3 * Math.sin(Math.PI * u) * (1 - u) * (1 - u);
+}
+
+/** Weight of tick `k` (0..IMPULSE_TICKS−1) of a ramped impulse: a sin² bump that sums to 1. */
+const RAMP_W = Array.from(
+  { length: IMPULSE_TICKS },
+  (_, k) => (2 / IMPULSE_TICKS) * Math.sin((Math.PI * (k + 0.5)) / IMPULSE_TICKS) ** 2,
+);
 
 /**
- * THE PLANET. Crush and tectonics with real moons: each moon is a separate matter body on a visible elliptical orbit (in front of
- * and behind the world), its weapon and its shield. Guard swings them between the planet and the foe; Moon Slam flings one as a
- * CRUSH projectile that comes home (or breaks); Cataclysm compresses the foe, quakes it, then rains both moons on it. Blows that
- * reach a moon damage the moon itself, and a hard one knocks it out of orbit for good. The atmosphere is matter that soaks heat and
- * can be stripped; cracks in the crust glow with magma; the gravity well gathers debris into a slow ring.
+ * THE PLANET. A real world fighting: no face, no limbs, no shear. It weaponises orbit, rotation, gravity, moons and geology.
  *
- * No face, no limbs, no shear: the world answers commands with its sky (aurora, the cloud deck, the debris ring, its moons) on
- * the input tick, turns at its own day rate, is committed into spin by its moves and twisted by blows (see SPIN_*), and on Guard
- * turns its more intact face toward the foe (Rotational Brace; the two-face shell swap is Phase 2, this is the mirror prototype).
+ *  - Its moons are separate matter bodies on visible orbits (in front of and behind the world): Moon Slam (Strike) whips one round
+ *    its orbit and curves it onto the foe; a broken moon shatters and its fragments carry on. Blows that reach a moon hurt the moon.
+ *  - Tidal Rush (Crush) is the fighter's choreography; held, it becomes the move the world's damage phase allows: Crust Breaker,
+ *    Magma Vent or Core Pulse. Orbital Drift (Surge) bends the dash around the foe and builds spin. Comet Shepherd (Signature,
+ *    hold) calls a comet in, captures it into orbit, spins it up and slings it (Slingshot). Tidal Draw (R1) deepens the gravity
+ *    well and packs what it draws back onto the world as crust. Rotational Brace (Guard) turns the more intact face to the foe.
+ *  - It turns at its own day rate, is committed into spin by its moves and twisted by blows (see SPIN_*); the sky answers every
+ *    command on its input tick (aurora, debris ring, moons, cloud deck), slowly, like weather.
+ *  - Four geological damage phases change what it can do (see PHASE_*); at KO it fails over ~3 s: the air vents, the moons drift
+ *    off, the crust slabs away, the core goes out last.
+ * The two-face shell (a far hemisphere that exists as matter and swaps in on a half-turn) needs the matter API of proposal 132;
+ * until then the Brace turns the mirror (the same map seen from its other side) under a cloud cover.
  */
 export class PlanetBehaviour extends Behaviour {
   private rig!: PlanetRig;
   private moons: Moon[] = [];
+  private readonly comet = new Comet();
   private skin!: BodyOverlay;
   private glow!: BodyOverlay;
   private halo!: GlowSprite;
+  private haloCore!: GlowSprite;
   private fx!: Overlay;
   private cfg!: SlamCfg;
+  private cometCfg!: CometCfg;
+  private driftCfg: DriftCfg = { curve: 760, spin: 1.2 };
   private barrage: BarrageCfg | null = null;
   private lit!: Uint8Array;
   private expo!: Uint8Array;
@@ -189,9 +395,9 @@ export class PlanetBehaviour extends Behaviour {
     params: { crater: 16, compress: 8, shock: 1.2 } as DamageEvent['params'],
   };
   /* input memory (aim of the slam) */
-  private aimX = 1;
   private aimY = 0;
   private guardBlend = 0;
+  private guardBlendV = 0;
   /* spin (see SPIN_*): surface ω / acceleration / phase, the atmosphere's lagging ω and phase, the commanded target */
   private omega = PROGRADE * SPIN_BASE;
   private alpha = 0;
@@ -201,27 +407,62 @@ export class PlanetBehaviour extends Behaviour {
   private spinCmd = 0;
   /** Spin as last published, to tell the impulse the fighter added since (its impact model, a move's authored spin keys). */
   private spinOut = PROGRADE * SPIN_BASE;
+  /** Angular impulses being fed in over IMPULSE_TICKS: amount and age per slot. */
+  private readonly impAmt = new Float64Array(8);
+  private readonly impAge = new Int32Array(8).fill(-1);
   /** The drawn facing the cloud phase was last advanced with (+1 / −1): the local sense of the world's spin. */
   private airSense = 1;
-  /** Rotational Brace: the far face is toward the foe (body drawn and hit mirrored against the fighter's facing). */
-  private braced = false;
+  /** The matter world's shell and capture API (absent on test doubles), and whether this world has its two-face shell. */
+  private wx!: WorldExtras;
+  private shellOn = false;
   /** Half-turn progress in ticks (−1 = not turning) and this tick's extra phase rate from it (rad/s). */
   private turnTick = -1;
   private turnRate = 0;
   private wasGuard = false;
-  /** Pristine and current integrity per local half (0 = −x, 1 = +x), the census the Brace reads. */
-  private readonly halfPristine = new Float64Array(2);
-  private readonly halfNow = new Float64Array(2);
-  /** Debris ring: phase (rad), tightness 0..1 and its target; aurora pulse 0..1. */
+  /** Pristine live cells of the near face (all, and its shell only), and the near face's shell integrity now (0..1). */
+  private nearPristineAll = 1;
+  private nearPristineShell = 1;
+  private nearIntegrity = 1;
+  /** The debris ring's captured chunks (ids), and scratch for chunk queries. */
+  private readonly ringIds: number[] = [];
+  private readonly idsTmp = new Int32Array(64);
+  private readonly info: ChunkInfo = {
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    angle: 0,
+    spin: 0,
+    mass: 0,
+    radius: 0,
+    mode: 0,
+    owner: -1,
+    origin: -1,
+    temp: 0,
+  };
+  /** Debris ring: phase (rad), tightness 0..1 and its target, brightness pulse; aurora pulse; axis wander phase. */
   private ringPhase = 0;
   private ringTight = 0;
   private ringTarget = 0;
+  private ringGlow = 0;
   private auroraPulse = 0;
+  private wander = 0;
   /** The command this behaviour answered on its input tick (feel `respond`), and that tick. */
   private respondCmd = '';
   private respondTick = -1;
   private forceSkin = false;
-  /* monitoring of the failure mode */
+  /** Damage phase 1..4 (monotonic within a round), and the deep strata currently exposed (cells). */
+  private phase = 1;
+  private expoDeep = 0;
+  /* Tidal Draw */
+  private drawT = 0;
+  private wasDraw = false;
+  /* Orbital Drift: which side the dash bends to */
+  private driftSide = 1;
+  /* failure: ticks since the KO (−1 = standing) */
+  private failT = -1;
+  private coreOut = 0;
+  /* monitoring */
   private atmoCells0 = 1;
   private oceanCells0 = 1;
   private atmoFrac = 1;
@@ -263,12 +504,16 @@ export class PlanetBehaviour extends Behaviour {
     this.crustR = ramp('crust');
     this.cloudC = ramp('cloud');
     this.flame = ramp('magma');
-    this.cfg = f.slotMoves.signature!.extra!['slam'] as SlamCfg;
+    this.cfg = f.movesById.get('planet.moonslam')!.extra!['slam'] as SlamCfg;
+    this.cometCfg = f.movesById.get('planet.comet')!.extra!['comet'] as CometCfg;
+    this.driftCfg =
+      (f.movesById.get('planet.shift')?.extra?.['drift'] as DriftCfg | undefined) ?? this.driftCfg;
     this.barrage = (f.slotMoves.ultimate?.extra?.['barrage'] as BarrageCfg | undefined) ?? null;
     const map = f.body.map;
     this.skin = new BodyOverlay('planet-skin', 0.2, map.w, map.h, 'normal', true);
     this.glow = new BodyOverlay('planet-glow', 0.3, map.w, map.h, 'add', true);
     this.halo = new GlowSprite('planet-halo', -0.5, 118, [40, 90, 150], 0.5, 6);
+    this.haloCore = new GlowSprite('planet-halo-core', -0.4, 96, [190, 64, 20], 0.35, 6);
     this.fx = new Overlay('planet-fx', 20, 800, 560, 'add', true);
     this.expo = new Uint8Array(map.w * map.h);
     // light on every face cell (0..255), from the same key the painter used
@@ -299,14 +544,24 @@ export class PlanetBehaviour extends Behaviour {
     this.atmoCells0 = Math.max(1, a);
     this.oceanCells0 = Math.max(1, o);
     this.lastOcean = 1;
-    this.censusHalves(this.halfPristine);
-    this.resetSpin();
+    // the two-face world: the shell outside the magma exists twice; its far face is the far side of the world, painted (other
+    // continents, the same sun). The census of the near face as it was made is the Brace's reference.
+    this.wx = f.world as unknown as WorldExtras;
+    this.censusNear();
+    this.nearPristineAll = Math.max(1, this.nearAll);
+    this.nearPristineShell = Math.max(1, this.nearShell);
+    this.shellOn =
+      typeof this.wx.defineShell === 'function' &&
+      this.wx.defineShell(f.body.id, r.magmaR + 2, farFaceOf(f.def, f.seed, f.lighting));
+    // the debris ring: chunks the world captures ride it (ammunition and armour)
+    this.ringIds.length = 0;
     // the moons: real bodies
     this.moons = [];
     const specs = r.moons;
     for (let i = 0; i < specs.length; i++) this.spawnMoon(i);
     f.resourceMax = specs.length;
     f.resource = specs.length;
+    this.resetSpin();
     this.updateOrbit(0, true);
   }
 
@@ -343,16 +598,24 @@ export class PlanetBehaviour extends Behaviour {
       if (m && m.mode !== GONE) {
         f.world.heal(m.body.id, Math.max(heal, 0.5), f.seed + i);
         m.mode = ORBIT;
+        m.free = false;
       } else {
         if (m) m.layer.layer.visible = false;
         this.spawnMoon(i);
       }
     }
+    this.dropComet();
     f.resource = this.moons.length;
     f.resourceMax = this.moons.length;
     this.barrageNext = 0;
     this.quaked = false;
     this.atmoCue = 0;
+    this.phase = 1;
+    this.failT = -1;
+    this.coreOut = 0;
+    this.drawT = 0;
+    this.wasDraw = false;
+    this.clearRing();
     this.resetSpin();
     this.updateOrbit(f.tickNo, true);
   }
@@ -365,14 +628,16 @@ export class PlanetBehaviour extends Behaviour {
     this.omegaAir = this.omega;
     this.thetaAir = 0;
     this.spinCmd = 0;
-    this.braced = false;
+    this.impAge.fill(-1);
     this.turnTick = -1;
     this.turnRate = 0;
     this.wasGuard = false;
     this.ringPhase = 0;
     this.ringTight = 0;
     this.ringTarget = 0;
+    this.ringGlow = 0;
     this.auroraPulse = 0;
+    this.wander = 0;
     this.respondCmd = '';
     this.respondTick = -1;
     for (const m of this.moons) {
@@ -416,95 +681,174 @@ export class PlanetBehaviour extends Behaviour {
   get cloudSpin(): number {
     return this.omegaAir + this.turnRate;
   }
-  /** True while the far face is turned toward the foe (Rotational Brace). */
+  /** True while the world's other face (not the one it began the round with) is toward the viewer and the foe. */
   get bracedFace(): boolean {
-    return this.braced;
+    return this.shellOn && (this.wx.shellFace?.(this.f.body.id) ?? 0) === 1;
+  }
+  /** True when the world has its two-face shell (the real matter world; the test double has none). */
+  get twoFaced(): boolean {
+    return this.shellOn;
   }
   get turning(): boolean {
     return this.turnTick >= 0;
   }
-  /** Integrity (0..1 of pristine) of the face currently toward the foe and of the face turned away. */
-  faceIntegrity(out: { near: number; far: number }): void {
-    this.censusHalves(this.halfNow);
-    const nearHalf = this.braced ? 0 : 1;
-    out.near = this.halfNow[nearHalf]! / Math.max(1, this.halfPristine[nearHalf]!);
-    out.far = this.halfNow[1 - nearHalf]! / Math.max(1, this.halfPristine[1 - nearHalf]!);
+  /** The world's damage phase, 1 (intact) … 4 (core crisis). */
+  get damagePhase(): number {
+    return this.phase;
+  }
+  /** 0..1 how far Tidal Draw has deepened the well, and the chunks riding the debris ring. */
+  get drawLevel(): number {
+    return this.drawT;
+  }
+  get ringCount(): number {
+    return this.ringIds.length;
+  }
+  /** Ticks since the KO (−1 while standing) and how far the core light has gone out (0..1). */
+  get failure(): number {
+    return this.failT;
+  }
+  get coreLight(): number {
+    return 1 - this.coreOut;
+  }
+  /** Comet state: mode (0 none, 1 inbound, 2 orbit, 3 slung, 4 let go), position, speed (px/s). */
+  get cometMode(): number {
+    return this.comet.mode;
+  }
+  get cometPos(): { x: number; y: number; speed: number } {
+    const c = this.comet;
+    return { x: c.x, y: c.y, speed: Math.hypot(c.vx, c.vy) };
   }
 
   /**
-   * Integrity summed per local half of the map (column < core = −x half, else +x half), in units of a pristine cell. The +x half
-   * faces the foe unless braced (the body's own facing follows the fighter's). Same data as BodyStats.regionGrid, but in map
-   * coordinates, so it does not depend on which way the body was facing when the stats were last refreshed.
+   * Integrity (0..1 of pristine, live shell cells) of the face toward the viewer and the foe, and of the face turned away. The far
+   * face is the world's whole count minus the near face (stats count both faces and the shared core once).
    */
-  private censusHalves(out: Float64Array): void {
+  faceIntegrity(out: { near: number; far: number }): void {
+    this.censusNear();
+    out.near = this.nearShell / this.nearPristineShell;
+    if (!this.shellOn) {
+      out.far = out.near;
+      return;
+    }
+    const s = this.f.world.stats(this.f.body.id);
+    const farPristine = Math.max(1, s.initialCells - this.nearPristineAll);
+    out.far = clamp01((s.cells - this.nearAll) / farPristine);
+  }
+
+  /** Live cells of the near face: all of them, and those of its shell (outside the shared magma and core). */
+  private nearAll = 0;
+  private nearShell = 0;
+  private censusNear(): void {
     const map = this.f.body.map;
     const W = map.w;
-    const cx = map.coreX;
+    const cx = map.coreX + 0.5;
+    const cy = map.coreY + 0.5;
+    const r2 = (this.rig.magmaR + 2) ** 2;
     const mat = map.material;
-    const integ = map.integrity;
-    let l = 0;
-    let r = 0;
+    let all = 0;
+    let shell = 0;
     for (let y = 0; y < map.h; y++) {
       const row = y * W;
+      const dy = y + 0.5 - cy;
       for (let x = 0; x < W; x++) {
-        const i = row + x;
-        if (mat[i] === 0) continue;
-        if (x < cx) l += integ[i]!;
-        else r += integ[i]!;
+        if (mat[row + x] === 0) continue;
+        all++;
+        const dx = x + 0.5 - cx;
+        if (dx * dx + dy * dy > r2) shell++;
       }
     }
-    out[0] = l / 255;
-    out[1] = r / 255;
+    this.nearAll = all;
+    this.nearShell = shell;
   }
 
-  /** Add angular impulse (rad/s, world sense), scaled up by how light the wounded world has become. */
+  /** Queue angular impulse (rad/s, world sense), scaled up by how light the wounded world has become; fed in over IMPULSE_TICKS. */
   private kickSpin(dw: number): void {
     const inertia = Math.max(0.45, this.f.view.bodyStats.massFrac);
-    this.omega = clamp(this.omega + dw / inertia, -SPIN_MAX, SPIN_MAX);
+    this.queueImpulse(dw / inertia);
+  }
+
+  private queueImpulse(dw: number): void {
+    // a free slot, else the youngest busy one (the new impulse then rides its schedule, scaled so none of it is lost)
+    let slot = -1;
+    let young = 0;
+    for (let k = 0; k < this.impAge.length; k++) {
+      if (this.impAge[k]! < 0) {
+        slot = k;
+        break;
+      }
+      if (this.impAge[k]! < this.impAge[young]!) young = k;
+    }
+    if (slot >= 0) {
+      this.impAmt[slot] = dw;
+      this.impAge[slot] = 0;
+      return;
+    }
+    let left = 0;
+    for (let a = this.impAge[young]!; a < IMPULSE_TICKS; a++) left += RAMP_W[a]!;
+    this.impAmt[young] = this.impAmt[young]! + dw / Math.max(0.05, left);
+  }
+
+  /** This tick's share of every queued impulse (rad/s). */
+  private drainImpulses(): number {
+    let dw = 0;
+    for (let k = 0; k < this.impAge.length; k++) {
+      const age = this.impAge[k]!;
+      if (age < 0) continue;
+      dw += this.impAmt[k]! * RAMP_W[age]!;
+      this.impAge[k] = age + 1 >= IMPULSE_TICKS ? -1 : age + 1;
+    }
+    return dw;
   }
 
   /**
-   * The commanded spin for the current move (rad/s above the day rate, in the prograde sense): Impact winds the world up over its
-   * windup and lets go after the blow, the Cataclysm spins it to the limit until the quake, Moon Slam winds up with the charge,
-   * Orbital Shift carries spin through the dash. A move whose choreography authors its own spin keys (applied by the fighter and
-   * folded in by `stepSpin`) gets no commanded spin here: only the pull back to the day.
+   * The commanded spin for the current move (rad/s above the day rate, in the prograde sense): Tidal Rush winds the world up over
+   * its windup and lets go after the blow (unless its choreography authors spin keys, which the fighter applies and `stepSpin`
+   * folds in), the Cataclysm and the Core Pulse spin it to the limit, Crust Breaker winds it hard, Moon Slam and the Comet
+   * Shepherd wind up with the hold, Orbital Drift carries spin through the dash, Tidal Draw slows the surface a little.
    */
   private spinTarget(m: ActiveMove): number {
     const id = m.def?.id ?? '';
-    if (m.feint || spinKeysOf(m)) return 0;
-    if (id === 'planet.impact') {
-      if (m.phase === 'startup') return (SPIN_COMMIT - SPIN_BASE) * smoothstep(0, 1, m.phaseTick / m.startup);
-      if (m.phase === 'active') return SPIN_COMMIT - SPIN_BASE;
-      return 0;
+    if (this.failT >= 0) return -SPIN_BASE * 0.6;
+    if (this.drawT > 0) return -0.08 * this.drawT;
+    if (!m.def || m.feint || spinKeysOf(m)) return 0;
+    const q = m.phase === 'startup' ? smoothstep(0, 1, m.phaseTick / Math.max(1, m.startup)) : 1;
+    switch (id) {
+      case 'planet.impact':
+        return m.phase === 'recovery' ? 0 : (SPIN_COMMIT - SPIN_BASE) * q;
+      case 'planet.cataclysm':
+        if (m.phase === 'startup') return (SPIN_MAX - SPIN_BASE) * q;
+        return m.phase === 'active' && m.phaseTick - 1 < 52 ? SPIN_MAX - SPIN_BASE : 0;
+      case 'planet.corepulse':
+        return m.phase === 'recovery' ? 0 : (SPIN_MAX - SPIN_BASE) * q;
+      case 'planet.crustbreaker':
+        return m.phase === 'recovery' ? 0 : 1.8 * q;
+      case 'planet.magmavent':
+        return m.phase === 'recovery' ? 0 : 0.5;
+      case 'planet.moonslam':
+        if (m.phase === 'startup') return 0.4 * q;
+        return m.phase === 'charge' ? 0.4 + 0.8 * clamp01(m.chargeTicks / Math.max(1, m.chargeMax)) : 0;
+      case 'planet.comet':
+        return m.phase === 'charge' ? 0.7 * clamp01(m.chargeTicks / 60) : 0;
+      case 'planet.shift':
+        return 0.9;
+      default:
+        return 0;
     }
-    if (id === 'planet.cataclysm') {
-      if (m.phase === 'startup') return (SPIN_MAX - SPIN_BASE) * smoothstep(0, 1, m.phaseTick / m.startup);
-      if (m.phase === 'active' && m.phaseTick - 1 < 52) return SPIN_MAX - SPIN_BASE;
-      return 0;
-    }
-    if (id === 'planet.moonslam') {
-      if (m.phase === 'startup') return 0.5;
-      if (m.phase === 'charge') return 0.5 + 0.9 * clamp01(m.chargeTicks / Math.max(1, m.chargeMax));
-      return 0;
-    }
-    if (id === 'planet.shift') return 0.9;
-    return 0;
   }
 
   /**
-   * One tick of the angular state: fold in the impulse the fighter's impact model added since the last tick (or, if it added none,
-   * this behaviour's own lever-arm estimate of the blows taken), spring toward the commanded spin, drag the atmosphere, advance the
-   * phases and the Brace half-turn, swing the moons, the ring and the aurora.
+   * One tick of the angular state: queue the impulse the fighter's own angular state received since we last published it (a
+   * blow's torque from the impact model, or a move's authored spin key) and feed every queued impulse in on its ramp, spring toward
+   * the commanded spin, drag the atmosphere, advance the phases and the Brace half-turn, swing the moons, the ring and the aurora.
    */
   private stepSpin(m: ActiveMove): void {
     const dt = TICK_DT;
     const f = this.f;
     const before = this.omega;
-    // the impulse the fighter's own angular state received since we last published it: a blow's torque (impact model) or a
-    // move's authored spin keys. It is folded in whole; the day-rate spring below then takes the world back to its day.
     const ang = (f as unknown as { ang?: { spin: number } }).ang;
     const ext = ang ? ang.spin - this.spinOut : 0;
-    if (Math.abs(ext) > 1e-6) this.omega = clamp(this.omega + ext, -SPIN_MAX, SPIN_MAX);
+    if (Math.abs(ext) > 1e-6) this.queueImpulse(ext);
+    this.omega = clamp(this.omega + this.drainImpulses(), -SPIN_MAX, SPIN_MAX);
 
     this.spinCmd = this.spinTarget(m);
     const target = PROGRADE * (SPIN_BASE + this.spinCmd);
@@ -514,26 +858,28 @@ export class PlanetBehaviour extends Behaviour {
     this.omega = clamp(this.omega + this.alpha * dt, -SPIN_MAX, SPIN_MAX);
     const angAcc = (this.omega - before) / dt;
     this.omegaAir += (this.omega - this.omegaAir) * Math.min(1, CLOUD_DRAG * dt);
-    // the Brace half-turn: an eased π of extra phase in the sense the world already turns; the mirror swaps at its midpoint, under
-    // the cloud cover
+    // the Brace half-turn: an eased π of extra phase (a counter-swing first) in the sense the world already turns; the mirror
+    // swaps where the ease crosses half-way, under the cloud cover
     this.turnRate = 0;
     if (this.turnTick >= 0) {
       const k = this.turnTick;
-      const dTh = Math.PI * (smoothstep(0, 1, (k + 1) / TURN_TICKS) - smoothstep(0, 1, k / TURN_TICKS));
-      this.turnRate = ((this.omega >= 0 ? 1 : -1) * dTh) / dt;
-      if (k + 1 === TURN_TICKS >> 1) this.braced = !this.braced;
+      const e0 = turnEase(k / TURN_TICKS);
+      const e1 = turnEase((k + 1) / TURN_TICKS);
+      this.turnRate = ((this.omega >= 0 ? 1 : -1) * Math.PI * (e1 - e0)) / dt;
+      // the faces change over where the ease crosses half-way, under the thickest cloud cover
+      if (e0 < 0.5 && e1 >= 0.5 && this.shellOn) this.wx.swapShell?.(f.body.id);
       if (++this.turnTick >= TURN_TICKS) {
         this.turnTick = -1;
         // the stop overshoots: the world swings on past its day rate, then the spring settles it
         this.kickSpin(PROGRADE * 0.7);
       }
     }
-    // the cloud deck turns in map coordinates: the world sense seen through the drawn (possibly mirrored) facing
-    const rf = this.braced ? -f.facing : f.facing;
+    // the cloud deck turns in map coordinates: the world sense seen through the drawn facing
+    const rf = f.facing;
     this.theta += (this.omega + this.turnRate) * dt;
     this.thetaAir += (this.omegaAir + this.turnRate) * rf * dt;
     this.airSense = rf;
-    // moons lag a spin-up (and swing ahead of a spin-down), each on its own spring; their orbits run prograde
+    // moons lag a spin-up (and swing ahead of a spin-down), each on its own slow spring; their orbits run prograde
     const lk = MOON_LAG_K;
     const lc = 2 * MOON_LAG_ZETA * Math.sqrt(lk);
     for (const mo of this.moons) {
@@ -541,51 +887,68 @@ export class PlanetBehaviour extends Behaviour {
       mo.lagV += a * dt;
       mo.lag += mo.lagV * dt;
     }
-    // the ring: debris orbits with the world, slower than its surface, and is drawn in by commitment
-    const sw = this.omega >= 0 ? 1 : -1;
-    this.ringPhase -= (0.3 * sw + 0.5 * this.omega) * dt;
-    this.ringTarget = this.ringGoal(m);
-    this.ringTight += (this.ringTarget - this.ringTight) * 0.12;
-    this.auroraPulse *= 0.93;
+    // the ring: debris orbits with the world, slower than its surface, and is drawn in by commitment and by Tidal Draw
+    // (its drift follows the spin smoothly through zero: a reversal of the world never snaps the ring)
+    this.ringPhase -= (0.3 * Math.tanh(this.omega / 0.15) + 0.5 * this.omega) * dt;
+    this.ringTarget = Math.max(this.ringGoal(m), this.drawT);
+    this.ringTight += (this.ringTarget - this.ringTight) * 0.035;
+    this.ringGlow *= 0.97;
+    this.auroraPulse *= 0.985;
+    this.wander += dt * (0.35 + 0.15 * Math.abs(this.omega));
     this.writeAngular();
   }
 
   /** How tight the debris ring is drawn for the current move (0 = slack). */
   private ringGoal(m: ActiveMove): number {
     const id = m.def?.id ?? '';
-    if (id === 'planet.impact' && m.phase !== 'recovery')
-      return m.phase === 'startup' ? clamp01(m.phaseTick / m.startup) : 1;
-    if (id === 'planet.cataclysm' && (m.phase === 'startup' || (m.phase === 'active' && m.phaseTick < 52)))
-      return 1;
-    if (id === 'planet.moonslam' && m.phase === 'charge')
-      return 0.4 + 0.5 * clamp01(m.chargeTicks / Math.max(1, m.chargeMax));
     if (this.turnTick >= 0) return 0.7;
-    return 0;
+    if (!m.def || m.phase === 'recovery') return 0;
+    const q = m.phase === 'startup' ? clamp01(m.phaseTick / Math.max(1, m.startup)) : 1;
+    switch (id) {
+      case 'planet.impact':
+      case 'planet.crustbreaker':
+        return q;
+      case 'planet.cataclysm':
+        return m.phase === 'active' && m.phaseTick >= 52 ? 0 : 1;
+      case 'planet.corepulse':
+        return 1;
+      case 'planet.moonslam':
+        return m.phase === 'charge' ? 0.4 + 0.5 * clamp01(m.chargeTicks / Math.max(1, m.chargeMax)) : 0;
+      case 'planet.comet':
+        return m.phase === 'charge' ? 0.5 : 0;
+      default:
+        return 0;
+    }
   }
 
   /**
-   * Answer a command on its input tick, with no anatomy: the aurora flares, the debris ring is drawn in, the moon that will act
-   * swings ahead along its orbit (all of them for a whole-world command), the cloud deck redraws. Recorded for the feel `respond`.
+   * Answer a command on its input tick, with no anatomy: the aurora flares and the debris ring brightens at once (light), the ring
+   * then draws in, the moon that will act swings ahead along its orbit, the cloud deck redraws. Recorded for the feel `respond`.
    */
   private telegraph(cmd: string, strength: number, moon: Moon | null): void {
     this.auroraPulse = Math.max(this.auroraPulse, 0.55 * strength);
-    this.ringTight = Math.min(1, this.ringTight + 0.5 * strength);
-    if (moon) moon.lagV += 3.2 * strength;
-    else for (const mo of this.moons) mo.lagV += 1.6 * strength;
+    this.ringGlow = Math.max(this.ringGlow, Math.min(1, strength));
+    this.ringTight = Math.min(1, this.ringTight + 0.06 * strength);
+    if (moon) moon.lagV += 0.7 * strength;
+    else for (const mo of this.moons) mo.lagV += 0.35 * strength;
     this.forceSkin = true;
     this.respondCmd = cmd;
     this.respondTick = this.f.tickNo;
   }
 
   /**
-   * Feel instrumentation (docs/proposals/131-s1-planet-behaviour-hooks.md): the channel through which `cmd` (a move slot or
-   * 'guard') is answered on THIS tick, or null. Valid from the moment the fighter accepted the command: a move's telegraph is
-   * armed in `onMoveStart`, a raised Guard is answered in this tick's `update`. The Planet answers with light and detached fx
-   * (aurora, ring, moons, cloud deck), never with a lean.
+   * Feel instrumentation: the channel through which `cmd` (a move slot, 'guard' or 'gravity') is answered on THIS tick, or null.
+   * Valid from the moment the fighter accepted the command: a move's telegraph is armed in `onMoveStart`, a raised Guard and a
+   * pressed Gravity are answered in this tick's `update`. The Planet answers with light and detached fx (aurora, ring, moons,
+   * cloud deck), never with a lean.
    */
   override feelRespond(cmd: string): 'fx' | null {
     const f = this.f;
     if (cmd === 'guard') return f.guardUp && (!this.wasGuard || this.respondTick === f.tickNo) ? 'fx' : null;
+    if (cmd === 'gravity')
+      return (f.input.held & Btn.GRAVITY) !== 0 && (!this.wasDraw || this.respondTick === f.tickNo)
+        ? 'fx'
+        : null;
     return this.respondTick === f.tickNo && this.respondCmd === cmd ? 'fx' : null;
   }
 
@@ -601,6 +964,91 @@ export class PlanetBehaviour extends Behaviour {
   }
   private readonly faceTmp = { near: 1, far: 1 };
 
+  /* ---------------------------------------------------------------------------------------------- *
+   *  damage phases
+   * ---------------------------------------------------------------------------------------------- */
+
+  /** The phase the world's wounds put it in now (the round's phase never goes back: see `monitor`). */
+  private phaseNow(): number {
+    const s = this.f.view.bodyStats;
+    // what is left of the face toward the viewer (stats count the far face too: a fresh far face must not hide the wound)
+    const near = Math.min(s.massFrac, this.nearAll / this.nearPristineAll);
+    if (near < 0.42 || s.coreIntegrity < 0.62 || s.exposedCoreFrac > 0.2) return 4;
+    if (this.expoDeep > 260 || near < 0.64) return 3;
+    if (s.crackedCells > 1500 || near < 0.86 || this.atmoFrac < 0.7) return 2;
+    return 1;
+  }
+
+  /**
+   * The world enters a new phase: the sky marks it (aurora, ring, a slow shock ring and a cue for sound), and Core Crisis shakes
+   * the moons: the outer one is torn from its orbit, the inner one is cracked.
+   */
+  private enterPhase(p: number): void {
+    const f = this.f;
+    this.phase = p;
+    const t = f.body.transform;
+    this.auroraPulse = Math.max(this.auroraPulse, 0.6);
+    this.ringGlow = 1;
+    this.forceSkin = true;
+    f.events.push(
+      { t: 'cue', slot: f.slot, titan: f.def.id, id: `world-phase-${p}`, x: t.x, y: t.y, amount: p / 4 },
+      {
+        t: 'shockwave',
+        x: t.x,
+        y: t.y,
+        strength: 0.18 + 0.08 * p,
+        radius: 90 + 20 * p,
+        hue: p >= 3 ? 0.06 : 0.55,
+      },
+    );
+    if (p === 4) {
+      let outer: Moon | null = null;
+      for (const m of this.moons) if (m.mode === ORBIT && (!outer || m.spec.a > outer.spec.a)) outer = m;
+      if (outer) this.knockOut(outer, (outer.x - f.px) * 0.01, -0.6);
+      for (const m of this.moons) {
+        if (m === outer || m.mode === GONE) continue;
+        const e2 = this.ev;
+        const s2 = this.evShape;
+        s2.kind = 'point';
+        s2.x = m.x;
+        s2.y = m.y;
+        s2.r = m.radius * 0.8;
+        e2.shape = asShape(s2);
+        e2.type = 'KINETIC';
+        e2.energy = 160;
+        e2.dirX = 0;
+        e2.dirY = 1;
+        e2.flags = 0;
+        e2.params = { crater: 4 };
+        e2.sourceMass = 3;
+        e2.sourceBodyId = -1;
+        e2.originX = m.x;
+        e2.originY = m.y - 20;
+        f.world.applyDamage(m.body.id, e2);
+      }
+    }
+  }
+
+  /** The wounded world hits harder (PHASE_POWER). */
+  override adjustStats(s: EffectiveStats, _massFrac: number): void {
+    s.damageMul *= PHASE_POWER[this.phase]!;
+  }
+
+  /**
+   * The Brace shell is as strong as the atmosphere that remains, the moons standing in front of it, the integrity of the face that
+   * takes the blows (damage geography is tactics: brace with the better face) and the world's phase (a broken world braces worse).
+   */
+  override guardMultiplier(): number {
+    let shield = 0;
+    for (const m of this.moons) if (m.mode === ORBIT) shield += 0.12;
+    const face = 0.55 + 0.45 * clamp01(this.nearIntegrity);
+    return (0.4 + 0.6 * this.atmoFrac + shield) * face * PHASE_BRACE[this.phase]!;
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  moons: orbits
+   * ---------------------------------------------------------------------------------------------- */
+
   /** Moons still bound to the planet (orbiting, flung or returning): the HUD count and the resource ceiling. */
   get moonsAlive(): number {
     let n = 0;
@@ -614,10 +1062,6 @@ export class PlanetBehaviour extends Behaviour {
     return this.atmoFrac;
   }
 
-  /* ---------------------------------------------------------------------------------------------- *
-   *  moons: orbits
-   * ---------------------------------------------------------------------------------------------- */
-
   /** Where moon `m` sits on its orbit right now, blended toward the shield position while Guard is up. */
   private orbitPos(m: Moon, out: { x: number; y: number }, back: { v: boolean }, slotIdx: number): void {
     const f = this.f;
@@ -625,12 +1069,13 @@ export class PlanetBehaviour extends Behaviour {
     const ang = m.ang + m.lag;
     const ex = Math.cos(ang) * s.a;
     const ey = Math.sin(ang) * s.b;
-    const ct = Math.cos(s.tilt);
-    const st = Math.sin(s.tilt);
+    const tilt = s.tilt + PHASE_WANDER[this.phase]! * Math.sin(this.wander);
+    const ct = Math.cos(tilt);
+    const st = Math.sin(tilt);
     let x = ex * ct - ey * st;
     let y = ex * st + ey * ct;
     back.v = Math.sin(ang) < 0;
-    const gb = this.guardBlend;
+    const gb = clamp01(this.guardBlend);
     if (gb > 0.01) {
       // shield: stand in front of the planet on the foe's side, one above the other
       const sx = f.facing * (this.rig.radius + 16 + slotIdx * 6);
@@ -643,16 +1088,19 @@ export class PlanetBehaviour extends Behaviour {
     out.y = f.py + y;
   }
 
-  private updateOrbit(tick: number, snap: boolean): void {
+  private readonly orbP = { x: 0, y: 0 };
+  private readonly orbB = { v: false };
+
+  private updateOrbit(_tick: number, snap: boolean): void {
     const f = this.f;
-    const p = { x: 0, y: 0 };
-    const b = { v: false };
+    const p = this.orbP;
+    const b = this.orbB;
     for (let i = 0; i < this.moons.length; i++) {
       const m = this.moons[i]!;
       if (m.mode === GONE) continue;
       if (m.mode === ORBIT) {
         // a faster-turning world drags its moons along a little faster (tidal coupling)
-        const w = ((Math.PI * 2) / m.spec.period) * (1 + 0.6 * Math.max(0, this.omega - SPIN_BASE));
+        const w = ((Math.PI * 2) / m.spec.period) * (1 + 0.6 * Math.max(0, Math.abs(this.omega) - SPIN_BASE));
         m.ang += w;
         this.orbitPos(m, p, b, i);
         m.back = b.v;
@@ -660,9 +1108,11 @@ export class PlanetBehaviour extends Behaviour {
           m.x = p.x;
           m.y = p.y;
         } else {
-          // ease toward the target so blends (guard, return) are smooth
-          m.x += (p.x - m.x) * 0.5;
-          m.y += (p.y - m.y) * 0.5;
+          // follow the orbit through a light low-pass, so a blend never steps; a moon just caught back glides onto it slowly
+          const k = m.settle > 0 ? 0.04 + 0.31 * (1 - m.settle / SETTLE_TICKS) ** 2 : 0.35;
+          if (m.settle > 0) m.settle--;
+          m.x += (p.x - m.x) * k;
+          m.y += (p.y - m.y) * k;
         }
         m.vx = 0;
         m.vy = 0;
@@ -672,7 +1122,6 @@ export class PlanetBehaviour extends Behaviour {
       t.y = Math.round(m.y);
       m.layer.tickStart();
     }
-    void tick;
     void f;
   }
 
@@ -702,6 +1151,8 @@ export class PlanetBehaviour extends Behaviour {
 
   override intercept(ev: DamageEvent, _info: HitInfo, res: InterceptResult): void {
     const f = this.f;
+    // a world in core crisis is fragile: its shaken moons soak less of what comes at it
+    const share = this.phase >= 4 ? MOON_SHARE * 0.55 : MOON_SHARE;
     let n = 0;
     for (const m of this.moons) {
       if (m.mode === GONE) continue;
@@ -712,7 +1163,7 @@ export class PlanetBehaviour extends Behaviour {
       const e2 = this.ev;
       e2.type = ev.type;
       e2.shape = ev.shape;
-      e2.energy = ev.energy * MOON_SHARE;
+      e2.energy = ev.energy * share;
       e2.dirX = ev.dirX;
       e2.dirY = ev.dirY;
       e2.duration = 1;
@@ -726,19 +1177,26 @@ export class PlanetBehaviour extends Behaviour {
       const frac = f.world.stats(m.body.id).massFrac;
       const push = Math.hypot(r.impulseX, r.impulseY) / Math.max(0.2, frac);
       if (frac < BREAK_FRAC) this.loseMoon(m, ev.dirX * 90, ev.dirY * 90, true);
-      else if (push > KNOCK_LIMIT && m.mode !== DRIFT) {
-        m.mode = DRIFT;
-        m.age = 0;
-        m.vx = ev.dirX * Math.min(8, push * 0.012) + (m.x - f.px) * 0.004;
-        m.vy = ev.dirY * Math.min(8, push * 0.012) - 1;
-        f.events.push({ t: 'shake', dirX: ev.dirX, dirY: ev.dirY, amp: 5 });
-      }
+      else if (push > KNOCK_LIMIT && m.mode !== DRIFT)
+        this.knockOut(m, ev.dirX * Math.min(8, push * 0.012), ev.dirY * Math.min(8, push * 0.012) - 1);
     }
-    if (n > 0) {
+    // the debris ring is armour too: chunks in the blow's path take part of it and are struck loose
+    const ring = this.ringSoak(ev);
+    if (n > 0 || ring > 0) {
       res.touched = true;
       res.partsHit += n;
-      res.absorbed = Math.max(res.absorbed, Math.min(SOAK_MAX, MOON_SHARE * n));
+      res.absorbed = Math.max(res.absorbed, Math.min(SOAK_MAX, share * n + ring));
     }
+  }
+
+  /** A moon is knocked out of its orbit (px/tick): it drifts, and wobbles home only if it was not thrown far. */
+  private knockOut(m: Moon, vx: number, vy: number): void {
+    const f = this.f;
+    m.mode = DRIFT;
+    m.age = 0;
+    m.vx = vx + (m.x - f.px) * 0.004;
+    m.vy = vy;
+    f.events.push({ t: 'shake', dirX: Math.sign(vx) || 1, dirY: 0, amp: 4 });
   }
 
   /** A moon is lost: what is left of it drifts off as a debris chunk, and the pip goes out. */
@@ -747,13 +1205,11 @@ export class PlanetBehaviour extends Behaviour {
     if (m.mode === GONE) return;
     const wasBound = m.mode !== DRIFT;
     const map = m.body.map;
-    const px = new Uint32Array(map.pixels);
-    const em = new Uint8Array(map.emissive);
     const mass = f.world.stats(m.body.id).mass;
     if (mass > 0.5)
       f.world.spawnChunk({
-        pixels: px,
-        emissive: em,
+        pixels: new Uint32Array(map.pixels),
+        emissive: new Uint8Array(map.emissive),
         w: map.w,
         h: map.h,
         x: m.x + map.w / 2 - m.body.transform.anchorX,
@@ -763,25 +1219,106 @@ export class PlanetBehaviour extends Behaviour {
         spin: broke ? 1.6 : 0.5,
         mass,
       });
+    this.retireMoon(m, wasBound);
+  }
+
+  /**
+   * A broken moon shatters on its target: its matter splits into three wedges about its core, which carry the moon's momentum on
+   * toward the foe (debris that hits a body hits it as a blow), and the pip goes out.
+   */
+  private shatterMoon(m: Moon, vx: number, vy: number): void {
+    const f = this.f;
+    const map = m.body.map;
+    const w = map.w;
+    const h = map.h;
+    const mass = f.world.stats(m.body.id).mass;
+    const cx = m.body.transform.anchorX + 0.5;
+    const cy = m.body.transform.anchorY + 0.5;
+    const heading = Math.atan2(vy, vx);
+    let total = 0;
+    for (let i = 0; i < w * h; i++) if (map.pixels[i]! >>> 24 !== 0) total++;
+    for (let k = 0; k < 3; k++) {
+      const px = new Uint32Array(w * h);
+      const em = new Uint8Array(w * h);
+      let n = 0;
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++) {
+          const i = y * w + x;
+          if (map.pixels[i]! >>> 24 === 0) continue;
+          const a = Math.atan2(y + 0.5 - cy, x + 0.5 - cx) - heading;
+          const sector = Math.floor((((a / (Math.PI * 2)) % 1) + 1) * 3) % 3;
+          if (sector !== k) continue;
+          px[i] = map.pixels[i]!;
+          em[i] = map.emissive[i]!;
+          n++;
+        }
+      if (n === 0 || total === 0) continue;
+      const spread = (k - 1) * 0.28;
+      const c = Math.cos(spread);
+      const s = Math.sin(spread);
+      const sp = 0.85 + 0.1 * k;
+      f.world.spawnChunk({
+        pixels: px,
+        emissive: em,
+        w,
+        h,
+        x: m.x + w / 2 - m.body.transform.anchorX,
+        y: m.y + h / 2 - m.body.transform.anchorY,
+        vx: (vx * c - vy * s) * 60 * sp,
+        vy: (vx * s + vy * c) * 60 * sp,
+        spin: 1.2 * (k - 1) + 0.4,
+        mass: (mass * n) / total,
+      });
+    }
+    f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'moon-shatter', x: m.x, y: m.y, amount: 1 });
+    this.retireMoon(m, m.mode !== DRIFT);
+  }
+
+  private retireMoon(m: Moon, wasBound: boolean): void {
+    const f = this.f;
     f.world.removeBody(m.body.id);
     m.mode = GONE;
     m.layer.layer.visible = false;
     f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'moon-lost', x: m.x, y: m.y, amount: 1 });
     f.events.push({ t: 'resource', slot: f.slot, kind: 'spend', amount: 1 });
-    f.events.push({ t: 'shockwave', x: m.x, y: m.y, strength: 0.35, radius: 110, hue: 0.6 });
+    f.events.push({ t: 'shockwave', x: m.x, y: m.y, strength: 0.3, radius: 110, hue: 0.6 });
     if (wasBound && f.resource > this.moonsAlive) f.resource = this.moonsAlive;
   }
 
-  /** The Guard shell is as strong as the atmosphere that remains (and the moons standing in front of it). */
-  override guardMultiplier(): number {
-    let shield = 0;
-    for (const m of this.moons) if (m.mode === ORBIT) shield += 0.12;
-    return 0.4 + 0.6 * this.atmoFrac + shield;
-  }
-
   /* ---------------------------------------------------------------------------------------------- *
-   *  moons: slam and barrage
+   *  moons: the slam and the barrage
    * ---------------------------------------------------------------------------------------------- */
+
+  /**
+   * The moon to sling: the one whose orbital path already points most nearly at the foe (it needs the shortest whip before it can
+   * let go on its tangent).
+   */
+  private pickSlamMoon(): Moon | null {
+    const f = this.f;
+    let best: Moon | null = null;
+    let bd = 1e9;
+    for (const m of this.moons) {
+      if (m.mode !== ORBIT) continue;
+      const s = m.spec;
+      const ang = m.ang + m.lag;
+      const tx = -Math.sin(ang) * s.a;
+      const ty = Math.cos(ang) * s.b;
+      const head = Math.atan2(
+        tx * Math.sin(s.tilt) + ty * Math.cos(s.tilt),
+        tx * Math.cos(s.tilt) - ty * Math.sin(s.tilt),
+      );
+      let off = Math.atan2(f.foe.view.y - m.y, f.foe.view.x - m.x) - head;
+      while (off > Math.PI) off -= Math.PI * 2;
+      while (off < -Math.PI) off += Math.PI * 2;
+      // it can only swing forward along its orbit: a path that is just past the foe needs most of a turn
+      const need = off >= 0 ? off : off + Math.PI * 2;
+      if (need < bd) {
+        bd = need;
+        best = m;
+      }
+    }
+    return best;
+  }
 
   private pickMoon(): Moon | null {
     // the moon nearest the foe's side, in orbit
@@ -799,68 +1336,197 @@ export class PlanetBehaviour extends Behaviour {
     return best;
   }
 
-  private launch(m: Moon, speed: number, aimX: number, aimY: number): void {
-    const l = Math.hypot(aimX, aimY) || 1;
+  /**
+   * Send moon `m` at the foe: it first whips round its orbit for `windup` ticks (the delay that makes it a moon, not a bullet), then
+   * leaves on its tangent, accelerates toward `speed` and curves onto the foe (`curve` −1 over, +1 under, 0 straight).
+   */
+  private launchMoon(
+    m: Moon,
+    o: {
+      windup: number;
+      speed: number;
+      accel: number;
+      turn: number;
+      curve: number;
+      energy: number;
+      crater: number;
+      compress: number;
+      shock: number;
+      life: number;
+    },
+  ): void {
     m.mode = SLAM;
     m.age = 0;
     m.slamHit = false;
-    m.vx = (aimX / l) * speed;
-    m.vy = (aimY / l) * speed;
+    m.windup = o.windup;
+    m.windupMax = Math.max(1, o.windup);
+    m.speedMax = o.speed;
+    m.accel = o.accel;
+    m.turn = o.turn;
+    m.curve = o.curve;
+    m.energy = o.energy;
+    m.crater = o.crater;
+    m.compress = o.compress;
+    m.shock = o.shock;
+    m.life = o.life;
+    m.vx = 0;
+    m.vy = 0;
     m.tx.fill(m.x);
     m.ty.fill(m.y);
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  moves
+   * ---------------------------------------------------------------------------------------------- */
+
+  /** Every command is answered on its input tick (see `telegraph`); the moon (or comet) that will act is the one that moves. */
+  override onMoveStart(m: ActiveMove): void {
+    const f = this.f;
+    const id = m.def?.id ?? '';
+    const slot = m.def?.slot ?? '';
+    switch (id) {
+      case 'planet.moonslam':
+        this.telegraph(slot, 1, this.pickSlamMoon());
+        break;
+      case 'planet.shift': {
+        this.telegraph(slot, 0.8, null);
+        this.kickSpin(PROGRADE * this.driftCfg.spin);
+        // the dash bends around the foe: toward the side the foe lies on, relative to the push
+        const tx = f.foe.view.x - f.px;
+        const ty = f.foe.view.y - f.py;
+        const cross = m.dirX * ty - m.dirY * tx;
+        this.driftSide = cross >= 0 ? 1 : -1;
+        break;
+      }
+      case 'planet.comet':
+        this.telegraph(slot, 1, null);
+        this.takeComet(f.ctx);
+        break;
+      case 'planet.impact':
+      case 'planet.cataclysm':
+      case 'planet.crustbreaker':
+      case 'planet.magmavent':
+      case 'planet.corepulse':
+        this.telegraph(slot, 1.2, null);
+        break;
+      default:
+        this.telegraph(slot, 0.7, null);
+    }
   }
 
   override onRelease(m: ActiveMove): void {
     const f = this.f;
     const id = m.def?.id;
     if (id === 'planet.moonslam') {
-      const moon = this.pickMoon();
+      const moon = this.pickSlamMoon();
+      const cf = m.chargeMax > 0 ? m.chargeTicks / m.chargeMax : 0;
+      // no moon in orbit: the world throws the heaviest chunk of its debris ring; with none, its own tidal shove (the hitbox)
       if (!moon) {
-        // nothing to throw: the cost is handed back
-        f.resource = Math.min(this.moonsAlive, f.resource + 1);
+        this.throwRingChunk(1 + 0.35 * cf);
         return;
       }
-      const cf = m.chargeMax > 0 ? m.chargeTicks / m.chargeMax : 0;
-      // aim: the stick if it is held, otherwise straight at the foe
-      let ax = this.aimX;
-      let ay = this.aimY;
-      if (Math.hypot(ax, ay) < 0.3) {
-        ax = f.foe.view.x - moon.x;
-        ay = f.foe.view.y - moon.y;
-      }
-      this.launch(moon, this.cfg.speed * (1 + 0.35 * cf), ax, ay);
+      const cfg = this.cfg;
+      // aim: the stick bends the path over (up) or under (down) the foe
+      const curve = this.aimY < -0.3 ? -1 : this.aimY > 0.3 ? 1 : 0;
+      this.launchMoon(moon, {
+        windup: cfg.windup,
+        speed: cfg.speed * (1 + 0.35 * cf),
+        accel: cfg.accel,
+        turn: cfg.turn,
+        curve: curve * cfg.curve,
+        energy: cfg.energy * m.power,
+        crater: cfg.crater,
+        compress: cfg.compress,
+        shock: cfg.shock,
+        life: cfg.life,
+      });
+      f.resource = Math.max(0, f.resource - 1);
+      f.events.push({ t: 'resource', slot: f.slot, kind: 'spend', amount: 1 });
       // the throw's reaction: the world lurches on its axis and the other moon swings back
       this.kickSpin(PROGRADE * (0.5 + 0.6 * cf));
-      for (const mo of this.moons) if (mo !== moon && mo.mode === ORBIT) mo.lagV -= 2.2;
-    } else if (id === 'planet.cataclysm') this.quaked = false;
+      for (const mo of this.moons) if (mo !== moon && mo.mode === ORBIT) mo.lagV -= 0.6;
+    } else if (id === 'planet.comet') this.slingshot();
+    else if (id === 'planet.cataclysm') this.quaked = false;
+    else if (id === 'planet.magmavent') {
+      // the vent is the world's own wound: it bleeds a little of itself
+      const shed = (m.def?.extra?.['vent'] as { shed: number } | undefined)?.shed ?? 0.004;
+      f.world.shed(f.body.id, shed * f.view.bodyStats.initialMass, 'burn');
+      this.forceSkin = true;
+    } else if (id === 'planet.corepulse') {
+      const shed = (m.def?.extra?.['pulse'] as { shed: number } | undefined)?.shed ?? 0.03;
+      f.world.shed(f.body.id, shed * f.view.bodyStats.initialMass, 'blow');
+      const t = f.body.transform;
+      f.events.push(
+        { t: 'flash', amount: 0.5, x: t.x, y: t.y },
+        { t: 'shockwave', x: t.x, y: t.y, strength: 1, radius: 260, hue: 0.08 },
+        { t: 'shake', dirX: f.facing, dirY: 0.3, amp: 11 },
+        { t: 'cue', slot: f.slot, titan: f.def.id, id: 'core-pulse', x: t.x, y: t.y, amount: 1 },
+      );
+    }
   }
 
-  /** Every command is answered on its input tick (see `telegraph`); the moon that will be thrown is the one that moves. */
-  override onMoveStart(m: ActiveMove): void {
-    const id = m.def?.id ?? '';
-    const slot = m.def?.slot ?? '';
-    if (id === 'planet.moonslam') this.telegraph(slot, 1, this.pickMoon());
-    else if (id === 'planet.shift') {
-      this.telegraph(slot, 0.8, null);
-      this.kickSpin(PROGRADE * 1.2);
-    } else if (id === 'planet.impact' || id === 'planet.cataclysm') this.telegraph(slot, 1.2, null);
-    else this.telegraph(slot, 0.7, null);
+  override onMoveEnd(m: ActiveMove, interrupted: boolean): void {
+    const id = m.def?.id;
+    if (id === 'planet.cataclysm') this.barrageNext = 0;
+    // a shepherded comet that was never slung (the hold was broken) is let go along its path
+    if (
+      id === 'planet.comet' &&
+      interrupted &&
+      (this.comet.mode === C_INBOUND || this.comet.mode === C_ORBIT)
+    )
+      this.comet.mode = C_LOOSE;
   }
 
-  override onMoveEnd(m: ActiveMove, _interrupted: boolean): void {
-    if (m.def?.id === 'planet.cataclysm') this.barrageNext = 0;
+  /**
+   * Crush HELD: holding through the first HOLD_TICKS of Tidal Rush turns it into the move the world's phase allows. Phases 1–2:
+   * Crust Breaker. Phase 3: Magma Vent. Phase 4: Core Pulse, which spends a full meter (else Magma Vent).
+   * (Proposal 133 asks the fighter for a declarative hold-alternative; this is the behaviour side of it.)
+   */
+  private holdCrush(): void {
+    const f = this.f;
+    let id = 'planet.crustbreaker';
+    if (this.phase >= 4 && f.meter >= 1 - 1e-6) id = 'planet.corepulse';
+    else if (this.phase >= 3) id = 'planet.magmavent';
+    const def = f.movesById.get(id);
+    if (!def) return;
+    if (id === 'planet.corepulse') f.meter = Math.max(0, f.meter - def.meterCost);
+    f.startMove(def, Btn.CRUSH);
+  }
+
+  /** Per-tick move mechanics the move data cannot express: the hold-swap, Orbital Drift's curve. */
+  private stepMoves(ctx: FighterTickCtx): void {
+    const f = this.f;
+    const m = f.mv;
+    if (!m.def || !f.live || f.ko) return;
+    if (
+      m.def.id === 'planet.impact' &&
+      m.phase === 'startup' &&
+      !m.feint &&
+      m.phaseTick === HOLD_TICKS &&
+      (ctx.input.held & Btn.CRUSH) !== 0
+    ) {
+      this.holdCrush();
+      return;
+    }
+    if (m.def.id === 'planet.shift' && m.phase === 'active') {
+      // a perpendicular pull, ramped in and out over the dash: the path is an arc, not a line
+      const k = Math.sin(Math.PI * clamp01((m.phaseTick - 0.5) / Math.max(1, m.active)));
+      const a = this.driftCfg.curve * k * this.driftSide;
+      f.vx += -m.dirY * a * TICK_DT;
+      f.vy += m.dirX * a * TICK_DT;
+    }
   }
 
   override onKo(): void {
     for (const mo of this.moons) if (mo.mode === SLAM) mo.mode = RETURN;
+    if (this.comet.mode === C_INBOUND || this.comet.mode === C_ORBIT) this.comet.mode = C_LOOSE;
+    this.failT = 0;
   }
 
   override resolveVolumes(ctx: FighterTickCtx): void {
     const f = this.f;
-    const tick = ctx.tick;
     const m = f.mv;
     // stick aim, remembered for the slam
-    this.aimX = ctx.input.moveX;
     this.aimY = ctx.input.moveY;
     // cataclysm: after the quake the moons rain on the foe one after another
     if (m.def?.id === 'planet.cataclysm' && this.barrage && m.phase === 'active') {
@@ -868,10 +1534,19 @@ export class PlanetBehaviour extends Behaviour {
       const b = this.barrage;
       if (at >= b.from && at >= this.barrageNext) {
         const moon = this.pickMoon();
-        if (moon) {
-          this.launch(moon, b.speed, f.foe.view.x - moon.x, f.foe.view.y - moon.y);
-          moon.slamHit = false;
-        }
+        if (moon)
+          this.launchMoon(moon, {
+            windup: 6,
+            speed: b.speed,
+            accel: 0.6,
+            turn: 0.09,
+            curve: 0,
+            energy: b.energy,
+            crater: b.crater,
+            compress: b.compress,
+            shock: b.shock,
+            life: 60,
+          });
         this.barrageNext = at + b.gap;
       }
     }
@@ -887,126 +1562,181 @@ export class PlanetBehaviour extends Behaviour {
         { t: 'cue', slot: f.slot, titan: f.def.id, id: 'crust-crack', x: t.x, y: t.y, amount: 1 },
       );
     }
-    // flying moons
-    const cfg = this.cfg;
-    const bar = this.barrage;
     for (const mo of this.moons) {
-      if (mo.mode === SLAM) {
-        mo.age++;
-        mo.x += mo.vx;
-        mo.y += mo.vy;
-        for (let k = 13; k > 0; k--) {
-          mo.tx[k] = mo.tx[k - 1]!;
-          mo.ty[k] = mo.ty[k - 1]!;
-        }
-        mo.tx[0] = mo.x;
-        mo.ty[0] = mo.y;
-        const ult = m.def?.id === 'planet.cataclysm';
-        const energy = ult
-          ? (bar?.energy ?? 900)
-          : cfg.energy * (m.def?.id === 'planet.moonslam' ? m.power : 1);
-        if (!mo.slamHit && f.live) {
-          const sh = this.tmp;
-          sh.kind = 'point';
-          sh.x = mo.x;
-          sh.y = mo.y;
-          sh.r = mo.radius + 2;
-          this.dmg.energy = energy;
-          this.dmg.params.crater = ult ? (bar?.crater ?? 14) : cfg.crater;
-          this.dmg.params.compress = ult ? (bar?.compress ?? 7) : cfg.compress;
-          this.dmg.params.shock = ult ? (bar?.shock ?? 1) : cfg.shock;
-          const hit = f.strike(
-            sh,
-            this.dmg,
-            mo.vx * 50,
-            mo.vy * 50,
-            0.6,
-            12,
-            'signature',
-            'planet.moonslam',
-            1,
-          );
-          if (hit) {
-            mo.slamHit = true;
-            // the moon pays for the blow: a KINETIC bruise where it struck
-            const e2 = this.ev;
-            const s2 = this.evShape;
-            s2.kind = 'point';
-            s2.x = mo.x + Math.sign(mo.vx) * mo.radius * 0.6;
-            s2.y = mo.y;
-            s2.r = mo.radius * 0.7;
-            e2.type = 'KINETIC';
-            e2.energy = energy * cfg.recoil;
-            e2.dirX = -Math.sign(mo.vx || 1);
-            e2.dirY = 0;
-            e2.flags = 0;
-            e2.params = { crater: 3 };
-            e2.sourceMass = 4;
-            e2.sourceBodyId = f.body.id;
-            e2.originX = mo.x;
-            e2.originY = mo.y;
-            f.world.applyDamage(mo.body.id, e2);
-            if (f.world.stats(mo.body.id).massFrac < BREAK_FRAC)
-              this.loseMoon(mo, mo.vx * 30, mo.vy * 30, true);
-            else {
-              mo.mode = RETURN;
-              mo.vx *= -0.3;
-              mo.vy *= -0.3;
-            }
-          }
-        }
-        if (mo.mode === SLAM) {
-          f.addThreat(asShape(this.moonShape(mo)), 'CRUSH', energy, 0, 4, true);
-          if (mo.age > cfg.life || Math.hypot(mo.x - f.px, mo.y - f.py) > 470) mo.mode = RETURN;
-        }
-      } else if (mo.mode === RETURN) {
-        const dx = f.px - mo.x;
-        const dy = f.py - mo.y;
-        const d = Math.hypot(dx, dy) || 1;
-        mo.vx += (dx / d) * 0.9;
-        mo.vy += (dy / d) * 0.9;
-        mo.vx *= 0.93;
-        mo.vy *= 0.93;
-        const sp = Math.hypot(mo.vx, mo.vy);
-        if (sp > 9) {
-          mo.vx *= 9 / sp;
-          mo.vy *= 9 / sp;
-        }
-        mo.x += mo.vx;
-        mo.y += mo.vy;
-        // captured back into orbit when it reaches the orbit ring
-        const orb = Math.hypot(mo.spec.a, mo.spec.b) * 0.9;
-        if (d < orb) {
-          mo.mode = ORBIT;
-          mo.ang = Math.atan2((mo.y - f.py) / Math.max(1, mo.spec.b), (mo.x - f.px) / Math.max(1, mo.spec.a));
-          if (f.resource < this.moonsAlive) {
-            f.resource = Math.min(this.moonsAlive, f.resource + 1);
-            f.events.push({ t: 'resource', slot: f.slot, kind: 'gain', amount: 1 });
-          }
-        }
-      } else if (mo.mode === DRIFT) {
-        // knocked out of orbit: the planet's gravity tugs at it; it wobbles home only if it was not thrown far
-        mo.age++;
-        const dx = f.px - mo.x;
-        const dy = f.py - mo.y;
-        const d = Math.hypot(dx, dy) || 1;
-        const g = 0.028 * (1 / Math.max(0.6, d / 160));
-        mo.vx += (dx / d) * g * 4;
-        mo.vy += (dy / d) * g * 4;
-        mo.x += mo.vx;
-        mo.y += mo.vy;
-        if (d > LOST_RADIUS || mo.age > 260) this.loseMoon(mo, mo.vx * 60, mo.vy * 60, false);
-        else if (mo.age > 90 && d < 190 && Math.hypot(mo.vx, mo.vy) < 2.2) mo.mode = RETURN;
-      }
+      if (mo.mode === SLAM) this.flyMoon(mo);
+      else if (mo.mode === RETURN) this.returnMoon(mo);
+      else if (mo.mode === DRIFT) this.driftMoon(mo);
       if (mo.mode !== ORBIT && mo.mode !== GONE) {
         const t = mo.body.transform;
         t.x = Math.round(mo.x);
         t.y = Math.round(mo.y);
         mo.layer.tickStart();
-        mo.back = false;
+        // a moon slung from behind the world stays behind it until it has cleared the disc (no pop through the planet)
+        const clear = Math.hypot(mo.x - f.px, mo.y - f.py) > this.rig.radius + this.rig.atmo + mo.radius;
+        if (!(mo.mode === SLAM && mo.back && !clear)) mo.back = false;
       }
     }
-    void tick;
+    this.stepComet();
+  }
+
+  /** One tick of a moon strike: the whip round the orbit, then the accelerating, curving flight and the blow. */
+  private flyMoon(mo: Moon): void {
+    const f = this.f;
+    if (mo.windup > 0) {
+      // the whip: the moon races round its own orbit, gathering speed, and lets go where its path points at the foe (after at
+      // least `windupMax` ticks, at most WHIP_EXTRA more): it leaves exactly on its orbital tangent, so the path has no corner
+      mo.age++;
+      const u = clamp01(mo.age / mo.windupMax);
+      const w = ((Math.PI * 2) / mo.spec.period) * (1 + 2.6 * smoothstep(0, 1, u));
+      mo.ang += w;
+      this.orbitPos(mo, this.orbP, this.orbB, this.moons.indexOf(mo));
+      const nx = this.orbP.x;
+      const ny = this.orbP.y;
+      mo.vx = nx - mo.x;
+      mo.vy = ny - mo.y;
+      mo.x = nx;
+      mo.y = ny;
+      mo.back = this.orbB.v;
+      let off =
+        Math.atan2(f.foe.view.y - mo.y, f.foe.view.x - mo.x) + mo.curve * 0.7 - Math.atan2(mo.vy, mo.vx);
+      while (off > Math.PI) off -= Math.PI * 2;
+      while (off < -Math.PI) off += Math.PI * 2;
+      if ((mo.age >= mo.windupMax && Math.abs(off) < 0.45) || mo.age >= mo.windupMax + WHIP_EXTRA) {
+        mo.windup = 0;
+        mo.age = 0;
+      }
+    } else {
+      mo.age++;
+      const tx = f.foe.view.x - mo.x;
+      const ty = f.foe.view.y - mo.y;
+      const d = Math.hypot(tx, ty) || 1;
+      // desired heading: at the foe, bent to one side while far (the arc), straight at the end
+      const bend = mo.curve * clamp01((d - 60) / 220);
+      const des = Math.atan2(ty, tx) + bend;
+      let head = Math.atan2(mo.vy, mo.vx);
+      let dh = des - head;
+      while (dh > Math.PI) dh -= Math.PI * 2;
+      while (dh < -Math.PI) dh += Math.PI * 2;
+      head += clamp(dh, -mo.turn, mo.turn);
+      const sp = Math.min(mo.speedMax, Math.hypot(mo.vx, mo.vy) + mo.accel);
+      mo.vx = Math.cos(head) * sp;
+      mo.vy = Math.sin(head) * sp;
+      mo.x += mo.vx;
+      mo.y += mo.vy;
+    }
+    for (let k = 13; k > 0; k--) {
+      mo.tx[k] = mo.tx[k - 1]!;
+      mo.ty[k] = mo.ty[k - 1]!;
+    }
+    mo.tx[0] = mo.x;
+    mo.ty[0] = mo.y;
+    if (mo.windup > 0) return;
+    if (!mo.slamHit && f.live) {
+      const sh = this.tmp;
+      sh.kind = 'point';
+      sh.x = mo.x;
+      sh.y = mo.y;
+      sh.r = mo.radius + 2;
+      this.dmg.energy = mo.energy;
+      this.dmg.params.crater = mo.crater;
+      this.dmg.params.compress = mo.compress;
+      this.dmg.params.shock = mo.shock;
+      const hit = f.strike(sh, this.dmg, mo.vx * 50, mo.vy * 50, 0.6, 12, 'strike', 'planet.moonslam', 1);
+      if (hit) {
+        mo.slamHit = true;
+        if (f.world.stats(mo.body.id).massFrac < this.cfg.breakFrac) {
+          // a broken moon does not come home: it shatters, and its fragments carry on
+          this.shatterMoon(mo, mo.vx, mo.vy);
+          return;
+        }
+        // the moon pays for the blow: a KINETIC bruise where it struck
+        const e2 = this.ev;
+        const s2 = this.evShape;
+        s2.kind = 'point';
+        s2.x = mo.x + Math.sign(mo.vx) * mo.radius * 0.6;
+        s2.y = mo.y;
+        s2.r = mo.radius * 0.7;
+        e2.shape = asShape(s2);
+        e2.type = 'KINETIC';
+        e2.energy = mo.energy * this.cfg.recoil;
+        e2.dirX = -Math.sign(mo.vx || 1);
+        e2.dirY = 0;
+        e2.flags = 0;
+        e2.params = { crater: 3 };
+        e2.sourceMass = 4;
+        e2.sourceBodyId = f.body.id;
+        e2.originX = mo.x;
+        e2.originY = mo.y;
+        f.world.applyDamage(mo.body.id, e2);
+        if (f.world.stats(mo.body.id).massFrac < BREAK_FRAC) this.loseMoon(mo, mo.vx * 30, mo.vy * 30, true);
+        else {
+          // it does not bounce back in one tick: the blow brakes it over the next ticks (see `returnMoon`) and the world reels it in
+          mo.mode = RETURN;
+          mo.age = 0;
+        }
+        return;
+      }
+    }
+    if (mo.mode === SLAM) {
+      f.addThreat(asShape(this.moonShape(mo)), 'CRUSH', mo.energy, 0, 4, true);
+      if (mo.age > mo.life || Math.hypot(mo.x - f.px, mo.y - f.py) > 470) mo.mode = RETURN;
+    }
+  }
+
+  /** Home: pulled back toward the planet with drag, captured into orbit when it reaches its ring. */
+  private returnMoon(mo: Moon): void {
+    const f = this.f;
+    const dx = f.px - mo.x;
+    const dy = f.py - mo.y;
+    const d = Math.hypot(dx, dy) || 1;
+    mo.age++;
+    mo.vx += (dx / d) * 0.45;
+    mo.vy += (dy / d) * 0.45;
+    // quadratic drag (terminal ~6.7 px/tick), plus the impact's braking over the first ticks after a blow
+    const sp = Math.hypot(mo.vx, mo.vy);
+    const drag = (1 - 0.01 * sp) * (mo.slamHit && mo.age < 10 ? 0.86 : 1);
+    mo.vx *= drag;
+    mo.vy *= drag;
+    mo.x += mo.vx;
+    mo.y += mo.vy;
+    const orb = Math.hypot(mo.spec.a, mo.spec.b) * 0.9;
+    if (d < orb) {
+      mo.mode = ORBIT;
+      mo.lag = 0;
+      mo.lagV = 0;
+      mo.settle = SETTLE_TICKS;
+      // the orbit point nearest where it is: undo the orbit's tilt, then read the ellipse parameter
+      const ct = Math.cos(mo.spec.tilt);
+      const st = Math.sin(mo.spec.tilt);
+      const rx = mo.x - f.px;
+      const ry = mo.y - f.py;
+      mo.ang = Math.atan2(
+        (-rx * st + ry * ct) / Math.max(1, mo.spec.b),
+        (rx * ct + ry * st) / Math.max(1, mo.spec.a),
+      );
+      if (f.resource < this.moonsAlive) {
+        f.resource = Math.min(this.moonsAlive, f.resource + 1);
+        f.events.push({ t: 'resource', slot: f.slot, kind: 'gain', amount: 1 });
+      }
+    }
+  }
+
+  /** Knocked out of orbit: the planet's gravity tugs at it; it wobbles home only if it was not thrown far (never once freed). */
+  private driftMoon(mo: Moon): void {
+    const f = this.f;
+    mo.age++;
+    const dx = f.px - mo.x;
+    const dy = f.py - mo.y;
+    const d = Math.hypot(dx, dy) || 1;
+    if (!mo.free) {
+      const g = 0.028 * (1 / Math.max(0.6, d / 160));
+      mo.vx += (dx / d) * g * 4;
+      mo.vy += (dy / d) * g * 4;
+    }
+    mo.x += mo.vx;
+    mo.y += mo.vy;
+    if (d > LOST_RADIUS || mo.age > (mo.free ? 400 : 260)) this.loseMoon(mo, mo.vx * 60, mo.vy * 60, false);
+    else if (!mo.free && mo.age > 90 && d < 190 && Math.hypot(mo.vx, mo.vy) < 2.2) mo.mode = RETURN;
   }
 
   private moonShape(mo: Moon): ReturnType<typeof makeFatShape> {
@@ -1019,29 +1749,250 @@ export class PlanetBehaviour extends Behaviour {
   }
 
   /* ---------------------------------------------------------------------------------------------- *
-   *  per tick
+   *  Comet Shepherd → Slingshot
    * ---------------------------------------------------------------------------------------------- */
 
-  override update(ctx: FighterTickCtx): void {
+  /**
+   * Take a comet to shepherd: a free arena comet within reach (the Lead's hazard module), else call one in from the far edge of
+   * the arena, high on the side away from the foe, heading to pass the world below its orbit. Either way it is a debris chunk of the
+   * matter world; the deepened well bends its path. One comet at a time.
+   */
+  private takeComet(ctx: FighterTickCtx): void {
     const f = this.f;
-    const tick = ctx.tick;
-    const m = f.mv;
-    this.tickLast = tick;
-    this.guardBlend += ((f.guardUp ? 1 : 0) - this.guardBlend) * 0.16;
-    // Guard answers on its input tick, and turns the better face toward the foe (Rotational Brace)
-    if (f.guardUp && !this.wasGuard && f.live) {
-      this.telegraph('guard', 0.9, null);
-      this.brace();
+    const c = this.comet;
+    if (c.mode === C_INBOUND || c.mode === C_ORBIT || c.mode === C_FLY) return;
+    this.dropComet();
+    let best = -1;
+    let bd = 400;
+    for (const ac of ctx.comets ?? []) {
+      if (ac.mode !== 0) continue;
+      const d = Math.hypot(ac.x - f.px, ac.y - f.py);
+      if (d < bd) {
+        bd = d;
+        best = ac.id;
+      }
     }
-    this.wasGuard = f.guardUp;
-    this.stepSpin(m);
-    // a world neither shears nor leans: the body is drawn (and hit) upright; the Brace decides which face is toward the foe
-    const t = f.body.transform;
-    t.lean = 0;
-    t.facing = this.braced ? (f.facing === 1 ? -1 : 1) : f.facing;
-    this.updateOrbit(tick, false);
+    if (best >= 0) {
+      c.id = best;
+      c.mode = C_INBOUND;
+      c.age = 0;
+      c.w = 0;
+      c.sling = false;
+      c.slingWait = 0;
+      this.readComet();
+      f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'comet-call', x: c.x, y: c.y, amount: 1 });
+      return;
+    }
+    this.summonComet();
+  }
 
-    // Gravity Well (passive): a small well that gathers debris into a slow ring
+  /** Call a comet nucleus in (a chunk of ice and rock painted by art/comet.ts) when the arena offers none. */
+  private summonComet(): void {
+    const f = this.f;
+    const c = this.comet;
+    const cfg = this.cometCfg;
+    const a = f.arena;
+    const sx = clamp(f.px - f.facing * cfg.spawnDist, a.minX + 20, a.maxX - 20);
+    const sy = clamp(f.py - cfg.spawnRise, a.minY + 20, a.maxY - 20);
+    const g = generateCometBody(f.def, f.seed + 977, f.lighting);
+    const map = g.map;
+    const px = new Uint32Array(map.w * map.h);
+    for (let i = 0; i < px.length; i++)
+      if (map.material[i] !== 0) px[i] = (map.baseColor[i]! | 0xff000000) >>> 0;
+    // aim to pass below the world at about its orbit, so the well has a path to bend
+    const tx = f.px - (sx - f.px) * 0.2;
+    const ty = f.py + cfg.orbit * 0.55;
+    const d = Math.hypot(tx - sx, ty - sy) || 1;
+    const id = f.world.spawnChunk({
+      pixels: px,
+      w: map.w,
+      h: map.h,
+      x: sx,
+      y: sy,
+      vx: ((tx - sx) / d) * cfg.entrySpeed,
+      vy: ((ty - sy) / d) * cfg.entrySpeed,
+      spin: 0.4,
+      mass: cfg.mass,
+    }) as number | undefined;
+    if (typeof id !== 'number' || id < 0) return;
+    c.id = id;
+    c.mode = C_INBOUND;
+    c.age = 0;
+    c.w = 0;
+    c.sling = false;
+    c.slingWait = 0;
+    c.r = Math.max(map.w, map.h) * 0.35;
+    this.readComet();
+    f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'comet-call', x: sx, y: sy, amount: 1 });
+  }
+
+  /** Read the comet chunk's state; false (and the comet forgotten) if the chunk is gone. */
+  private readComet(): boolean {
+    const c = this.comet;
+    const s = this.info;
+    if (c.id < 0 || !this.wx.chunkState?.(c.id, s)) {
+      c.mode = C_NONE;
+      c.id = -1;
+      return false;
+    }
+    c.x = s.x;
+    c.y = s.y;
+    c.vx = s.vx;
+    c.vy = s.vy;
+    c.r = Math.max(4, s.radius * 0.8);
+    return true;
+  }
+
+  /** Let the comet go: it stays in the arena as ordinary debris. */
+  private dropComet(): void {
+    const c = this.comet;
+    if (c.mode === C_NONE) return;
+    if (c.id >= 0) this.wx.releaseChunk?.(c.id);
+    c.mode = C_NONE;
+    c.id = -1;
+  }
+
+  /** Release: a captured comet leaves at the next point where its orbit points at the foe; one still falling in is let go. */
+  private slingshot(): void {
+    const c = this.comet;
+    if (c.mode === C_INBOUND) {
+      this.dropComet();
+      return;
+    }
+    if (c.mode !== C_ORBIT) return;
+    c.sling = true;
+    c.slingWait = 0;
+  }
+
+  /**
+   * Throw it now, along its orbit (aimed the last few degrees at the foe), with the speed the orbit gave it. The blow it lands is
+   * the matter world's (½·m·(v/60)²); the launch speed is set so that energy is `energy`·(v/vRef)² whatever the comet's mass.
+   */
+  private letGo(): void {
+    const f = this.f;
+    const c = this.comet;
+    const cfg = this.cometCfg;
+    const speed = Math.hypot(c.vx, c.vy);
+    const mass = this.wx.chunkState?.(c.id, this.info) ? Math.max(1, this.info.mass) : cfg.mass;
+    const v = 60 * Math.sqrt((2 * cfg.energy) / mass) * (speed / cfg.vRef);
+    const dx = f.foe.view.x - c.x;
+    const dy = f.foe.view.y - c.y;
+    const dl = Math.hypot(dx, dy) || 1;
+    c.sling = false;
+    if (!this.wx.launchChunk?.(c.id, (dx / dl) * v, (dy / dl) * v, f.body.id, f.slot)) {
+      this.dropComet();
+      return;
+    }
+    c.mode = C_FLY;
+    c.age = 0;
+    this.kickSpin(PROGRADE * 0.6);
+    f.events.push({
+      t: 'cue',
+      slot: f.slot,
+      titan: f.def.id,
+      id: 'comet-sling',
+      x: c.x,
+      y: c.y,
+      amount: speed / cfg.vRef,
+    });
+  }
+
+  /**
+   * One tick of the comet: falling in under the deepened well until it swings close enough to be caught; riding the ring while the
+   * shepherd spins it up; waiting, once released, for the point where its orbit points at the foe; then the throw.
+   */
+  private stepComet(): void {
+    const f = this.f;
+    const c = this.comet;
+    if (c.mode === C_NONE) return;
+    if (!this.readComet()) return;
+    const cfg = this.cometCfg;
+    const dt = TICK_DT;
+    c.age++;
+    const holding = f.mv.def?.id === 'planet.comet' && f.mv.phase === 'charge';
+    if (c.mode === C_INBOUND) {
+      const d = Math.hypot(c.x - f.px, c.y - f.py);
+      if (d < cfg.orbit * 1.3 || (c.age > 120 && d < 300)) {
+        if (this.wx.captureChunk?.(c.id, f.slot)) {
+          c.mode = C_ORBIT;
+          c.w = cfg.w0;
+          f.events.push({
+            t: 'cue',
+            slot: f.slot,
+            titan: f.def.id,
+            id: 'comet-capture',
+            x: c.x,
+            y: c.y,
+            amount: 1,
+          });
+        } else this.dropComet();
+      } else if (c.age > 180) this.dropComet();
+    } else if (c.mode === C_ORBIT) {
+      // caught: the ring (and the comet on it) is spun up for as long as the shepherd holds it, like a flywheel
+      if (holding) c.w = Math.min(cfg.w1, c.w + cfg.spinUp * dt);
+      if (c.sling) {
+        let off = Math.atan2(f.foe.view.y - c.y, f.foe.view.x - c.x) - Math.atan2(c.vy, c.vx);
+        while (off > Math.PI) off -= Math.PI * 2;
+        while (off < -Math.PI) off += Math.PI * 2;
+        const front = c.y >= f.py;
+        if ((Math.abs(off) < 0.3 && front) || ++c.slingWait > 90) this.letGo();
+      } else if (!holding && f.mv.def?.id !== 'planet.comet') this.dropComet();
+    } else if (c.mode === C_FLY) {
+      // slung: the world's matter carries the blow; the comet is spent when it has struck (or slowed to debris)
+      if (this.info.mode !== 2 || c.age > cfg.life) {
+        f.events.push({
+          t: 'cue',
+          slot: f.slot,
+          titan: f.def.id,
+          id: 'comet-spent',
+          x: c.x,
+          y: c.y,
+          amount: 1,
+        });
+        c.mode = C_NONE;
+        c.id = -1;
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  the debris ring and Tidal Draw (Gravity, R1); the passive Gravity Well
+   * ---------------------------------------------------------------------------------------------- */
+
+  /** Let the ring go (KO, new round): its chunks keep their speed and are ordinary debris again. */
+  private clearRing(): void {
+    if (this.f.slot === 0 || this.f.slot === 1) this.wx?.setOrbit?.(this.f.slot, null);
+    this.ringIds.length = 0;
+  }
+
+  /** Forget ring chunks that are gone, thrown, struck loose or taken by someone else. */
+  private pruneRing(): void {
+    const s = this.info;
+    for (let k = this.ringIds.length - 1; k >= 0; k--) {
+      const id = this.ringIds[k]!;
+      if (!this.wx.chunkState?.(id, s) || s.mode !== 1 || s.owner !== this.f.slot) this.ringIds.splice(k, 1);
+    }
+  }
+
+  /**
+   * The well and the ring. The gravity source deepens while Gravity is held (ramped in over DRAW_IN s, out over DRAW_OUT s) and
+   * grows with the phase (a broken world has more debris about it); while the draw is deep, free debris within its reach is
+   * captured into the ring (severed enemy matter included) up to RING_CAP chunks: ammunition (Moon Slam throws it when no moon is
+   * in orbit) and armour (ring chunks in a blow's path soak part of it). The ring rides the world's spin; a held comet spins it up.
+   * The world slows while drawing (it is concentrating).
+   */
+  private stepDraw(ctx: FighterTickCtx): void {
+    const f = this.f;
+    const dt = TICK_DT;
+    const held = (ctx.input.held & Btn.GRAVITY) !== 0 && f.live && !f.ko && !f.guardUp;
+    if (held && !this.wasDraw) this.telegraph('gravity', 1, null);
+    this.wasDraw = held;
+    this.drawT = clamp01(this.drawT + (held ? dt / DRAW_IN : -dt / DRAW_OUT));
+    if (this.drawT > 0.05) f.applyStatus(1 - 0.35 * this.drawT, 2);
+    const R = this.rig.radius;
+    const shepherd =
+      this.comet.mode === C_INBOUND || (f.mv.def?.id === 'planet.comet' && f.mv.phase === 'charge');
+    const reach = 250 + DRAW_REACH * this.drawT + (shepherd ? 170 : 0);
     f.world.setGravitySource(
       f.slot,
       f.ko
@@ -1049,12 +2000,245 @@ export class PlanetBehaviour extends Behaviour {
         : {
             x: f.px,
             y: f.py,
-            strength: GRAVITY_STRENGTH,
-            radius: GRAVITY_RADIUS,
+            strength: PHASE_GRAVITY[this.phase]! + DRAW_PULL * this.drawT + (shepherd ? 140 : 0),
+            radius: reach,
           },
     );
+    if (f.ko) {
+      if (this.ringIds.length > 0 || this.comet.mode !== C_NONE) {
+        this.dropComet();
+        this.clearRing();
+      }
+      return;
+    }
+    // the ring: in the moons' plane, turning prograde with the world; widened to the comet's orbit while one rides it
+    // (a chunk keeps the lane it was caught on, so the ring is widened before the comet arrives, not after)
+    const comet = this.comet.mode === C_ORBIT || this.comet.mode === C_INBOUND;
+    this.wx.setOrbit?.(f.slot, {
+      x: f.px,
+      y: f.py,
+      radius: comet ? this.cometCfg.orbit : R * RING_R * (1 - 0.15 * this.ringTight),
+      omega: this.comet.mode === C_ORBIT ? this.comet.w : 0.55 + 0.3 * Math.abs(this.omega),
+      flatten: RING_FLAT,
+    });
+    if (f.tickNo % 30 === 0) this.pruneRing();
+    if (
+      this.drawT > 0.4 &&
+      f.tickNo % CAPTURE_EVERY === 0 &&
+      this.ringIds.length < RING_CAP &&
+      this.wx.chunksInShape
+    ) {
+      const sh = this.tmp;
+      sh.kind = 'point';
+      sh.x = f.px;
+      sh.y = f.py;
+      sh.r = reach * 0.85;
+      const n = this.wx.chunksInShape(asShape(sh), this.idsTmp);
+      for (let k = 0; k < n && this.ringIds.length < RING_CAP; k++) {
+        const id = this.idsTmp[k]!;
+        if (id === this.comet.id || !this.wx.chunkState?.(id, this.info) || this.info.mode !== 0) continue;
+        if (this.wx.captureChunk?.(id, f.slot)) {
+          this.ringIds.push(id);
+          f.events.push({
+            t: 'cue',
+            slot: f.slot,
+            titan: f.def.id,
+            id: 'ring-capture',
+            x: this.info.x,
+            y: this.info.y,
+            amount: this.info.mass,
+          });
+        }
+      }
+    }
+  }
 
-    // failure-mode monitors (cheap: every few ticks)
+  /** Moon Slam with no moon in orbit: the world throws the heaviest chunk of its ring at the foe. False if the ring is empty. */
+  private throwRingChunk(power: number): boolean {
+    const f = this.f;
+    this.pruneRing();
+    let best = -1;
+    let bm = 0;
+    for (const id of this.ringIds)
+      if (this.wx.chunkState?.(id, this.info) && this.info.mass > bm) {
+        bm = this.info.mass;
+        best = id;
+      }
+    if (best < 0 || !this.wx.chunkState?.(best, this.info)) return false;
+    const dx = f.foe.view.x - this.info.x;
+    const dy = f.foe.view.y - this.info.y;
+    const dl = Math.hypot(dx, dy) || 1;
+    const v = RING_THROW * power;
+    if (!this.wx.launchChunk?.(best, (dx / dl) * v, (dy / dl) * v, f.body.id, f.slot)) return false;
+    this.ringIds.splice(this.ringIds.indexOf(best), 1);
+    f.events.push({
+      t: 'cue',
+      slot: f.slot,
+      titan: f.def.id,
+      id: 'ring-throw',
+      x: this.info.x,
+      y: this.info.y,
+      amount: bm,
+    });
+    return true;
+  }
+
+  /** Ring armour: ring chunks in a blow's path take part of it (they are struck loose, and break if hit hard). Returns the share. */
+  private ringSoak(ev: DamageEvent): number {
+    if (this.ringIds.length === 0 || !this.wx.chunksInShape) return 0;
+    const n = this.wx.chunksInShape(ev.shape, this.idsTmp);
+    let soak = 0;
+    for (let k = 0; k < n; k++) {
+      const id = this.idsTmp[k]!;
+      const at = this.ringIds.indexOf(id);
+      if (at < 0 || !this.wx.chunkState?.(id, this.info)) continue;
+      this.wx.strikeChunk?.(id, this.info.x, this.info.y, ev.energy * RING_SOAK, ev.dirX, ev.dirY);
+      this.ringIds.splice(at, 1);
+      soak += RING_SOAK;
+    }
+    return soak;
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  failure: the world dies over ~3 s
+   * ---------------------------------------------------------------------------------------------- */
+
+  /**
+   * After the KO: the atmosphere vents (tidal tears off the air, round the limb), the moons drift off their orbits for good, the crust
+   * separates into slabs (fractures seeded round the limb that shear over the following ticks), and the core's light goes out last.
+   */
+  private stepFailure(): void {
+    const f = this.f;
+    const t = this.failT;
+    const R = this.rig.radius;
+    const e = this.ev;
+    const s = this.evShape;
+    if (t === 0)
+      f.events.push({
+        t: 'cue',
+        slot: f.slot,
+        titan: f.def.id,
+        id: 'atmo-vent',
+        x: f.px,
+        y: f.py,
+        amount: 1,
+      });
+    if (t < FAIL_VENT_END && t % 3 === 0) {
+      const a = this.thetaAir * 0.7 + t * 0.05;
+      s.kind = 'ring';
+      s.x = f.px;
+      s.y = f.py;
+      s.r0 = R - 3;
+      s.r1 = R + this.rig.atmo + 4;
+      e.shape = asShape(s);
+      e.type = 'TIDAL';
+      e.energy = 70;
+      e.dirX = Math.cos(a);
+      e.dirY = Math.sin(a);
+      e.duration = 1;
+      e.flags = 0;
+      e.params = { pull: 1.6 };
+      e.sourceMass = 4;
+      e.sourceBodyId = -1;
+      e.originX = f.px + Math.cos(a) * 260;
+      e.originY = f.py + Math.sin(a) * 260;
+      f.world.applyDamage(f.body.id, e);
+    }
+    if (t === FAIL_MOONS_AT) {
+      f.events.push({
+        t: 'cue',
+        slot: f.slot,
+        titan: f.def.id,
+        id: 'moons-drift',
+        x: f.px,
+        y: f.py,
+        amount: 1,
+      });
+      for (const mo of this.moons) {
+        if (mo.mode === DRIFT) mo.free = true;
+        if (mo.mode !== ORBIT && mo.mode !== RETURN) continue;
+        // let go along the orbit: the tangent of their prograde motion, a little outward, slowly
+        const ox = mo.x - f.px;
+        const oy = mo.y - f.py;
+        const ol = Math.hypot(ox, oy) || 1;
+        mo.mode = DRIFT;
+        mo.free = true;
+        mo.age = 0;
+        mo.vx = (oy / ol) * 1.4 + (ox / ol) * 0.5;
+        mo.vy = (-ox / ol) * 0.5 + (oy / ol) * 0.5;
+      }
+    }
+    if (t >= FAIL_SLAB_FROM && (t - FAIL_SLAB_FROM) % FAIL_SLAB_EVERY === 0) {
+      const k = (t - FAIL_SLAB_FROM) / FAIL_SLAB_EVERY;
+      if (k < FAIL_SLABS) {
+        if (k === 0)
+          f.events.push({
+            t: 'cue',
+            slot: f.slot,
+            titan: f.def.id,
+            id: 'crust-slab',
+            x: f.px,
+            y: f.py,
+            amount: 1,
+          });
+        const a = k * 2.399 + 0.6;
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        s.kind = 'point';
+        s.x = f.px + ca * (R - 4);
+        s.y = f.py + sa * (R - 4);
+        s.r = 12;
+        e.shape = asShape(s);
+        e.type = 'FRACTURE';
+        e.energy = 260;
+        e.dirX = -ca;
+        e.dirY = -sa;
+        e.duration = 1;
+        e.flags = DamageFlag.SEED_CRACK;
+        e.params = { crackSeeds: 3, crackStress: 200, penetration: 30 };
+        e.sourceMass = 4;
+        e.sourceBodyId = -1;
+        e.originX = f.px + ca * (R + 40);
+        e.originY = f.py + sa * (R + 40);
+        f.world.applyDamage(f.body.id, e);
+      }
+    }
+    this.coreOut = smoothstep(FAIL_CORE_FROM, FAIL_CORE_OUT, t);
+    if (t === FAIL_CORE_OUT)
+      f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'core-out', x: f.px, y: f.py, amount: 1 });
+    this.forceSkin = this.forceSkin || (t >= FAIL_CORE_FROM && t <= FAIL_CORE_OUT + 2);
+    this.failT++;
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  per tick
+   * ---------------------------------------------------------------------------------------------- */
+
+  override update(ctx: FighterTickCtx): void {
+    const f = this.f;
+    const tick = ctx.tick;
+    this.tickLast = tick;
+    this.stepMoves(ctx);
+    const m = f.mv;
+    // the moons' swing into the shield: a critically damped spring (ω = GUARD_OMEGA), so it starts and stops without a corner
+    const gw = GUARD_OMEGA;
+    this.guardBlendV +=
+      (gw * gw * ((f.guardUp ? 1 : 0) - this.guardBlend) - 2 * gw * this.guardBlendV) * TICK_DT;
+    this.guardBlend += this.guardBlendV * TICK_DT;
+    // Guard answers on its input tick, and turns the better face toward the foe (Rotational Brace)
+    if (f.guardUp && !this.wasGuard && f.live) {
+      this.telegraph('guard', 0.9, null);
+      this.brace();
+    }
+    this.wasGuard = f.guardUp;
+    this.stepDraw(ctx);
+    this.stepSpin(m);
+    // a world neither shears nor leans: the body is drawn (and hit) upright
+    f.body.transform.lean = 0;
+    this.updateOrbit(tick, false);
+    if (this.failT >= 0) this.stepFailure();
+
+    // monitors (cheap: every few ticks)
     if (tick % 6 === 0) this.monitor();
     f.resource = clamp(f.resource, 0, this.moonsAlive);
     f.view.parts = this.moonsAlive;
@@ -1076,6 +2260,15 @@ export class PlanetBehaviour extends Behaviour {
     }
     this.atmoFrac = clamp01(a / this.atmoCells0);
     this.oceanFrac = clamp01(o / this.oceanCells0);
+    // the face toward the foe, for the Brace's strength
+    this.censusNear();
+    this.nearIntegrity = this.nearShell / this.nearPristineShell;
+    // the damage phase only ever advances within a round
+    this.stampExposure();
+    if (f.live && !f.ko) {
+      const p = this.phaseNow();
+      if (p > this.phase) this.enterPhase(p);
+    }
     const t = f.body.transform;
     if (this.atmoFrac < 0.66 && this.atmoCue < 1) {
       this.atmoCue = 1;
@@ -1127,13 +2320,13 @@ export class PlanetBehaviour extends Behaviour {
   private draw(tick: number, m: ActiveMove): void {
     const f = this.f;
     const map = f.body.map;
-    // skin + glow every third tick while the day drifts calmly; every tick while the cloud deck streaks (spin, a half-turn) and on a
-    // command's input tick; the reveal only changes with the map
+    // skin + glow every third tick while the day drifts calmly; every tick while the cloud deck streaks (spin, a half-turn), on a
+    // command's input tick and while the core goes out; the reveal only changes with the map
     const fast = Math.abs(this.cloudSpin) > 0.6 || this.forceSkin;
     if (fast || tick % 3 === 0 || map.version !== this.lastVer) {
       if (fast || tick % 3 === 0 || this.redraw++ % 2 === 0) {
         this.drawSkin(tick);
-        if (!fast || tick % 3 === 0 || map.version !== this.lastVer) this.drawGlow(tick);
+        if (!fast || tick % 3 === 0 || map.version !== this.lastVer || this.failT >= 0) this.drawGlow(tick);
         this.lastVer = map.version;
       }
     }
@@ -1177,6 +2370,10 @@ export class PlanetBehaviour extends Behaviour {
             }
           }
       }
+    // how much of the deep world (mantle, magma, core) now shows: the Exposed Mantle phase reads it
+    let deep = 0;
+    for (let i = 0; i < expo.length; i++) if (expo[i] === 1 && DEEP(ids, mat[i]!)) deep++;
+    this.expoDeep = deep;
     return any;
   }
 
@@ -1203,6 +2400,9 @@ export class PlanetBehaviour extends Behaviour {
     const cover = this.turnTick >= 0 ? Math.sin((Math.PI * (this.turnTick + 0.5)) / TURN_TICKS) : 0;
     const density = Math.max(this.atmoFrac, cover);
     const cn = this.cloudC;
+    // the core going out: the exposed deep strata darken and stop glowing, dithered in from the outside
+    const out = this.coreOut;
+    const heat = 1 - out;
     let any = false;
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
@@ -1210,24 +2410,31 @@ export class PlanetBehaviour extends Behaviour {
         const mm = mat[i]!;
         if (mm === 0) continue;
         if (anyExpo && this.expo[i] === 1) {
-          // the strata the damage exposed: crust, banded mantle, flowing magma, white-hot core
+          // the strata the damage exposed: crust, banded mantle, slowly flowing magma, white-hot core
           if (mm === ids.crust) {
             const v = 0.25 + 0.5 * tn(x * 0.5, y * 0.9 + 3) + 0.15 * (((x + y) & 3) === 0 ? 1 : 0);
             px[i] = rampDither(this.crustR, v, x, y);
             em[i] = 0;
-          } else if (mm === ids.mantle) {
-            const band =
-              0.5 +
-              0.5 * Math.sin(Math.hypot(x - rig.core.x, y - rig.core.y) * 0.55 + 2.2 * tn(x * 0.3, y * 0.3));
-            px[i] = rampDither(this.mantle, 0.45 + 0.5 * band, x, y);
-            em[i] = 80;
-          } else if (mm === ids.magma) {
-            const v = 0.45 + 0.5 * tn(x * 0.35 + tick * 0.09, y * 0.35 - tick * 0.06);
-            px[i] = rampDither(this.magma, v, x, y);
-            em[i] = 190;
           } else {
-            px[i] = rampAt(this.magma, 0.92 + 0.08 * Math.sin(tick * 0.1));
-            em[i] = 240;
+            const dead = out > 0 && out >= bayer(x, y);
+            if (dead) {
+              px[i] = rampDither(this.crustR, 0.12 + 0.2 * tn(x * 0.4, y * 0.4), x, y);
+              em[i] = 0;
+            } else if (mm === ids.mantle) {
+              const band =
+                0.5 +
+                0.5 *
+                  Math.sin(Math.hypot(x - rig.core.x, y - rig.core.y) * 0.55 + 2.2 * tn(x * 0.3, y * 0.3));
+              px[i] = rampDither(this.mantle, 0.45 + 0.5 * band * heat, x, y);
+              em[i] = Math.round(80 * heat);
+            } else if (mm === ids.magma) {
+              const v = 0.45 + 0.5 * tn(x * 0.35 + tick * 0.012, y * 0.35 - tick * 0.008);
+              px[i] = rampDither(this.magma, v * heat + 0.1, x, y);
+              em[i] = Math.round(190 * heat);
+            } else {
+              px[i] = rampAt(this.magma, (0.92 + 0.08 * Math.sin(tick * 0.035)) * heat);
+              em[i] = Math.round(240 * heat);
+            }
           }
           any = true;
           continue;
@@ -1276,57 +2483,64 @@ export class PlanetBehaviour extends Behaviour {
     const ids = this.rig.ids;
     const px = G.px;
     const em = G.emis!;
+    // a hotter world (exposed mantle, core crisis) glows harder through its cracks; a dead one not at all
+    const gain = (this.phase >= 3 ? 1.25 : 1) * (1 - this.coreOut);
+    const slow = tick >> 5;
     let any = false;
-    for (let y = 0; y < H; y++)
-      for (let x = 0; x < W; x++) {
-        const i = y * W + x;
-        const mm = mat[i]!;
-        if (mm === 0) continue;
-        if ((fl[i]! & CellFlag.CRACKED) !== 0) {
-          // magma light leaking through the fissures: brighter the deeper the crack runs
-          const deep = mm === ids.crust ? 1 : mm === ids.mantle ? 1.3 : 0.55;
-          const flick = 0.55 + 0.45 * tn(x * 0.4 + tick * 0.05, y * 0.4);
-          const a = deep * flick;
-          px[i] =
-            0xff000000 |
-            (Math.min(255, 14 * a) << 16) |
-            (Math.min(255, 70 * a) << 8) |
-            Math.min(255, 130 * a);
-          em[i] = Math.min(255, 130 * a);
-          any = true;
-        } else if (mm === ids.atmosphere && ((i * 2654435761) ^ ((tick >> 2) * 40503)) % 23 === 0) {
-          px[i] = 0xff000000 | (90 << 16) | (70 << 8) | 40;
-          em[i] = 90;
-          any = true;
+    if (gain > 0.01)
+      for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+          const i = y * W + x;
+          const mm = mat[i]!;
+          if (mm === 0) continue;
+          if ((fl[i]! & CellFlag.CRACKED) !== 0) {
+            // magma light leaking through the fissures: brighter the deeper the crack runs, breathing slowly
+            const deep = mm === ids.crust ? 1 : mm === ids.mantle ? 1.3 : 0.55;
+            const flick = 0.55 + 0.45 * tn(x * 0.4 + tick * 0.008, y * 0.4);
+            const a = deep * flick * gain;
+            px[i] =
+              0xff000000 |
+              (Math.min(255, 14 * a) << 16) |
+              (Math.min(255, 70 * a) << 8) |
+              Math.min(255, 130 * a);
+            em[i] = Math.min(255, 130 * a);
+            any = true;
+          } else if (mm === ids.atmosphere && ((i * 2654435761) ^ (slow * 40503)) % 23 === 0) {
+            px[i] = 0xff000000 | (90 << 16) | (70 << 8) | 40;
+            em[i] = 90;
+            any = true;
+          }
         }
-      }
     if (any) G.mark();
     G.commit();
   }
 
   /**
-   * The debris ring: motes on a flattened, tilted ellipse (the moons' plane), each drawn as a short arc that curves along the ring
-   * — longer the faster the world turns. Slack it is a faint dotted halo; commitment draws it in tight and bright. The half behind
-   * the globe is hidden by it.
+   * The debris ring: motes on a flattened, tilted ellipse (the moons' plane, wandering with the broken axis), each drawn as a short
+   * arc that curves along the ring — longer the faster the world turns. Slack it is a faint dotted halo; commitment and Tidal Draw
+   * draw it in; a command brightens it at once. A broken world has more debris (PHASE_MOTES). The half behind the globe is hidden.
    */
-  private drawRing(X: Overlay, tick: number): void {
+  private drawRing(X: Overlay): void {
     const t = this.f.body.transform;
     const R = this.rig.radius;
     const tight = this.ringTight;
-    const vis = 0.18 + 0.82 * tight;
+    const vis = (0.18 + 0.82 * Math.max(tight, this.ringGlow * 0.8)) * (1 - this.coreOut);
+    if (vis < 0.03) return;
     const a = R * (RING_LOOSE + (RING_TIGHT - RING_LOOSE) * tight);
     const b = a * RING_FLAT;
-    const ct = Math.cos(RING_TILT);
-    const st = Math.sin(RING_TILT);
+    const tilt = RING_TILT + PHASE_WANDER[this.phase]! * Math.sin(this.wander);
+    const ct = Math.cos(tilt);
+    const st = Math.sin(tilt);
     const hide = (R + this.rig.atmo) * (R + this.rig.atmo);
     const arc = Math.min(0.5, 0.05 + 0.06 * Math.abs(this.omega) * (0.6 + 0.4 * tight));
     // the ring lies in the moons' (world-fixed) plane; each mote trails an arc behind its motion (see `stepSpin`)
     const sense = this.omega >= 0 ? 1 : -1;
     const ramp = this.crustR;
-    for (let k = 0; k < RING_MOTES; k++) {
+    const motes = PHASE_MOTES[this.phase] ?? RING_MOTES;
+    for (let k = 0; k < motes; k++) {
       const h = ((k * 2654435761) >>> 0) / 4294967296;
       // each mote keeps its own slot and drifts a little in and out of the band
-      const phi0 = (k / RING_MOTES) * Math.PI * 2 + this.ringPhase + h * 0.4;
+      const phi0 = (k / motes) * Math.PI * 2 + this.ringPhase + h * 0.4;
       const bright = vis * (0.55 + 0.45 * h);
       const segs = 1 + Math.round(arc * a * 0.5);
       for (let s = 0; s < segs; s++) {
@@ -1338,29 +2552,35 @@ export class PlanetBehaviour extends Behaviour {
         const lx = ex * ct - ey * st;
         const ly = ex * st + ey * ct;
         if (sp < 0 && lx * lx + ly * ly < hide) continue;
-        const x = Math.round(t.x + lx);
-        const y = Math.round(t.y + ly);
         const fade = bright * (1 - s / (segs + 1));
-        if (fade <= bayer(x + tick, y) * 0.9) continue;
-        X.set(x, y, rampAt(ramp, 0.35 + 0.6 * fade), Math.round(40 * tight));
+        // the dither is a property of the mote, not of the screen pixel: it never twinkles as it moves
+        if (fade <= ((k * 7 + s * 3) % 16) / 17) continue;
+        X.set(
+          Math.round(t.x + lx),
+          Math.round(t.y + ly),
+          rampAt(ramp, 0.35 + 0.6 * fade),
+          Math.round(40 * tight),
+        );
       }
     }
   }
 
   /**
-   * Aurora ovals about both poles of the tilted axis: curtains standing out of the limb and over the face, shimmering, brighter the
-   * faster the world turns and on every command; they need an atmosphere to light.
+   * Aurora ovals about both poles of the tilted (wandering) axis: curtains standing out of the limb and over the face, shimmering
+   * slowly, brighter the faster the world turns and on every command; they need an atmosphere to light.
    */
   private drawAurora(X: Overlay, tick: number): void {
     const t = this.f.body.transform;
     const R = this.rig.radius;
     const level =
       clamp01(0.08 + (0.55 * Math.abs(this.spin)) / SPIN_MAX + this.auroraPulse) *
-      (0.35 + 0.65 * this.atmoFrac);
+      (0.35 + 0.65 * this.atmoFrac) *
+      (1 - this.coreOut);
     if (level < 0.06) return;
     const rf = t.facing;
-    const s = Math.sin(this.rig.tilt);
-    const c = Math.cos(this.rig.tilt);
+    const tilt = this.rig.tilt + PHASE_WANDER[this.phase]! * Math.cos(this.wander);
+    const s = Math.sin(tilt);
+    const c = Math.cos(tilt);
     const cb = Math.cos(AURORA_BETA);
     const sb = Math.sin(AURORA_BETA);
     const height = 2 + 7 * level;
@@ -1378,7 +2598,8 @@ export class PlanetBehaviour extends Behaviour {
         const oy = py * cb + s * cp * sb;
         const oz = sp * sb;
         if (oz < -0.12) continue;
-        const shimmer = tn(k * 0.37 + tick * 0.12, pole * 7 + tick * 0.05);
+        // curtains drift and breathe below 0.5 Hz
+        const shimmer = tn(k * 0.37 + tick * 0.012, pole * 7 + tick * 0.006);
         const v = level * (0.45 + 0.75 * shimmer);
         const ol = Math.hypot(ox, oy) || 1;
         const ux = ox / ol;
@@ -1386,14 +2607,41 @@ export class PlanetBehaviour extends Behaviour {
         const h = height * (0.5 + 0.5 * shimmer);
         for (let j = 0; j < h; j++) {
           const r = R * ol + j;
-          const x = Math.round(t.x + ux * r * rf);
-          const y = Math.round(t.y + uy * r);
           const fade = v * (1 - j / (h + 1));
-          if (fade <= bayer(x, y + (tick >> 2)) * 0.85) continue;
-          X.set(x, y, rampAt(AURORA_RAMP, clamp01(fade)), Math.round(200 * clamp01(fade)));
+          // dithered per curtain sample (k, j), so the pattern travels with the curtain instead of flickering on the screen
+          if (fade <= ((((k * 5 + j * 11) % 16) + 0.5) / 16) * 0.85) continue;
+          X.set(
+            Math.round(t.x + ux * r * rf),
+            Math.round(t.y + uy * r),
+            rampAt(AURORA_RAMP, clamp01(fade)),
+            Math.round(200 * clamp01(fade)),
+          );
         }
       }
     }
+  }
+
+  /** The comet's tails: a pale ion tail straight back along its motion, a warmer dust tail curving after it. */
+  private drawComet(X: Overlay): void {
+    const c = this.comet;
+    if (c.mode === C_NONE) return;
+    const sp = Math.hypot(c.vx, c.vy);
+    if (sp < 1) return;
+    const ux = -c.vx / sp;
+    const uy = -c.vy / sp;
+    const len = clamp(18 + sp * 0.09, 18, 90);
+    const glow = c.mode === C_FLY ? 1 : 0.7;
+    for (let k = -2; k <= 2; k++) {
+      const ox = -uy * k * 1.2;
+      const oy = ux * k * 1.2;
+      const g = (1 - Math.abs(k) * 0.3) * glow;
+      streak(X, c.x + ox, c.y + oy, c.x + ox + ux * len, c.y + oy + uy * len, 120, 190, 255, g * 0.55);
+    }
+    // the dust tail lags the turn: it points back along where the comet was heading a moment ago
+    const bx = ux * 0.8 - uy * 0.25;
+    const by = uy * 0.8 + ux * 0.25;
+    streak(X, c.x, c.y, c.x + bx * len * 0.7, c.y + by * len * 0.7, 255, 210, 150, 0.4 * glow);
+    glowD(X, c.x, c.y, c.r * 2, 170, 220, 255, 0.35 * glow);
   }
 
   private drawFx(tick: number, m: ActiveMove): void {
@@ -1404,45 +2652,51 @@ export class PlanetBehaviour extends Behaviour {
     const id = m.def?.id ?? '';
     const at = m.phase === 'active' ? m.phaseTick - 1 : -1;
     const R = this.rig.radius;
-    const dir = f.facing;
-    this.drawRing(X, tick);
+    this.drawRing(X);
     this.drawAurora(X, tick);
-    // moon ribbons in flight
-    for (const mo of this.moons) {
-      if (mo.mode === SLAM) {
-        const pos = (u: number, out: { x: number; y: number }): void => {
-          const q = clamp(u, 0, 1) * 12;
-          const k = Math.min(12, Math.floor(q));
-          const fr = q - k;
-          out.x = mo.tx[k]! + (mo.tx[k + 1]! - mo.tx[k]!) * fr;
-          out.y = mo.ty[k]! + (mo.ty[k + 1]! - mo.ty[k]!) * fr;
-        };
-        ribbon(X, pos, 1, 0, 60, 1, mo.radius * 0.55, tick, this.flame);
-        glowD(X, mo.x, mo.y, mo.radius * 2.2, 200, 190, 230, 0.35);
+    this.drawComet(X);
+    // Tidal Draw: debris lanes spiralling in from the ring to the world
+    if (this.drawT > 0.05) {
+      const lanes = 14;
+      for (let k = 0; k < lanes; k++) {
+        const a0 = (k / lanes) * Math.PI * 2 + this.ringPhase * 1.6;
+        for (let s = 0; s < 22; s++) {
+          const u = ((s / 22 + this.wander * 0.25 + k * 0.137) % 1) * this.drawT;
+          const r = R * (2.1 - 1.0 * u);
+          const a = a0 + u * 1.4;
+          if (((k + s) & 3) !== 0) continue;
+          X.set(
+            Math.round(t.x + Math.cos(a) * r),
+            Math.round(t.y + Math.sin(a) * r * 0.42),
+            rampAt(this.crustR, 0.4 + 0.5 * u),
+            Math.round(60 * u),
+          );
+        }
       }
     }
-    if (id === 'planet.nudge' && m.phase === 'active' && f.liveHitShape(0, at, this.tmp)) {
-      const s = this.tmp;
-      const q = at / 8;
-      ringBand(
-        X,
-        s.x,
-        s.y,
-        s.r * (0.6 + q),
-        s.r * (0.9 + q) + 3,
-        tick,
-        this.mantle,
-        1 - 0.6 * q,
-        [0, Math.PI * 2],
-        0.9,
-      );
-      glowD(X, s.x, s.y, s.r * 1.4, 120, 170, 255, 0.35 * (1 - q));
+    // moon ribbons in flight; a moon whipping round its orbit glows hotter as it gathers speed
+    for (const mo of this.moons) {
+      if (mo.mode !== SLAM) continue;
+      if (mo.windup > 0) {
+        const u = 1 - mo.windup / mo.windupMax;
+        glowD(X, mo.x, mo.y, mo.radius * (1.6 + 1.2 * u), 255, 170, 90, 0.25 + 0.4 * u);
+        continue;
+      }
+      const pos = (u: number, out: { x: number; y: number }): void => {
+        const q = clamp(u, 0, 1) * 12;
+        const k = Math.min(12, Math.floor(q));
+        const fr = q - k;
+        out.x = mo.tx[k]! + (mo.tx[k + 1]! - mo.tx[k]!) * fr;
+        out.y = mo.ty[k]! + (mo.ty[k + 1]! - mo.ty[k]!) * fr;
+      };
+      ribbon(X, pos, 1, 0, 60, 1, mo.radius * 0.55, tick, this.flame);
+      glowD(X, mo.x, mo.y, mo.radius * 2.2, 200, 190, 230, 0.35);
     }
     if (id === 'planet.impact') {
       if (m.phase === 'startup') {
         const q = clamp01(m.phaseTick / m.startup);
         for (let i = 0; i < 26; i++) {
-          const a = i * 2.399 + tick * 0.05;
+          const a = i * 2.399 + tick * 0.02;
           const rr = (R + 60) * (1 - q) * (0.5 + (0.5 * ((i * 37) % 10)) / 10) + R * 0.6;
           X.set(
             Math.round(t.x + Math.cos(a) * rr),
@@ -1469,25 +2723,78 @@ export class PlanetBehaviour extends Behaviour {
         glowD(X, s.x, s.y, 50 * (1 - q) + 10, 255, 190, 110, 0.6 * (1 - q));
       }
     }
-    if (id === 'planet.moonslam' && (m.phase === 'startup' || m.phase === 'charge')) {
-      const moon = this.pickMoon();
-      if (moon) {
-        // an aiming line of dots from the chosen moon toward the aim point, brightening with charge
-        let ax = this.aimX;
-        let ay = this.aimY;
-        if (Math.hypot(ax, ay) < 0.3) {
-          ax = f.foe.view.x - moon.x;
-          ay = f.foe.view.y - moon.y;
+    if (id === 'planet.crustbreaker') {
+      if (m.phase === 'startup') {
+        // the crust heaves: plates along the limb light up from below
+        const q = clamp01(m.phaseTick / m.startup);
+        for (let k = 0; k < 9; k++) {
+          const a = k * 0.698 + 0.3;
+          glowD(
+            X,
+            t.x + Math.cos(a) * R * 0.92,
+            t.y + Math.sin(a) * R * 0.92,
+            6 + 6 * q,
+            255,
+            150,
+            70,
+            0.25 + 0.4 * q,
+          );
         }
-        const l = Math.hypot(ax, ay) || 1;
+      } else if (m.phase === 'active' && f.liveHitShape(0, at, this.tmp)) {
+        const s = this.tmp;
+        ringBand(X, s.x, s.y, s.r0, s.r1, tick, this.crustR, 1 - 0.5 * (at / 14), [0, Math.PI * 2], 0.62);
+      }
+    }
+    if (id === 'planet.magmavent') {
+      const ang = f.facing === 1 ? 0 : Math.PI;
+      const aim = (m.aim === 'up' ? -0.72 : m.aim === 'down' ? 0.72 : 0) * f.facing;
+      const dx = Math.cos(ang + aim);
+      const dy = Math.sin(ang + aim);
+      const mx = t.x + dx * R * 0.95;
+      const my = t.y + dy * R * 0.95;
+      if (m.phase === 'startup') {
+        const q = clamp01(m.phaseTick / m.startup);
+        glowD(X, mx, my, 8 + 14 * q, 255, 140, 50, 0.3 + 0.5 * q);
+      } else if (m.phase === 'active') {
+        // the jet: a tapered magma column out of the wound, its length breathing slowly
+        const len = 200 * (0.85 + 0.15 * Math.sin(tick * 0.05));
+        const pos = (u: number, out: { x: number; y: number }): void => {
+          out.x = mx + dx * len * (1 - u);
+          out.y = my + dy * len * (1 - u);
+        };
+        ribbon(X, pos, 0, 1, len, 2, 9, tick, this.flame);
+        glowD(X, mx, my, 24, 255, 160, 70, 0.55);
+      }
+    }
+    if (id === 'planet.corepulse') {
+      if (m.phase === 'startup') {
+        // the core swells through the broken world
+        const q = clamp01(m.phaseTick / m.startup);
+        glowD(X, t.x, t.y, R * (0.4 + 1.1 * q), 255, 220, 150, 0.25 + 0.55 * q);
+      } else if (m.phase === 'active' && f.liveHitShape(0, at, this.tmp)) {
+        const s = this.tmp;
+        ringBand(X, s.x, s.y, s.r0, s.r1, tick, this.magma, 1.3 - 0.7 * (at / 24), [0, Math.PI * 2], 0.85);
+      }
+    }
+    if (id === 'planet.moonslam' && (m.phase === 'startup' || m.phase === 'charge')) {
+      const moon = this.pickSlamMoon();
+      if (moon) {
+        // an aiming line of dots from the chosen moon toward the foe, bent the way the stick will curve it
         const cf = m.phase === 'charge' ? clamp01(m.chargeTicks / Math.max(1, m.chargeMax)) : 0.2;
-        for (let d = 24; d < 170 + 130 * cf; d += 7)
+        const curve = (this.aimY < -0.3 ? -1 : this.aimY > 0.3 ? 1 : 0) * this.cfg.curve;
+        const ax = f.foe.view.x - moon.x;
+        const ay = f.foe.view.y - moon.y;
+        const base = Math.atan2(ay, ax);
+        const dist = Math.hypot(ax, ay);
+        for (let d = 24; d < Math.min(dist, 170 + 130 * cf); d += 7) {
+          const a = base + curve * 0.5 * Math.sin((Math.PI * d) / Math.max(1, dist));
           X.set(
-            Math.round(moon.x + (ax / l) * d),
-            Math.round(moon.y + (ay / l) * d),
+            Math.round(moon.x + Math.cos(a) * d),
+            Math.round(moon.y + Math.sin(a) * d),
             rampAt(this.magma, 0.5 + 0.5 * cf),
             180,
           );
+        }
         glowD(X, moon.x, moon.y, moon.radius * (1.8 + 1.2 * cf), 255, 170, 90, 0.4 * (0.4 + cf));
       }
     }
@@ -1547,7 +2854,6 @@ export class PlanetBehaviour extends Behaviour {
         }
       }
     }
-    void dir;
     X.end();
   }
 
@@ -1555,14 +2861,53 @@ export class PlanetBehaviour extends Behaviour {
    *  plumbing
    * ---------------------------------------------------------------------------------------------- */
 
+  /**
+   * Planet-scale motion probes (tools/feel/scale.ts), in a fixed order: both moons, a marker riding the cloud deck's phase, the
+   * crest of the north aurora, two debris-ring motes, the comet. Anything absent reports the planet's centre.
+   */
+  override trackPoints(out: number[]): number {
+    const f = this.f;
+    const R = this.rig.radius;
+    // the sky's markers ride on the body's continuous root (they are drawn around it), so what they show is their own motion
+    const root = this.rootTmp;
+    f.motionSample(root);
+    for (let i = 0; i < 2; i++) {
+      const mo = this.moons[i];
+      if (mo && mo.mode !== GONE) out.push(mo.x, mo.y);
+      else out.push(root.x, root.y);
+    }
+    out.push(root.x + Math.cos(this.thetaAir) * R * 0.7, root.y + Math.sin(this.thetaAir) * R * 0.2);
+    const tilt = this.rig.tilt + PHASE_WANDER[this.phase]! * Math.cos(this.wander);
+    const level = clamp01(0.08 + (0.55 * Math.abs(this.spin)) / SPIN_MAX + this.auroraPulse);
+    const rf = f.body.transform.facing;
+    out.push(
+      root.x + Math.sin(tilt) * (R + 2 + 7 * level) * rf,
+      root.y - Math.cos(tilt) * (R + 2 + 7 * level),
+    );
+    const a = R * (RING_LOOSE + (RING_TIGHT - RING_LOOSE) * this.ringTight);
+    for (const k of [0, 11]) {
+      const phi = (k / RING_MOTES) * Math.PI * 2 + this.ringPhase;
+      out.push(root.x + Math.cos(phi) * a, root.y + Math.sin(phi) * a * RING_FLAT);
+    }
+    const c = this.comet;
+    if (c.mode !== C_NONE) out.push(c.x, c.y);
+    else out.push(root.x, root.y);
+    return 7;
+  }
+  private readonly rootTmp = { x: 0, y: 0, lean: 0, angle: 0 };
+
   override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
     const f = this.f;
     const body = out[out.length - 1]!;
     this.skin.follow(body);
     this.glow.follow(body);
     const t = f.body.transform;
-    this.halo.place(t.x, t.y, body.prevX, body.prevY, 0.28 + 0.5 * this.atmoFrac);
-    out.push(this.halo.layer, this.skin.layer, this.glow.layer);
+    const alive = 1 - this.coreOut;
+    this.halo.place(t.x, t.y, body.prevX, body.prevY, (0.28 + 0.5 * this.atmoFrac) * (0.15 + 0.85 * alive));
+    // Exposed Mantle warms the halo; Core Crisis makes it an apocalyptic glow that breathes; it dies with the core
+    const core = this.phase >= 4 ? 0.3 + 0.1 * Math.sin(this.tickLast * 0.025) : this.phase === 3 ? 0.12 : 0;
+    this.haloCore.place(t.x, t.y, body.prevX, body.prevY, core * alive);
+    out.push(this.haloCore.layer, this.halo.layer, this.skin.layer, this.glow.layer);
     for (const mo of this.moons) {
       if (mo.mode === GONE) continue;
       mo.layer.flush(mo.back ? -1 : 1);
@@ -1581,6 +2926,15 @@ export class PlanetBehaviour extends Behaviour {
       s.y = mo.y;
       s.r = mo.radius;
       out.push({ shape: asShape(s), color: mo.mode === SLAM ? 0xff3040ff : 0xffe0b060, label: 'moon' });
+    }
+    const c = this.comet;
+    if (c.mode !== C_NONE) {
+      const s = makeFatShape();
+      s.kind = 'point';
+      s.x = c.x;
+      s.y = c.y;
+      s.r = c.r;
+      out.push({ shape: asShape(s), color: 0xffffd080, label: 'comet' });
     }
   }
 

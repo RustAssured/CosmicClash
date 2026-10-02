@@ -1,4 +1,5 @@
 import type {
+  MoveDef,
   DamageEvent,
   DamageShape,
   DebugShape,
@@ -8,6 +9,7 @@ import type {
   RenderLayer,
   ViewRect,
 } from '@/contracts';
+import type { DamageSum } from './damageSum';
 import type { FighterImpl } from './fighter';
 import type { ActiveMove } from './move';
 
@@ -99,6 +101,55 @@ export abstract class Behaviour {
    */
   feelRespond(_cmd: string): 'light' | 'fx' | null {
     return null;
+  }
+  /**
+   * Scale-of-motion instrumentation (`tools/feel/scale.ts`, docs/briefs/scale-spec.md): push the world x,y of the parts that
+   * should move at planet scale (tendril/arm tips, moons, halo segments…) into `out` as pairs; return how many pairs. The
+   * order must be stable from tick to tick (one signal per index). Optionally push one kind per pair into `kinds`: 0 = a part
+   * (held to the whole spec), 1 = a projectile in flight (a slung moon: held to the wobble limit only). Default: none.
+   */
+  trackPoints(_out: number[], _kinds?: number[]): number {
+    return 0;
+  }
+
+  /**
+   * Hold alternatives (proposal 133): for a move with `extra.hold = { after, move? }`, the fighter asks this once, on startup
+   * tick `after`, while the move's button is still held. Return the move it turns into (null = keep the move). The default
+   * returns `extra.hold.move` when the JSON names one. The fighter swaps through `startMove` (same move event, costs and
+   * `onMoveStart`) without a second feel accept: it is still one command.
+   */
+  holdAlternative(m: ActiveMove): MoveDef | null {
+    const id = (m.def?.extra?.['hold'] as { move?: string } | undefined)?.move;
+    return id ? (this.f.moveById(id) ?? null) : null;
+  }
+
+  /* ---- multi-body fighters (the Witness, proposal 160) ---- */
+
+  /**
+   * Place the fighter's region bodies for THIS tick (transforms: x, y, rot), right after the primary body's transform was
+   * set and before this tick's hits are resolved, so a blow meets the regions where they are drawn. Default: nothing.
+   */
+  placeRegions(): void {}
+  /**
+   * Apply an incoming blow to the fighter's matter yourself (e.g. front-to-back through reveal layers): call
+   * `world.applyDamage` for each body the energy reaches and fold each result in at once with `addDamageResult(out, r)`
+   * (`src/combat/damageSum.ts`). Return true when handled; false = the fighter's default routing (the primary body, or the
+   * blow split over every touched region body by cells touched).
+   */
+  routeDamage(_ev: DamageEvent, _out: DamageSum): boolean {
+    return false;
+  }
+  /**
+   * The mass frame the impact model turns a blow about (lever arm, inertia): WORLD centre of mass, radius of gyration and
+   * outer radius (px) of the whole fighter. Return true to supply it (a rig whose load is spread over many regions); false =
+   * the primary body's own mass properties.
+   */
+  massFrame(_out: { x: number; y: number; gyration: number; radius: number }): boolean {
+    return false;
+  }
+  /** Fold behaviour-owned sim state (a rig) into a determinism hash. Default: unchanged. */
+  hash(h: number): number {
+    return h;
   }
   setVictory(): void {}
 }

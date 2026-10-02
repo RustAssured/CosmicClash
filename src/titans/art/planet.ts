@@ -238,10 +238,15 @@ export function buildPlanetRig(def: TitanDef, seed: number): PlanetRig {
 
 type Class = 'ocean' | 'forest' | 'desert' | 'mountain' | 'ice';
 
+/**
+ * Paint the planet. `lonShift` (rad) turns the world about its axis before painting: 0 is the face it shows at the start of a
+ * round, π its far side (the far face of the two-hemisphere shell: other continents, lit by the same sun).
+ */
 export function paintPlanet(
   def: TitanDef,
   seed: number,
   lighting: StageLighting,
+  lonShift = 0,
 ): { map: MatterMap; rig: PlanetRig } {
   const L = layout(def, seed);
   const rig = buildPlanetRig(def, seed);
@@ -293,7 +298,7 @@ export function paintPlanet(
         const un = clamp(r / R, 0, 0.985);
         let rel = 0.92 * R * Math.sqrt(1 - un * un);
         if (sphere(dx / R, dy / R, p.tilt, q)) {
-          const s = surf(q.lon, q.lat);
+          const s = surf(q.lon + lonShift, q.lat);
           const c = s.c;
           cls[i] = classId[c];
           if (c === 'ocean') {

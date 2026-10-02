@@ -53,6 +53,41 @@ describe('heavy moves: load → commit → recover (SLICE_PLAN §6)', () => {
     expect(backAfter).toBeLessThanOrEqual(-2);
   });
 
+  it('a hold alternative (proposal 133): Tidal Rush still held on its startup tick 10 turns into the phase move, one command', () => {
+    const lab = makeLab({ a: 'planet', b: 'lastone', gap: 300 });
+    const f = lab.f0;
+    const alt = f.moveById('planet.crustbreaker');
+    expect(alt).toBeDefined();
+    f.behaviour.holdAlternative = (): typeof alt => alt!;
+    lab.events.length = 0;
+    lab.a.held = Btn.CRUSH;
+    for (let i = 0; i < 14; i++) lab.step();
+    lab.a.held = 0;
+    expect(f.mv.def?.id).toBe('planet.crustbreaker');
+    const accepts = lab.events.filter((e) => e.t === 'feel' && e.kind === 'accept' && e.slot === 0);
+    expect(accepts).toHaveLength(1);
+    // released before the hold tick: the plain move plays
+    const lab2 = makeLab({ a: 'planet', b: 'lastone', gap: 300 });
+    lab2.f0.behaviour.holdAlternative = (): typeof alt => alt!;
+    lab2.a.held = Btn.CRUSH;
+    lab2.step();
+    lab2.a.held = 0;
+    lab2.step(14);
+    expect(lab2.f0.mv.def?.id).toBe('planet.impact');
+  });
+
+  it('Gravity (R1) is a command: accepted and answered on its press tick', () => {
+    const lab = makeLab({ a: 'planet', b: 'lastone', gap: 300 });
+    lab.events.length = 0;
+    lab.a.held = Btn.GRAVITY;
+    lab.step();
+    const feel = lab.events.filter(
+      (e): e is Extract<SimEvent, { t: 'feel' }> => e.t === 'feel' && e.slot === 0,
+    );
+    expect(feel.find((e) => e.kind === 'accept')?.cmd).toBe('gravity');
+    expect(feel.find((e) => e.kind === 'respond')?.ticks).toBe(0);
+  });
+
   it('a heavy windup is feintable into Guard or Surge during its first 40 %, not after', () => {
     const lab = makeLab({ gap: 300 });
     lab.a.held = Btn.CRUSH;

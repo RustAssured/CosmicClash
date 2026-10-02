@@ -83,3 +83,5 @@ vs. a real GPU and are reported alongside sim ms/tick (which is representative).
 - **Depth offset and sprite push:** no verdict; they are subtle. Both stay behind their flags (off by default), to be shown again at Gate C with clips that isolate the moment they matter.
 - **Controller mapping:** not yet confirmed. Re-ask at Gate C.
 - **Phase 2 is approved** ("move forward with what you can").
+
+**D29 — Between-round heal 0.6 → 0.85 (Lead, proposal 162).** With orbit pacing (~9 contacts/min), round 1 lasts ~48 s, but rounds 2–3 lasted ~15 s on 2 contacts because the loser started fragile. 0.85 keeps visible scars and structural memory ("damage persists as partially healed scars") while giving the loser a real round. Re-measured at Gate C.

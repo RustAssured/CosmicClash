@@ -25,6 +25,8 @@ const LOG_MAX = 80;
 /** A foe that has shown no move, guard or surge for PASSIVE_FROM ticks (6 s) starts to be treated as passive, fully so PASSIVE_RAMP ticks (6 s) later. */
 const PASSIVE_FROM = 360;
 const PASSIVE_RAMP = 360;
+/** Orbit footwork: the mean gap (ticks) between one AI's own attacks. */
+const ENGAGE_GAP_TICKS = 480;
 
 interface Cand {
   score: number;
@@ -173,6 +175,12 @@ export class UtilityAI implements AIController {
    * latched the first time the AI's OWN view reports an orbital state (proprioception; the foe's view is never consulted).
    */
   private orbit: boolean;
+  /**
+   * Orbit pacing (D28: rounds of 45–90 s, ~8–10 contacts a minute): ticks the AI waits between its own attacks, and the
+   * tick its next neutral attack may start. Not a level parameter: it is the rhythm of colossal fights.
+   */
+  private readonly engageGap = ENGAGE_GAP_TICKS;
+  private nextAttackTick = 0;
   /** The foe re-expressed in the attack frame (orbit): straight ahead along +x at its true distance. */
   private readonly aimSnap = new Snapshot();
   /** Real world offset to the (delayed, noisy) foe, for steering and dashes when the attack frame is rotated. */
@@ -230,6 +238,7 @@ export class UtilityAI implements AIController {
     this.pendIdx = -1;
     this.lastSurgeTick = -1e9;
     this.stunAge = 0;
+    this.nextAttackTick = 0;
   }
 
   /* ================================================================================================
@@ -753,14 +762,19 @@ export class UtilityAI implements AIController {
       }
     }
 
+    // orbit pacing (D28): colossi trade blows, then circle and breathe. Between its own attacks the AI waits out an
+    // engagement gap; an opening (punish) may cut it short by half, never more.
+    const resting = this.orbit && ctx.tick < this.nextAttackTick;
+    const restingHard = this.orbit && ctx.tick < this.nextAttackTick - this.engageGap * 0.5;
+
     /* ---- punish ---- */
-    if (vuln > 6) {
+    if (vuln > 6 && !restingHard) {
       this.attackCandidates(S, F, age, dist, vuln, true);
     }
 
     /* ---- ultimate ---- */
     const ult = this.bySlot.ultimate?.[1];
-    if (ult && S.meter >= 1 - 1e-6 && dist < 400) {
+    if (ult && !resting && S.meter >= 1 - 1e-6 && dist < 400) {
       for (const mi of this.bySlot.ultimate!) {
         this.evalMove(mi, S, F, age, this.ev);
         if (this.ev.p > 0.35 || vuln > mi.startup * 0.6) {
@@ -783,7 +797,7 @@ export class UtilityAI implements AIController {
     }
 
     /* ---- neutral attacks ---- */
-    if (vuln <= 6) this.attackCandidates(S, F, age, dist, 0, false);
+    if (vuln <= 6 && !resting) this.attackCandidates(S, F, age, dist, 0, false);
 
     /* ---- spacing / patience ---- */
     // the distance an attack actually reaches from (anchor to anchor), and the standoff a patient titan prefers just outside it
@@ -798,7 +812,9 @@ export class UtilityAI implements AIController {
         0.55 * approachNeed * (0.5 + pers.aggression) -
         (lowHp ? 0.25 : 0) +
         (behind && late ? 0.3 : 0) -
-        (ahead && late ? 0.25 : 0),
+        (ahead && late ? 0.25 : 0) -
+        // resting between exchanges: hold the standoff instead of crowding in
+        (resting && dist < range + 60 ? 0.3 : 0),
       'close the gap',
     );
     a.ticks = 10 + Math.round(this.rng.next() * 12);
@@ -860,7 +876,10 @@ export class UtilityAI implements AIController {
         'circle',
         'space',
         'strafe',
-        0.16 + 0.25 * pers.zoning + (F.phase === 'startup' || F.phase === 'charge' ? 0.12 : 0),
+        0.16 +
+          0.25 * pers.zoning +
+          (F.phase === 'startup' || F.phase === 'charge' ? 0.12 : 0) +
+          (resting ? 0.15 : 0),
         'circle the foe',
       );
       ci.dirY = Math.sign(vt) || (this.rng.chance(0.5) ? 1 : -1);
@@ -1139,6 +1158,13 @@ export class UtilityAI implements AIController {
       case 'ultimate':
       case 'attack': {
         const mi = c.info!;
+        // the engagement gap starts now (orbit pacing): ±25 % so two AIs do not fall into lock-step
+        if (this.orbit) {
+          // a foe that has done nothing for a long while cannot punish: the breath shortens (to a quarter)
+          const quiet = clamp((F.tick - this.foeActedTick - PASSIVE_FROM) / PASSIVE_RAMP, 0, 1);
+          const gap = this.engageGap * (1 - 0.75 * (Number.isFinite(quiet) ? quiet : 0));
+          this.nextAttackTick = ctx.tick + Math.round(gap * (0.75 + 0.5 * this.rng.next()));
+        }
         this.pendIdx = mi.idx;
         this.pendMass = F.massFrac;
         this.pendModel = c.rawDmg;
@@ -1154,10 +1180,15 @@ export class UtilityAI implements AIController {
                 ? Btn.SIGNATURE
                 : Btn.ULTIMATE;
         const sy = this.aimSign(mi.aim);
-        const hold = mi.chargeMax > 0 ? 1 + Math.round(mi.startup) + c.charge : 3;
         // approach first if the move reaches only when we are a little closer (lunges do part of the work)
         const dist = Math.abs(dx);
         const reachNow = mi.x1 * S.stats.reachMul + mi.lungeBefore + 40;
+        // a hold alternative (proposal 133: Tidal Rush held turns into the Planet's phase move, which reaches further) is
+        // taken when the plain move would fall short, or half the time otherwise
+        const holdAlt = mi.def.extra?.['hold'] as { after: number } | undefined;
+        const takeAlt = !!holdAlt && (dist > reachNow * 0.85 || this.rng.chance(0.5));
+        const hold =
+          mi.chargeMax > 0 ? 1 + Math.round(mi.startup) + c.charge : takeAlt ? holdAlt!.after + 3 : 3;
         if (mi.slot !== 'signature' && dist > reachNow + 20 && c.kind === 'attack' && c.what === 'attack') {
           const walk = clamp(
             Math.round(((dist - reachNow) / (this.def.attributes.tempo * 13 + 130)) * 60 * 0.8),

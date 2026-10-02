@@ -3,7 +3,8 @@
  * fanned out over worker_threads. Seeded, resumable, robust to a crashing or stalling fight (counted as a draw and logged).
  *
  *   npm run balance -- --ladder [--levels=6v1,6v3,3v1,5v3] [--n=50]   (mirror matches per titan and level pair; monotonicity table)
- *   npm run balance -- [--n=100] [--level=3] [--la=3 --lb=3] [--seed=1000] [--workers=4] [--titans=lastone,asteroid,...]
+ *   npm run balance -- [--n=100] [--level=3] [--la=3 --lb=3] [--seed=1000] [--workers=4] [--titans=lastone,asteroid,...] [--classic]
+ *   (orbit footwork is the default since D28; `--classic` plays the side-view locomotion; results are stored per footwork)
  *                      [--no-mirror] [--timeout=240] [--fresh] [--no-docs] [--report]
  *
  *  - fight i of a pair uses seed `seed + i` for every pair (differences are not seed noise) and alternates which titan is on the left;
@@ -30,6 +31,8 @@ export interface Job {
   seed: number;
   swapped: boolean;
   index: number;
+  /** Locomotion model of the fight (orbit is the default since D28). */
+  footwork?: 'classic' | 'orbit';
   /** Per-titan balance knob overrides applied inside the worker before the fight (autotune). */
   knobs?: Partial<Record<TitanId, { power: number; durability: number }>>;
 }
@@ -76,7 +79,7 @@ async function workerMain(): Promise<void> {
       const tb = job.swapped ? job.a : job.b;
       const l1 = job.swapped ? job.lb : job.la;
       const l2 = job.swapped ? job.la : job.lb;
-      const { res } = playMatch(job.seed, ta, tb, l1, l2, '', false);
+      const { res } = playMatch(job.seed, ta, tb, l1, l2, '', false, undefined, job.footwork ?? 'orbit');
       const slotOfA = job.swapped ? 1 : 0;
       const winner: Result['winner'] = res.winner === -1 ? 'draw' : res.winner === slotOfA ? 'a' : 'b';
       out = {
@@ -463,11 +466,13 @@ async function mainThread(): Promise<void> {
   const timeoutMs = +opt('timeout', '240') * 1000;
   const titans = (opt('titans', '') ? opt('titans', '').split(',') : [...IMPLEMENTED_TITANS]) as TitanId[];
   const mirrors = !flag('no-mirror');
+  /** Orbit is the slice's footwork (D28); `--classic` for comparison. */
+  const footwork: 'classic' | 'orbit' = flag('classic') ? 'classic' : 'orbit';
 
   mkdirSync('.scratch/balance', { recursive: true });
   const store = flag('ladder')
     ? `.scratch/balance/ladder-s${seed0}.json`
-    : `.scratch/balance/results-L${la}v${lb}-s${seed0}.json`;
+    : `.scratch/balance/results-L${la}v${lb}-s${seed0}${footwork === 'classic' ? '-classic' : '-orbit'}.json`;
   let results: Result[] = [];
   if (!flag('fresh') && existsSync(store)) {
     try {
@@ -496,7 +501,7 @@ async function mainThread(): Promise<void> {
     for (const sp of specs) {
       const key = `${sp.a}|${sp.b}|L${sp.la}v${sp.lb}|${seed0 + k}`;
       if (done.has(key)) continue;
-      queue.push({ key, ...sp, seed: seed0 + k, swapped: k % 2 === 1, index: k });
+      queue.push({ key, ...sp, seed: seed0 + k, swapped: k % 2 === 1, index: k, footwork });
     }
   const total = specs.length * nTarget;
   console.log(

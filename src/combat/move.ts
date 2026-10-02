@@ -85,6 +85,19 @@ export function aimFromStick(moveY: number): AimDir {
   return moveY < -0.45 ? 'up' : moveY > 0.45 ? 'down' : 'forward';
 }
 
+/**
+ * Scale of motion (D28): a movement or spin key is never a one-tick velocity jump. Its impulse is spread over
+ * KEY_RAMP_TICKS ticks with a smoothstep profile, starting on the tick the key fires (so the first pixel still moves then).
+ */
+export const KEY_RAMP_TICKS = 10;
+
+const smooth = (u: number): number => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
+
+/** Share of a ramped impulse applied on the `age`-th tick of its ramp (age 1..ticks; the shares sum to 1). */
+export function rampWeight(age: number, ticks = KEY_RAMP_TICKS): number {
+  return smooth(age / ticks) - smooth((age - 1) / ticks);
+}
+
 /** Fill `out` with forward displacement per tick for a move's movement keys, starting from forward velocity `v0` (px/s). */
 export function fillDisplacement(
   out: Float32Array,
@@ -101,8 +114,12 @@ export function fillDisplacement(
   for (let t = 0; t < out.length; t++) {
     while (ki < keys.length && keys[ki]!.at <= t) {
       const k = keys[ki++]!;
-      v += k.ix;
       if (k.damp !== undefined) damp = k.damp;
+    }
+    // ramped impulses: every key that fired within the last KEY_RAMP_TICKS ticks adds its share this tick
+    for (let j = 0; j < ki; j++) {
+      const age = t - keys[j]!.at + 1;
+      if (age >= 1 && age <= KEY_RAMP_TICKS) v += keys[j]!.ix * rampWeight(age);
     }
     v *= damp < 1 ? Math.pow(damp, dt) : half;
     x += v * dt;

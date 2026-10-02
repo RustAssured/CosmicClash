@@ -1,5 +1,6 @@
 import {
   type DamageParams,
+  type DamageResult,
   Btn,
   DamageFlag,
   EMPTY_DAMAGE_RESULT,
@@ -49,11 +50,20 @@ import { generateTitanBody, rememberRig, rigOfMap, type TitanRig } from '@/titan
 import { buildRigFor } from '@/titans/rigs';
 import type { Behaviour, HitInfo, InterceptResult } from './behaviour';
 import { createBehaviour } from './behaviours';
+import { addDamageResult, makeDamageSum, resetDamageSum, type DamageSum } from './damageSum';
 import { resolveFeel, type Feel } from './feel';
 import { FeelTracker, type DrawnState } from './feelTrack';
 import { makeImpactResult, makeMassProps, measureMass, resolveImpact } from './impact';
 import { InputBuffer } from './inputBuffer';
-import { ActiveMove, MAX_HITBOXES, aimFromStick, fillDisplacement, resolveFrame } from './move';
+import {
+  ActiveMove,
+  KEY_RAMP_TICKS,
+  MAX_HITBOXES,
+  aimFromStick,
+  fillDisplacement,
+  rampWeight,
+  resolveFrame,
+} from './move';
 import { ORBIT, ZDEPTH, classifyOrbit, makeOrbitFrame, orbitFrame, type OrbitMemory } from './orbit';
 import { Angular, anticipationKick, poseLeanTarget, spinKeysOf } from './pose';
 import {
@@ -117,6 +127,8 @@ const emptyBodyStats = (): BodyStats => ({
 const TAU = Math.PI * 2;
 const TETHER_SOFT_DX = 330;
 const TETHER_SOFT_DY = 140;
+/** Ramped impulses that may be in flight at once (movement and spin keys overlap at most a few at a time). */
+const RAMP_SLOTS = 6;
 
 export class FighterImpl implements Fighter {
   readonly slot: 0 | 1;
@@ -210,6 +222,8 @@ export class FighterImpl implements Fighter {
   private readonly placement: TemplatePlacement = { x: 0, y: 0, facing: 1, scale: 1, rotC: 1, rotS: 0 };
   /** Next scripted spin key of the move in progress. */
   private spinIdx = 0;
+  /** Ramped impulses in flight: per slot Δvx, Δvy, Δω, age (0 = free), ramp length. */
+  private readonly ramps = new Float64Array(RAMP_SLOTS * 5);
   /** Feel instrumentation and the pixel guarantee of the accept tick. */
   readonly feelTrack = new FeelTracker();
   private readonly drawn: DrawnState = { rx: 0, ry: 0, lean: 0 };
@@ -521,6 +535,7 @@ export class FighterImpl implements Fighter {
         this.stepFree();
     }
     this.detectSteer();
+    this.stepRamps();
 
     // guard shell recovers while it is down
     if (!this.guardUp && this.guardHealth < 1)
@@ -531,6 +546,7 @@ export class FighterImpl implements Fighter {
     if (this.zdepth) this.stepDepth();
     this.applyTransform();
     if (this.acceptAt === this.tickNo) this.ensureAcceptPixel();
+    this.behaviour.placeRegions();
     this.emitMoveFx();
     if (this.moveActiveNow) this.resolveMoveHits();
     this.threatCount = 0;
@@ -585,6 +601,23 @@ export class FighterImpl implements Fighter {
     return Math.round(clamp(w, -T.leanMax, T.leanMax));
   }
 
+  /**
+   * The body's motion as continuous signals (before pixel rounding), for the scale-of-motion tool (`tools/feel/scale.ts`):
+   * root x/y including the visual offsets (bob, sway, shudder, follow-through), world lean in px, and the angle (rad).
+   */
+  motionSample(out: { x: number; y: number; lean: number; angle: number }): void {
+    const torsion = this.feel.angular.omega > 0 ? this.ang.angle * this.body.transform.anchorY : 0;
+    out.x = this.px + this.offX;
+    out.y = this.py + this.offY;
+    out.lean = (this.leanF * this.facing + torsion) * this.feel.shear;
+    out.angle = this.ang.angle;
+  }
+
+  /** Tracked secondary points of the titan's parts (tendril tips, moons…), as x,y pairs into `out`; returns the pair count. */
+  trackPoints(out: number[], kinds?: number[]): number {
+    return this.behaviour.trackPoints(out, kinds);
+  }
+
   /** Angular state: scripted spin keys of the move in progress, then the spring/drag step. */
   private stepAngular(): void {
     const m = this.mv;
@@ -592,7 +625,7 @@ export class FighterImpl implements Fighter {
     if (keys) {
       const et = this.effTick();
       while (this.spinIdx < keys.length && keys[this.spinIdx]!.at <= et) {
-        this.ang.impulse(keys[this.spinIdx++]!.w * this.facing, this.feel.angular);
+        this.addRamp(0, 0, keys[this.spinIdx++]!.w * this.facing, KEY_RAMP_TICKS);
       }
     }
     this.ang.step(this.feel.angular);
@@ -655,6 +688,9 @@ export class FighterImpl implements Fighter {
 
   /** The stick as a command: a fresh push, or a sharp change of direction, while the fighter is free to move. */
   private detectSteer(): void {
+    // Gravity (R1, a held command the behaviour reads — the Planet's Tidal Draw) is a command too (proposal 133); the
+    // behaviour answers it through `feelRespond('gravity')`, or the lean takes the accept-tick pixel
+    if (this.live && !this.ko && this.input.pressed & Btn.GRAVITY) this.acceptCommand('gravity', -1);
     const free = this.state === 'idle' || this.state === 'move' || this.state === 'intro';
     const sx = this.input.moveX;
     const sy = this.input.moveY;
@@ -692,7 +728,8 @@ export class FighterImpl implements Fighter {
    * ---------------------------------------------------------------------------------------------- */
 
   refreshStats(): void {
-    const bs = this.world.stats(this.body.id);
+    const bs =
+      this.regions.length || this.lostRegionMass > 0 ? this.aggregateStats() : this.world.stats(this.body.id);
     this.view.bodyStats = bs;
     computeStats(this.def, bs.massFrac, this.stats);
     this.behaviour?.adjustStats(this.stats, bs.massFrac);
@@ -701,6 +738,94 @@ export class FighterImpl implements Fighter {
     this.view.integrityPct = clamp(Math.min(coreMargin, massMargin) * 100, 0, 100);
     if (this.live && !this.ko && (bs.coreIntegrity < KO_CORE_INTEGRITY || bs.massFrac < KO_MASS_FRAC))
       this.enterKo();
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  multi-body fighters (the Witness: one matter body per rigid region, D27)
+   * ---------------------------------------------------------------------------------------------- */
+
+  /**
+   * Region bodies beyond the primary `body`. The primary stays the KO core, the impact model's frame and the portrait source
+   * (`view.body`); regions add their matter to the fighter's mass and integrity, are probed and struck like the primary, and
+   * are placed by the behaviour every tick (`Behaviour.placeRegions`, right after the primary's transform).
+   */
+  readonly regions: MatterBody[] = [];
+  /** Per region: does it count toward mass / integrity / KO (false: e.g. halo arcs that are a resource, like moons)? */
+  private readonly regionCounts: boolean[] = [];
+  /** Initial and (zero) live mass of regions that left the fighter (severed into chunks): their loss keeps counting. */
+  private lostRegionMass = 0;
+  private lostRegionCells = 0;
+  private readonly aggStats: BodyStats = emptyBodyStats();
+
+  /**
+   * Register a region body this fighter owns (created by the behaviour through `world.createBody`, normally in `attach`).
+   * `counts` = false keeps it out of mass / integrity / KO (it is still probed, struck and framed).
+   */
+  addRegion(body: MatterBody, counts = true, regrown = false): void {
+    if (body.id === this.body.id || this.regions.includes(body)) return;
+    this.regions.push(body);
+    this.regionCounts.push(counts);
+    if (regrown && counts) {
+      // a severed region grown back (between rounds): its pristine mass is no longer a loss
+      const st = this.world.stats(body.id);
+      this.lostRegionMass = Math.max(0, this.lostRegionMass - st.initialMass);
+      this.lostRegionCells = Math.max(0, this.lostRegionCells - st.initialCells);
+    }
+    this.bbCache.stamp = -1e9;
+  }
+
+  /**
+   * A region left the fighter (severed: the behaviour called `world.bodyToChunk`, or it was destroyed). Call BEFORE the body
+   * is removed from the world: its pristine mass stays in the total, so the loss counts toward KO.
+   */
+  removeRegion(bodyId: number): void {
+    const i = this.regions.findIndex((b) => b.id === bodyId);
+    if (i < 0) return;
+    if (this.regionCounts[i]) {
+      const st = this.world.stats(bodyId);
+      this.lostRegionMass += st.initialMass;
+      this.lostRegionCells += st.initialCells;
+    }
+    this.regions.splice(i, 1);
+    this.regionCounts.splice(i, 1);
+    this.bbCache.stamp = -1e9;
+  }
+
+  /**
+   * Fighter-wide body statistics: matter sums over the primary and every region (plus the pristine share of severed
+   * regions, so losing an arm is losing mass); the core, its exposure and the region grid are the primary's (the KO core).
+   */
+  private aggregateStats(): BodyStats {
+    const p = this.world.stats(this.body.id);
+    const a = this.aggStats;
+    a.mass = p.mass;
+    a.initialMass = p.initialMass + this.lostRegionMass;
+    a.cells = p.cells;
+    a.initialCells = p.initialCells + this.lostRegionCells;
+    a.burningCells = p.burningCells;
+    a.infectedCells = p.infectedCells;
+    a.crackedCells = p.crackedCells;
+    a.massGained = p.massGained;
+    a.massLost = p.massLost;
+    for (let i = 0; i < this.regions.length; i++) {
+      if (!this.regionCounts[i]) continue;
+      const s = this.world.stats(this.regions[i]!.id);
+      a.mass += s.mass;
+      a.initialMass += s.initialMass;
+      a.cells += s.cells;
+      a.initialCells += s.initialCells;
+      a.burningCells += s.burningCells;
+      a.infectedCells += s.infectedCells;
+      a.crackedCells += s.crackedCells;
+      a.massGained += s.massGained;
+      a.massLost += s.massLost;
+    }
+    a.massFrac = a.initialMass > 0 ? a.mass / a.initialMass : 0;
+    a.coreIntegrity = p.coreIntegrity;
+    a.anchoredFrac = p.anchoredFrac;
+    a.exposedCoreFrac = p.exposedCoreFrac;
+    a.regionGrid.set(p.regionGrid);
+    return a;
   }
 
   private enterKo(): void {
@@ -773,7 +898,7 @@ export class FighterImpl implements Fighter {
     }
     if (slot === 'surge' && this.tickNo < this.surgeReadyAt) return false;
     this.buf.take(bit, this.tickNo);
-    this.startMove(def, bit);
+    this.startCommand(def, bit);
     return true;
   }
 
@@ -874,13 +999,27 @@ export class FighterImpl implements Fighter {
     );
     this.spinIdx = 0;
     // anticipation on the press tick: the body snaps toward its load pose at once (a whole pixel at least)
-    const kick = anticipationKick(m);
+    const kick = this.holdSwap ? 0 : anticipationKick(m);
     this.leanF += kick;
     this.leanV += kick * 8;
     this.behaviour.onMoveStart(m);
     this.fireKeys();
     this.updateIntangible();
-    this.acceptCommand(def.slot, kick !== 0 ? kick : -1);
+    // only a move the player's input started is a command: a hold alternative is still the same command, and a move a
+    // behaviour starts on its own (a scripted follow-on) is not one
+    if (this.inputStart && !this.holdSwap) this.acceptCommand(def.slot, kick !== 0 ? kick : -1);
+  }
+
+  /** True while `startMove` runs for a hold alternative (no new feel accept). */
+  private holdSwap = false;
+  /** True while `startMove` runs for the player's input (`startCommand`): only then is it a feel command. */
+  private inputStart = false;
+
+  /** Start a move because of input (buffer, cancel, follow-up, stun escape): the feel tracker counts it as a command. */
+  private startCommand(def: MoveDef, button: number): void {
+    this.inputStart = true;
+    this.startMove(def, button);
+    this.inputStart = false;
   }
 
   /**
@@ -935,6 +1074,7 @@ export class FighterImpl implements Fighter {
     const m = this.mv;
     if (!m.def) return;
     m.interrupted = interrupted;
+    if (interrupted) this.clearRamps();
     if (m.def.slot === 'ultimate')
       this.events.push({
         t: 'ultimate',
@@ -994,9 +1134,27 @@ export class FighterImpl implements Fighter {
         const surge = this.slotMoves.surge;
         if (surge && this.buf.has(Btn.SURGE, this.tickNo) && this.tickNo >= this.surgeReadyAt) {
           this.buf.take(Btn.SURGE, this.tickNo);
-          this.startMove(surge, Btn.SURGE);
+          this.startCommand(surge, Btn.SURGE);
           return;
         }
+      }
+    }
+    // --- hold alternative (proposal 133): the button still held on startup tick `extra.hold.after` turns the move ---
+    const hold = def.extra?.['hold'] as { after: number } | undefined;
+    if (
+      hold &&
+      this.live &&
+      !m.feint &&
+      m.phase === 'startup' &&
+      m.phaseTick === hold.after &&
+      this.input.held & m.button
+    ) {
+      const alt = this.behaviour.holdAlternative(m);
+      if (alt && alt !== def) {
+        this.holdSwap = true;
+        this.startMove(alt, m.button, m.aim);
+        this.holdSwap = false;
+        return;
       }
     }
     // --- follow-up (Sidestep tail → lunging strike) ---
@@ -1007,7 +1165,7 @@ export class FighterImpl implements Fighter {
       const target = this.movesById.get(fu.move);
       if (target && this.buf.has(bit, this.tickNo, 4)) {
         this.buf.take(bit, this.tickNo);
-        this.startMove(target, bit);
+        this.startCommand(target, bit);
         return;
       }
     }
@@ -1173,6 +1331,61 @@ export class FighterImpl implements Fighter {
     return m.tick - 1 - skipped;
   }
 
+  /** Queue an impulse (Δvx, Δvy px/s, Δω rad/s) spread over `ticks` ticks with a smoothstep profile (scale of motion, D28). */
+  private addRamp(dvx: number, dvy: number, dw: number, ticks: number): void {
+    const R = this.ramps;
+    let slot = -1;
+    for (let i = 0; i < RAMP_SLOTS; i++)
+      if (R[i * 5 + 3] === 0) {
+        slot = i;
+        break;
+      }
+    if (slot < 0) {
+      // all busy: land the oldest at once and reuse its slot
+      slot = 0;
+      for (let i = 1; i < RAMP_SLOTS; i++) if (R[i * 5 + 3]! > R[slot * 5 + 3]!) slot = i;
+      this.flushRamp(slot);
+    }
+    const o = slot * 5;
+    R[o] = dvx;
+    R[o + 1] = dvy;
+    R[o + 2] = dw;
+    R[o + 3] = 1;
+    R[o + 4] = ticks;
+  }
+
+  /** Apply what is left of ramp `i` now and free it. */
+  private flushRamp(i: number): void {
+    const R = this.ramps;
+    const o = i * 5;
+    let left = 0;
+    for (let a = R[o + 3]!; a <= R[o + 4]!; a++) left += rampWeight(a, R[o + 4]!);
+    this.vx += R[o]! * left;
+    this.vy += R[o + 1]! * left;
+    if (R[o + 2] !== 0) this.ang.impulse(R[o + 2]! * left, this.feel.angular);
+    R[o + 3] = 0;
+  }
+
+  /** Apply this tick's share of every ramped impulse. */
+  private stepRamps(): void {
+    const R = this.ramps;
+    for (let i = 0; i < RAMP_SLOTS; i++) {
+      const o = i * 5;
+      const age = R[o + 3]!;
+      if (age === 0) continue;
+      const w = rampWeight(age, R[o + 4]!);
+      this.vx += R[o]! * w;
+      this.vy += R[o + 1]! * w;
+      if (R[o + 2] !== 0) this.ang.impulse(R[o + 2]! * w, this.feel.angular);
+      R[o + 3] = age >= R[o + 4]! ? 0 : age + 1;
+    }
+  }
+
+  /** Drop every pending ramp (an interrupted move does not keep pushing). */
+  private clearRamps(): void {
+    for (let i = 0; i < RAMP_SLOTS; i++) this.ramps[i * 5 + 3] = 0;
+  }
+
   private fireKeys(): void {
     const m = this.mv;
     if (!m.def || !m.variant || m.phase === 'charge') return;
@@ -1183,17 +1396,16 @@ export class FighterImpl implements Fighter {
     while (m.keyIdx < keys.length && keys[m.keyIdx]!.at <= et) {
       const k = keys[m.keyIdx++]!;
       if (m.def.slot === 'surge') {
+        // a dash takes the body to its dash velocity over a short ramp (a quick but massive launch, not a teleport)
         const sp = Math.hypot(k.ix, k.iy) * push;
-        this.vx = m.dirX * sp;
-        this.vy = m.dirY * sp;
+        this.addRamp(m.dirX * sp - this.vx, m.dirY * sp - this.vy, 0, T.surgeRampTicks);
       } else {
         // ix along the attack axis, iy across it (screen-down for a horizontal axis): 2-D root motion
         const ux = this.aimUx;
         const uy = this.aimUy;
         const sx = -uy * this.facing;
         const sy = ux * this.facing;
-        this.vx += (k.ix * ux + k.iy * sx) * push;
-        this.vy += (k.ix * uy + k.iy * sy) * push;
+        this.addRamp((k.ix * ux + k.iy * sx) * push, (k.ix * uy + k.iy * sy) * push, 0, KEY_RAMP_TICKS);
       }
       if (k.damp !== undefined) m.damp = k.damp;
     }
@@ -1286,7 +1498,7 @@ export class FighterImpl implements Fighter {
         this.stunEndTick = this.tickNo;
         this.state = 'idle';
         this.buf.take(Btn.SURGE, this.tickNo);
-        this.startMove(surge, Btn.SURGE);
+        this.startCommand(surge, Btn.SURGE);
         return;
       }
     }
@@ -1677,14 +1889,21 @@ export class FighterImpl implements Fighter {
       }
     }
     if (corr <= 0) return;
-    A.px -= nx * corr * shareA;
-    A.py -= ny * corr * shareA;
-    B.px += nx * corr * shareB;
-    B.py += ny * corr * shareB;
+    // Scale of motion (D28): colossal bodies meet like cushions of rock, not billiard balls. The overlap is worked out over
+    // several ticks and the momentum is exchanged over several ticks (a soft contact, ≈ 0.2 s), so a collision bends the
+    // path instead of snapping the velocity. The cores are a hard limit: inside them the full correction applies at once.
+    const dist = Math.abs(A.footwork === 'orbit' || B.footwork === 'orbit' ? Math.hypot(dx, dy) : dx);
+    const hard = dist < coreGap;
+    const k = hard ? 1 : T.contactSoftness;
+    const c = hard ? Math.max(corr, coreGap - dist) : corr * k;
+    A.px -= nx * c * shareA;
+    A.py -= ny * c * shareA;
+    B.px += nx * c * shareB;
+    B.py += ny * c * shareB;
     // momentum: the closing part of the relative velocity is exchanged (nearly inelastic): a lunge shoves, a heavier body yields less
     const vrel = (B.vx - A.vx) * nx + (B.vy - A.vy) * ny;
     if (vrel < 0) {
-      const j = (-(1 + T.restitution) * vrel) / (1 / mA + 1 / mB);
+      const j = ((-(1 + T.restitution) * vrel) / (1 / mA + 1 / mB)) * k;
       A.vx -= (j / mA) * nx;
       A.vy -= (j / mA) * ny;
       B.vx += (j / mB) * nx;
@@ -1699,7 +1918,16 @@ export class FighterImpl implements Fighter {
     const t = this.body.transform;
     t.x = Math.round(this.px + this.offX);
     t.y = Math.round(this.py + this.offY);
+    this.behaviour.placeRegions();
     this.syncView();
+  }
+
+  /**
+   * Fold fighter-owned sim state that the view does not carry (a behaviour's rig) into a determinism hash. The Match folds
+   * it into `match.hash()` (proposal 162).
+   */
+  stateHash(h: number): number {
+    return this.behaviour.hash(h);
   }
 
   /** Deepest horizontal overlap (px) between the two bodies' live silhouettes over sampled rows. */
@@ -1837,8 +2065,33 @@ export class FighterImpl implements Fighter {
     c.tx = t.x;
     c.ty = t.y;
     c.lean = t.lean;
-    return o;
+    if (this.regions.length === 0) return o;
+    // a multi-body fighter: the union with every region body (they move on their own rig: refreshed once per tick)
+    const u = this.unionBnd;
+    if (this.unionStamp === this.tickNo && this.unionX === t.x && this.unionY === t.y) return u;
+    u.x0 = o.x0;
+    u.y0 = o.y0;
+    u.x1 = o.x1;
+    u.y1 = o.y1;
+    const rb = this.regionBnd;
+    for (const b of this.regions) {
+      if (!this.world.liveBounds(b.id, rb)) continue;
+      if (rb.x0 < u.x0) u.x0 = rb.x0;
+      if (rb.y0 < u.y0) u.y0 = rb.y0;
+      if (rb.x1 > u.x1) u.x1 = rb.x1;
+      if (rb.y1 > u.y1) u.y1 = rb.y1;
+    }
+    this.unionStamp = this.tickNo;
+    this.unionX = t.x;
+    this.unionY = t.y;
+    return u;
   }
+
+  private readonly unionBnd: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  private readonly regionBnd: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  private unionStamp = -1;
+  private unionX = 0;
+  private unionY = 0;
 
   /* ---------------------------------------------------------------------------------------------- *
    *  hit resolution — attacker side
@@ -2151,9 +2404,82 @@ export class FighterImpl implements Fighter {
       return r;
     }
     this.world.overlap(this.body.id, shape, r);
+    if (this.regions.length) this.probeRegions(shape, r);
     this.behaviour.probeParts(shape, r);
     return r;
   }
+
+  private readonly regionOv: OverlapResult = {
+    cells: 0,
+    x: NaN,
+    y: NaN,
+    nearestX: NaN,
+    nearestY: NaN,
+    coverage: 0,
+  };
+
+  /** Fold every region body's overlap into `r`: cells summed, centroid weighted by cells, nearest point of the nearest body. */
+  private probeRegions(shape: DamageShape, r: OverlapResult): void {
+    const o = this.regionOv;
+    let best = r.cells;
+    for (const b of this.regions) {
+      this.world.overlap(b.id, shape, o);
+      if (o.cells <= 0) continue;
+      const n = r.cells + o.cells;
+      r.x = r.cells > 0 ? (r.x * r.cells + o.x * o.cells) / n : o.x;
+      r.y = r.cells > 0 ? (r.y * r.cells + o.y * o.cells) / n : o.y;
+      if (o.cells > best) {
+        best = o.cells;
+        r.nearestX = o.nearestX;
+        r.nearestY = o.nearestY;
+      }
+      r.cells = n;
+      r.coverage = Math.max(r.coverage, o.coverage);
+    }
+  }
+
+  /** Accumulator for damage spread over several bodies (default routing and `Behaviour.routeDamage`). */
+  private readonly dmgSum: DamageSum = makeDamageSum();
+
+  /**
+   * The matter-world step of `receive`: a single body as before, or — for a multi-body fighter — the behaviour's own routing
+   * (front-to-back reveal layers) or, by default, the blow split over the bodies it touches in proportion to the cells it
+   * touches on each.
+   */
+  private applyWorldDamage(e: DamageEvent): DamageSum {
+    const s = this.dmgSum;
+    resetDamageSum(s);
+    if (this.behaviour.routeDamage(e, s)) return s;
+    if (this.regions.length === 0) {
+      addDamageResult(s, this.world.applyDamage(this.body.id, e));
+      return s;
+    }
+    const o = this.regionOv;
+    let total = 0;
+    const touched = this.touchScratch;
+    touched.length = 0;
+    for (let i = -1; i < this.regions.length; i++) {
+      const id = i < 0 ? this.body.id : this.regions[i]!.id;
+      this.world.overlap(id, e.shape, o);
+      if (o.cells > 0) {
+        touched.push(id, o.cells);
+        total += o.cells;
+      }
+    }
+    if (total === 0) {
+      addDamageResult(s, this.world.applyDamage(this.body.id, e));
+      return s;
+    }
+    const energy = e.energy;
+    for (let k = 0; k < touched.length; k += 2) {
+      e.energy = (energy * touched[k + 1]!) / total;
+      addDamageResult(s, this.world.applyDamage(touched[k]!, e));
+    }
+    e.energy = energy;
+    return s;
+  }
+
+  private readonly touchScratch: number[] = [];
 
   receive(evIn: DamageEvent, attacker: Fighter, events: SimEvent[]): HitResult {
     this.events = events;
@@ -2244,10 +2570,8 @@ export class FighterImpl implements Fighter {
     e.hitstop = hitstop;
 
     // 3. the matter world
-    let dr = EMPTY_DAMAGE_RESULT as Readonly<typeof EMPTY_DAMAGE_RESULT>;
-    if (e.energy >= 0.5) {
-      dr = this.world.applyDamage(this.body.id, e);
-    }
+    let dr: Readonly<DamageResult> = EMPTY_DAMAGE_RESULT;
+    if (e.energy >= 0.5) dr = this.applyWorldDamage(e);
     const cells = dr.cellsRemoved + ir.extraCells;
     res.cellsRemoved = cells;
     res.massRemoved = dr.massRemoved + ir.extraMass;
@@ -2356,12 +2680,25 @@ export class FighterImpl implements Fighter {
    * version), classify the hit, add Δv = J'/m and Δω, and announce the class as a cue (telemetry, audio, tools).
    */
   private applyImpact(cx: number, cy: number, jx: number, jy: number, mass: number): void {
-    const mp = measureMass(this.body.map, this.massProps);
     const com = this.comWorld;
-    localToWorld(this.body.transform, mp.comX, mp.comY, com);
+    const frame = this.massFrameScratch;
+    let gyration: number;
+    let radius: number;
+    if (this.behaviour.massFrame(frame)) {
+      // a rig spreads the load: turn about the whole fighter's centre of mass (proposal 160, S2)
+      com.x = frame.x;
+      com.y = frame.y;
+      gyration = frame.gyration;
+      radius = frame.radius;
+    } else {
+      const mp = measureMass(this.body.map, this.massProps);
+      localToWorld(this.body.transform, mp.comX, mp.comY, com);
+      gyration = mp.gyration;
+      radius = mp.radius;
+    }
     const px = Number.isFinite(cx) ? cx : com.x;
     const py = Number.isFinite(cy) ? cy : com.y;
-    const r = resolveImpact(px, py, jx, jy, com.x, com.y, mass, mp.gyration, mp.radius, this.impact);
+    const r = resolveImpact(px, py, jx, jy, com.x, com.y, mass, gyration, radius, this.impact);
     this.vx += r.jx / mass;
     this.vy += r.jy / mass;
     this.ang.impulse(r.dw, this.feel.angular);
@@ -2379,6 +2716,7 @@ export class FighterImpl implements Fighter {
   }
 
   private readonly comWorld = { x: 0, y: 0 };
+  private readonly massFrameScratch = { x: 0, y: 0, gyration: 1, radius: 1 };
 
   /**
    * Continuous movement emissions from the titan's `feel.fx` (a wake of dust or gas, embers, motes...): density follows distance
@@ -2763,6 +3101,7 @@ export class FighterImpl implements Fighter {
     this.offX = 0;
     this.offY = 0;
     this.ang.reset();
+    this.clearRamps();
     this.z = 0;
     this.vz = 0;
     this.orbitMem.prevVr = 0;
@@ -2772,6 +3111,8 @@ export class FighterImpl implements Fighter {
     this.steerOn = false;
     this.feelTrack.reset();
     this.world.heal(this.body.id, healFraction, seed);
+    for (let i = 0; i < this.regions.length; i++)
+      this.world.heal(this.regions[i]!.id, healFraction, seed + i + 1);
     const t = this.body.transform;
     t.x = Math.round(x);
     t.y = Math.round(y);

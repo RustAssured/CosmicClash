@@ -30,8 +30,12 @@ export const TUNING = {
   overlapAllowance: 9,
   /** Soft wall: fraction of arena.softWall over which speed into the wall is bled off. */
   wallBleed: 0.9,
-  /** Stick response of the underdamped velocity filter: natural frequency (rad/s) for a mass-5 body before the per-titan feel. */
-  steerOmega: 8.6,
+  /**
+   * Stick response of the underdamped velocity filter: natural frequency (rad/s) for a mass-5 body before the per-titan feel.
+   * Scale of motion (D28): 6 rad/s (was 8.6) — about 70 % of top speed after 0.3 s, so the root's velocity builds over
+   * ≥ 0.25 s after the first pixel instead of snapping.
+   */
+  steerOmega: 6,
   /** Bob (px) of the idle breathing offset applied to the body transform (only when a titan's feel does not set one). */
   idleBob: 1.4,
   /**
@@ -41,8 +45,8 @@ export const TUNING = {
   steerAccelMax: 1500,
   /** Velocity time constant (s) of a KO'd body's long tumble. */
   koGlideTau: 0.95,
-  /** Velocity time constant (s) while stunned: the struck body brakes its slide over ~0.4 s (a 450 px/s shove ≈ 180 px). */
-  stunDragTau: 0.4,
+  /** Velocity time constant (s) while stunned: the struck body brakes its slide slowly (D28: long and slow, never a jiggle). */
+  stunDragTau: 0.65,
 
   /* ---- pixel-first response (every accepted command changes a drawn pixel on its accept tick) ---- */
   /** A new stick direction: the root steps this many px at once and the top lags (counter-lean, px). */
@@ -66,15 +70,16 @@ export const TUNING = {
 
   /* ---- lean (integer row shear; spring-damper so direction changes overshoot a little) ---- */
   leanPerSpeed: 7,
-  leanOmega: 15,
-  leanZeta: 0.5,
+  /** Scale of motion (D28): ω 6.5 rad/s ≈ 1 Hz (was 15 ≈ 2.4 Hz) and ζ 0.6: one slow overshoot, never a quiver. */
+  leanOmega: 6.5,
+  leanZeta: 0.6,
 
   /* ---- lean limits and the angular state ---- */
   /** |lean| cap in px (velocity lean + pose + torsion together). */
   leanMax: 18,
   /** Torsion (a body that springs back upright): natural frequency (rad/s), damping ratio, spin drag (s), caps. */
-  torsionOmega: 9,
-  torsionZeta: 0.4,
+  torsionOmega: 5,
+  torsionZeta: 0.5,
   torsionDragTau: 1.2,
   /** Free spin (a world): spin drag time constant (s). */
   spinDragTau: 2.6,
@@ -88,7 +93,7 @@ export const TUNING = {
    * the body's ONE velocity (real momentum): drag and the defender's own thrust take it out, nothing else.
    */
   massNeutral: 5,
-  knockScale: 0.62,
+  knockScale: 0.5,
   knockMassExp: 1,
   knockRatioMin: 0.22,
   knockRatioMax: 1.9,
@@ -97,6 +102,8 @@ export const TUNING = {
   koKnockMul: 1.4,
   /** Bodies in contact exchange momentum along the contact normal with this restitution (heavy, nearly inelastic). */
   restitution: 0.1,
+  /** Share of the overlap and of the momentum exchange worked out per tick of contact (soft contact, D28 scale of motion). */
+  contactSoftness: 0.12,
   /** Recoil: lean velocity kick per unit of raw knockback, capped (px/s of shear velocity). */
   recoilGain: 0.16,
   recoilMax: 150,
@@ -105,8 +112,8 @@ export const TUNING = {
   shudderEnergy: 1500,
   shudderDecay: 0.8,
   /** Attacker follow-through: visual push (px) through the contact and its per-tick decay. */
-  followMax: 5,
-  followDecay: 0.84,
+  followMax: 6,
+  followDecay: 0.93,
   /** Low-frequency thud shake of a heavy release (Crush or Ultimate), amplitude = thudGain x (mass/5)^thudMassExp. */
   thudGain: 1.6,
   thudMassExp: 1.1,
@@ -123,6 +130,8 @@ export const TUNING = {
   stunEscapeTicks: 9,
   /** Cooldown (ticks) between stun-escape surges. */
   escapeCooldown: 90,
+  /** Ticks over which a Surge's dash velocity builds (a massive launch, not a teleport; other keys use KEY_RAMP_TICKS). */
+  surgeRampTicks: 6,
   /** Surge (any) cooldown so it stays a decision, not a spam key. */
   surgeCooldown: 14,
   /** Feint recovery (ticks). */

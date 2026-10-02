@@ -10,7 +10,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { DamageFlag, type MaterialSpec, type MoveDef, type TitanDef } from '@/contracts';
-import { AIM_SIGN, aims, frame, hb, key } from './kit';
+import { AIM_ANGLE, AIM_SIGN, aims, frame, hb, key } from './kit';
 
 const PATH = 'src/titans/planet.json';
 
@@ -191,48 +191,13 @@ const CONT = DamageFlag.CONTINUOUS;
 /** A world does not shear: every phase of every Planet move holds the body upright (the fighter's default lean is overridden). */
 const RIGID = { startup: { lean: 0 }, charge: { lean: 0 }, active: { lean: 0 }, recovery: { lean: 0 } };
 
-const nudge: MoveDef = {
-  id: 'planet.nudge',
-  slot: 'strike',
-  name: 'Tidal Nudge',
-  nameKo: '조석 밀기',
-  frame: frame(12, 8, 18, { hitstop: 6 }),
-  variants: aims((aim) => {
-    const s = AIM_SIGN[aim];
-    return {
-      hitboxes: [
-        hb(
-          'nudge',
-          0,
-          8,
-          { kind: 'point', ox: 82, oy: s * 30, r: 30 },
-          C,
-          252,
-          { compress: 4, crater: 6.4, shock: 0.48 },
-          0,
-          { x: 560, y: s * 90 - 30 },
-          0.4,
-          {
-            sweepTo: { kind: 'point', ox: 118, oy: s * 34, r: 34 },
-          },
-        ),
-      ],
-      movement: [key(8, 120, 0, 0.2)],
-    };
-  }),
-  resourceCost: 0,
-  meterCost: 0,
-  tags: ['shove'],
-  extra: { pose: RIGID },
-};
-
-/** Fallback only: the live block is carried over from the JSON (combat owns its choreography). */
+/** Fallback only: the live block is carried over from the JSON (combat owns its choreography). This is TIDAL RUSH (Crush). */
 const impactFallback: MoveDef = {
   id: 'planet.impact',
   slot: 'crush',
-  name: 'Impact',
-  nameKo: '충격',
-  frame: frame(40, 8, 64, { hitstop: 14 }),
+  name: 'Tidal Rush',
+  nameKo: '조석 돌진',
+  frame: frame(34, 8, 56, { hitstop: 12 }),
   variants: aims((aim) => {
     const s = AIM_SIGN[aim];
     return {
@@ -250,7 +215,7 @@ const impactFallback: MoveDef = {
           1,
         ),
       ],
-      movement: [key(0, -90, 0, 0.3), key(34, 150, s * 40, 0.05)],
+      movement: [key(0, -70, 20, 0.04), key(26, 560, s * 40 - 24, 0.06), key(46, -150, 16, 0.1)],
     };
   }),
   resourceCost: 0,
@@ -259,25 +224,36 @@ const impactFallback: MoveDef = {
   extra: { pose: RIGID },
 };
 
+/**
+ * ORBITAL DRIFT (Surge): a curved momentum shift. The movement key is the push; the behaviour bends the path around the foe
+ * (`extra.drift.curve`, px/s² perpendicular to the push, ramped in and out) and builds spin (`extra.drift.spin`, rad/s).
+ */
 const shift: MoveDef = {
   id: 'planet.shift',
   slot: 'surge',
-  name: 'Orbital Shift',
-  nameKo: '궤도 이동',
+  name: 'Orbital Drift',
+  nameKo: '궤도 표류',
   frame: frame(3, 16, 9, { cancelWindow: 0 }),
   variants: aims(() => ({ hitboxes: [], movement: [key(0, 430, 0, 0.04)] })),
   resourceCost: 0,
   meterCost: 0,
   intangible: [2, 16],
   tags: ['dash', 'orbit'],
+  extra: { drift: { curve: 760, spin: 1.2 } },
 };
 
+/**
+ * MOON SLAM (Strike): a moon is redirected into a delayed kinetic strike. On release the chosen moon whips round its orbit
+ * (`windup` ticks), leaves on its tangent and curves onto the foe: up/down aim bends the path over or under, neutral comes
+ * straight; it accelerates (`accel` px/tick²) up to `speed`. The `launch` hitbox is the world's own tidal shove, which is all a
+ * moonless Planet has. A moon below `breakFrac` of its mass shatters on impact and its fragments carry on at the foe.
+ */
 const slam: MoveDef = {
   id: 'planet.moonslam',
-  slot: 'signature',
+  slot: 'strike',
   name: 'Moon Slam',
   nameKo: '달 충돌',
-  frame: frame(14, 44, 24, { chargeMax: 45, hitstop: 8 }),
+  frame: frame(12, 8, 22, { chargeMax: 30, hitstop: 8 }),
   variants: aims(() => ({
     hitboxes: [
       hb(
@@ -295,17 +271,177 @@ const slam: MoveDef = {
     ],
     movement: [key(0, -40, 0, 0.2)],
   })),
-  resourceCost: 1,
+  resourceCost: 0,
   meterCost: 0,
   tags: ['charge', 'projectile', 'moon'],
   extra: {
     chargePower: 0.9,
     chargeReach: [0.8, 1.35],
-    /** The moon is flung at speed px/tick and hits for `energy` (× charge power) as CRUSH with a crater; recoil is the share of the energy the moon itself takes. */
-    slam: { speed: 9, energy: 430, crater: 14, compress: 8, shock: 1.2, recoil: 0.14, life: 46 },
+    /** Energy (× charge power) as CRUSH with a crater; recoil is the share of the energy the moon itself takes. */
+    slam: {
+      speed: 9,
+      accel: 0.45,
+      windup: 14,
+      turn: 0.1,
+      curve: 0.9,
+      energy: 430,
+      crater: 14,
+      compress: 8,
+      shock: 1.2,
+      recoil: 0.14,
+      life: 70,
+      breakFrac: 0.55,
+    },
     ctl: { charge: 0.2, active: 0.25 },
     pose: RIGID,
   },
+};
+
+/**
+ * COMET SHEPHERD → SLINGSHOT (Signature, hold). Holding takes a free arena comet within reach, or calls one in from the far edge
+ * (a `mass` nucleus at `entrySpeed` px/s): the deepened well bends its path, it is captured into the ring at `orbit` px and spun up
+ * there (from `w0` toward `w1` rad/s, +`spinUp`/s); releasing throws it where its orbit points at the foe. The blow is the matter
+ * world's, sized so its energy is `energy` at an orbit speed of `vRef` px/s (∝ speed²). A comet never caught is let go as debris
+ * (after `life` ticks in flight the throw is spent). The `tug` hitbox is the release's gravity tug.
+ */
+const comet: MoveDef = {
+  id: 'planet.comet',
+  slot: 'signature',
+  name: 'Comet Shepherd',
+  nameKo: '혜성 목자',
+  frame: frame(8, 10, 24, { chargeMax: 150 }),
+  variants: aims(() => ({
+    hitboxes: [
+      hb(
+        'tug',
+        0,
+        8,
+        { kind: 'field', ox: 70, oy: 0, r: 60, falloff: 1.5 },
+        C,
+        40,
+        { compress: 2, crater: 3 },
+        0,
+        { x: -160, y: 0 },
+        0.2,
+      ),
+    ],
+    movement: [],
+  })),
+  resourceCost: 0,
+  meterCost: 0,
+  tags: ['charge', 'projectile', 'comet'],
+  extra: {
+    comet: {
+      spawnDist: 330,
+      spawnRise: 150,
+      entrySpeed: 260,
+      orbit: 150,
+      w0: 1.4,
+      w1: 5.2,
+      spinUp: 2.2,
+      vRef: 620,
+      energy: 720,
+      life: 110,
+      mass: 13.5,
+    },
+    ctl: { charge: 0.35 },
+    pose: RIGID,
+  },
+};
+
+/**
+ * The Crush-held phase moves: they are not on a button of their own (`followUpOnly`); holding Crush through the first ticks of
+ * Tidal Rush turns it into the move the world's damage phase allows (src/combat/behaviours/planet.ts `holdCrush`):
+ * phases 1–2 CRUST BREAKER, phase 3 MAGMA VENT, phase 4 CORE PULSE (if the meter is full; else Magma Vent).
+ */
+const crustbreaker: MoveDef = {
+  id: 'planet.crustbreaker',
+  slot: 'crush',
+  name: 'Crust Breaker',
+  nameKo: '지각 파괴',
+  frame: frame(26, 14, 52, { hitstop: 10 }),
+  variants: aims(() => ({
+    hitboxes: [
+      hb(
+        'tectonic',
+        0,
+        14,
+        { kind: 'ring', ox: 0, oy: 0, r0: 50, r1: 78 },
+        C,
+        560,
+        { crater: 12, compress: 7, shock: 2, scatter: 1.4 },
+        0,
+        { x: 520, y: -60 },
+        0.9,
+        { sweepTo: { kind: 'ring', ox: 0, oy: 0, r0: 140, r1: 176 } },
+      ),
+    ],
+    movement: [key(0, -30, 0, 0.1)],
+  })),
+  resourceCost: 0,
+  meterCost: 0,
+  tags: ['heavy', 'quake', 'phase'],
+  extra: { followUpOnly: true, pose: RIGID },
+};
+
+const magmavent: MoveDef = {
+  id: 'planet.magmavent',
+  slot: 'crush',
+  name: 'Magma Vent',
+  nameKo: '마그마 분출',
+  frame: frame(24, 30, 40),
+  variants: aims((aim) => ({
+    hitboxes: [
+      hb(
+        'vent',
+        0,
+        30,
+        { kind: 'cone', ox: 40, oy: 0, angle: AIM_ANGLE[aim], range: 210, halfAngle: 0.26 },
+        'THERMAL',
+        46,
+        { shock: 0.6 },
+        CONT,
+        { x: 140, y: 0 },
+        0.5,
+        { rehit: 3 },
+      ),
+    ],
+    movement: [key(0, -60, 0, 0.08)],
+  })),
+  resourceCost: 0,
+  meterCost: 0,
+  tags: ['heavy', 'thermal', 'phase'],
+  extra: { followUpOnly: true, pose: RIGID, vent: { shed: 0.004 } },
+};
+
+const corepulse: MoveDef = {
+  id: 'planet.corepulse',
+  slot: 'crush',
+  name: 'Core Pulse',
+  nameKo: '핵 맥동',
+  frame: frame(36, 24, 56, { hitstop: 13 }),
+  variants: aims(() => ({
+    hitboxes: [
+      hb(
+        'pulse',
+        0,
+        24,
+        { kind: 'ring', ox: 0, oy: 0, r0: 40, r1: 80 },
+        C,
+        1500,
+        { crater: 22, compress: 10, shock: 2.4, scatter: 2 },
+        UNBLOCK,
+        { x: 680, y: -120 },
+        1,
+        { sweepTo: { kind: 'ring', ox: 0, oy: 0, r0: 200, r1: 236 } },
+      ),
+    ],
+    movement: [key(0, 0, 0, 0.05)],
+  })),
+  resourceCost: 0,
+  meterCost: 1,
+  tags: ['heavy', 'quake', 'phase', 'armor'],
+  extra: { followUpOnly: true, pose: RIGID, pulse: { shed: 0.03 } },
 };
 
 const cataclysm: MoveDef = {
@@ -355,11 +491,15 @@ const cataclysm: MoveDef = {
   },
 };
 
+/**
+ * ROTATIONAL BRACE (Guard): the shell absorbs as the old atmosphere shield did; raising it turns the more intact face toward the
+ * foe, and the guard's strength follows the integrity of the face that takes the blows (behaviour `guardMultiplier`).
+ */
 const guard: MoveDef = {
   id: 'planet.guard',
   slot: 'guard',
-  name: 'Atmosphere Shield',
-  nameKo: '대기 방패',
+  name: 'Rotational Brace',
+  nameKo: '회전 방어',
   frame: frame(3, 0, 5, { cancelWindow: 0 }),
   variants: aims(() => ({ hitboxes: [], movement: [] })),
   resourceCost: 0,
@@ -388,11 +528,11 @@ export const planet: TitanDef = {
   destruction: 'CRUSH',
   passive: {
     name: 'Gravity Well',
-    text: 'A small gravity well gathers debris into slow orbit around the planet: a ring of remains that drifts and now and then strikes the enemy.',
+    text: 'A gravity well gathers debris into a slow ring. Hold Gravity (R1) for Tidal Draw: the well deepens and drawn debris is packed back onto the world as crust.',
   },
   failureMode: {
     name: 'Broken World',
-    text: 'Crust cracks reveal glowing magma, the atmosphere is stripped away (and with it the shield against heat), and moons can be knocked out of orbit and lost.',
+    text: 'Intact, fractured crust, exposed mantle (Magma Vent), core crisis (Core Pulse): hits harder, braces worse. At the end the air vents, moons drift off, the crust slabs away, the core goes out last.',
   },
   materials: MATERIALS,
   art: {
@@ -442,9 +582,51 @@ export const planet: TitanDef = {
           ),
         },
       ],
+      /** The comet nucleus the Comet Shepherd calls in (src/titans/art/comet.ts). */
+      comet: {
+        r: 11,
+        elong: 1.7,
+        pits: 5,
+        lobes: 0.4,
+        materials: [
+          {
+            key: 'cometice',
+            base: 'ice',
+            visual: vis(
+              ['#2a4c74', '#4c84b4', '#8cc4e4', '#c4ecf8', '#f0fcff'],
+              40,
+              '#183050',
+              '#1a2a3a',
+              '#8cc4e4',
+            ),
+          },
+          {
+            key: 'cometdust',
+            base: 'regolith',
+            visual: vis(
+              ['#141216', '#26222a', '#3c363e', '#565058', '#746c72', '#948a8c'],
+              0,
+              '#0a0a0c',
+              '#100e10',
+              '#565058',
+            ),
+          },
+          {
+            key: 'cometrock',
+            base: 'rock',
+            visual: vis(
+              ['#1a1820', '#2e2a34', '#46404a', '#625a62', '#827880'],
+              0,
+              '#0a080c',
+              '#121014',
+              '#46404a',
+            ),
+          },
+        ],
+      },
     },
   },
-  moves: [nudge, impact, shift, slam, cataclysm, guard],
+  moves: [slam, impact, shift, comet, cataclysm, guard, crustbreaker, magmavent, corepulse],
   ai: {
     style:
       'Fortress: sits back behind its moons, punishes with Impact and Moon Slam, and uses its weight to hold the space.',

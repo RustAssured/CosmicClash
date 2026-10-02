@@ -80,9 +80,10 @@ export const DEFAULT_CAMERA_TUNING: Readonly<CameraTuning> = {
   lookaheadMax: 64,
   marginX: 36,
   marginY: 28,
-  shakeTau: 0.14, // e^(−0.4/0.14) ≈ 6 %: the felt tail is ~0.4 s
-  shakeHzMin: 5,
-  shakeHzMax: 9,
+  // scale of motion (D28): low frequency (2.5–4 Hz, was 5–9), heavily damped — about one and a half swings
+  shakeTau: 0.18,
+  shakeHzMin: 2.5,
+  shakeHzMax: 4,
   zoomTau: 0.085,
   maxZoom: 1.06,
   rollHalfLife: 0.28,

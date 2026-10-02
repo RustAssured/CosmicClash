@@ -21,25 +21,40 @@ export interface WitnessRigTuning {
   armZeta: number;
   /** Relative angle limit of every arm joint (rad), ±. */
   armLimit: number;
+  /** Caps (rad, ±) on how far a part may swing from the carapace (D28: a blow makes the structure sway, never scatter). */
+  armAbsLimit: number;
+  haloLimit: number;
+  shrineLimit: number;
   /**
    * Arms also chase the HEADING (the eye's angle) directly, with frequencies falling along the chain: the root follows first,
    * the tip last. Without it a chain pinned to a fast-turning carapace whips past the heading and rings.
    */
   armHeadingHz: readonly number[];
   armHeadingZeta: number;
+  /** Idle sway: amplitude (rad) and period range (s) of the slow breathing of arms and halo arcs (D28: periods of seconds). */
+  swayAmp: number;
+  swayPeriod: readonly [number, number];
+  haloDrift: number;
 }
 
 export const WITNESS_RIG_TUNING: Readonly<WitnessRigTuning> = Object.freeze({
-  carapaceHz: 4.5,
-  shrineHz: 1.9,
-  haloHz: [1.4, 1.7, 1.1, 1.5],
-  armRootHz: 2,
-  armHz: 1.8,
-  zeta: 0.85,
-  armZeta: 1.4,
-  armLimit: 0.75,
-  armHeadingHz: [1.9, 1.6, 1.35, 1.2],
-  armHeadingZeta: 1,
+  // colossal scale (D28): nothing above ~1.2 Hz; the structure turns in ≈ 0.5 s, the mass and the long parts in seconds
+  carapaceHz: 0.6,
+  shrineHz: 0.5,
+  haloHz: [0.42, 0.5, 0.33, 0.45, 0.38],
+  armRootHz: 0.62,
+  armHz: 0.6,
+  zeta: 0.9,
+  armZeta: 0.75,
+  armLimit: 0.5,
+  armAbsLimit: 0.6,
+  haloLimit: 0.3,
+  shrineLimit: 0.35,
+  armHeadingHz: [0.62, 0.56, 0.5, 0.44],
+  armHeadingZeta: 0.7,
+  swayAmp: 0.05,
+  swayPeriod: [3.2, 5.5] as const,
+  haloDrift: 0.035,
 });
 
 export interface WitnessRig {
@@ -53,13 +68,37 @@ export interface WitnessRig {
   halo: number[];
   /** Per arm: its segment bodies (root first) and its joint chain as anchors (joints, then the tip). */
   arms: { bodies: number[]; chain: RigAnchor[] }[];
-  /** Drives whose target is the heading (see setWitnessHeading). */
+  /** Drives whose target is the heading (see setWitnessHeading), and the halo arcs' drives (they drift). */
   headingDrives: number[];
+  haloDrives: number[];
+  /** Swing caps of the halo arcs and of every arm segment (indices into `rig.limits`); moves widen them for a while. */
+  haloLimits: number[];
+  armLimits: number[];
+  /** Per rig body: the joint pinning it to its parent and its rest drive (−1 for the eye). */
+  jointOf: Int16Array;
+  driveOf: Int16Array;
+  tuning: Readonly<WitnessRigTuning>;
 }
 
-/** Point every heading drive at the eye's current angle (call each tick with the intent). */
-export function setWitnessHeading(wr: WitnessRig, angle: number): void {
-  for (const d of wr.headingDrives) wr.rig.drives[d]!.target = angle;
+/**
+ * Point every heading drive at the eye's current angle (call each tick with the intent). With `tick`, the long parts also
+ * breathe: each arm sways by a few hundredths of a radian with its own period of 3–5.5 s, the halo arcs drift in and out of
+ * phase more slowly still. Deterministic in the tick.
+ */
+export function setWitnessHeading(wr: WitnessRig, angle: number, tick = -1): void {
+  const t = wr.tuning;
+  for (let k = 0; k < wr.headingDrives.length; k++) {
+    let sway = 0;
+    if (tick >= 0) {
+      const period = t.swayPeriod[0] + ((k * 0.618034) % 1) * (t.swayPeriod[1] - t.swayPeriod[0]);
+      sway = t.swayAmp * Math.sin((2 * Math.PI * tick) / (60 * period) + k * 1.7);
+    }
+    wr.rig.drives[wr.headingDrives[k]!]!.target = angle + sway;
+  }
+  if (tick >= 0)
+    for (let k = 0; k < wr.haloDrives.length; k++)
+      wr.rig.drives[wr.haloDrives[k]!]!.target =
+        t.haloDrift * Math.sin((2 * Math.PI * tick) / (60 * (6 + 1.3 * k)) + k * 2.1);
 }
 
 /** Combine two mass properties given in the same frame (parallel-axis theorem). */
@@ -111,7 +150,7 @@ export function buildWitnessRig(
     const b = rig.addBody(originX + r.pivotX, originY + r.pivotY, 0, props[i]!, {
       kinematic,
       linDrag: 1.2,
-      angDrag: r.kind === 'arm' ? 6 : r.kind === 'halo' ? 2.5 : 1.4,
+      angDrag: r.kind === 'arm' ? 4 : r.kind === 'halo' ? 2 : 1.3,
     });
     bodyOf[i] = b;
     if (kinematic) eye = b;
@@ -123,24 +162,37 @@ export function buildWitnessRig(
   // joints at the pivots and the angular drives
   let haloK = 0;
   const headingDrives: number[] = [];
+  const haloDrives: number[] = [];
+  const haloLimits: number[] = [];
+  const armLimits: number[] = [];
+  const jointOf = new Int16Array(n + 1).fill(-1);
+  const driveOf = new Int16Array(n + 1).fill(-1);
   for (let i = 0; i < n; i++) {
     const r = w.regions[i]!;
     if (owner[i] !== i || r.parent < 0) continue;
     const p = w.regions[r.parent]!;
     const a = bodyOf[i]!;
     const b = bodyOf[r.parent]!;
-    rig.addJoint({ a, b, ax: 0, ay: 0, bx: r.pivotX - p.pivotX, by: r.pivotY - p.pivotY });
+    jointOf[a] = rig.addJoint({ a, b, ax: 0, ay: 0, bx: r.pivotX - p.pivotX, by: r.pivotY - p.pivotY });
     let hz: number;
     let zeta = t.zeta;
     if (r.kind === 'carapace') hz = t.carapaceHz;
-    else if (r.kind === 'shrine') hz = t.shrineHz;
-    else if (r.kind === 'halo') hz = t.haloHz[haloK++ % t.haloHz.length]!;
-    else {
+    else if (r.kind === 'shrine') {
+      hz = t.shrineHz;
+      rig.addLimit({ a: carapace, b: a, min: -t.shrineLimit, max: t.shrineLimit, aboutPivot: true });
+    } else if (r.kind === 'halo') {
+      hz = t.haloHz[haloK++ % t.haloHz.length]!;
+      haloLimits.push(rig.addLimit({ a: carapace, b: a, min: -t.haloLimit, max: t.haloLimit, aboutPivot: true }));
+    } else {
       hz = r.segment === 0 ? t.armRootHz : t.armHz;
       zeta = t.armZeta;
-      rig.addLimit({ a: b, b: a, min: -t.armLimit, max: t.armLimit });
+      rig.addLimit({ a: b, b: a, min: -t.armLimit, max: t.armLimit, aboutPivot: true });
+      armLimits.push(rig.addLimit({ a: carapace, b: a, min: -t.armAbsLimit, max: t.armAbsLimit, aboutPivot: true }));
     }
-    rig.addDrive({ a: b, b: a, target: 0, hz, zeta, aboutPivot: true });
+    // halo arcs orbit the eye but are DRIVEN by the carapace: the ring follows the structure, a beat behind it (D28 load wave)
+    const di = rig.addDrive({ a: r.kind === 'halo' ? carapace : b, b: a, target: 0, hz, zeta, aboutPivot: true });
+    driveOf[a] = di;
+    if (r.kind === 'halo') haloDrives.push(di);
     if (r.kind === 'arm') {
       const hh = t.armHeadingHz[Math.min(r.segment, t.armHeadingHz.length - 1)]!;
       if (hh > 0)
@@ -162,5 +214,5 @@ export function buildWitnessRig(
     });
     return { bodies, chain };
   });
-  return { rig, bodyOf, eye, carapace, shrine, halo, arms, headingDrives };
+  return { rig, bodyOf, eye, carapace, shrine, halo, arms, headingDrives, haloDrives, haloLimits, armLimits, jointOf, driveOf, tuning: t };
 }

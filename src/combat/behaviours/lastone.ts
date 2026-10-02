@@ -63,6 +63,8 @@ export class LastOneBehaviour extends Behaviour {
   private readonly post: Posture = { guard: 0, rise: 0, focus: 0, limp: 0, agitation: 0, eyeX: 0, eyeY: 0 };
   private readonly xy = { x: 0, y: 0 };
   private readonly wp = { x: 0, y: 0 };
+  /** The body's continuous motion (pre-rounding): the tendrils hang from it so they glide instead of stepping. */
+  private readonly motion = { x: 0, y: 0, lean: 0, angle: 0 };
   private readonly cut = { lost: 0, x: 0, y: 0 };
   private readonly tmpShape = makeFatShape();
   private readonly hitNode = new Int8Array(64);
@@ -307,7 +309,8 @@ export class LastOneBehaviour extends Behaviour {
   }
 
   override onDamaged(energy: number, dx: number, dy: number): void {
-    this.sys.recoil(dx * Math.min(6, energy / 90), dy * Math.min(6, energy / 90));
+    // a long, slow swing of the veil (half the old kick: with the softer chains it travels further, never jiggles)
+    this.sys.recoil(dx * Math.min(3, energy / 180), dy * Math.min(3, energy / 180));
     this.regrowClock = 0;
   }
 
@@ -336,7 +339,7 @@ export class LastOneBehaviour extends Behaviour {
     // ---- posture targets (smoothed) ----
     const id = m.def?.id ?? '';
     const slot = m.def?.slot;
-    P.guard = ease(P.guard, f.guardUp ? 1 : 0, 0.22);
+    P.guard = ease(P.guard, f.guardUp ? 1 : 0, 0.1);
     let rise = 0;
     if (slot === 'ultimate') {
       rise =
@@ -354,15 +357,16 @@ export class LastOneBehaviour extends Behaviour {
           ? 0.4 + 0.6 * clamp01(m.chargeTicks / Math.max(1, m.chargeMax))
           : 0.25 * (m.phaseTick / m.startup);
     }
-    P.focus = ease(P.focus, focus, 0.15);
+    P.focus = ease(P.focus, focus, 0.08);
     P.limp = f.ko ? ease(P.limp, 1, 0.04) : 0;
     const spd = Math.hypot(f.vx, f.vy);
-    P.agitation = ease(P.agitation, clamp01(spd / 260), 0.15);
+    P.agitation = ease(P.agitation, clamp01(spd / 260), 0.05);
 
     // ---- scripted whip targets ----
     this.steerWhips(m);
 
-    this.sys.step(t, P, f.vx, f.vy, tick);
+    f.motionSample(this.motion);
+    this.sys.step(t, P, f.vx, f.vy, tick, this.motion);
 
     // ---- passive: patient regrowth ----
     this.regrowClock++;
@@ -404,7 +408,8 @@ export class LastOneBehaviour extends Behaviour {
     if (!isLash && !heavy) return;
     // the whips are released a few ticks BEFORE the first active tick, so the tips are arriving when the blow lands (and are
     // already out there during the hit-stop that freezes the contact frame)
-    const lead = heavy ? 5 : 3;
+    // (the whips are slow now, D28: they leave earlier so they still arrive as the blow lands)
+    const lead = heavy ? 12 : 8;
     const releasing = m.phase === 'startup' && m.phaseTick > m.startup - lead;
     if (m.phase === 'startup' && !releasing) {
       // wind up: whips draw back behind the body, each along its own slightly bowed arc (the lagging target staggers them)
@@ -797,6 +802,16 @@ export class LastOneBehaviour extends Behaviour {
 
   override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
     out.push(this.back.layer, this.front.layer, this.eye.layer, this.fx.layer);
+  }
+
+  /** The planet-scale parts for the scale-of-motion tool: every tendril tip, in tendril order. */
+  override trackPoints(out: number[]): number {
+    const s = this.sys;
+    for (let i = 0; i < s.n; i++) {
+      const j = i * NODES + Math.max(0, s.count[i]! - 1);
+      out.push(s.x[j]!, s.y[j]!);
+    }
+    return s.n;
   }
 
   override debugShapes(out: DebugShape[]): void {

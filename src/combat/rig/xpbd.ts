@@ -123,6 +123,8 @@ export interface DriveDef {
    * pivot, and `hz` is what you see.
    */
   aboutPivot?: boolean;
+  /** Switched off (its joint failed). */
+  off?: boolean;
 }
 
 export interface LimitDef {
@@ -130,6 +132,10 @@ export interface LimitDef {
   b: number;
   min: number;
   max: number;
+  /** Correct by turning about each body's pivot (see DriveDef.aboutPivot). */
+  aboutPivot?: boolean;
+  /** Switched off (its joint failed). */
+  off?: boolean;
 }
 
 export interface BreakEvent {
@@ -283,6 +289,30 @@ export class XpbdRig {
     if (jt.broken) return;
     jt.broken = true;
     if (this.breaks.length < 64) this.breaks.push({ joint: j, force, tick: this.tick });
+  }
+
+  /**
+   * Take body i out of the structure (its region left as debris): break its joints, switch off every drive and limit acting on
+   * it, and freeze it where it is (kinematic) so it no longer pulls on anything.
+   */
+  detach(i: number): void {
+    for (let j = 0; j < this.joints.length; j++) {
+      const jt = this.joints[j]!;
+      if (jt.a === i || jt.b === i) this.breakJoint(j, 0);
+    }
+    for (const d of this.drives) if (d.a === i || d.b === i) d.off = true;
+    for (const l of this.limits) if (l.a === i || l.b === i) l.off = true;
+    const fx = this.frameX(i);
+    const fy = this.frameY(i);
+    this.kinematic[i] = 1;
+    this.invMass[i] = 0;
+    this.invInertia[i] = 0;
+    this.vx[i] = 0;
+    this.vy[i] = 0;
+    this.w[i] = 0;
+    this.k0x[i] = this.k1x[i] = fx;
+    this.k0y[i] = this.k1y[i] = fy;
+    this.k0a[i] = this.k1a[i] = this.a[i]!;
   }
 
   /** Update a body's mass properties (cells were destroyed); the frame stays put, the centre of mass moves. */
@@ -521,6 +551,10 @@ export class XpbdRig {
     const h2 = h * h;
     for (let d = 0; d < this.drives.length; d++) {
       const dr = this.drives[d]!;
+      if (dr.off === true) {
+        dr.torque = 0;
+        continue;
+      }
       const a = dr.a;
       const b = dr.b;
       // about the pivot: the correction turns each body about its frame origin (so the pin there is not disturbed), against
@@ -557,10 +591,12 @@ export class XpbdRig {
   private solveLimits(): void {
     for (let l = 0; l < this.limits.length; l++) {
       const lm = this.limits[l]!;
+      if (lm.off === true) continue;
       const a = lm.a;
       const b = lm.b;
-      const iiA = a >= 0 ? this.invInertia[a]! : 0;
-      const iiB = this.invInertia[b]!;
+      const piv = lm.aboutPivot === true;
+      const iiA = a >= 0 ? (piv ? this.pivotInvInertia(a) : this.invInertia[a]!) : 0;
+      const iiB = piv ? this.pivotInvInertia(b) : this.invInertia[b]!;
       const wsum = iiA + iiB;
       if (wsum <= 0) continue;
       const rel = wrapAngle(this.a[b]! - (a >= 0 ? this.a[a]! : 0));
@@ -573,8 +609,13 @@ export class XpbdRig {
       }
       const dl = -C / wsum;
       lm.lambda = dl;
-      this.a[b] = this.a[b]! + iiB * dl;
-      if (a >= 0) this.a[a] = this.a[a]! - iiA * dl;
+      if (piv) {
+        this.turnAboutFrame(b, iiB * dl);
+        if (a >= 0) this.turnAboutFrame(a, -iiA * dl);
+      } else {
+        this.a[b] = this.a[b]! + iiB * dl;
+        if (a >= 0) this.a[a] = this.a[a]! - iiA * dl;
+      }
     }
   }
 
@@ -610,7 +651,17 @@ export class XpbdRig {
       mixF(j.broken ? 1 : 0);
       mixF(j.health);
     }
-    for (const d of this.drives) mixF(d.target);
+    for (const d of this.drives) {
+      mixF(d.target);
+      mixF(d.hz);
+      mixF(d.off === true ? 1 : 0);
+    }
+    for (const l of this.limits) {
+      mixF(l.min);
+      mixF(l.max);
+      mixF(l.off === true ? 1 : 0);
+    }
+    for (let i = 0; i < this.n; i++) mixF(this.kinematic[i]!);
     return hh >>> 0;
   }
 }

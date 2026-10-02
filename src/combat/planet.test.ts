@@ -61,10 +61,10 @@ describe('Planet', () => {
     expect(fa.world.ledger().error).toBeLessThan(0.05);
   }, 60_000);
 
-  it('Moon Slam spends a moon, hits for real, and the moon comes home damaged', () => {
+  it('Moon Slam (Strike) spends a moon, hits for real, and the moon comes home damaged', () => {
     const { m, fa, fb, pl } = duel('planet', 'asteroid', 300);
     const ini = fb.view.bodyStats.mass;
-    m.setSources(createScriptSource(parseScript('1:sig*45'), m.tick + 1), null);
+    m.setSources(createScriptSource(parseScript('1:strike*30'), m.tick + 1), null);
     let spent = false;
     for (let t = 0; t < 300; t++) {
       m.step();
@@ -103,6 +103,8 @@ describe('Planet', () => {
     expect(mo.mode).toBe(4);
     expect(knocked || lost).toBe(true);
     expect(fb.world.getBody(mo.body.id)).toBeUndefined();
+    // the other moon may have been jolted out of orbit by the same blows: given time, it comes home and its pip stays lit
+    for (let t = 0; t < 240 && fb.view.parts !== 1; t++) m.step();
     expect(fb.view.parts).toBe(1);
     expect(fb.world.ledger().error).toBeLessThan(0.05);
   }, 60_000);
@@ -261,7 +263,7 @@ describe('Planet spin and orientation', () => {
     a.held = 0;
     let lagged = false;
     let moonLag = 0;
-    for (let t = 0; t < 90; t++) {
+    for (let t = 0; t < 150; t++) {
       step();
       if (Math.abs(pl.cloudSpin) < Math.abs(pl.spin) - 0.05) lagged = true;
       for (const mo of pl.moonBodies) moonLag = Math.min(moonLag, mo.lag);
@@ -277,6 +279,7 @@ describe('Planet spin and orientation', () => {
       [Btn.SURGE, 'surge'],
       [Btn.SIGNATURE, 'signature'],
       [Btn.GUARD, 'guard'],
+      [Btn.GRAVITY, 'gravity'],
     ] as const) {
       const ctl = handDuel();
       ctl.step(8);
@@ -292,11 +295,12 @@ describe('Planet spin and orientation', () => {
     }
   }, 120_000);
 
-  it('Rotational Brace turns the more intact face toward the foe under a cloud cover, and the next blow lands on it', () => {
+  it('Rotational Brace turns the world: its fresh far face comes round under a cloud cover, and the next blow lands on it', () => {
     const { m, fa, pl, a, step } = handDuel(300);
     m.setSources(a, null);
     step(5);
-    // batter the face toward the foe (the foe is to the right: blows come from the right, heading left)
+    expect(pl.twoFaced).toBe(true);
+    // batter the face toward the viewer and the foe (blows from the right, heading left)
     const hitNear = (): void => {
       fa.world.applyDamage(fa.body.id, crushAt(fa.px + 50, fa.py, -1));
       step(30);
@@ -307,20 +311,21 @@ describe('Planet spin and orientation', () => {
     const before = { near: 1, far: 1 };
     pl.faceIntegrity(before);
     expect(before.near).toBeLessThan(before.far - 0.04);
-    expect(fa.body.transform.facing).toBe(fa.facing);
+    const mass0 = fa.world.stats(fa.body.id).massFrac;
     a.held = Btn.GUARD;
     step();
     expect(pl.turning).toBe(true);
     let streak = 0;
-    for (let t = 0; t < 20; t++) {
+    for (let t = 0; t < 45; t++) {
       step();
       streak = Math.max(streak, Math.abs(pl.cloudSpin));
     }
     expect(pl.turning).toBe(false);
     expect(pl.bracedFace).toBe(true);
     expect(streak).toBeGreaterThan(5); // the half-turn streaks the cloud deck
-    // the body is now drawn and hit mirrored against the fighter's facing: the intact face is toward the foe
-    expect(fa.body.transform.facing).toBe(-fa.facing as 1 | -1);
+    // no mirror: the body is drawn and hit as it always is; the matter itself changed faces, and the world's mass did not
+    expect(fa.body.transform.facing).toBe(fa.facing);
+    expect(fa.world.stats(fa.body.id).massFrac).toBeCloseTo(mass0, 2);
     const after = { near: 1, far: 1 };
     pl.faceIntegrity(after);
     expect(after.near).toBeCloseTo(before.far, 2);
@@ -330,19 +335,17 @@ describe('Planet spin and orientation', () => {
     const hit = { near: 1, far: 1 };
     pl.faceIntegrity(hit);
     expect(hit.near).toBeLessThan(after.near - 0.01);
-    expect(after.far - hit.far).toBeLessThan((after.near - hit.near) * 0.5);
+    expect(hit.far).toBeCloseTo(after.far, 3);
+    expect(fa.world.ledger().error).toBeLessThan(0.05);
   }, 90_000);
 
-  it('does not turn when the face toward the foe is already the better one', () => {
+  it('does not turn when the face toward the foe is as good as the far one', () => {
     const { fa, pl, a, step } = handDuel(300);
     step(5);
-    for (let k = 0; k < 3; k++) {
-      fa.world.applyDamage(fa.body.id, crushAt(fa.px - 50, fa.py, 1));
-      step(30);
-    }
     a.held = Btn.GUARD;
-    step(25);
+    step(45);
     expect(pl.bracedFace).toBe(false);
+    expect(pl.turning).toBe(false);
     expect(fa.body.transform.facing).toBe(fa.facing);
   }, 60_000);
 
@@ -365,4 +368,386 @@ describe('Planet spin and orientation', () => {
       expect(Number.isFinite(e.y)).toBe(true);
     }
   }, 60_000);
+});
+
+/** Rms (px) of the part of a signal above `hz` (DFT of the detrended, Hann-windowed series sampled at 60 Hz). */
+function rmsAbove(sig: number[], hz: number): number {
+  const n = sig.length;
+  const a0 = sig[0]!;
+  const b = (sig[n - 1]! - a0) / (n - 1);
+  const d = sig.map((v, i) => (v - a0 - b * i) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1))));
+  let hi = 0;
+  for (let k = 1; k < n / 2; k++) {
+    if ((k * 60) / n <= hz) continue;
+    let re = 0;
+    let im = 0;
+    for (let i = 0; i < n; i++) {
+      re += d[i]! * Math.cos((2 * Math.PI * k * i) / n);
+      im -= d[i]! * Math.sin((2 * Math.PI * k * i) / n);
+    }
+    hi += re * re + im * im;
+  }
+  return Math.sqrt((2 * hi) / (n * n)) * 1.63;
+}
+
+describe('Planet scale of motion (D28)', () => {
+  it('moons swing into the Guard shield and back like orbiting bodies, not springs: no motion above 2.5 Hz', () => {
+    const { fa, pl, a, step } = handDuel();
+    step(10);
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let t = 0; t < 180; t++) {
+      a.held = t < 90 ? Btn.GUARD : 0;
+      step();
+      const mo = pl.moonBodies[1]!;
+      xs.push(mo.x - fa.px);
+      ys.push(mo.y - fa.py);
+    }
+    expect(rmsAbove(xs, 2.5)).toBeLessThan(0.3);
+    expect(rmsAbove(ys, 2.5)).toBeLessThan(0.3);
+  }, 60_000);
+
+  it('the sky does not twinkle: under 5% of its lit pixels flicker (on, off, on again) from tick to tick', () => {
+    // moving motes and curtains change pixels as they travel; a flicker is a pixel that blinks back within two ticks
+    const { fa, step } = handDuel();
+    step(10);
+    const frames: Set<number>[] = [];
+    let lit = 0;
+    for (let t = 0; t < 60; t++) {
+      step();
+      const fx = fa.renderLayers({ x0: 0, y0: 0, w: 640, h: 360 }, 0).find((l) => l.id === 'planet-fx')!;
+      const cur = new Set<number>();
+      const ox = fx.x - fx.anchorX;
+      const oy = fx.y - fx.anchorY;
+      if (fx.visible)
+        for (let i = 0; i < fx.pixels.length; i++)
+          if (fx.pixels[i]! >>> 24 !== 0) cur.add((oy + Math.floor(i / fx.w)) * 4096 + ox + (i % fx.w));
+      frames.push(cur);
+      lit += cur.size;
+    }
+    let flicker = 0;
+    for (let t = 2; t < frames.length; t++)
+      for (const p of frames[t]!) if (frames[t - 2]!.has(p) && !frames[t - 1]!.has(p)) flicker++;
+    expect(lit).toBeGreaterThan(0);
+    expect(flicker / lit).toBeLessThan(0.05);
+  }, 60_000);
+
+  it('publishes its planet-scale parts as tracked points in a stable order (moons, cloud, aurora, ring, comet)', () => {
+    const { fa, step } = handDuel();
+    step(3);
+    const out: number[] = [];
+    expect(fa.trackPoints(out)).toBe(7);
+    expect(out).toHaveLength(14);
+    expect(out.every(Number.isFinite)).toBe(true);
+  }, 60_000);
+});
+
+describe('Planet kit', () => {
+  it('Moon Slam is delayed and curved: the moon whips round its orbit first, and the stick bends its path over or under', () => {
+    const flight = (aim: number): { whip: number; meanY: number } => {
+      const { fa, fb, pl, a, step } = handDuel(360);
+      step(5);
+      a.held = Btn.STRIKE;
+      a.moveY = aim;
+      step(14);
+      a.held = 0;
+      step();
+      const mo = pl.moonBodies.find((m) => m.mode === 1)!;
+      // the whip: it stays on its orbit (racing round it) until its path points at the foe
+      let whip = 0;
+      while (mo.windup > 0 && whip < 90) {
+        step();
+        whip++;
+        expect(Math.hypot(mo.x - fa.px, mo.y - fa.py)).toBeLessThan(140);
+      }
+      // then the flight: where it runs relative to the straight line to the foe, over its first 20 ticks
+      const y0 = mo.y;
+      let sum = 0;
+      for (let t = 0; t < 20 && mo.mode === 1; t++) {
+        step();
+        const u = (mo.x - fa.px) / Math.max(1, fb.px - fa.px);
+        sum += mo.y - (y0 + (fb.py - y0) * u);
+      }
+      return { whip, meanY: sum / 20 };
+    };
+    const up = flight(-1);
+    const down = flight(1);
+    expect(up.whip).toBeGreaterThanOrEqual(13);
+    expect(down.whip).toBeGreaterThanOrEqual(13);
+    expect(up.meanY).toBeLessThan(down.meanY - 10);
+  }, 90_000);
+
+  it('a broken moon shatters on impact and its fragments carry on at the foe', () => {
+    const { m, fa, pl, a, step } = handDuel(300);
+    step(5);
+    // crack both moons down to about half their mass (whichever is slung is broken)
+    for (const mo of pl.moonBodies) {
+      const i = pl.moonBodies.indexOf(mo);
+      fa.world.carve(mo.body.id, 0.45, 11 + i);
+      expect(pl.moonFrac(i)).toBeGreaterThan(0.28);
+      expect(pl.moonFrac(i)).toBeLessThan(0.55);
+    }
+    const chunks0 = fa.world.ledger().chunkMass;
+    a.held = Btn.STRIKE;
+    step(13);
+    a.held = 0;
+    let shattered = false;
+    for (let t = 0; t < 200 && !shattered; t++) {
+      step();
+      for (const e of m.events) if (e.t === 'cue' && e.id === 'moon-shatter') shattered = true;
+    }
+    expect(shattered).toBe(true);
+    expect(pl.moonBodies.filter((mo) => mo.mode === 4)).toHaveLength(1);
+    expect(fa.world.ledger().chunkMass).toBeGreaterThan(chunks0);
+    expect(fa.world.ledger().error).toBeLessThan(0.05);
+  }, 90_000);
+
+  it('Orbital Drift bends the dash into an arc around the foe and builds spin', () => {
+    const { fa, pl, a, step } = handDuel(380);
+    step(5);
+    const y0 = fa.py;
+    const s0 = Math.abs(pl.spin);
+    a.moveX = 1;
+    a.held = Btn.SURGE;
+    step();
+    a.held = 0;
+    let dy = 0;
+    let spin = 0;
+    for (let t = 0; t < 30; t++) {
+      step();
+      dy = Math.max(dy, Math.abs(fa.py - y0));
+      spin = Math.max(spin, Math.abs(pl.spin));
+    }
+    expect(dy).toBeGreaterThan(6);
+    expect(spin).toBeGreaterThan(s0 + 0.5);
+  }, 60_000);
+
+  it('Comet Shepherd calls a comet in, bends it into the ring, spins it up while held, and Slingshot throws it at the foe', () => {
+    const { fa, fb, pl, a, step } = handDuel(260);
+    step(5);
+    const ini = fb.view.bodyStats.mass;
+    a.held = Btn.SIGNATURE;
+    // on the flattened ring the speed swings with the phase: compare the top speed just after capture with the top speed late
+    let captured = -1;
+    let early = 0;
+    let late = 0;
+    for (let t = 0; t < 150; t++) {
+      step();
+      if (captured < 0 && pl.cometMode === 2) captured = t;
+      if (pl.cometMode !== 2) continue;
+      if (t < captured + 25) early = Math.max(early, pl.cometPos.speed);
+      if (t >= 110) late = Math.max(late, pl.cometPos.speed);
+    }
+    expect(captured).toBeGreaterThan(5);
+    expect(captured).toBeLessThan(85);
+    expect(late).toBeGreaterThan(early * 1.5);
+    a.held = 0;
+    let flew = false;
+    for (let t = 0; t < 200; t++) {
+      step();
+      if (pl.cometMode === 3) flew = true;
+    }
+    expect(flew).toBe(true);
+    expect(fb.view.bodyStats.mass).toBeLessThan(ini);
+    expect(fa.world.ledger().error).toBeLessThan(0.05);
+  }, 90_000);
+
+  it('Comet Shepherd takes a free arena comet within reach instead of calling one in', () => {
+    const { m, fa, pl, a, step } = handDuel(300);
+    step(5);
+    const px = new Uint32Array(12 * 12).fill(0xffe0d0c0);
+    const id = fa.world.spawnChunk({
+      pixels: px,
+      w: 12,
+      h: 12,
+      x: fa.px - 200,
+      y: fa.py - 120,
+      vx: 80,
+      vy: 0,
+      spin: 0.2,
+      mass: 12,
+    }) as unknown as number;
+    (m as unknown as { ctx: { comets: unknown[] } }).ctx.comets = [
+      { id, x: fa.px - 200, y: fa.py - 120, vx: 80, vy: 0, mass: 12, mode: 0, owner: -1 },
+    ];
+    a.held = Btn.SIGNATURE;
+    step(2);
+    expect(pl.cometMode).toBe(1);
+    expect(Math.hypot(pl.cometPos.x - (fa.px - 200), pl.cometPos.y - (fa.py - 120))).toBeLessThan(10);
+  }, 60_000);
+
+  it('Tidal Draw (R1) captures nearby debris into the ring; a moonless Moon Slam throws it, and ring chunks soak blows', () => {
+    const { m, fa, fb, pl, a, step } = handDuel(300);
+    step(5);
+    const px = new Uint32Array(14 * 14).fill(0xff406080);
+    for (let k = 0; k < 4; k++)
+      fa.world.spawnChunk({
+        pixels: px,
+        w: 14,
+        h: 14,
+        x: fa.px - 120,
+        y: fa.py - 45 + 30 * k,
+        vx: 0,
+        vy: 0,
+        spin: 0,
+        mass: 14,
+      });
+    a.held = Btn.GRAVITY;
+    step(90);
+    expect(pl.drawLevel).toBeCloseTo(1, 2);
+    expect(pl.ringCount).toBeGreaterThanOrEqual(3);
+    a.held = 0;
+    step(60);
+    expect(pl.drawLevel).toBeLessThan(0.1);
+    expect(pl.ringCount).toBeGreaterThanOrEqual(3); // the ring keeps what it caught
+    // ammunition: with no moon in orbit, Strike throws the heaviest ring chunk
+    for (const mo of pl.moonBodies) mo.mode = 3;
+    const ring0 = pl.ringCount;
+    a.held = Btn.STRIKE;
+    step(13);
+    a.held = 0;
+    let thrown = false;
+    for (let t = 0; t < 10 && !thrown; t++) {
+      step();
+      for (const e of m.events) if (e.t === 'cue' && e.id === 'ring-throw') thrown = true;
+    }
+    expect(thrown).toBe(true);
+    expect(pl.ringCount).toBe(ring0 - 1);
+    // armour: a blow aimed through the ring is partly soaked and knocks ring chunks loose
+    const ids = new Int32Array(16);
+    const w = fa.world as unknown as {
+      chunksInShape(s: DamageEvent['shape'], o: Int32Array): number;
+      chunkState(id: number, o: { x: number; y: number; mode: number }): boolean;
+    };
+    const st = {
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      spin: 0,
+      mass: 0,
+      radius: 0,
+      mode: 0,
+      owner: 0,
+      origin: 0,
+      temp: 0,
+    };
+    const n = w.chunksInShape({ kind: 'field', x: fa.px, y: fa.py, r: 200, falloff: 1 }, ids);
+    let target = -1;
+    for (let k = 0; k < n && target < 0; k++)
+      if (w.chunkState(ids[k]!, st) && st.mode === 1) target = ids[k]!;
+    expect(target).toBeGreaterThanOrEqual(0);
+    w.chunkState(target, st);
+    const before = pl.ringCount;
+    const ev = crushAt(st.x, st.y, 1, 400);
+    ev.shape = { kind: 'point', x: st.x, y: st.y, r: 16 };
+    const events: SimEvent[] = [];
+    const res = fa.receive(ev, fb, events);
+    expect(res.blocked).toBeGreaterThan(0);
+    expect(pl.ringCount).toBeLessThan(before);
+    expect(fa.world.ledger().error).toBeLessThan(0.05);
+  }, 90_000);
+});
+
+describe('Planet damage phases and failure', () => {
+  it('advances through the four geological phases as it is wounded, never back; the wounded world hits harder and braces worse', () => {
+    const { fa, pl, step } = handDuel();
+    step(7);
+    expect(pl.damagePhase).toBe(1);
+    const g1 = pl.guardMultiplier();
+    const seen: number[] = [1];
+    for (const frac of [0.8, 0.58, 0.38]) {
+      fa.world.carve(fa.body.id, frac, 3);
+      step(13);
+      seen.push(pl.damagePhase);
+    }
+    for (let k = 1; k < seen.length; k++) expect(seen[k]).toBeGreaterThanOrEqual(seen[k - 1]!);
+    expect(seen[1]).toBeGreaterThanOrEqual(2);
+    expect(seen[2]).toBeGreaterThanOrEqual(3);
+    expect(seen[3]).toBe(4);
+    const s = { speedMul: 1, damageMul: 1, mass: 5, reachMul: 1, tempoMul: 1 };
+    pl.adjustStats(s, 0.4);
+    expect(s.damageMul).toBeGreaterThan(1.2);
+    expect(pl.guardMultiplier()).toBeLessThan(g1 * 0.7);
+    // core crisis shakes the outer moon loose
+    expect(pl.moonsAlive).toBeLessThan(2);
+  }, 120_000);
+
+  it('holding Crush turns Tidal Rush into the phase move: Crust Breaker, then Magma Vent, then Core Pulse (full meter)', () => {
+    const held = (frac: number, meter: number): string | null => {
+      const { fa, a, step } = handDuel(300);
+      step(5);
+      if (frac < 1) {
+        fa.world.carve(fa.body.id, frac, 3);
+        step(13);
+      }
+      fa.meter = meter;
+      a.held = Btn.CRUSH;
+      step(14);
+      return fa.view.moveId;
+    };
+    expect(held(1, 0)).toBe('planet.crustbreaker');
+    expect(held(0.58, 0)).toBe('planet.magmavent');
+    expect(held(0.38, 1)).toBe('planet.corepulse');
+    expect(held(0.38, 0)).toBe('planet.magmavent');
+    // a tap stays Tidal Rush
+    const { fa, a, step } = handDuel(300);
+    step(5);
+    a.held = Btn.CRUSH;
+    step(3);
+    a.held = 0;
+    step(12);
+    expect(fa.view.moveId).toBe('planet.impact');
+  }, 120_000);
+
+  it('Crust Breaker sends a tectonic ring out that reaches the foe', () => {
+    const { fb, a, step } = handDuel(240);
+    step(5);
+    const ini = fb.view.bodyStats.mass;
+    a.held = Btn.CRUSH;
+    step(70);
+    a.held = 0;
+    step(60);
+    expect(fb.view.bodyStats.mass).toBeLessThan(ini * 0.99);
+  }, 90_000);
+
+  it('fails over ~3 s at KO: the air vents, the moons drift off, the crust slabs, the core goes out last', () => {
+    const { m, fa, pl } = handDuel();
+    const cues: string[] = [];
+    const step = (n = 1): void => {
+      for (let i = 0; i < n; i++) {
+        m.step();
+        for (const e of m.events) if (e.t === 'cue' && e.slot === fa.slot && fa.view.ko) cues.push(e.id);
+      }
+    };
+    step(5);
+    fa.world.carve(fa.body.id, 0.3, 4);
+    step(7);
+    const atmo0 = pl.atmosphere;
+    // the finishing wound
+    let guard = 0;
+    while (!fa.view.ko && guard++ < 20) {
+      fa.world.applyDamage(fa.body.id, crushAt(fa.px + 30, fa.py, -1, 1500));
+      step(3);
+    }
+    expect(fa.view.ko).toBe(true);
+    let lightAt100 = 0;
+    let moonsFree = false;
+    for (let t = 0; t < 230; t++) {
+      step();
+      if (pl.failure === 100) lightAt100 = pl.coreLight;
+      if (pl.failure > 30) moonsFree = pl.moonBodies.every((mo) => mo.mode === 3 || mo.mode === 4);
+    }
+    expect(cues).toContain('atmo-vent');
+    expect(cues).toContain('moons-drift');
+    expect(cues).toContain('crust-slab');
+    expect(cues).toContain('core-out');
+    expect(cues.indexOf('core-out')).toBeGreaterThan(cues.indexOf('crust-slab'));
+    expect(pl.atmosphere).toBeLessThanOrEqual(atmo0);
+    expect(moonsFree).toBe(true);
+    expect(lightAt100).toBe(1);
+    expect(pl.coreLight).toBe(0);
+    expect(fa.world.ledger().error).toBeLessThan(0.05);
+  }, 120_000);
 });

@@ -18,6 +18,8 @@ export interface Lab {
   f1: FighterImpl;
   events: SimEvent[];
   step(n?: number): void;
+  /** Optional view of the same lab with the two fighters' roles swapped (a tool that needs the foe to strike). */
+  swap?: Lab;
 }
 
 export interface LabOptions {

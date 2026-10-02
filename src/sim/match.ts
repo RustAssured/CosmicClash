@@ -47,8 +47,11 @@ const KO_SLOWMO_TICKS = 50;
 const TIMEOVER_PHASE_TICKS = 48;
 const DEFAULT_START_GAP = 380;
 const INFINITE_RESET_DELAY = 90;
-/** Fraction of missing matter that regrows (as scars) between rounds. */
-const ROUND_HEAL_FRACTION = 0.6;
+/**
+ * Fraction of missing matter that regrows (as scars) between rounds. 0.6 → 0.85 (D29): at 0.6 the loser of round 1 started
+ * round 2 too fragile for the slower orbit pacing (rounds 2–3 lasted ~15 s on 2 contacts); scars still show.
+ */
+const ROUND_HEAL_FRACTION = 0.85;
 
 const q = (v: number, s: number): number => Math.round(v * s) | 0;
 

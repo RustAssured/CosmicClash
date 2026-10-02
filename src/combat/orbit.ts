@@ -15,8 +15,8 @@ export const ORBIT = {
   /** Thrust gains along the tangent (around the foe) and the radius (toward / away). */
   tangential: 1,
   radial: 0.55,
-  /** Thrust acceleration as a multiple of the titan's top speed per second (≈ 70 % of top speed in 0.2 s). */
-  thrustPerTop: 3.6,
+  /** Thrust acceleration as a multiple of the titan's top speed per second (≈ 70 % of top speed in 0.3 s: D28 scale). */
+  thrustPerTop: 2.5,
   /** Above top speed, the velocity component ALONG the thrust relaxes back to top speed with this time constant (s). */
   capTau: 0.2,
   /** Drag time constant (s) while thrusting (space is nearly frictionless; this is the long glide). */

@@ -27,9 +27,9 @@ Control mapping recap: Y **Strike** · X **Crush** · B **Surge** · A **Signatu
 
 | key | physics archetype | overrides | emissive | ramp (dark → light) |
 |---|---|---|---|---|
-| shell | celadon | — | 0 | `#16242c` `#254541` `#37665a` `#548672` `#7ca88f` `#a8bdb2` `#c9dfc8` `#edf5d8` |
-| seam | celadon | bond=46, toughness=0.15 | 0 | `#0e1a24` `#1a3340` `#2b5057` `#436e69` `#5f8c83` `#86a99b` |
-| inner | crystal | — | 10 | `#25404f` `#3d6470` `#5f8c94` `#8fb8b8` `#bcd9d0` `#e0efe2` `#f6fbea` |
+| shell | celadon | resist={"FRACTURE":1.1,"KINETIC":1,"CRUSH":1,"THERMAL":1.6,"ASSIMILATION":0.2,"TIDAL":0.8} | 0 | `#16242c` `#254541` `#37665a` `#548672` `#7ca88f` `#a8bdb2` `#c9dfc8` `#edf5d8` |
+| seam | celadon | bond=46, toughness=0.15, resist={"FRACTURE":1.1,"KINETIC":1,"CRUSH":1,"THERMAL":1.6,"ASSIMILATION":0.2,"TIDAL":0.8} | 0 | `#0e1a24` `#1a3340` `#2b5057` `#436e69` `#5f8c83` `#86a99b` |
+| inner | crystal | resist={"FRACTURE":1.1,"KINETIC":1,"CRUSH":1,"THERMAL":1.6,"ASSIMILATION":0.2,"TIDAL":0.8} | 10 | `#25404f` `#3d6470` `#5f8c94` `#8fb8b8` `#bcd9d0` `#e0efe2` `#f6fbea` |
 | core | core | — | 200 | `#7a2f3d` `#c2523c` `#f08a3a` `#ffc65a` `#ffe9a3` `#fffbe6` |
 | eye | eye | — | 26 | `#2c4448` `#4d6d6c` `#7d9f96` `#a9c5b6` `#d2e3cf` `#f2f6e2` |
 | iris | eye | — | 90 | `#0b1f2a` `#12404a` `#1b6666` `#2f9a86` `#66c9a2` `#b7ecc0` `#f1ffd8` |
@@ -42,7 +42,7 @@ Control mapping recap: Y **Strike** · X **Crush** · B **Surge** · A **Signatu
 |---|---|---|---|---|---|---|
 | Tendril Lash | strike | 10 | 16 | 12 | 38 | 0.63 s |
 | Charging Thrust | strike | 6 | 12 | 14 | 32 | 0.53 s |
-| Shatter Blow | crush | 30 | 8 | 46 | 84 | 1.40 s |
+| Shatter Blow | crush | 30 | 8 | 44 | 82 | 1.37 s |
 | Sidestep | surge | 2 | 14 | 6 | 22 | 0.37 s |
 | Gaze | signature | 12 | 20 | 30 | 62 | 1.03 s |
 | The Last Light | ultimate | 96 | 84 | 60 | 240 | 4.00 s |
@@ -83,7 +83,7 @@ Data-driven extras: `{"followUpOnly":true,"pose":{"startup":{"lean":-3},"active"
 
 #### Shatter Blow · 분쇄의 일격  `lastone.shatter`  — crush
 
-Startup **30** · active **8** · recovery **46** = **84 ticks** (1.40 s); cancel window 0.4; hit-stop base 12. Tags: `crack` `heavy`.
+Startup **30** · active **8** · recovery **44** = **82 ticks** (1.37 s); cancel window 0.4; hit-stop base 12. Tags: `crack` `heavy`.
 
 Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
 
@@ -93,7 +93,7 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1100.
 
-Data-driven extras: `{"pose":{"startup":{"lean":-8},"active":{"lean":11},"recovery":{"lean":3}},"eyeFlare":true}`
+Data-driven extras: `{"pose":{"startup":{"lean":-6},"active":{"lean":8},"recovery":{"lean":3}},"spinKeys":[{"at":0,"w":-0.6},{"at":22,"w":1.3},{"at":42,"w":-0.8}],"eyeFlare":true}`
 
 #### Sidestep · 옆걸음  `lastone.sidestep`  — surge
 
@@ -158,12 +158,12 @@ Validation against the feel targets: all clear.
 
 | key | physics archetype | overrides | emissive | ramp (dark → light) |
 |---|---|---|---|---|
-| regolith | regolith | — | 0 | `#17131d` `#2b222b` `#443837` `#655247` `#8a7459` `#ad9878` `#cdbb98` `#e8dcbc` |
-| kamacite | ironNickel | — | 0 | `#121826` `#202a3e` `#33405a` `#4c5c78` `#6b7f9b` `#90a4bb` `#bccad8` `#e4ecf1` |
-| taenite | ironNickel | toughness=0.85 | 0 | `#1c1720` `#332a33` `#54444a` `#7a665f` `#a38d79` `#c9b399` `#e8d9bd` |
-| ice | ice | — | 54 | `#0f3358` `#1a628a` `#2c98bd` `#5ccbdc` `#a2ecef` `#defafb` |
-| olivine | crystal | — | 34 | `#2a3610` `#4b6712` `#809d1f` `#bccb38` `#eedf62` `#fff5a6` |
-| dense | ironNickel | density=3.2, toughness=0.9 | 36 | `#2a1416` `#552620` `#8a432b` `#bf7239` `#e8ad5a` `#fbe0a0` |
+| regolith | regolith | resist={"TIDAL":0.5} | 0 | `#17131d` `#2b222b` `#443837` `#655247` `#8a7459` `#ad9878` `#cdbb98` `#e8dcbc` |
+| kamacite | ironNickel | resist={"TIDAL":0.5} | 0 | `#121826` `#202a3e` `#33405a` `#4c5c78` `#6b7f9b` `#90a4bb` `#bccad8` `#e4ecf1` |
+| taenite | ironNickel | toughness=0.85, resist={"TIDAL":0.5} | 0 | `#1c1720` `#332a33` `#54444a` `#7a665f` `#a38d79` `#c9b399` `#e8d9bd` |
+| ice | ice | resist={"TIDAL":0.5} | 54 | `#0f3358` `#1a628a` `#2c98bd` `#5ccbdc` `#a2ecef` `#defafb` |
+| olivine | crystal | resist={"TIDAL":0.5} | 34 | `#2a3610` `#4b6712` `#809d1f` `#bccb38` `#eedf62` `#fff5a6` |
+| dense | ironNickel | density=3.2, toughness=0.9, resist={"TIDAL":0.5} | 36 | `#2a1416` `#552620` `#8a432b` `#bf7239` `#e8ad5a` `#fbe0a0` |
 
 ### Moves
 
@@ -268,13 +268,13 @@ Validation against the feel targets: all clear.
 
 | key | physics archetype | overrides | emissive | ramp (dark → light) |
 |---|---|---|---|---|
-| crystal | crystal | — | 46 | `#0f0a2a` `#241556` `#4a2792` `#8a39bd` `#c760d6` `#8fc4ff` `#d4ecff` `#ffffff` |
-| hubcore | core | — | 230 | `#8a1050` `#e0307a` `#ff7aa8` `#ffc4d8` `#fff2f6` |
-| chain | chain | — | 0 | `#140609` `#2a0d13` `#48141e` `#6a1c26` `#8f262f` `#b83a38` `#dc5f4a` `#ffb59a` |
-| node | node | resist={"FRACTURE":0.9,"KINETIC":0.9,"CRUSH":0.75} | 84 | `#1e0410` `#4a0818` `#7c0c28` `#b0143a` `#dc1e48` `#f8506a` `#ffb0b8` |
-| nodecore | node | resist={"FRACTURE":0.9,"KINETIC":0.9,"CRUSH":0.75} | 230 | `#7a0c30` `#d4204a` `#ff5a78` `#ffb0bc` `#fff0f2` |
-| lattice | lattice | — | 36 | `#2a0612` `#5c0e28` `#8e1a3c` `#c2304e` `#ee6078` `#ffb0bc` |
-| deadnode | node | resist={"FRACTURE":0.9,"KINETIC":0.9,"CRUSH":0.75} | 0 | `#141012` `#241e20` `#382f32` `#50464a` `#6c6266` `#8a8084` |
+| crystal | crystal | resist={"FRACTURE":1.05,"KINETIC":0.825,"CRUSH":0.675,"THERMAL":0.6,"ASSIMILATION":0.5,"TIDAL":0.15}, assimilable=0.1 | 46 | `#0f0a2a` `#241556` `#4a2792` `#8a39bd` `#c760d6` `#8fc4ff` `#d4ecff` `#ffffff` |
+| hubcore | core | resist={"FRACTURE":1.05,"KINETIC":0.825,"CRUSH":0.675,"THERMAL":0.6,"ASSIMILATION":0.5,"TIDAL":0.15}, assimilable=0.1 | 230 | `#8a1050` `#e0307a` `#ff7aa8` `#ffc4d8` `#fff2f6` |
+| chain | chain | resist={"FRACTURE":1.05,"KINETIC":0.825,"CRUSH":0.675,"THERMAL":0.6,"ASSIMILATION":0.5,"TIDAL":0.15}, assimilable=0.1, bond=420, toughness=1.6 | 0 | `#140609` `#2a0d13` `#48141e` `#6a1c26` `#8f262f` `#b83a38` `#dc5f4a` `#ffb59a` |
+| node | node | resist={"FRACTURE":1.125,"KINETIC":0.9,"CRUSH":0.675,"THERMAL":0.6,"ASSIMILATION":0.5,"TIDAL":0.15}, assimilable=0.1 | 84 | `#1e0410` `#4a0818` `#7c0c28` `#b0143a` `#dc1e48` `#f8506a` `#ffb0b8` |
+| nodecore | node | resist={"FRACTURE":1.125,"KINETIC":0.9,"CRUSH":0.675,"THERMAL":0.6,"ASSIMILATION":0.5,"TIDAL":0.15}, assimilable=0.1 | 230 | `#7a0c30` `#d4204a` `#ff5a78` `#ffb0bc` `#fff0f2` |
+| lattice | lattice | resist={"THERMAL":0.6,"ASSIMILATION":0.5,"TIDAL":0.15}, assimilable=0.1 | 36 | `#2a0612` `#5c0e28` `#8e1a3c` `#c2304e` `#ee6078` `#ffb0bc` |
+| deadnode | node | resist={"FRACTURE":1.125,"KINETIC":0.9,"CRUSH":0.675,"THERMAL":0.6,"ASSIMILATION":0.5,"TIDAL":0.15}, assimilable=0.1 | 0 | `#141012` `#241e20` `#382f32` `#50464a` `#6c6266` `#8a8084` |
 
 ### Moves
 
@@ -310,10 +310,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| grip | 0–10 | point | CRUSH | 850 | — | compress=7, crater=12 | -260,0 | 0.8 |
+| grip | 0–10 | point | CRUSH | 640 | — | compress=7, crater=12 | -260,0 | 0.8 |
 | bind | 0–10 | point | ASSIMILATION | 220 | LATCH | latch=140 | -40,0 | 0.2 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1070.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 860.
 
 Data-driven extras: `{"root":{"mul":0.5,"ticks":90,"chains":3,"snap":450},"recoil":0.05,"pose":{"startup":{"lean":-7},"active":{"lean":8},"recovery":{"lean":2}}}`
 
@@ -331,7 +331,7 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| harvest | 0–30 | field | ASSIMILATION | 38 /4t | CONTINUOUS | latch=70, harvest=0.9 | -22,0 | 0.05 |
+| harvest | 0–30 | field | ASSIMILATION | 38 /4t | CONTINUOUS | latch=45, harvest=0.6 | -22,0 | 0.05 |
 
 Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1140.
 
@@ -380,10 +380,10 @@ Validation against the feel targets: all clear.
 | key | physics archetype | overrides | emissive | ramp (dark → light) |
 |---|---|---|---|---|
 | horizon | horizon | density=0.15 | 0 | `#000000` `#010103` `#02020a` |
-| photon | diskGas | toughness=0.3, resist={"FRACTURE":1.6,"KINETIC":1.6,"CRUSH":1.6,"THERMAL":1.6,"TIDAL":0.6}, density=0.45 | 255 | `#7a3a10` `#ffb050` `#ffe6b0` `#ffffff` |
-| diskhot | diskGas | resist={"FRACTURE":1.6,"KINETIC":1.6,"CRUSH":1.6,"THERMAL":1.6,"TIDAL":0.6}, density=0.45 | 150 | `#5a1a08` `#b8420f` `#ff8a2a` `#ffc46a` `#fff0c0` |
-| diskmid | diskGas | resist={"FRACTURE":1.6,"KINETIC":1.6,"CRUSH":1.6,"THERMAL":1.6,"TIDAL":0.6}, density=0.45 | 90 | `#3a0f0a` `#7a2410` `#c4501a` `#f08838` `#ffc078` |
-| diskdim | diskGas | resist={"FRACTURE":1.6,"KINETIC":1.6,"CRUSH":1.6,"THERMAL":1.6,"TIDAL":0.6}, density=0.45 | 40 | `#1a0608` `#3a0c10` `#6a1616` `#9a2a1e` `#c8482a` |
+| photon | diskGas | toughness=0.3, resist={"FRACTURE":0.4,"KINETIC":0.5,"CRUSH":1.6,"THERMAL":0.9,"TIDAL":0.25,"ASSIMILATION":3}, density=0.45, bond=200, assimilable=0.8 | 255 | `#7a3a10` `#ffb050` `#ffe6b0` `#ffffff` |
+| diskhot | diskGas | resist={"FRACTURE":0.4,"KINETIC":0.5,"CRUSH":1.6,"THERMAL":0.9,"TIDAL":0.25,"ASSIMILATION":3}, density=0.45, toughness=0.8, bond=200, assimilable=0.8 | 150 | `#5a1a08` `#b8420f` `#ff8a2a` `#ffc46a` `#fff0c0` |
+| diskmid | diskGas | resist={"FRACTURE":0.4,"KINETIC":0.5,"CRUSH":1.6,"THERMAL":0.9,"TIDAL":0.25,"ASSIMILATION":3}, density=0.45, toughness=0.8, bond=200, assimilable=0.8 | 90 | `#3a0f0a` `#7a2410` `#c4501a` `#f08838` `#ffc078` |
+| diskdim | diskGas | resist={"FRACTURE":0.4,"KINETIC":0.5,"CRUSH":1.6,"THERMAL":0.9,"TIDAL":0.25,"ASSIMILATION":3}, density=0.45, toughness=0.8, bond=200, assimilable=0.8 | 40 | `#1a0608` `#3a0c10` `#6a1616` `#9a2a1e` `#c8482a` |
 | jet | jet | — | 170 | `#0e2a5a` `#2a68c8` `#7ab8ff` `#d8f0ff` `#ffffff` |
 
 ### Moves
@@ -406,10 +406,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| shear | 0–10 | field | TIDAL | 2001 | — | pull=1.2 | -60,0 | 0.15 |
-| shear-rake | 0–10 | point | KINETIC | 183.4 | — | — | -30,0 | 0.15 |
+| shear | 0–10 | field | TIDAL | 2301.2 | — | pull=1.2 | -60,0 | 0.15 |
+| shear-rake | 0–10 | point | KINETIC | 210.9 | — | — | -30,0 | 0.15 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 2184.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 2512.
 
 Data-driven extras: `{"pose":{"startup":{"lean":-3},"active":{"lean":3}},"noCredit":true}`
 
@@ -421,10 +421,10 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| maw | 0–16 | field | TIDAL | 15007.5 | — | pull=1.6 | -140,0 | 0.7 |
-| maw-crush | 6–14 | point | CRUSH | 700.4 | — | — | -60,0 | 0.7 |
+| maw | 0–16 | field | TIDAL | 17258.6 | — | pull=1.6 | -140,0 | 0.7 |
+| maw-crush | 6–14 | point | CRUSH | 805.4 | — | — | -60,0 | 0.7 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 15708.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 18064.
 
 Data-driven extras: `{"pose":{"startup":{"lean":-6},"active":{"lean":4}},"noCredit":true}`
 
@@ -442,9 +442,9 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| well | 0–50 | field | TIDAL | 23.3 /3t | CONTINUOUS | pull=1.1 | -25,0 | 0.05 |
+| well | 0–50 | field | TIDAL | 26.8 /3t | CONTINUOUS | pull=1.1 | -25,0 | 0.05 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1165.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1340.
 
 Data-driven extras: `{"chargePower":1,"chargeReach":[0.9,1.35],"well":{"radius":[110,190],"strength":[900,2200],"consume":26,"pullFoe":260},"ctl":{"active":0.5},"noCredit":true}`
 
@@ -456,9 +456,9 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| tide | 0–120 | field | TIDAL | 56.7 /3t | CONTINUOUS | pull=1.8 | -40,0 | 0.1 |
+| tide | 0–120 | field | TIDAL | 48.9 /3t | CONTINUOUS | pull=1.8 | -40,0 | 0.1 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 6804.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 5868.
 
 Data-driven extras: `{"well":{"radius":[170,270],"strength":[1600,3200],"consume":30,"pullFoe":450},"ctl":{"startup":0.1,"active":0.1,"recovery":0.3},"noCredit":true}`
 
@@ -490,11 +490,11 @@ Validation against the feel targets: all clear.
 
 | key | physics archetype | overrides | emissive | ramp (dark → light) |
 |---|---|---|---|---|
-| core | core | density=1.5, resist={"CRUSH":0.8,"KINETIC":0.8,"FRACTURE":4,"ASSIMILATION":4} | 165 | `#ff8a2e` `#ffae38` `#ffd050` `#ffe98a` `#fff8d6` `#ffffff` |
-| inner | plasma | density=0.5, resist={"CRUSH":0.8,"KINETIC":0.8,"FRACTURE":4,"ASSIMILATION":4} | 105 | `#d23c2a` `#f0621f` `#ff8a2e` `#ffae38` `#ffd050` `#ffe98a` `#fff8d6` |
-| photosphere | plasma | density=0.34, resist={"CRUSH":0.8,"KINETIC":0.8,"FRACTURE":4,"ASSIMILATION":4} | 85 | `#7c1d33` `#a72832` `#d23c2a` `#f0621f` `#ff8a2e` `#ffae38` `#ffd050` `#ffe98a` `#fff8d6` |
-| corona | corona | density=0.45, resist={"FRACTURE":0.65,"KINETIC":0.75,"CRUSH":0.75,"THERMAL":0.4,"ASSIMILATION":1,"TIDAL":3.6} | 78 | `#1b0d3a` `#3b1a68` `#6d34a0` `#a45ccc` `#e39ae6` `#fff0fb` |
-| prominence | plasma | density=0.35, resist={"FRACTURE":0.65,"KINETIC":0.75,"CRUSH":0.75,"THERMAL":0.38,"ASSIMILATION":1.1,"TIDAL":3.8} | 135 | `#5a1030` `#a01e34` `#e23f2c` `#ff7a30` `#ffb040` `#ffe080` `#fff6c8` |
+| core | core | density=1.5, resist={"CRUSH":0.3,"KINETIC":0.8,"FRACTURE":4,"ASSIMILATION":4}, bond=250 | 165 | `#ff8a2e` `#ffae38` `#ffd050` `#ffe98a` `#fff8d6` `#ffffff` |
+| inner | plasma | density=0.5, resist={"CRUSH":0.3,"KINETIC":0.8,"FRACTURE":4,"ASSIMILATION":4}, bond=250 | 105 | `#d23c2a` `#f0621f` `#ff8a2e` `#ffae38` `#ffd050` `#ffe98a` `#fff8d6` |
+| photosphere | plasma | density=0.34, resist={"CRUSH":0.3,"KINETIC":0.8,"FRACTURE":4,"ASSIMILATION":4}, bond=250 | 85 | `#7c1d33` `#a72832` `#d23c2a` `#f0621f` `#ff8a2e` `#ffae38` `#ffd050` `#ffe98a` `#fff8d6` |
+| corona | corona | density=0.45, resist={"FRACTURE":0.65,"KINETIC":0.75,"CRUSH":0.3,"THERMAL":0.4,"ASSIMILATION":1,"TIDAL":3.6}, bond=250 | 78 | `#1b0d3a` `#3b1a68` `#6d34a0` `#a45ccc` `#e39ae6` `#fff0fb` |
+| prominence | plasma | density=0.35, resist={"FRACTURE":0.65,"KINETIC":0.75,"CRUSH":0.3,"THERMAL":0.38,"ASSIMILATION":1.1,"TIDAL":3.8}, bond=250 | 135 | `#5a1030` `#a01e34` `#e23f2c` `#ff7a30` `#ffb040` `#ffe080` `#fff6c8` |
 
 ### Moves
 
@@ -604,8 +604,8 @@ Validation against the feel targets: all clear.
 
 - **Destruction signature:** CRUSH
 - **Resource:** Moons (달) — max 2, start 2, shown as pips
-- **Passive — Gravity Well:** A small gravity well gathers debris into slow orbit around the planet: a ring of remains that drifts and now and then strikes the enemy.
-- **Failure mode — Broken World:** Crust cracks reveal glowing magma, the atmosphere is stripped away (and with it the shield against heat), and moons can be knocked out of orbit and lost.
+- **Passive — Gravity Well:** A gravity well gathers debris into a slow ring. Hold Gravity (R1) for Tidal Draw: the well deepens and drawn debris is packed back onto the world as crust.
+- **Failure mode — Broken World:** Intact, fractured crust, exposed mantle (Magma Vent), core crisis (Core Pulse): hits harder, braces worse. At the end the air vents, moons drift off, the crust slabs away, the core goes out last.
 - **AI personality:** Fortress: sits back behind its moons, punishes with Impact and Moon Slam, and uses its weight to hold the space.
 - **Accent colours:** `#58a6d8`, `#e0b06a`
 - **Art recipe:** 208×208 map, core (104, 104) r=13
@@ -614,75 +614,80 @@ Validation against the feel targets: all clear.
 
 | key | physics archetype | overrides | emissive | ramp (dark → light) |
 |---|---|---|---|---|
-| atmosphere | gas | heatAbsorb=0.08, resist={"CRUSH":3.4,"KINETIC":3.4,"FRACTURE":3.4,"THERMAL":3.2} | 40 | `#16305a` `#24508c` `#3a7bc0` `#69b0e0` `#a8dcf2` `#e4f8ff` |
-| cloud | cloud | heatAbsorb=0.08, resist={"CRUSH":3.4,"KINETIC":3.4,"FRACTURE":3.4,"THERMAL":3.2} | 20 | `#2b3c66` `#4f6494` `#8497be` `#bccbe0` `#e6eef6` `#ffffff` |
-| ocean | ocean | heatAbsorb=0.08, resist={"CRUSH":3.4,"KINETIC":3.4,"FRACTURE":3.4,"THERMAL":3.2} | 0 | `#08183c` `#0d2a64` `#123f8f` `#1a5cb8` `#2e86d8` `#62b8ec` `#b6e8fa` |
-| forest | regolith | resist={"CRUSH":3.4,"KINETIC":3.4,"FRACTURE":3.4,"THERMAL":3.2} | 0 | `#14241a` `#243c22` `#3b5c2a` `#5d7e34` `#88a044` `#b4be5c` `#dcdc8a` |
-| desert | regolith | resist={"CRUSH":3.4,"KINETIC":3.4,"FRACTURE":3.4,"THERMAL":3.2} | 0 | `#2a1a18` `#4c3024` `#7a4c30` `#a8703c` `#cf9a52` `#e8c27a` `#f8e4b0` |
-| mountain | rock | resist={"CRUSH":3.4,"KINETIC":3.4,"FRACTURE":3.4,"THERMAL":3.2} | 0 | `#241c22` `#3d3038` `#5f4d4c` `#8a7466` `#b39c88` `#dccbb8` `#f4eee8` |
-| ice | ice | resist={"CRUSH":3.4,"KINETIC":3.4,"FRACTURE":3.4,"THERMAL":3.2} | 30 | `#284a72` `#4a7fb0` `#86bde0` `#bfe4f4` `#e8f8ff` `#ffffff` |
-| crust | rock | resist={"CRUSH":3.4,"KINETIC":3.4,"FRACTURE":3.4,"THERMAL":3.2} | 0 | `#1a1216` `#33242a` `#4f3a38` `#725248` `#97705a` `#bc9070` |
-| mantle | mantle | resist={"CRUSH":3.4,"KINETIC":3.4,"FRACTURE":3.4,"THERMAL":3.2} | 40 | `#2a0a10` `#5a1418` `#8c2a1a` `#c0481c` `#e8741e` `#ff9a30` |
-| magma | magma | — | 170 | `#7a1608` `#c03a10` `#f0701c` `#ffa838` `#ffd870` `#fff2b0` |
-| core | core | — | 235 | `#ffb84a` `#ffdc78` `#fff2b0` `#ffffff` |
+| atmosphere | gas | heatAbsorb=0.6, resist={"CRUSH":1.4,"KINETIC":1.4,"FRACTURE":1.4,"THERMAL":1.2} | 40 | `#16305a` `#24508c` `#3a7bc0` `#69b0e0` `#a8dcf2` `#e4f8ff` |
+| cloud | cloud | heatAbsorb=0.6, resist={"CRUSH":1.4,"KINETIC":1.4,"FRACTURE":1.4,"THERMAL":1.2} | 20 | `#2b3c66` `#4f6494` `#8497be` `#bccbe0` `#e6eef6` `#ffffff` |
+| ocean | ocean | heatAbsorb=0.6, resist={"CRUSH":1.4,"KINETIC":1.4,"FRACTURE":1.4,"THERMAL":1.2}, density=0.6 | 0 | `#08183c` `#0d2a64` `#123f8f` `#1a5cb8` `#2e86d8` `#62b8ec` `#b6e8fa` |
+| forest | regolith | resist={"CRUSH":1.4,"KINETIC":1.4,"FRACTURE":1.4,"THERMAL":1.2}, density=0.5 | 0 | `#14241a` `#243c22` `#3b5c2a` `#5d7e34` `#88a044` `#b4be5c` `#dcdc8a` |
+| desert | regolith | resist={"CRUSH":1.4,"KINETIC":1.4,"FRACTURE":1.4,"THERMAL":1.2}, density=0.5 | 0 | `#2a1a18` `#4c3024` `#7a4c30` `#a8703c` `#cf9a52` `#e8c27a` `#f8e4b0` |
+| mountain | rock | resist={"CRUSH":1.4,"KINETIC":1.4,"FRACTURE":1.4,"THERMAL":1.2}, density=0.6 | 0 | `#241c22` `#3d3038` `#5f4d4c` `#8a7466` `#b39c88` `#dccbb8` `#f4eee8` |
+| ice | ice | resist={"CRUSH":1.4,"KINETIC":1.4,"FRACTURE":1.4,"THERMAL":1.2}, density=0.4 | 30 | `#284a72` `#4a7fb0` `#86bde0` `#bfe4f4` `#e8f8ff` `#ffffff` |
+| crust | rock | resist={"CRUSH":1.4,"KINETIC":1.4,"FRACTURE":1.4,"THERMAL":1.2}, density=0.6 | 0 | `#1a1216` `#33242a` `#4f3a38` `#725248` `#97705a` `#bc9070` |
+| mantle | mantle | resist={"CRUSH":1.4,"KINETIC":1.4,"FRACTURE":1.4,"THERMAL":1.2}, density=0.5 | 40 | `#2a0a10` `#5a1418` `#8c2a1a` `#c0481c` `#e8741e` `#ff9a30` |
+| magma | magma | density=0.5 | 170 | `#7a1608` `#c03a10` `#f0701c` `#ffa838` `#ffd870` `#fff2b0` |
+| core | core | density=0.8 | 235 | `#ffb84a` `#ffdc78` `#fff2b0` `#ffffff` |
 
 ### Moves
 
 | move | slot | startup | active | recovery | total | seconds |
 |---|---|---|---|---|---|---|
-| Tidal Nudge | strike | 12 | 8 | 18 | 38 | 0.63 s |
-| Impact | crush | 40 | 8 | 64 | 112 | 1.87 s |
-| Orbital Shift | surge | 3 | 16 | 9 | 28 | 0.47 s |
-| Moon Slam | signature | 14 | 44 | 24 | 82 | 1.37 s |
+| Moon Slam | strike | 12 | 8 | 22 | 42 | 0.70 s |
+| Tidal Rush | crush | 34 | 8 | 56 | 98 | 1.63 s |
+| Orbital Drift | surge | 3 | 16 | 9 | 28 | 0.47 s |
+| Comet Shepherd | signature | 8 | 10 | 24 | 42 | 0.70 s |
 | Cataclysm | ultimate | 90 | 100 | 50 | 240 | 4.00 s |
+| Crust Breaker | crush | 26 | 14 | 52 | 92 | 1.53 s |
+| Magma Vent | crush | 24 | 30 | 40 | 94 | 1.57 s |
+| Core Pulse | crush | 36 | 24 | 56 | 116 | 1.93 s |
 
-**Guard — Atmosphere Shield:** absorbs THERMAL 80% · KINETIC 55% · CRUSH 35% · FRACTURE 50% · TIDAL 15% · ASSIMILATION 40% of incoming energy while healthy.
+**Guard — Rotational Brace:** absorbs THERMAL 80% · KINETIC 55% · CRUSH 35% · FRACTURE 50% · TIDAL 15% · ASSIMILATION 40% of incoming energy while healthy.
 
-#### Tidal Nudge · 조석 밀기  `planet.nudge`  — strike
+#### Moon Slam · 달 충돌  `planet.moonslam`  — strike
 
-Startup **12** · active **8** · recovery **18** = **38 ticks** (0.63 s); cancel window 0.4; hit-stop base 6. Tags: `shove`.
-
-Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
-
-| hitbox | window | shape | type | energy | flags | params | knockback | guard |
-|---|---|---|---|---|---|---|---|---|
-| nudge | 0–8 | point (sweeps) | CRUSH | 360 | — | compress=5, crater=8, shock=0.6 | 560,-30 | 0.4 |
-
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 360.
-
-Data-driven extras: `{"pose":{"startup":{"lean":-4},"active":{"lean":6}}}`
-
-#### Impact · 충격  `planet.impact`  — crush
-
-Startup **40** · active **8** · recovery **64** = **112 ticks** (1.87 s); cancel window 0.4; hit-stop base 14. Tags: `heavy` `ram` `quake`.
+Startup **12** · active **8** · recovery **22** = **42 ticks** (0.70 s); cancel window 0.4; hold up to 30 ticks to charge; hit-stop base 8. Tags: `charge` `projectile` `moon`.
 
 Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| slam | 0–8 | point | CRUSH | 1000 | — | crater=22, compress=10, shock=1.4, scatter=1.2 | 760,-60 | 1 |
+| launch | 0–6 | point | CRUSH | 84 | — | crater=4 | 200,0 | 0.3 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1000.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 84.
 
-Data-driven extras: `{"pose":{"startup":{"lean":-9},"active":{"lean":8},"recovery":{"lean":2}}}`
+Data-driven extras: `{"chargePower":0.9,"chargeReach":[0.8,1.35],"slam":{"speed":9,"accel":0.45,"windup":14,"turn":0.1,"curve":0.9,"energy":430,"crater":14,"compress":8,"shock":1.2,"recoil":0.14,"life":70,"breakFrac":0.55},"ctl":{"charge":0.2,"active":0.25},"pose":{"startup":{"lean":0},"charge":{"lean":0},"active":{"lean":0},"recovery":{"lean":0}}}`
 
-#### Orbital Shift · 궤도 이동  `planet.shift`  — surge
+#### Tidal Rush · 조석 돌진  `planet.impact`  — crush
+
+Startup **34** · active **8** · recovery **56** = **98 ticks** (1.63 s); cancel window 0.4; hit-stop base 12. Tags: `heavy` `ram` `quake`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| slam | 0–8 | point (sweeps) | CRUSH | 500 | — | crater=17.6, compress=8, shock=1.12, scatter=1.2 | 760,-60 | 1 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 500.
+
+Data-driven extras: `{"pose":{"startup":{"lean":0},"active":{"lean":0},"recovery":{"lean":0}},"spinKeys":[{"at":0,"w":-1},{"at":26,"w":-3},{"at":46,"w":1.2}],"hold":{"after":10}}`
+
+#### Orbital Drift · 궤도 표류  `planet.shift`  — surge
 
 Startup **3** · active **16** · recovery **9** = **28 ticks** (0.47 s); cancel window 0; hit-stop base 0. Intangible ticks [2, 16). Tags: `dash` `orbit`.
 
-#### Moon Slam · 달 충돌  `planet.moonslam`  — signature
+Data-driven extras: `{"drift":{"curve":760,"spin":1.2}}`
 
-Startup **14** · active **44** · recovery **24** = **82 ticks** (1.37 s); cancel window 0.4; hold up to 45 ticks to charge; hit-stop base 8. Cost: resource 1. Tags: `charge` `projectile` `moon`.
+#### Comet Shepherd · 혜성 목자  `planet.comet`  — signature
+
+Startup **8** · active **10** · recovery **24** = **42 ticks** (0.70 s); cancel window 0.4; hold up to 150 ticks to charge; hit-stop base 0. Tags: `charge` `projectile` `comet`.
 
 Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| launch | 0–6 | point | CRUSH | 120 | — | crater=5 | 200,0 | 0.3 |
+| tug | 0–8 | field | CRUSH | 40 | — | compress=2, crater=3 | -160,0 | 0.2 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 120.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 40.
 
-Data-driven extras: `{"chargePower":0.9,"chargeReach":[0.8,1.35],"slam":{"speed":9,"energy":430,"crater":14,"compress":8,"shock":1.2,"recoil":0.14,"life":46},"ctl":{"charge":0.2,"active":0.25},"pose":{"startup":{"lean":-5},"charge":{"lean":-7},"active":{"lean":5}}}`
+Data-driven extras: `{"comet":{"spawnDist":330,"spawnRise":150,"entrySpeed":260,"orbit":150,"w0":1.4,"w1":5.2,"spinUp":2.2,"vRef":620,"energy":720,"life":110,"mass":13.5},"ctl":{"charge":0.35},"pose":{"startup":{"lean":0},"charge":{"lean":0},"active":{"lean":0},"recovery":{"lean":0}}}`
 
 #### Cataclysm · 대격변  `planet.cataclysm`  — ultimate
 
@@ -692,17 +697,59 @@ Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 
 
 | hitbox | window | shape | type | energy | flags | params | knockback | guard |
 |---|---|---|---|---|---|---|---|---|
-| gravity | 0–50 | field | CRUSH | 20 /2t | CONTINUOUS | compress=4, crater=6 | -70,0 | 0.2 |
-| quake | 52–62 | point | CRUSH | 2000 | UNBLOCKABLE | crater=32, compress=14, shock=2.2, scatter=1.6 | 500,-160 | 1 |
+| gravity | 0–50 | field | CRUSH | 14 /2t | CONTINUOUS | compress=3.2, crater=4.8 | -70,0 | 0.2 |
+| quake | 52–62 | point | CRUSH | 1400 | UNBLOCKABLE | crater=25.6, compress=11.2, shock=1.76, scatter=1.6 | 500,-160 | 1 |
 
-Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 3000.
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 2100.
 
-Data-driven extras: `{"barrage":{"from":66,"gap":10,"speed":11,"energy":520,"crater":14,"compress":7,"shock":1},"ctl":{"startup":0.1,"active":0.05,"recovery":0.3},"pose":{"startup":{"lean":-5},"active":{"lean":3}}}`
+Data-driven extras: `{"barrage":{"from":66,"gap":10,"speed":11,"energy":520,"crater":14,"compress":7,"shock":1},"ctl":{"startup":0.1,"active":0.05,"recovery":0.3},"pose":{"startup":{"lean":0},"charge":{"lean":0},"active":{"lean":0},"recovery":{"lean":0}}}`
 
-#### Atmosphere Shield · 대기 방패  `planet.guard`  — guard
+#### Rotational Brace · 회전 방어  `planet.guard`  — guard
 
 Startup **3** · active **0** · recovery **5** = **8 ticks** (0.13 s); cancel window 0; hit-stop base 0. Tags: `guard`.
 
 Data-driven extras: `{"shell":{"absorb":{"THERMAL":0.8,"KINETIC":0.55,"CRUSH":0.35,"FRACTURE":0.5,"TIDAL":0.15,"ASSIMILATION":0.4}}}`
+
+#### Crust Breaker · 지각 파괴  `planet.crustbreaker`  — crush
+
+Startup **26** · active **14** · recovery **52** = **92 ticks** (1.53 s); cancel window 0.4; hit-stop base 10. Tags: `heavy` `quake` `phase`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| tectonic | 0–14 | ring (sweeps) | CRUSH | 560 | — | crater=12, compress=7, shock=2, scatter=1.4 | 520,-60 | 0.9 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 560.
+
+Data-driven extras: `{"followUpOnly":true,"pose":{"startup":{"lean":0},"charge":{"lean":0},"active":{"lean":0},"recovery":{"lean":0}}}`
+
+#### Magma Vent · 마그마 분출  `planet.magmavent`  — crush
+
+Startup **24** · active **30** · recovery **40** = **94 ticks** (1.57 s); cancel window 0.4; hit-stop base 0. Tags: `heavy` `thermal` `phase`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| vent | 0–30 | cone | THERMAL | 46 /3t | CONTINUOUS | shock=0.6 | 140,0 | 0.5 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1380.
+
+Data-driven extras: `{"followUpOnly":true,"pose":{"startup":{"lean":0},"charge":{"lean":0},"active":{"lean":0},"recovery":{"lean":0}},"vent":{"shed":0.004}}`
+
+#### Core Pulse · 핵 맥동  `planet.corepulse`  — crush
+
+Startup **36** · active **24** · recovery **56** = **116 ticks** (1.93 s); cancel window 0.4; hit-stop base 13. Cost: meter 1. Tags: `heavy` `quake` `phase` `armor`.
+
+Forward-aim hitboxes (ticks relative to the first active tick; lengths at REACH 5):
+
+| hitbox | window | shape | type | energy | flags | params | knockback | guard |
+|---|---|---|---|---|---|---|---|---|
+| pulse | 0–24 | ring (sweeps) | CRUSH | 1500 | UNBLOCKABLE | crater=22, compress=10, shock=2.4, scatter=2 | 680,-120 | 1 |
+
+Aims with hitboxes: up, forward, down. Total nominal energy if everything connects (forward): 1500.
+
+Data-driven extras: `{"followUpOnly":true,"pose":{"startup":{"lean":0},"charge":{"lean":0},"active":{"lean":0},"recovery":{"lean":0}},"pulse":{"shed":0.03}}`
 
 Validation against the feel targets: all clear.

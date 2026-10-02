@@ -97,3 +97,29 @@ Bench, pools full, 22k-cell bodies, load-robust:
 | 640 | 3.66 ms | 1.35 ms |
 
 The two runs had different machine load, so the honest reading is "no measurable cost".
+
+## Update (Gate C prep): the swap is time-sliced
+
+- **New signature:** `swapShell(bodyId, ticks = 18): boolean`. It returns false while a swap is still running.
+  `shellProgress(bodyId)` reports rows moved / h, 1 when idle and -1 with no shell.
+- **When it happens:** the call itself only settles in-flight wounds and cuts (0.04 ms). The exchange runs inside `tick()`
+  in row bands, top to bottom. `ticks ≤ 1` keeps the one-shot swap.
+- **During a swap:**
+  - Every row is wholly one face, so drawing and hit-testing agree on every tick (tested).
+  - The body's connectivity is held, so matter is never shed across the band edge.
+  - Blows separate at once and hold no slabs.
+  - The swap state is hashed.
+  - `shellFace` flips when the last band moves.
+  - `restore` and `heal` finish a running swap first.
+- **Result:** byte-identical to a one-shot swap, so two swaps are still the identity (tested).
+- **Cost** on a 216² planet with 44.7k shell cells:
+
+  | tick | cost |
+  |---|---|
+  | swap call | 0.04 ms |
+  | band ticks | ≤ 0.71 ms |
+  | final tick (connectivity) | 1.68 ms |
+  | before (one-shot, one tick) | 7.9 ms |
+
+- **S3:** call `swapShell(id)` at the start of the turn instead of the midpoint, so the 0.3 s of bands sits under the cloud
+  cover. Read `shellProgress` if the globe overlay should follow the bands.

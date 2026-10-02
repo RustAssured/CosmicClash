@@ -2,7 +2,7 @@
  * Headless duel runner: plays N fights between two titans at given AI levels and prints results.
  *   npx tsx tools/ai/duel.ts [--a=lastone] [--b=asteroid] [--la=3] [--lb=3] [--n=10] [--seed=1] [--dummy=a|b] [--swap] [--log] [--fake]
  * Uses the real Match, real Fighters and the real matter world (`--fake` swaps in the test double for speed).
- * `--dummy=b` makes titan b a do-nothing dummy; `--swap` alternates which titan starts on the left (tallies stay per titan). Prints per-fight winner/reason/rounds and an overall tally.
+ * Orbit footwork is the default (D28); `--classic` plays the side view. `--dummy=b` makes titan b a do-nothing dummy; `--swap` alternates which titan starts on the left (tallies stay per titan). Prints per-fight winner/reason/rounds and an overall tally.
  */
 import {
   DEFAULT_ARENA,
@@ -52,11 +52,13 @@ export function playMatch(
   dummySlot: string,
   fake: boolean,
   maxTicks = 60 * 60 * 5,
+  footwork: 'classic' | 'orbit' = 'orbit',
 ): { match: Match; res: DuelResult; ais: (UtilityAI | null)[] } {
   const cfg: MatchConfig = {
     seed,
     stage: 'nursery',
     mode: 'aivai',
+    footwork,
     slots: [
       { titan: ta, controller: dummySlot === 'a' ? 'dummy' : 'ai', aiLevel: levelA },
       { titan: tb, controller: dummySlot === 'b' ? 'dummy' : 'ai', aiLevel: levelB },
@@ -72,11 +74,11 @@ export function playMatch(
   const ais: (UtilityAI | null)[] = [null, null];
   const src = [null, null] as (ReturnType<typeof createAiSource> | null)[];
   if (dummySlot !== 'a') {
-    ais[0] = createAI(levelA, getTitanDef(ta), seed * 7 + 1) as UtilityAI;
+    ais[0] = createAI(levelA, getTitanDef(ta), seed * 7 + 1, { footwork }) as UtilityAI;
     src[0] = createAiSource(match, 0, ais[0]);
   }
   if (dummySlot !== 'b') {
-    ais[1] = createAI(levelB, getTitanDef(tb), seed * 7 + 2) as UtilityAI;
+    ais[1] = createAI(levelB, getTitanDef(tb), seed * 7 + 2, { footwork }) as UtilityAI;
     src[1] = createAiSource(match, 1, ais[1]);
   }
   match.setSources(src[0], src[1]);
@@ -120,7 +122,17 @@ if (process.argv[1]?.endsWith('duel.ts')) {
     const [ta, tb, l1, l2, dm] = swapped
       ? [b, a, lb, la, dummy === 'a' ? 'b' : dummy === 'b' ? 'a' : dummy]
       : [a, b, la, lb, dummy];
-    const { res } = playMatch(seed0 + i, ta, tb, l1, l2, dm, flag('fake'));
+    const { res } = playMatch(
+      seed0 + i,
+      ta,
+      tb,
+      l1,
+      l2,
+      dm,
+      flag('fake'),
+      undefined,
+      flag('classic') ? 'classic' : 'orbit',
+    );
     const slotOfA = swapped ? 1 : 0;
     const who = res.winner === -1 ? 2 : res.winner === slotOfA ? 0 : 1;
     tally[who]!++;

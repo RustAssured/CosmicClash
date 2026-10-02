@@ -16,21 +16,26 @@ import type { SplinePen, SplineStyle } from '../fx/spline';
 
 export const NODES = 12;
 const ITER = 4;
-const DAMP = 0.93;
+/** Velocity kept per tick: heavy damping, so nothing jiggles (D28: planet scale, no fast wobble). */
+const DAMP = 0.9;
 /** Sag toward +y per tick². */
-const SAG = 0.045;
+const SAG = 0.012;
 const PIECES = 10;
 /** How far the whip's mid-chain trails the moving target (ticks of target motion). */
 const TRAIL = 3.2;
 /** Longest stretch of a whip (× natural length). */
 const EXT_MAX = 4.4;
 /** Ticks a released whip takes to fold back to its rest curve (after its staggered delay), and the damping meanwhile. */
-const RETURN_TICKS = 24;
+const RETURN_TICKS = 45;
 const DAMP_RETURN = 0.8;
 /** Most a whip arc may turn end to end (rad). */
 const MAX_TURN = 2.4;
-/** Least distance between nodes k and k − 2, in segments (1.2 ⇔ a joint bends at most ~107°). */
-const MIN_FOLD = 1.2;
+/** Least distance between nodes k and k − 2, in segments (0.9 ⇔ a joint bends at most ~127°), enforced softly. */
+const MIN_FOLD = 0.9;
+/** Share of the difference to the neighbours' velocity removed each tick (internal damping). */
+const INNER_DAMP = 0.5;
+/** Ticks a hit's recoil is spread over. */
+const RECOIL_TICKS = 10;
 
 /** What the posture solver should push the chains toward this tick (weights 0..1, smoothed by the caller). */
 export interface Posture {
@@ -111,6 +116,13 @@ export class TendrilSystem {
   private readonly piecePY: Float32Array;
   private readonly pieceSeg: Float32Array;
   private pieceCursor = 0;
+  /** Pending recoil (px) and the ticks left to deliver it. */
+  private recX = 0;
+  private recY = 0;
+  private recT = 0;
+  /** Low-passed body velocity (px/s). */
+  private vfx = 0;
+  private vfy = 0;
   private readonly hpMax = 100;
 
   constructor(roots: TendrilRoot[]) {
@@ -180,7 +192,7 @@ export class TendrilSystem {
       // the curl bends the chain over its length: start it rotated back by half the curl so the whole curve keeps the fan
       this.restAng[i] = Math.atan2(dy, dx) - r.curl * 0.45;
       // staggered lag: neighbours never arrive together (golden-ratio spread of rates)
-      this.lag[i] = 0.3 + 0.26 * ((i * 0.618034) % 1);
+      this.lag[i] = 0.05 + 0.04 * ((i * 0.618034) % 1);
     }
     this.pieceOn = new Uint8Array(PIECES);
     this.pieceLen = new Int8Array(PIECES);
@@ -210,7 +222,8 @@ export class TendrilSystem {
     const r = this.roots[i]!;
     const u = k / (NODES - 1);
     const s = Math.sin(u * 4.4 + r.wavePh);
-    const travel = Math.sin(tick * 0.035 + r.phase * 6.283 - u * 2.6) * sway * (0.35 + u);
+    // a slow wave travelling down the length: period ≈ 4.2 s
+    const travel = Math.sin(tick * 0.025 + r.phase * 6.283 - u * 2.6) * sway * (0.35 + u);
     return base + (r.curl * u + r.wave * s + travel) * f;
   }
 
@@ -245,24 +258,48 @@ export class TendrilSystem {
     }
   }
 
-  /** Root world positions from the body transform (mirror + lean aware, integer-cell centres). */
-  private updateRoots(t: BodyTransform): void {
+  /**
+   * Root world positions from the body transform (mirror + lean aware). With `smooth`, the continuous (pre-rounding) root and
+   * lean are used instead of the whole-pixel transform: the chains then hang from a root that glides, instead of being
+   * yanked by a pixel each time the sprite steps (that saw-tooth read as a fast jiggle of every tip, D28).
+   */
+  private updateRoots(t: BodyTransform, smooth: { x: number; y: number; lean: number } | null = null): void {
     for (let i = 0; i < this.n; i++) {
       const r = this.roots[i]!;
       this.prx[i] = this.rx[i]!;
       this.pry[i] = this.ry[i]!;
       const ly = Math.floor(r.y);
-      const shift = Math.round((t.lean * (t.anchorY - ly)) / Math.max(1, t.anchorY));
-      this.rx[i] = t.x + (r.x - t.anchorX) * t.facing + shift;
-      this.ry[i] = t.y + (r.y - t.anchorY);
+      if (smooth) {
+        const shift = (smooth.lean * (t.anchorY - ly)) / Math.max(1, t.anchorY);
+        this.rx[i] = smooth.x + (r.x - t.anchorX) * t.facing + shift;
+        this.ry[i] = smooth.y + (r.y - t.anchorY);
+      } else {
+        const shift = Math.round((t.lean * (t.anchorY - ly)) / Math.max(1, t.anchorY));
+        this.rx[i] = t.x + (r.x - t.anchorX) * t.facing + shift;
+        this.ry[i] = t.y + (r.y - t.anchorY);
+      }
     }
   }
 
   /**
-   * Advance one tick. `vbx,vby` is the body's velocity (px/s) so chains trail it; `facing` mirrors rest postures.
+   * Advance one tick. `vbx,vby` is the body's velocity (px/s) so chains trail it; `facing` mirrors rest postures. `smooth`
+   * (optional) is the body's continuous root and world lean (see `updateRoots`).
    */
-  step(t: BodyTransform, posture: Posture, vbx: number, vby: number, tick: number): void {
-    this.updateRoots(t);
+  step(
+    t: BodyTransform,
+    posture: Posture,
+    vbx: number,
+    vby: number,
+    tick: number,
+    smooth: { x: number; y: number; lean: number } | null = null,
+  ): void {
+    this.updateRoots(t, smooth);
+    this.stepRecoil();
+    // the body velocity the chains trail, low-passed (τ ≈ 0.2 s): a stepping velocity would shake every tip each tick
+    this.vfx += (vbx - this.vfx) * 0.08;
+    this.vfy += (vby - this.vfy) * 0.08;
+    vbx = this.vfx;
+    vby = this.vfy;
     const f = t.facing;
     const spd = Math.hypot(vbx, vby);
     const swayAmp = 0.14 + 0.2 * posture.agitation;
@@ -372,7 +409,7 @@ export class TendrilSystem {
         arcY = ey;
         this.extT[i] = clamp(L / (this.seg[i]! * (NODES - 1)), 1, EXT_MAX);
       } else this.extT[i] = 1;
-      this.ext[i] = this.ext[i]! + (this.extT[i]! - this.ext[i]!) * (whip ? (returning ? 0.25 : 0.6) : 0.14);
+      this.ext[i] = this.ext[i]! + (this.extT[i]! - this.ext[i]!) * (whip ? (returning ? 0.2 : 0.35) : 0.12);
       const seg = this.seg[i]! * this.ext[i]!;
       const damp = returning ? DAMP_RETURN : DAMP;
       // the chain follows the SAME curvature for the length it actually has: shorter than the arc (still stretching out) it
@@ -409,7 +446,8 @@ export class TendrilSystem {
         let ay = SAG * (1 + 3 * posture.limp);
 
         // rest-shape spring toward the grown curve
-        const stiff = (0.045 * (1 - u * 0.7) + 0.006) * (1 - posture.limp) * (1 - tw * 0.95);
+        // hanging-part spring (scale spec: ω ≤ 4 rad/s; was ≈ 13 rad/s): k = 0.0057 per tick² ⇒ ω ≈ 4.5 at the root, ≈ 3 at the tip
+        const stiff = (0.0045 * (1 - u * 0.5) + 0.0012) * (1 - posture.limp) * (1 - tw * 0.95);
         ax += (restX - this.x[j]!) * stiff;
         ay += (restY - this.y[j]!) * stiff;
 
@@ -419,13 +457,13 @@ export class TendrilSystem {
           const rad = 24 + 9 * Math.sin(i * 1.7) + u * 6;
           const gx = posture.eyeX + Math.cos(th + tick * 0.02) * rad;
           const gy = posture.eyeY + Math.sin(th + tick * 0.02) * rad * 0.9;
-          const gs = 0.09 * posture.guard * (0.4 + u);
+          const gs = 0.0045 * posture.guard * (0.4 + u);
           ax += (gx - this.x[j]!) * gs;
           ay += (gy - this.y[j]!) * gs;
         }
         // Gaze focus: tips lean in toward the eye
         if (posture.focus > 0.01) {
-          const fs = 0.05 * posture.focus * u * u;
+          const fs = 0.004 * posture.focus * u * u;
           ax += (posture.eyeX - this.x[j]!) * fs;
           ay += (posture.eyeY - 10 - this.y[j]!) * fs;
         }
@@ -494,7 +532,8 @@ export class TendrilSystem {
             const fd = Math.sqrt(fx * fx + fy * fy) || 1e-6;
             const minD = seg * MIN_FOLD;
             if (fd < minD) {
-              const push = ((minD - fd) / fd) * 0.5;
+              // soft (a quarter of the way per pass): a hard limit chattered at the frame rate (D28)
+              const push = ((minD - fd) / fd) * 0.125;
               if (k === 2) {
                 this.x[b] = this.x[b]! + fx * push * 2;
                 this.y[b] = this.y[b]! + fy * push * 2;
@@ -508,6 +547,19 @@ export class TendrilSystem {
           }
         }
       }
+      // internal damping: each node's velocity is pulled toward its neighbours' (a Laplacian smoothing of the velocity
+      // field). It kills the node-to-node (high-frequency) modes and leaves the long, slow swing of the whole chain (D28).
+      for (let k = 1; k < cnt; k++) {
+        const j = base + k;
+        const pv = j - 1;
+        const nx = k + 1 < cnt ? j + 1 : j;
+        const vx = this.x[j]! - this.px[j]!;
+        const vy = this.y[j]! - this.py[j]!;
+        const ax = (this.x[pv]! - this.px[pv]! + (this.x[nx]! - this.px[nx]!)) * 0.5;
+        const ay = (this.y[pv]! - this.py[pv]! + (this.y[nx]! - this.py[nx]!)) * 0.5;
+        this.px[j] = this.px[j]! - (ax - vx) * INNER_DAMP;
+        this.py[j] = this.py[j]! - (ay - vy) * INNER_DAMP;
+      }
     }
     this.stepPieces();
   }
@@ -518,6 +570,23 @@ export class TendrilSystem {
 
   /** Kick every chain (hit reaction): velocity added as a Verlet displacement of the previous positions. */
   recoil(dx: number, dy: number): void {
+    // ramped over RECOIL_TICKS (scale spec: no one-tick impulse on a planet-scale part); a new blow adds to what is left
+    this.recX += dx;
+    this.recY += dy;
+    this.recT = RECOIL_TICKS;
+  }
+
+  /** Apply this tick's share of the pending recoil (a smoothstep ramp). */
+  private stepRecoil(): void {
+    if (this.recT <= 0) return;
+    const t = this.recT;
+    // share of the remaining kick delivered now: the derivative of a smoothstep over the remaining ticks, normalised
+    const share = t <= 1 ? 1 : (6 * (1 / t) * (1 - 1 / t)) / 1.5 + 1 / (t * t);
+    const dx = this.recX * Math.min(1, share);
+    const dy = this.recY * Math.min(1, share);
+    this.recX -= dx;
+    this.recY -= dy;
+    this.recT--;
     for (let i = 0; i < this.n; i++) {
       const cnt = this.count[i]!;
       const base = i * NODES;
