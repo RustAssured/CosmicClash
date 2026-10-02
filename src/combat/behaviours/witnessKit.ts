@@ -34,12 +34,26 @@ export interface WitnessKitHost {
   /** Halo arcs: rig body, frame-local midpoint, rest angle about the eye (facing frame), alive. */
   halo: { body: number; mx: number; my: number; angle: number; alive: boolean }[];
   /** Arms: elbow and tip anchors (rig body + frame-local point), alive (the blade's segment still holds matter). */
-  arms: { elbowBody: number; ex: number; ey: number; tipBody: number; tx: number; ty: number; alive: boolean }[];
+  arms: {
+    elbowBody: number;
+    ex: number;
+    ey: number;
+    tipBody: number;
+    tx: number;
+    ty: number;
+    alive: boolean;
+  }[];
   /** Inner eyes opened by damage (0..5). */
   openEyes: number;
+  /** World positions of the open inner eyes (the first `openEyes` entries). */
+  openEyeX: number[];
+  openEyeY: number[];
 }
 
 const MAX_MARKS = 24;
+/** The gaze marks what it crosses every MARK_EVERY ticks; each mark shears with this energy. */
+const MARK_EVERY = 12;
+const GAZE_MARK_ENERGY = 80;
 /** Which move a fracture mark belongs to (meter and announcer bookkeeping). */
 const SLOT_SIG = 0;
 const SLOT_ULT = 1;
@@ -84,7 +98,14 @@ export class WitnessKit {
   private readonly sh: FatShape = makeFatShape();
   private readonly pa = { x: 0, y: 0 };
   private readonly pb = { x: 0, y: 0 };
-  private readonly ov: OverlapResult = { cells: 0, x: NaN, y: NaN, nearestX: NaN, nearestY: NaN, coverage: 0 };
+  private readonly ov: OverlapResult = {
+    cells: 0,
+    x: NaN,
+    y: NaN,
+    nearestX: NaN,
+    nearestY: NaN,
+    coverage: 0,
+  };
   readonly fx: Overlay;
 
   constructor(haloCount: number) {
@@ -141,16 +162,23 @@ export class WitnessKit {
         const u = clamp01((t - start) / 18);
         const through = wrapAngle(aim - a.angle);
         // first toward the lane, then past it: the arc sweeps across the front
-        this.haloOffset[k] = clamp(through * Math.min(1, u * 1.6) + (u > 0.6 ? (u - 0.6) * 0.8 * Math.sign(through) : 0), -1.8, 1.8);
+        this.haloOffset[k] = clamp(
+          through * Math.min(1, u * 1.6) + (u > 0.6 ? (u - 0.6) * 0.8 * Math.sign(through) : 0),
+          -1.8,
+          1.8,
+        );
       });
     } else if (kind === 'sweep') {
       // SWEEPING ARCHITECTURE: wind the arms back against the turn, then sweep them through it (the tips arrive late)
       // (the up variant sweeps up through the front — counter-clockwise in the y-down facing frame — the others down)
       const dir = m.variant !== null && m.variant === m.def.variants.up ? -1 : 1;
-      if (m.phase === 'startup') this.armOffset = -0.45 * dir * clamp01(m.phaseTick / Math.max(1, m.startup * 0.7));
-      else if (m.phase === 'active') this.armOffset = 0.85 * dir;
+      // every change of target is eased (smoothstep): a stepped target is a jerk the whole arm would ring with
+      const ease = (u: number): number => u * u * (3 - 2 * u);
+      if (m.phase === 'startup')
+        this.armOffset = -0.45 * dir * ease(clamp01(m.phaseTick / Math.max(1, m.startup * 0.7)));
+      else if (m.phase === 'active') this.armOffset = dir * (-0.45 + 1.3 * ease(clamp01(m.phaseTick / 30)));
       else if (m.phase === 'recovery')
-        this.armOffset = 0.85 * dir * (1 - clamp01(m.phaseTick / Math.max(1, m.recovery * 0.6)));
+        this.armOffset = 0.85 * dir * (1 - ease(clamp01(m.phaseTick / Math.max(1, m.recovery * 0.6))));
     }
   }
 
@@ -171,7 +199,22 @@ export class WitnessKit {
         s.x = this.pa.x;
         s.y = this.pa.y;
         s.r = 10;
-        if (this.hit(f, s, 'FRACTURE', 90, { penetration: 6, scatter: 0.9 }, 60, -10, 0.15, 6, 'strike', m.def!.id)) this.hitMask |= 1 << k;
+        if (
+          this.hit(
+            f,
+            s,
+            'FRACTURE',
+            90,
+            { penetration: 6, scatter: 0.9 },
+            60,
+            -10,
+            0.15,
+            6,
+            'strike',
+            m.def!.id,
+          )
+        )
+          this.hitMask |= 1 << k;
       });
     }
     // HALO SHARDS: as each live arc swings through the lane it sheds a shard of light down the attack axis
@@ -196,7 +239,14 @@ export class WitnessKit {
       const d = age * SHARD_SPEED;
       const x = this.shX[k]! + this.shUx[k]! * d;
       const y = this.shY[k]! + this.shUy[k]! * d;
-      this.drawBeam(x - this.shUx[k]! * 16, y - this.shUy[k]! * 16, x, y, 0.9 * (1 - age / (SHARD_TICKS + 4)), 3);
+      this.drawBeam(
+        x - this.shUx[k]! * 16,
+        y - this.shUy[k]! * 16,
+        x,
+        y,
+        0.9 * (1 - age / (SHARD_TICKS + 4)),
+        3,
+      );
       const bit = 1 << (16 + k);
       if (this.hitMask & bit) continue;
       const s = this.sh;
@@ -204,12 +254,31 @@ export class WitnessKit {
       s.x = x;
       s.y = y;
       s.r = 8;
-      if (this.hit(f, s, 'FRACTURE', 110, { penetration: 10, scatter: 0.8 }, 70, -8, 0.2, 5, 'strike', 'witness.halo')) {
+      if (
+        this.hit(
+          f,
+          s,
+          'FRACTURE',
+          110,
+          { penetration: 10, scatter: 0.8 },
+          70,
+          -8,
+          0.2,
+          5,
+          'strike',
+          'witness.halo',
+        )
+      ) {
         this.hitMask |= bit;
         this.shT[k] = -1;
       }
     }
-    if (live && kind === 'sweep' && m.variant !== null && (m.phase === 'active' || (m.phase === 'recovery' && m.phaseTick < m.recovery * 0.6))) {
+    if (
+      live &&
+      kind === 'sweep' &&
+      m.variant !== null &&
+      (m.phase === 'active' || (m.phase === 'recovery' && m.phaseTick < m.recovery * 0.6))
+    ) {
       const down = m.variant === m.def!.variants.down;
       if (!down)
         h.arms.forEach((arm, k) => {
@@ -225,7 +294,21 @@ export class WitnessKit {
           s.x1 = this.pb.x;
           s.y1 = this.pb.y;
           s.width = 12;
-          if (this.hit(f, s, 'FRACTURE', 440, { crackSeeds: 3, crackStress: 220, penetration: 12, scatter: 1.1 }, 200, -40, 0.8, 10, 'crush', m.def!.id))
+          if (
+            this.hit(
+              f,
+              s,
+              'FRACTURE',
+              440,
+              { crackSeeds: 3, crackStress: 220, penetration: 12, scatter: 1.1 },
+              200,
+              -40,
+              0.8,
+              10,
+              'crush',
+              m.def!.id,
+            )
+          )
             this.hitMask |= 1 << (8 + k);
         });
       else if (m.phase === 'active' && m.phaseTick === 1) {
@@ -234,7 +317,17 @@ export class WitnessKit {
         const uy = f.aimUy;
         for (let k = 0; k < 3; k++) {
           const d0 = 50 + k * 34;
-          this.mark(h, h.eyeX + ux * d0, h.eyeY + uy * d0, h.eyeX + ux * (d0 + 40), h.eyeY + uy * (d0 + 40), 20 + k * 12, 260, false, SLOT_CRUSH);
+          this.mark(
+            h,
+            h.eyeX + ux * d0,
+            h.eyeY + uy * d0,
+            h.eyeX + ux * (d0 + 40),
+            h.eyeY + uy * (d0 + 40),
+            20 + k * 12,
+            260,
+            false,
+            SLOT_CRUSH,
+          );
         }
       }
     }
@@ -242,7 +335,7 @@ export class WitnessKit {
       // the main beam is the JSON hitbox; it MARKS what it crosses, and every opened inner eye adds a beam
       if (f.liveHitShape(0, m.phaseTick - 1, this.sh) && this.sh.kind === 'line') {
         this.drawBeam(this.sh.x0, this.sh.y0, this.sh.x1, this.sh.y1, 0.9);
-        const ov = (m.phaseTick & 3) === 1 ? f.foe.probe(asShape(this.sh), this.ov) : null;
+        const ov = m.phaseTick % MARK_EVERY === 1 ? f.foe.probe(asShape(this.sh), this.ov) : null;
         if (ov !== null && ov.cells > 0) {
           const dx = this.sh.x1 - this.sh.x0;
           const dy = this.sh.y1 - this.sh.y0;
@@ -250,13 +343,27 @@ export class WitnessKit {
           const cx = ov.x;
           const cy = ov.y;
           const delay = 18 + ((f.tickNo * 7) % 31);
-          this.mark(h, cx - (dx / l) * 22, cy - (dy / l) * 22, cx + (dx / l) * 22, cy + (dy / l) * 22, delay, 150, true, SLOT_SIG);
+          this.mark(
+            h,
+            cx - (dx / l) * 22,
+            cy - (dy / l) * 22,
+            cx + (dx / l) * 22,
+            cy + (dy / l) * 22,
+            delay,
+            GAZE_MARK_ENERGY,
+            true,
+            SLOT_SIG,
+          );
         }
       }
+      // each opened inner eye looks out from where it is, at the foe, a little off the main gaze: a new angle of attack
+      const fv = f.foe.view;
       for (let k = 0; k < h.openEyes; k++) {
+        const ex = h.openEyeX[k]!;
+        const ey = h.openEyeY[k]!;
         const side = k % 2 === 0 ? 1 : -1;
-        const ang = Math.atan2(f.aimUy, f.aimUx) + side * 0.2 * (1 + (k >> 1));
-        this.beam(h, ang, BEAM_LEN * 0.85, 36, 6, 'signature', m.def!.id, m.phaseTick);
+        const ang = Math.atan2(fv.y - ey, fv.x - ex) + side * 0.08 * (1 + (k >> 1));
+        this.beam(h, ang, BEAM_LEN * 0.85, 36, 6, 'signature', m.def!.id, m.phaseTick + k, ex, ey);
       }
     }
     if (live && kind === 'revelation' && m.phase === 'active') {
@@ -266,12 +373,25 @@ export class WitnessKit {
       for (let k = 0; k < n; k++) {
         const ang = base + turn + (n > 1 ? (k / (n - 1) - 0.5) * 1.3 : 0);
         // every beam that lands every 12 ticks also lays a fracture across the foe that shears 0.3–0.8 s later
-        if (this.beam(h, ang, BEAM_LEN * 1.2, 70, 6, 'ultimate', m.def!.id, m.phaseTick + k * 3) && (m.phaseTick + k * 3) % 12 === 0) {
+        if (
+          this.beam(h, ang, BEAM_LEN * 1.2, 70, 6, 'ultimate', m.def!.id, m.phaseTick + k * 3) &&
+          (m.phaseTick + k * 3) % 12 === 0
+        ) {
           const ov = f.foe.probe(asShape(this.sh), this.ov);
           if (ov.cells > 0) {
             const c = Math.cos(ang + 1.2) * 26;
             const s = Math.sin(ang + 1.2) * 26;
-            this.mark(h, ov.x - c, ov.y - s, ov.x + c, ov.y + s, 18 + ((f.tickNo * 11 + k * 7) % 31), 170, true, SLOT_ULT);
+            this.mark(
+              h,
+              ov.x - c,
+              ov.y - s,
+              ov.x + c,
+              ov.y + s,
+              18 + ((f.tickNo * 11 + k * 7) % 31),
+              170,
+              true,
+              SLOT_ULT,
+            );
           }
         }
       }
@@ -280,23 +400,60 @@ export class WitnessKit {
   }
 
   /** A gaze beam from the eye at world angle `ang`: strikes every `rehit` ticks, drawn every tick. */
-  private beam(h: WitnessKitHost, ang: number, len: number, energy: number, rehit: number, slot: 'signature' | 'ultimate', id: string, t: number): boolean {
+  private beam(
+    h: WitnessKitHost,
+    ang: number,
+    len: number,
+    energy: number,
+    rehit: number,
+    slot: 'signature' | 'ultimate',
+    id: string,
+    t: number,
+    ox = h.eyeX,
+    oy = h.eyeY,
+  ): boolean {
     const s = this.sh;
     s.kind = 'line';
-    s.x0 = h.eyeX;
-    s.y0 = h.eyeY;
-    s.x1 = h.eyeX + Math.cos(ang) * len;
-    s.y1 = h.eyeY + Math.sin(ang) * len;
+    s.x0 = ox;
+    s.y0 = oy;
+    s.x1 = ox + Math.cos(ang) * len;
+    s.y1 = oy + Math.sin(ang) * len;
     s.width = 8;
     this.drawBeam(s.x0, s.y0, s.x1, s.y1, 0.8);
-    return t % rehit === 0 && this.hit(h.f, s, 'FRACTURE', energy, { penetration: 30, scatter: 0.6 }, 8, 0, 0.05, 0, slot, id, DamageFlag.PIERCE | DamageFlag.CONTINUOUS);
+    return (
+      t % rehit === 0 &&
+      this.hit(
+        h.f,
+        s,
+        'FRACTURE',
+        energy,
+        { penetration: 30, scatter: 0.6 },
+        8,
+        0,
+        0.05,
+        0,
+        slot,
+        id,
+        DamageFlag.PIERCE | DamageFlag.CONTINUOUS,
+      )
+    );
   }
 
   /**
    * Schedule a fracture line (world coordinates now) that shears `delay` ticks later: with `onFoe` it is marked ON the foe and
    * travels with it (the gaze), otherwise it stays where it was laid down (the shear path).
    */
-  private mark(h: WitnessKitHost, x0: number, y0: number, x1: number, y1: number, delay: number, energy: number, onFoe: boolean, slot: number): void {
+  private mark(
+    h: WitnessKitHost,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    delay: number,
+    energy: number,
+    onFoe: boolean,
+    slot: number,
+  ): void {
     const fv = h.f.foe.view;
     const bx = onFoe ? fv.x : 0;
     const by = onFoe ? fv.y : 0;
@@ -337,7 +494,20 @@ export class WitnessKit {
       s.x1 = x1;
       s.y1 = y1;
       s.width = 4;
-      this.hit(f, s, 'FRACTURE', this.mE[k]!, { crackSeeds: 4, crackStress: 260, penetration: 30, scatter: 1 }, 40, 0, 0.2, 6, MARK_SLOTS[this.mSlot[k]!]!, 'witness.fracture', DamageFlag.PIERCE | DamageFlag.SEED_CRACK);
+      this.hit(
+        f,
+        s,
+        'FRACTURE',
+        this.mE[k]!,
+        { crackSeeds: 4, crackStress: 260, penetration: 30, scatter: 1 },
+        40,
+        0,
+        0.2,
+        6,
+        MARK_SLOTS[this.mSlot[k]!]!,
+        'witness.fracture',
+        DamageFlag.PIERCE | DamageFlag.SEED_CRACK,
+      );
       this.drawBeam(x0, y0, x1, y1, 1.2, 3);
     }
   }
@@ -356,9 +526,17 @@ export class WitnessKit {
     id: string,
     flags = 0,
   ): boolean {
-    return f.strike(s, { type, energy, duration: 1, flags, params }, kbx, kby, guardPressure, hitstop, slot, id);
+    return f.strike(
+      s,
+      { type, energy, duration: 1, flags, params },
+      kbx,
+      kby,
+      guardPressure,
+      hitstop,
+      slot,
+      id,
+    );
   }
-
 
   /** Rig points are in the facing frame: mirror x into the world. */
   private toWorld(h: WitnessKitHost, p: { x: number; y: number }): void {

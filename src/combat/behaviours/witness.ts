@@ -79,7 +79,15 @@ interface EyeSpot {
 const MAX_PULSES = 32;
 const PULSE_TICKS = 10;
 /** The failure process (ticks after KO). */
-const FAIL = { give: 120, haloStart: 30, haloEvery: 22, armStart: 60, armEvery: 24, shrine: 150, eyeOut: 210 } as const;
+const FAIL = {
+  give: 120,
+  haloStart: 30,
+  haloEvery: 22,
+  armStart: 60,
+  armEvery: 24,
+  shrine: 150,
+  eyeOut: 210,
+} as const;
 
 /** A joint fails once its patch health stays below this for this many ticks. */
 const JOINT_FAIL_HEALTH = 0.15;
@@ -89,7 +97,9 @@ const ATLAS_ROW = 1024;
 const WHITE_GOLD = rgba(255, 241, 201, 255);
 const CYAN = rgba(127, 232, 255, 255);
 
-type WorldWithWounds = MatterWorld & { setFissureGlow?(bodyId: number, colour: number | null | undefined): void };
+type WorldWithWounds = MatterWorld & {
+  setFissureGlow?(bodyId: number, colour: number | null | undefined): void;
+};
 
 export class WitnessBehaviour extends Behaviour {
   private W!: WitnessBody;
@@ -321,7 +331,18 @@ export class WitnessBehaviour extends Behaviour {
       ty: 0,
       alive: false,
     }));
-    return { f: this.f, wr, facing: this.facing, eyeX: 0, eyeY: 0, halo, arms, openEyes: 0 };
+    return {
+      f: this.f,
+      wr,
+      facing: this.facing,
+      eyeX: 0,
+      eyeY: 0,
+      halo,
+      arms,
+      openEyes: 0,
+      openEyeX: [],
+      openEyeY: [],
+    };
   }
 
   /** Refresh the kit's view: what is still attached, where the eye is, how many inner eyes are open. */
@@ -358,8 +379,14 @@ export class WitnessBehaviour extends Behaviour {
       out.ty = arm.points[last + 1]!.y - seg.pivotY;
     });
     let open = 0;
-    for (const s of this.eyes) if (s.inner && this.eyeUncovered(s)) open++;
-    h.openEyes = Math.min(5, open);
+    for (const s of this.eyes) {
+      if (!s.inner || open >= 5 || !this.eyeUncovered(s)) continue;
+      this.wr.rig.worldPoint(this.wr.bodyOf[s.region]!, s.lx, s.ly, this.pt);
+      h.openEyeX[open] = this.pt.x * this.facing;
+      h.openEyeY[open] = this.pt.y;
+      open++;
+    }
+    h.openEyes = open;
   }
 
   /**
@@ -389,7 +416,11 @@ export class WitnessBehaviour extends Behaviour {
       const r = W.regions[i]!;
       const inner = r.kind === 'interior' && r.layer === 3;
       // an eye is its lid / sclera together with the slit across it
-      const want = inner ? [ids['sclera'], ids['pupil']] : r.kind === 'arm' ? [ids['orb'], ids['iris'], ids['pupil']] : [];
+      const want = inner
+        ? [ids['sclera'], ids['pupil']]
+        : r.kind === 'arm'
+          ? [ids['orb'], ids['iris'], ids['pupil']]
+          : [];
       const mats = new Set(want.filter((m): m is number => m !== undefined));
       if (mats.size === 0) continue;
       for (const c of clusters(r.map, mats)) {
@@ -487,7 +518,7 @@ export class WitnessBehaviour extends Behaviour {
     this.haloCap = kit.haloFree ? t.haloLimit + 1.9 : Math.max(t.haloLimit, this.haloCap - 0.01);
     this.armCap =
       kit.armOffset !== 0
-        ? Math.max(this.armCap, t.armAbsLimit + Math.abs(kit.armOffset) + 0.3)
+        ? Math.max(this.armCap, t.armAbsLimit + Math.abs(kit.armOffset) + 0.15)
         : Math.max(t.armAbsLimit, this.armCap - 0.01);
     for (const l of wr.haloLimits) {
       wr.rig.limits[l]!.min = -this.haloCap;
@@ -572,7 +603,8 @@ export class WitnessBehaviour extends Behaviour {
     const give = clamp01(t / FAIL.give);
     for (let d = 0; d < rig.drives.length; d++) rig.drives[d]!.hz = this.baseHz[d]! * (1 - 0.75 * give);
     for (let j = 0; j < rig.joints.length; j++)
-      if (!rig.joints[j]!.broken) rig.setHealth(j, Math.min(rig.joints[j]!.health, Math.max(0.1, 1 - 0.9 * give)));
+      if (!rig.joints[j]!.broken)
+        rig.setHealth(j, Math.min(rig.joints[j]!.health, Math.max(0.1, 1 - 0.9 * give)));
     const W = this.W;
     let hk = 0;
     let ak = 0;

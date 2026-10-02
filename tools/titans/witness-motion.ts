@@ -30,7 +30,7 @@ function intent(t: number): { x: number; a: number } {
   return { x: Math.min(18, (t - COMMIT + 1) * 3), a: TURN };
 }
 
-const FRAMES = [6, 13, 15, 17, 20, 24, 29, 36, 45, 56, 70, 90];
+const FRAMES = [6, 13, 16, 20, 26, 34, 44, 56, 72, 92, 120, 160];
 const frames: SheetItem[] = [];
 const win = { x0: -150, y0: -112, w: 320, h: 240, lighting, soft: true };
 const fr = { x: 0, y: 0, a: 0 };
@@ -39,8 +39,10 @@ const poses: Pose[] = W.regions.map(() => ({ x: 0, y: 0, a: 0 }));
 // order-of-motion probes: each reaches half of the turn after the commit
 const half = TURN * 0.5;
 const firstTick: Record<string, number> = {};
+const ninety: Record<string, number> = {};
 const mark = (name: string, v: number, t: number): void => {
   if (firstTick[name] === undefined && v >= half) firstTick[name] = t - COMMIT;
+  if (ninety[name] === undefined && v >= TURN * 0.9) ninety[name] = t - COMMIT;
 };
 const comAngle = (): number => {
   let mx = 0;
@@ -58,7 +60,7 @@ const comAngle = (): number => {
 const com0 = comAngle();
 let settled = -1;
 let calm = 0;
-for (let t = 0; t <= 150; t++) {
+for (let t = 0; t <= 330; t++) {
   const it = intent(t);
   rig.setKinematic(WR.eye, it.x, 0, it.a);
   setWitnessHeading(WR, it.a);
@@ -89,7 +91,8 @@ writeContactSheet(`${outDir}/witness-motion-turn.png`, frames, 6, 2, 4);
 console.log(
   `frames at ticks ${FRAMES.join(', ')} (commit at ${COMMIT}); ticks after the commit to reach half the turn:`,
 );
-for (const [k, v] of Object.entries(firstTick)) console.log(`  ${k.padEnd(20)} ${v}`);
+for (const [k, v] of Object.entries(firstTick))
+  console.log(`  ${k.padEnd(20)} half ${v} ticks, 90 % ${ninety[k] ?? '-'} ticks`);
 if (settled < 0)
   for (let i = 0; i < rig.n; i++)
     console.log(

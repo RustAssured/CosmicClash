@@ -154,7 +154,7 @@ const MATERIALS: MaterialSpec[] = [
  * Calibrated for the slice (SLICE_PLAN §3 D1): at the old ×4 every cell cost ~0.18 energy, so any heavy blow saturated the
  * crater search and the whole bowl left as powder in one tick.
  */
-const SHELL_RESIST = { CRUSH: 1.4, KINETIC: 1.4, FRACTURE: 1.4, THERMAL: 1.2 };
+const SHELL_RESIST = { CRUSH: 1.7, KINETIC: 1.7, FRACTURE: 1.7, THERMAL: 1.35 };
 const SOFTEN = ['forest', 'desert', 'mountain', 'ice', 'crust', 'mantle', 'ocean', 'atmosphere', 'cloud'];
 const SOAK = ['ocean', 'atmosphere', 'cloud'];
 /** A planet is lighter per cell than bare rock (it is mostly a thin painted shell over a hot interior): mass per cell by layer. */
@@ -428,7 +428,7 @@ const corepulse: MoveDef = {
         24,
         { kind: 'ring', ox: 0, oy: 0, r0: 40, r1: 80 },
         C,
-        1500,
+        1200,
         { crater: 22, compress: 10, shock: 2.4, scatter: 2 },
         UNBLOCK,
         { x: 680, y: -120 },

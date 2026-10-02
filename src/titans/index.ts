@@ -8,7 +8,8 @@ export {
   type PaintedTitan,
   type TitanRig,
 } from './generate';
-export type { LastOneRig, TendrilRoot } from './art/lastone';
+export type { LastOneRig, TendrilRoot, WitnessBody, WitnessRegion, WitnessTitanRig } from './art/lastone';
+export { isWitnessDef, witnessDef, WITNESS_MATERIALS } from './art/lastone';
 export type { AsteroidRig } from './art/asteroid';
 export type { BlackHoleRig } from './art/blackhole';
 export {

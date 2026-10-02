@@ -1,4 +1,12 @@
-import { LOGICAL_H, LOGICAL_W, localToWorld, type RenderLayer, type ViewRect } from '@/contracts';
+import {
+  LOGICAL_H,
+  LOGICAL_W,
+  localToWorld,
+  rotBounds,
+  rotSample,
+  type RenderLayer,
+  type ViewRect,
+} from '@/contracts';
 
 /**
  * Minimal software compositor for RenderLayers (pure TS, no DOM): world layers are placed with the same space.ts maths the
@@ -25,6 +33,10 @@ export function blitLayers(
     if (!L.visible) continue;
     if (L.space === 'screen') {
       blitScreen(frame, L, fw, fh);
+      continue;
+    }
+    if (L.parts && L.parts.length > 0) {
+      blitParts(frame, L, view, fw, fh);
       continue;
     }
     T.x = Math.round(L.prevX + (L.x - L.prevX) * alpha);
@@ -75,6 +87,35 @@ export function blitLayers(
         }
       }
     }
+  }
+}
+
+/**
+ * Rig parts (RenderLayer.parts, proposal 151): each part is a sub-rectangle of the layer's atlas drawn rotated about its pivot
+ * by the shared sampler (`@/contracts/rotation`, the renderer's twin), mirrored first when the layer faces left.
+ */
+function blitParts(frame: Uint32Array, L: RenderLayer, view: ViewRect, fw: number, fh: number): void {
+  const parts = L.parts!.slice().sort((a, b) => a.z - b.z);
+  for (const p of parts) {
+    // the part's source, mirrored about the pivot when facing left (texel x' = 2·px − 1 − x)
+    const src = new Uint32Array(p.sw * p.sh);
+    for (let y = 0; y < p.sh; y++)
+      for (let x = 0; x < p.sw; x++) {
+        const sx = L.facing === 1 ? x : 2 * p.px - 1 - x;
+        if (sx < 0 || sx >= p.sw) continue;
+        src[y * p.sw + x] = L.pixels[(p.sy + y) * L.w + p.sx + sx]!;
+      }
+    const part = { pixels: src, w: p.sw, h: p.sh, px: p.px, py: p.py, step: p.step };
+    const b = rotBounds(part);
+    for (let dy = b.y0; dy < b.y1; dy++)
+      for (let dx = b.x0; dx < b.x1; dx++) {
+        const c = rotSample(part, dx, dy);
+        if (c >>> 24 === 0) continue;
+        const sx = p.wx + dx - view.x0;
+        const sy = p.wy + dy - view.y0;
+        if (sx < 0 || sy < 0 || sx >= fw || sy >= fh) continue;
+        frame[sy * fw + sx] = c | 0xff000000;
+      }
   }
 }
 

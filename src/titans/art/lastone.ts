@@ -1,4 +1,5 @@
 import {
+  DEFAULT_LIGHTING,
   Rng,
   clamp,
   clamp01,
@@ -7,8 +8,10 @@ import {
   lerp,
   rgba,
   smoothstep,
+  AIM_DIRS,
   type MaterialSpec,
   type MatterMap,
+  type MoveDef,
   type StageLighting,
   type TitanDef,
 } from '@/contracts';
@@ -861,26 +864,30 @@ export interface WitnessBody {
 
 /** Shape constants (body px). */
 const WE = {
-  eyeR: 30,
-  rimR: 33.5,
-  socketR: 32.5,
+  eyeR: 28,
+  rimR: 31.5,
+  socketR: 30.5,
   carCX: 0,
-  carCY: 6,
-  carR: 46,
-  haloR: 62,
-  haloT: 5.5,
-  shrineY: 46,
+  carCY: 4,
+  carR: 42,
+  haloR: 60,
+  haloT: 5,
+  shrineY: 42,
   /** The pupil is not quite centred and not quite round (it tracks at runtime). */
   pupilDX: 2.5,
   pupilDY: 1.5,
 };
 
-/** Halo arcs: span (degrees, y down: −90 = straight up) and a radius offset (arc 2 drifts out of phase). The top arc carries the sigil. */
+/**
+ * Halo arcs: span (degrees, y down: −90 = straight up) and a radius offset. The top arc is long (92°, so it visibly bends with
+ * the ring) and carries the sigil; the ring is BROKEN on the lower left: a 40° gap and a small fragment drifted inward.
+ */
 const HALO_ARCS: readonly [number, number, number][] = [
-  [-122, -58, 0],
+  [-152, -60, 0],
   [-46, -6, 0],
-  [8, 42, 3.5],
-  [140, 204, 0],
+  [12, 64, 3.5],
+  [96, 128, 0],
+  [168, 190, -3],
 ];
 
 interface ArmDef {
@@ -892,12 +899,15 @@ interface ArmDef {
   w: number;
 }
 
-/** Four asymmetric scythe architectures sweeping down and around (one short one raised). */
+/**
+ * Four asymmetric scythe architectures sweeping down and around: the front upper one is the longest and hangs lowest, the
+ * back upper one is shorter and held high (its blade ends level with the shrine), the lower pair are short and unequal.
+ */
 const ARMS: readonly ArmDef[] = [
-  { c: [40, -10, 82, 4, 94, 54, 70, 88], joints: [0, 0.34, 0.67], w: 1 },
-  { c: [-38, -6, -86, -40, -110, -4, -96, 44], joints: [0, 0.27, 0.52, 0.76], w: 1.05 },
-  { c: [32, -30, 60, -62, 88, -56, 88, -22], joints: [0, 0.5], w: 0.8 },
-  { c: [-30, 30, -54, 54, -46, 84, -22, 92], joints: [0, 0.4, 0.72], w: 0.8 },
+  { c: [34, -16, 76, -82, 114, -20, 78, 74], joints: [0, 0.26, 0.52, 0.77], w: 1.15 },
+  { c: [-34, -14, -76, -82, -108, -42, -84, 22], joints: [0, 0.25, 0.5, 0.75], w: 1.2 },
+  { c: [32, 24, 78, 34, 98, 90, 46, 102], joints: [0, 0.36, 0.7], w: 0.95 },
+  { c: [-30, 26, -66, 44, -74, 88, -40, 100], joints: [0, 0.4, 0.72], w: 0.85 },
 ];
 
 interface RegionCanvas {
@@ -1361,11 +1371,11 @@ function paintInterior(
   const pupil = WID('pupil');
   const inner = WE.socketR - 1.5;
   const innerEyes: [number, number, number][] = [
-    [-17, 36, 7],
-    [1, 41, 8],
-    [18, 35, 6.5],
-    [-33, 16, 5],
-    [33, 18, 5],
+    [-15, 31, 6.5],
+    [1, 36, 7.5],
+    [16, 30, 6],
+    [-29, 13, 4.5],
+    [29, 15, 4.5],
   ];
   for (let y = 0; y < cv.h; y++)
     for (let x = 0; x < cv.w; x++) {
@@ -1460,16 +1470,16 @@ function paintInterior(
 
 /** x, length, root radius, snapped (0 = whole; else the fraction of the length that is left). Uneven; two have snapped. */
 const SPIRES: readonly [number, number, number, number][] = [
-  [-25, 14, 2.0, 0],
-  [-17, 24, 2.4, 0.45],
-  [-8, 33, 2.8, 0],
-  [1, 38, 3.4, 0],
-  [10, 29, 2.8, 0],
-  [18, 20, 2.4, 0],
-  [25, 13, 2.0, 0.55],
+  [-24, 22, 1.8, 0],
+  [-16, 34, 2.2, 0.5],
+  [-8, 40, 2.5, 0],
+  [1, 44, 3.0, 0],
+  [9, 36, 2.5, 0],
+  [17, 28, 2.2, 0],
+  [24, 18, 1.8, 0.6],
 ];
 /** Where a spire hangs from the dome (the dome is lowest in the middle). */
-const spireRootY = (x: number): number => WE.shrineY + 7 + 11 * (1 - Math.min(1, Math.abs(x) / 31));
+const spireRootY = (x: number): number => WE.shrineY + 7 + 9 * (1 - Math.min(1, Math.abs(x) / 28));
 
 function paintShrine(
   ramps: number[][],
@@ -1773,4 +1783,135 @@ function paintArmSegment(
     arm,
     segment: seg,
   });
+}
+
+/* ---------------------------------------------------------------- the Witness as a titan (behind `witness=1`) */
+
+/** The rig a Witness fighter is generated with: every painted region (the eye cradle is the fighter's primary body). */
+export interface WitnessTitanRig {
+  kind: 'witness';
+  body: WitnessBody;
+  /** Material ids by key (index + 1 of WITNESS_MATERIALS). */
+  ids: Record<string, number>;
+}
+
+/** True for the Witness's definition (see `witnessDef`). */
+export const isWitnessDef = (def: TitanDef): boolean =>
+  (def.art.params as { witness?: unknown }).witness === true;
+
+/** Paint the Witness for the titan generator: the eye cradle is the primary map, every region rides in the rig. */
+export function paintWitnessTitan(
+  _def: TitanDef,
+  seed: number,
+  lighting: StageLighting,
+): { map: MatterMap; rig: WitnessTitanRig } {
+  const body = paintWitness(seed, lighting);
+  const ids: Record<string, number> = {};
+  for (const m of WITNESS_MATERIALS) ids[m.key] = WID(m.key);
+  return { map: body.regions[0]!.map, rig: { kind: 'witness', body, ids } };
+}
+
+const WITNESS_DEFS = new WeakMap<TitanDef, TitanDef>();
+
+/**
+ * The Last One's definition rebuilt as the Witness (the `witness=1` flag; SLICE_PHASE2): the Witness's materials, its eye
+ * cradle as the art recipe (the KO core is the pupil), its halo arcs as the resource, and the Witness's six moves (witnessMoves).
+ * Cached per source definition.
+ */
+export function witnessDef(def: TitanDef): TitanDef {
+  const hit = WITNESS_DEFS.get(def);
+  if (hit) return hit;
+  const eye = paintWitness(1, DEFAULT_LIGHTING).regions[0]!.map;
+  const w: TitanDef = {
+    ...def,
+    name: 'The Witness',
+    materials: WITNESS_MATERIALS.map((m) => ({ ...m })),
+    resource: { ...def.resource, max: HALO_ARCS.length, start: HALO_ARCS.length },
+    moves: witnessMoves(def.moves),
+    art: {
+      w: eye.w,
+      h: eye.h,
+      coreX: eye.coreX,
+      coreY: eye.coreY,
+      coreRadius: eye.coreRadius,
+      params: { witness: true },
+    },
+  };
+  WITNESS_DEFS.set(def, w);
+  return w;
+}
+
+/** Deep copy of a move under a new id (the Witness reuses the Last One's frame data and choreography where they fit). */
+function cloneMove(src: MoveDef | undefined, id: string, name: string, nameKo: string): MoveDef {
+  if (!src) throw new Error(`witness: base move for '${id}' missing`);
+  const m = JSON.parse(JSON.stringify(src)) as MoveDef;
+  m.id = id;
+  m.name = name;
+  m.nameKo = nameKo;
+  return m;
+}
+
+const emptyVariant = (
+  movement: MoveDef['variants']['forward']['movement'],
+): MoveDef['variants']['forward'] => ({
+  hitboxes: [],
+  movement,
+});
+
+/**
+ * The Witness's kit (SLICE_PHASE2 S2.4). Moves whose reach comes from the body itself carry no JSON hitboxes: the behaviour
+ * strikes with the live rig (halo arcs, arm blades, extra gaze angles) through `FighterImpl.strike`, so damage changes the kit
+ * (a severed arm no longer sweeps, a broken arc no longer cuts, an opened inner eye adds a beam). `extra.witness` names the
+ * behaviour's part of each move.
+ */
+export function witnessMoves(base: readonly MoveDef[]): MoveDef[] {
+  const by = (id: string): MoveDef | undefined => base.find((m) => m.id === id);
+  // Strike — HALO SHARDS: the broken halo's arcs swing forward through a lane, one after another
+  const halo = cloneMove(by('lastone.lash'), 'witness.halo', 'Halo Shards', '후광 파편');
+  halo.frame = { startup: 10, active: 24, recovery: 14, cancelWindow: 0.4, chargeMax: 0, hitstop: 6 };
+  for (const a of AIM_DIRS) halo.variants[a] = emptyVariant([{ at: 0, ix: -20, iy: 0, damp: 0.3 }]);
+  halo.tags = ['multi'];
+  halo.extra = { witness: 'halo', pose: { startup: { lean: -2 }, active: { lean: 3 } } };
+  // Crush — SWEEPING ARCHITECTURE (up/forward) / STRUCTURAL SHEAR (down, close range): the whole body turns through a scythe
+  // arc on S1's load → commit → re-balance choreography; the arm blades are the hit volumes
+  const sweep = cloneMove(by('lastone.shatter'), 'witness.sweep', 'Sweeping Architecture', '휩쓰는 구조');
+  sweep.variants.up = emptyVariant(sweep.variants.up.movement);
+  sweep.variants.forward = emptyVariant(sweep.variants.forward.movement);
+  sweep.extra = { ...(sweep.extra ?? {}), witness: 'sweep', eyeFlare: false };
+  // the down aim keeps its close cone and adds the delayed fracture path (the behaviour schedules it)
+  sweep.variants.down.hitboxes.forEach((h) => {
+    h.id = 'shear';
+  });
+  // Surge — CHARGE, AND SIDESTEP
+  const side = cloneMove(by('lastone.sidestep'), 'witness.sidestep', 'Sidestep', '옆걸음');
+  const charge = cloneMove(by('lastone.lunge'), 'witness.charge', 'Charge', '돌진');
+  side.extra = {
+    ...(side.extra ?? {}),
+    followUp: { button: 'strike', from: 6, to: 20, move: 'witness.charge' },
+  };
+  // Signature — FRACTURE GAZE: the held beam marks the foe; each mark shears 0.3–0.8 s later
+  const gaze = cloneMove(by('lastone.gaze'), 'witness.gaze', 'Fracture Gaze', '균열의 시선');
+  gaze.extra = { ...(gaze.extra ?? {}), witness: 'gaze' };
+  // the gaze leaves from the eye itself (the Last One's beam started at a crown above its root): keep each line's direction
+  // and length, move its start onto the eye centre (2 px left of and 1 px above the anchor)
+  for (const a of AIM_DIRS)
+    for (const hb of gaze.variants[a].hitboxes) {
+      const s = hb.shape;
+      if (s.kind !== 'line') continue;
+      const dx = -2 - s.ox0;
+      const dy = -1 - s.oy0;
+      hb.shape = { ...s, ox0: s.ox0 + dx, oy0: s.oy0 + dy, ox1: s.ox1 + dx, oy1: s.oy1 + dy };
+      // from the eye the beam runs through the foe's centre instead of grazing it: 15% of the energy per tick, the
+      // rest of the move's damage comes later, from the fractures it leaves (WitnessKit)
+      hb.damage = { ...hb.damage, energy: hb.damage.energy * 0.15 };
+    }
+  // Ultimate — REVELATION: the inner eyes open and a lattice of gazes fans out
+  const rev = cloneMove(by('lastone.lastlight'), 'witness.revelation', 'Revelation', '계시');
+  for (const a of AIM_DIRS) rev.variants[a] = emptyVariant(rev.variants[a].movement);
+  rev.tags = ['ultimate', 'armor'];
+  rev.extra = { ...(rev.extra ?? {}), witness: 'revelation', halo: false };
+  // Guard — HALO CLOSE: the arcs close into a shield in front; every broken arc weakens it
+  const close = cloneMove(by('lastone.guard'), 'witness.close', 'Halo Close', '후광 닫기');
+  close.extra = { ...(close.extra ?? {}), witness: 'close' };
+  return [halo, sweep, side, charge, gaze, rev, close];
 }

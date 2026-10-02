@@ -134,6 +134,9 @@ export interface LimitDef {
   max: number;
   /** Correct by turning about each body's pivot (see DriveDef.aboutPivot). */
   aboutPivot?: boolean;
+  /** Soft stop: beyond the bound, a damped spring of this frequency (Hz) and damping ratio instead of a hard projection. */
+  hz?: number;
+  zeta?: number;
   /** Switched off (its joint failed). */
   off?: boolean;
 }
@@ -403,10 +406,11 @@ export class XpbdRig {
       }
       for (let j = 0; j < this.joints.length; j++) this.joints[j]!.lambda = 0;
       for (let d = 0; d < this.drives.length; d++) this.drives[d]!.lambda = 0;
+      for (let l = 0; l < this.limits.length; l++) if (this.limits[l]!.hz) this.limits[l]!.lambda = 0;
       for (let it = 0; it < RIG_ITERATIONS; it++) {
         // the soft rotational constraints first, the positional joints last: the structure ends every pass connected
         this.solveDrives(h);
-        this.solveLimits();
+        this.solveLimits(h);
         this.solveJoints(h);
       }
       for (let i = 0; i < n; i++) {
@@ -588,7 +592,7 @@ export class XpbdRig {
     }
   }
 
-  private solveLimits(): void {
+  private solveLimits(h: number): void {
     for (let l = 0; l < this.limits.length; l++) {
       const lm = this.limits[l]!;
       if (lm.off === true) continue;
@@ -607,8 +611,24 @@ export class XpbdRig {
         lm.lambda = 0;
         continue;
       }
-      const dl = -C / wsum;
-      lm.lambda = dl;
+      let dl: number;
+      if (lm.hz !== undefined && lm.hz > 0) {
+        // a SOFT stop: beyond the bound the limit is a damped spring (XPBD compliance), so a part running into it is slowed
+        // over a fraction of a second instead of stopped in one substep (no velocity kink, no high-frequency content)
+        const om = TAU * lm.hz;
+        const k = (om * om) / wsum;
+        const alpha = 1 / (k * h * h);
+        const gamma = (alpha * ((2 * (lm.zeta ?? 1) * om) / wsum) * h * h) / h;
+        const relv = this.a[b]! - this.pa[b]! - (a >= 0 ? this.a[a]! - this.pa[a]! : 0);
+        dl = (-C - alpha * lm.lambda - gamma * relv) / ((1 + gamma) * wsum + alpha);
+        // an inequality: it may only push back toward the range, never pull outward
+        if (C > 0 && lm.lambda + dl > 0) dl = -lm.lambda;
+        if (C < 0 && lm.lambda + dl < 0) dl = -lm.lambda;
+        lm.lambda += dl;
+      } else {
+        dl = -C / wsum;
+        lm.lambda = dl;
+      }
       if (piv) {
         this.turnAboutFrame(b, iiB * dl);
         if (a >= 0) this.turnAboutFrame(a, -iiA * dl);

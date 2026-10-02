@@ -25,6 +25,9 @@ export interface WitnessRigTuning {
   armAbsLimit: number;
   haloLimit: number;
   shrineLimit: number;
+  /** The caps are soft stops: beyond them a damped spring of this frequency (Hz; ω ≤ 7 rad/s, D28) and damping ratio. */
+  limitHz: number;
+  limitZeta: number;
   /**
    * Arms also chase the HEADING (the eye's angle) directly, with frequencies falling along the chain: the root follows first,
    * the tip last. Without it a chain pinned to a fast-turning carapace whips past the heading and rings.
@@ -50,6 +53,8 @@ export const WITNESS_RIG_TUNING: Readonly<WitnessRigTuning> = Object.freeze({
   armAbsLimit: 0.6,
   haloLimit: 0.3,
   shrineLimit: 0.35,
+  limitHz: 1.1,
+  limitZeta: 1,
   armHeadingHz: [0.62, 0.56, 0.5, 0.44],
   armHeadingZeta: 0.7,
   swayAmp: 0.05,
@@ -179,18 +184,61 @@ export function buildWitnessRig(
     if (r.kind === 'carapace') hz = t.carapaceHz;
     else if (r.kind === 'shrine') {
       hz = t.shrineHz;
-      rig.addLimit({ a: carapace, b: a, min: -t.shrineLimit, max: t.shrineLimit, aboutPivot: true });
+      rig.addLimit({
+        a: carapace,
+        b: a,
+        min: -t.shrineLimit,
+        max: t.shrineLimit,
+        aboutPivot: true,
+        hz: t.limitHz,
+        zeta: t.limitZeta,
+      });
     } else if (r.kind === 'halo') {
       hz = t.haloHz[haloK++ % t.haloHz.length]!;
-      haloLimits.push(rig.addLimit({ a: carapace, b: a, min: -t.haloLimit, max: t.haloLimit, aboutPivot: true }));
+      haloLimits.push(
+        rig.addLimit({
+          a: carapace,
+          b: a,
+          min: -t.haloLimit,
+          max: t.haloLimit,
+          aboutPivot: true,
+          hz: t.limitHz,
+          zeta: t.limitZeta,
+        }),
+      );
     } else {
       hz = r.segment === 0 ? t.armRootHz : t.armHz;
       zeta = t.armZeta;
-      rig.addLimit({ a: b, b: a, min: -t.armLimit, max: t.armLimit, aboutPivot: true });
-      armLimits.push(rig.addLimit({ a: carapace, b: a, min: -t.armAbsLimit, max: t.armAbsLimit, aboutPivot: true }));
+      rig.addLimit({
+        a: b,
+        b: a,
+        min: -t.armLimit,
+        max: t.armLimit,
+        aboutPivot: true,
+        hz: t.limitHz,
+        zeta: t.limitZeta,
+      });
+      armLimits.push(
+        rig.addLimit({
+          a: carapace,
+          b: a,
+          min: -t.armAbsLimit,
+          max: t.armAbsLimit,
+          aboutPivot: true,
+          hz: t.limitHz,
+          zeta: t.limitZeta,
+        }),
+      );
     }
     // halo arcs orbit the eye but are DRIVEN by the carapace: the ring follows the structure, a beat behind it (D28 load wave)
-    const di = rig.addDrive({ a: r.kind === 'halo' ? carapace : b, b: a, target: 0, hz, zeta, aboutPivot: true });
+    const di = rig.addDrive({
+      a: r.kind === 'halo' ? carapace : b,
+      b: a,
+      target: 0,
+      hz,
+      zeta,
+      aboutPivot: true,
+    });
     driveOf[a] = di;
     if (r.kind === 'halo') haloDrives.push(di);
     if (r.kind === 'arm') {
@@ -214,5 +262,20 @@ export function buildWitnessRig(
     });
     return { bodies, chain };
   });
-  return { rig, bodyOf, eye, carapace, shrine, halo, arms, headingDrives, haloDrives, haloLimits, armLimits, jointOf, driveOf, tuning: t };
+  return {
+    rig,
+    bodyOf,
+    eye,
+    carapace,
+    shrine,
+    halo,
+    arms,
+    headingDrives,
+    haloDrives,
+    haloLimits,
+    armLimits,
+    jointOf,
+    driveOf,
+    tuning: t,
+  };
 }

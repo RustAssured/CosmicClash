@@ -33,7 +33,14 @@
       "key": "atmosphere",
       "base": "gas",
       "visual": {
-        "ramp": ["#16305a", "#24508c", "#3a7bc0", "#69b0e0", "#a8dcf2", "#e4f8ff"],
+        "ramp": [
+          "#16305a",
+          "#24508c",
+          "#3a7bc0",
+          "#69b0e0",
+          "#a8dcf2",
+          "#e4f8ff"
+        ],
         "emissive": 40,
         "char": "#1a2a4a",
         "crack": "#0a1a3a",
@@ -42,10 +49,10 @@
       "physics": {
         "heatAbsorb": 0.6,
         "resist": {
-          "CRUSH": 1.4,
-          "KINETIC": 1.4,
-          "FRACTURE": 1.4,
-          "THERMAL": 1.2
+          "CRUSH": 1.7,
+          "KINETIC": 1.7,
+          "FRACTURE": 1.7,
+          "THERMAL": 1.35
         }
       }
     },
@@ -53,7 +60,14 @@
       "key": "cloud",
       "base": "cloud",
       "visual": {
-        "ramp": ["#2b3c66", "#4f6494", "#8497be", "#bccbe0", "#e6eef6", "#ffffff"],
+        "ramp": [
+          "#2b3c66",
+          "#4f6494",
+          "#8497be",
+          "#bccbe0",
+          "#e6eef6",
+          "#ffffff"
+        ],
         "emissive": 20,
         "char": "#3a4560",
         "crack": "#2b3c66",
@@ -62,10 +76,10 @@
       "physics": {
         "heatAbsorb": 0.6,
         "resist": {
-          "CRUSH": 1.4,
-          "KINETIC": 1.4,
-          "FRACTURE": 1.4,
-          "THERMAL": 1.2
+          "CRUSH": 1.7,
+          "KINETIC": 1.7,
+          "FRACTURE": 1.7,
+          "THERMAL": 1.35
         }
       }
     },
@@ -73,7 +87,15 @@
       "key": "ocean",
       "base": "ocean",
       "visual": {
-        "ramp": ["#08183c", "#0d2a64", "#123f8f", "#1a5cb8", "#2e86d8", "#62b8ec", "#b6e8fa"],
+        "ramp": [
+          "#08183c",
+          "#0d2a64",
+          "#123f8f",
+          "#1a5cb8",
+          "#2e86d8",
+          "#62b8ec",
+          "#b6e8fa"
+        ],
         "emissive": 0,
         "char": "#0a1a38",
         "crack": "#04102a",
@@ -82,10 +104,10 @@
       "physics": {
         "heatAbsorb": 0.6,
         "resist": {
-          "CRUSH": 1.4,
-          "KINETIC": 1.4,
-          "FRACTURE": 1.4,
-          "THERMAL": 1.2
+          "CRUSH": 1.7,
+          "KINETIC": 1.7,
+          "FRACTURE": 1.7,
+          "THERMAL": 1.35
         },
         "density": 0.6
       }
@@ -94,7 +116,15 @@
       "key": "forest",
       "base": "regolith",
       "visual": {
-        "ramp": ["#14241a", "#243c22", "#3b5c2a", "#5d7e34", "#88a044", "#b4be5c", "#dcdc8a"],
+        "ramp": [
+          "#14241a",
+          "#243c22",
+          "#3b5c2a",
+          "#5d7e34",
+          "#88a044",
+          "#b4be5c",
+          "#dcdc8a"
+        ],
         "emissive": 0,
         "char": "#1a1a10",
         "crack": "#0c160e",
@@ -102,10 +132,10 @@
       },
       "physics": {
         "resist": {
-          "CRUSH": 1.4,
-          "KINETIC": 1.4,
-          "FRACTURE": 1.4,
-          "THERMAL": 1.2
+          "CRUSH": 1.7,
+          "KINETIC": 1.7,
+          "FRACTURE": 1.7,
+          "THERMAL": 1.35
         },
         "density": 0.5
       }
@@ -114,7 +144,15 @@
       "key": "desert",
       "base": "regolith",
       "visual": {
-        "ramp": ["#2a1a18", "#4c3024", "#7a4c30", "#a8703c", "#cf9a52", "#e8c27a", "#f8e4b0"],
+        "ramp": [
+          "#2a1a18",
+          "#4c3024",
+          "#7a4c30",
+          "#a8703c",
+          "#cf9a52",
+          "#e8c27a",
+          "#f8e4b0"
+        ],
         "emissive": 0,
         "char": "#2a1a14",
         "crack": "#1a0e0c",
@@ -122,10 +160,10 @@
       },
       "physics": {
         "resist": {
-          "CRUSH": 1.4,
-          "KINETIC": 1.4,
-          "FRACTURE": 1.4,
-          "THERMAL": 1.2
+          "CRUSH": 1.7,
+          "KINETIC": 1.7,
+          "FRACTURE": 1.7,
+          "THERMAL": 1.35
         },
         "density": 0.5
       }
@@ -134,7 +172,15 @@
       "key": "mountain",
       "base": "rock",
       "visual": {
-        "ramp": ["#241c22", "#3d3038", "#5f4d4c", "#8a7466", "#b39c88", "#dccbb8", "#f4eee8"],
+        "ramp": [
+          "#241c22",
+          "#3d3038",
+          "#5f4d4c",
+          "#8a7466",
+          "#b39c88",
+          "#dccbb8",
+          "#f4eee8"
+        ],
         "emissive": 0,
         "char": "#1a1414",
         "crack": "#120c10",
@@ -142,10 +188,10 @@
       },
       "physics": {
         "resist": {
-          "CRUSH": 1.4,
-          "KINETIC": 1.4,
-          "FRACTURE": 1.4,
-          "THERMAL": 1.2
+          "CRUSH": 1.7,
+          "KINETIC": 1.7,
+          "FRACTURE": 1.7,
+          "THERMAL": 1.35
         },
         "density": 0.6
       }
@@ -154,7 +200,14 @@
       "key": "ice",
       "base": "ice",
       "visual": {
-        "ramp": ["#284a72", "#4a7fb0", "#86bde0", "#bfe4f4", "#e8f8ff", "#ffffff"],
+        "ramp": [
+          "#284a72",
+          "#4a7fb0",
+          "#86bde0",
+          "#bfe4f4",
+          "#e8f8ff",
+          "#ffffff"
+        ],
         "emissive": 30,
         "char": "#284a72",
         "crack": "#183050",
@@ -162,10 +215,10 @@
       },
       "physics": {
         "resist": {
-          "CRUSH": 1.4,
-          "KINETIC": 1.4,
-          "FRACTURE": 1.4,
-          "THERMAL": 1.2
+          "CRUSH": 1.7,
+          "KINETIC": 1.7,
+          "FRACTURE": 1.7,
+          "THERMAL": 1.35
         },
         "density": 0.4
       }
@@ -174,7 +227,14 @@
       "key": "crust",
       "base": "rock",
       "visual": {
-        "ramp": ["#1a1216", "#33242a", "#4f3a38", "#725248", "#97705a", "#bc9070"],
+        "ramp": [
+          "#1a1216",
+          "#33242a",
+          "#4f3a38",
+          "#725248",
+          "#97705a",
+          "#bc9070"
+        ],
         "emissive": 0,
         "char": "#1a1214",
         "crack": "#0a0608",
@@ -182,10 +242,10 @@
       },
       "physics": {
         "resist": {
-          "CRUSH": 1.4,
-          "KINETIC": 1.4,
-          "FRACTURE": 1.4,
-          "THERMAL": 1.2
+          "CRUSH": 1.7,
+          "KINETIC": 1.7,
+          "FRACTURE": 1.7,
+          "THERMAL": 1.35
         },
         "density": 0.6
       }
@@ -194,19 +254,31 @@
       "key": "mantle",
       "base": "mantle",
       "visual": {
-        "ramp": ["#2a0a10", "#5a1418", "#8c2a1a", "#c0481c", "#e8741e", "#ff9a30"],
+        "ramp": [
+          "#2a0a10",
+          "#5a1418",
+          "#8c2a1a",
+          "#c0481c",
+          "#e8741e",
+          "#ff9a30"
+        ],
         "emissive": 40,
         "char": "#3a0c10",
         "crack": "#ffb040",
         "debris": "#c0481c",
-        "glowRamp": ["#c0481c", "#ff9a30", "#ffe080", "#ffffff"]
+        "glowRamp": [
+          "#c0481c",
+          "#ff9a30",
+          "#ffe080",
+          "#ffffff"
+        ]
       },
       "physics": {
         "resist": {
-          "CRUSH": 1.4,
-          "KINETIC": 1.4,
-          "FRACTURE": 1.4,
-          "THERMAL": 1.2
+          "CRUSH": 1.7,
+          "KINETIC": 1.7,
+          "FRACTURE": 1.7,
+          "THERMAL": 1.35
         },
         "density": 0.5
       }
@@ -215,12 +287,24 @@
       "key": "magma",
       "base": "magma",
       "visual": {
-        "ramp": ["#7a1608", "#c03a10", "#f0701c", "#ffa838", "#ffd870", "#fff2b0"],
+        "ramp": [
+          "#7a1608",
+          "#c03a10",
+          "#f0701c",
+          "#ffa838",
+          "#ffd870",
+          "#fff2b0"
+        ],
         "emissive": 170,
         "char": "#5a1006",
         "crack": "#ffe080",
         "debris": "#f0701c",
-        "glowRamp": ["#f0701c", "#ffd870", "#fff2b0", "#ffffff"]
+        "glowRamp": [
+          "#f0701c",
+          "#ffd870",
+          "#fff2b0",
+          "#ffffff"
+        ]
       },
       "physics": {
         "density": 0.5
@@ -230,12 +314,22 @@
       "key": "core",
       "base": "core",
       "visual": {
-        "ramp": ["#ffb84a", "#ffdc78", "#fff2b0", "#ffffff"],
+        "ramp": [
+          "#ffb84a",
+          "#ffdc78",
+          "#fff2b0",
+          "#ffffff"
+        ],
         "emissive": 235,
         "char": "#7a3a10",
         "crack": "#ffffff",
         "debris": "#ffdc78",
-        "glowRamp": ["#ffdc78", "#fff2b0", "#ffffff", "#ffffff"]
+        "glowRamp": [
+          "#ffdc78",
+          "#fff2b0",
+          "#ffffff",
+          "#ffffff"
+        ]
       },
       "physics": {
         "density": 0.8
@@ -272,7 +366,15 @@
               "key": "moonrock",
               "base": "rock",
               "visual": {
-                "ramp": ["#1c1a24", "#38343f", "#5a5560", "#84808a", "#b0aab0", "#dcd6d4", "#f4f0ec"],
+                "ramp": [
+                  "#1c1a24",
+                  "#38343f",
+                  "#5a5560",
+                  "#84808a",
+                  "#b0aab0",
+                  "#dcd6d4",
+                  "#f4f0ec"
+                ],
                 "emissive": 0,
                 "char": "#1a1616",
                 "crack": "#0c0a0e",
@@ -283,7 +385,14 @@
               "key": "moondust",
               "base": "regolith",
               "visual": {
-                "ramp": ["#2a2428", "#4a4046", "#74666a", "#a08e8c", "#c8b8ae", "#e6d8cc"],
+                "ramp": [
+                  "#2a2428",
+                  "#4a4046",
+                  "#74666a",
+                  "#a08e8c",
+                  "#c8b8ae",
+                  "#e6d8cc"
+                ],
                 "emissive": 0,
                 "char": "#1a1616",
                 "crack": "#0c0a0e",
@@ -294,7 +403,13 @@
               "key": "moondark",
               "base": "mantle",
               "visual": {
-                "ramp": ["#0e0c14", "#1c1a26", "#2c2a38", "#403e50", "#5c5a6c"],
+                "ramp": [
+                  "#0e0c14",
+                  "#1c1a26",
+                  "#2c2a38",
+                  "#403e50",
+                  "#5c5a6c"
+                ],
                 "emissive": 0,
                 "char": "#141012",
                 "crack": "#08060a",
@@ -317,7 +432,15 @@
               "key": "moonrock",
               "base": "rock",
               "visual": {
-                "ramp": ["#2a1410", "#54281c", "#84402a", "#b0603a", "#d4844c", "#eeac72", "#fbd6a4"],
+                "ramp": [
+                  "#2a1410",
+                  "#54281c",
+                  "#84402a",
+                  "#b0603a",
+                  "#d4844c",
+                  "#eeac72",
+                  "#fbd6a4"
+                ],
                 "emissive": 0,
                 "char": "#1a1616",
                 "crack": "#0c0a0e",
@@ -328,7 +451,14 @@
               "key": "moondust",
               "base": "regolith",
               "visual": {
-                "ramp": ["#3a1c14", "#683424", "#9a5636", "#c47a4c", "#e2a06c", "#f6c894"],
+                "ramp": [
+                  "#3a1c14",
+                  "#683424",
+                  "#9a5636",
+                  "#c47a4c",
+                  "#e2a06c",
+                  "#f6c894"
+                ],
                 "emissive": 0,
                 "char": "#1a1616",
                 "crack": "#0c0a0e",
@@ -339,7 +469,13 @@
               "key": "moondark",
               "base": "mantle",
               "visual": {
-                "ramp": ["#1c0c0a", "#341812", "#4c261c", "#683828", "#8a4c34"],
+                "ramp": [
+                  "#1c0c0a",
+                  "#341812",
+                  "#4c261c",
+                  "#683828",
+                  "#8a4c34"
+                ],
                 "emissive": 0,
                 "char": "#141012",
                 "crack": "#08060a",
@@ -359,7 +495,13 @@
             "key": "cometice",
             "base": "ice",
             "visual": {
-              "ramp": ["#2a4c74", "#4c84b4", "#8cc4e4", "#c4ecf8", "#f0fcff"],
+              "ramp": [
+                "#2a4c74",
+                "#4c84b4",
+                "#8cc4e4",
+                "#c4ecf8",
+                "#f0fcff"
+              ],
               "emissive": 40,
               "char": "#1a2a3a",
               "crack": "#183050",
@@ -370,7 +512,14 @@
             "key": "cometdust",
             "base": "regolith",
             "visual": {
-              "ramp": ["#141216", "#26222a", "#3c363e", "#565058", "#746c72", "#948a8c"],
+              "ramp": [
+                "#141216",
+                "#26222a",
+                "#3c363e",
+                "#565058",
+                "#746c72",
+                "#948a8c"
+              ],
               "emissive": 0,
               "char": "#100e10",
               "crack": "#0a0a0c",
@@ -381,7 +530,13 @@
             "key": "cometrock",
             "base": "rock",
             "visual": {
-              "ramp": ["#1a1820", "#2e2a34", "#46404a", "#625a62", "#827880"],
+              "ramp": [
+                "#1a1820",
+                "#2e2a34",
+                "#46404a",
+                "#625a62",
+                "#827880"
+              ],
               "emissive": 0,
               "char": "#121014",
               "crack": "#0a080c",
@@ -521,10 +676,17 @@
       },
       "resourceCost": 0,
       "meterCost": 0,
-      "tags": ["charge", "projectile", "moon"],
+      "tags": [
+        "charge",
+        "projectile",
+        "moon"
+      ],
       "extra": {
         "chargePower": 0.9,
-        "chargeReach": [0.8, 1.35],
+        "chargeReach": [
+          0.8,
+          1.35
+        ],
         "slam": {
           "speed": 9,
           "accel": 0.45,
@@ -750,7 +912,11 @@
       },
       "resourceCost": 0,
       "meterCost": 0,
-      "tags": ["heavy", "ram", "quake"],
+      "tags": [
+        "heavy",
+        "ram",
+        "quake"
+      ],
       "extra": {
         "pose": {
           "startup": {
@@ -832,8 +998,14 @@
       },
       "resourceCost": 0,
       "meterCost": 0,
-      "intangible": [2, 16],
-      "tags": ["dash", "orbit"],
+      "intangible": [
+        2,
+        16
+      ],
+      "tags": [
+        "dash",
+        "orbit"
+      ],
       "extra": {
         "drift": {
           "curve": 760,
@@ -954,7 +1126,11 @@
       },
       "resourceCost": 0,
       "meterCost": 0,
-      "tags": ["charge", "projectile", "comet"],
+      "tags": [
+        "charge",
+        "projectile",
+        "comet"
+      ],
       "extra": {
         "comet": {
           "spawnDist": 330,
@@ -1209,7 +1385,12 @@
       },
       "resourceCost": 0,
       "meterCost": 1,
-      "tags": ["ultimate", "armor", "quake", "moon"],
+      "tags": [
+        "ultimate",
+        "armor",
+        "quake",
+        "moon"
+      ],
       "extra": {
         "barrage": {
           "from": 66,
@@ -1270,7 +1451,9 @@
       },
       "resourceCost": 0,
       "meterCost": 0,
-      "tags": ["guard"],
+      "tags": [
+        "guard"
+      ],
       "extra": {
         "shell": {
           "absorb": {
@@ -1445,7 +1628,11 @@
       },
       "resourceCost": 0,
       "meterCost": 0,
-      "tags": ["heavy", "quake", "phase"],
+      "tags": [
+        "heavy",
+        "quake",
+        "phase"
+      ],
       "extra": {
         "followUpOnly": true,
         "pose": {
@@ -1601,7 +1788,11 @@
       },
       "resourceCost": 0,
       "meterCost": 0,
-      "tags": ["heavy", "thermal", "phase"],
+      "tags": [
+        "heavy",
+        "thermal",
+        "phase"
+      ],
       "extra": {
         "followUpOnly": true,
         "pose": {
@@ -1652,7 +1843,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1500,
+                "energy": 1200,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1700,7 +1891,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1500,
+                "energy": 1200,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1748,7 +1939,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1500,
+                "energy": 1200,
                 "duration": 1,
                 "flags": 32,
                 "params": {
@@ -1784,7 +1975,12 @@
       },
       "resourceCost": 0,
       "meterCost": 1,
-      "tags": ["heavy", "quake", "phase", "armor"],
+      "tags": [
+        "heavy",
+        "quake",
+        "phase",
+        "armor"
+      ],
       "extra": {
         "followUpOnly": true,
         "pose": {

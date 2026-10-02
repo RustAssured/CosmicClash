@@ -167,14 +167,18 @@ describe('the Witness in game (witness=1)', () => {
     // a visible sway of the whole structure (≥ 0.08 rad ≈ 4.6°), carapace first, the halo and the arms trailing it
     expect(car.peak).toBeGreaterThan(0.08);
     expect(arms.at).toBeGreaterThan(car.at + 10);
-    expect(halo.at).toBeGreaterThan(car.at + 5);    expect(hit.worst).toBeLessThan(1);
+    expect(halo.at).toBeGreaterThan(car.at + 5);
+    expect(hit.worst).toBeLessThan(1);
   });
   it('HALO SHARDS: every live arc sheds a shard; broken arcs shed none (and the Guard shell weakens with them)', () => {
     const shards = (broken: number): { hits: number; guard: number } => {
       const { m, w, beh } = witnessMatch(7, 'asteroid');
       (m.fighters[1] as unknown as { px: number }).px = w.px + 150;
       for (let k = 0; k < broken; k++) beh.debugSever(`halo${k}`);
-      m.setSources(createScriptSource(parseScript('4:strike'), m.tick + 1), createScriptSource([], m.tick + 1));
+      m.setSources(
+        createScriptSource(parseScript('4:strike'), m.tick + 1),
+        createScriptSource([], m.tick + 1),
+      );
       let mask = 0;
       for (let t = 0; t < 90; t++) {
         m.step();
@@ -198,15 +202,21 @@ describe('the Witness in game (witness=1)', () => {
       const foe = m.fighters[1] as FighterImpl;
       (foe as unknown as { px: number }).px = w.px + 120;
       for (const k of sever) beh.debugSever(k);
-      m.setSources(createScriptSource(parseScript('4:crush'), m.tick + 1), createScriptSource([], m.tick + 1));
+      m.setSources(
+        createScriptSource(parseScript('4:crush'), m.tick + 1),
+        createScriptSource([], m.tick + 1),
+      );
       const i0 = foe.view.integrityPct;
       for (let t = 0; t < 150; t++) m.step();
       return i0 - foe.view.integrityPct;
     };
+    // the two front arms (0 and 2) do the sweeping: cut one to its root segment and lose the other, then lose both
     const whole = sweep([]);
-    const cut = sweep(['arm0.1', 'arm1.1', 'arm2.0', 'arm3.0']);
-    expect(whole).toBeGreaterThan(2);
-    expect(cut).toBeLessThan(whole * 0.7);
+    const stub = sweep(['arm0.1', 'arm2.0']);
+    const none = sweep(['arm0.0', 'arm2.0']);
+    expect(whole).toBeGreaterThan(5);
+    expect(stub).toBeLessThan(whole * 0.85);
+    expect(none).toBeLessThan(whole * 0.3);
   });
 
   it('FRACTURE GAZE: breaking the carapace open opens inner eyes, and every open eye adds a beam (more damage)', () => {
@@ -246,7 +256,10 @@ describe('the Witness in game (witness=1)', () => {
         }
       }
       const eyes = beh.openEyes;
-      m.setSources(createScriptSource(parseScript('2:sig*60'), m.tick + 1), createScriptSource([], m.tick + 1));
+      m.setSources(
+        createScriptSource(parseScript('2:sig*60'), m.tick + 1),
+        createScriptSource([], m.tick + 1),
+      );
       const i0 = foe.view.integrityPct;
       for (let t = 0; t < 150; t++) m.step();
       return { eyes, dealt: i0 - foe.view.integrityPct };
@@ -256,7 +269,7 @@ describe('the Witness in game (witness=1)', () => {
     expect(closed.eyes).toBe(0);
     expect(open.eyes).toBeGreaterThanOrEqual(2);
     expect(closed.dealt).toBeGreaterThan(1);
-    expect(open.dealt).toBeGreaterThan(closed.dealt * 1.15);
+    expect(open.dealt).toBeGreaterThan(closed.dealt * 1.3);
   });
   it('on KO the structure fails over 2–4 s: the halo drifts off, the arms fall, the eye goes out last', () => {
     const { m, w, beh } = witnessMatch();

@@ -29,7 +29,7 @@ const isWarmWound = (c: number): boolean => {
   return (h < 30 / 360 || h > 340 / 360) && s > 0.45 && l > 0.25 && l < 0.8;
 };
 
-describe('The Witness painter v1 (rest pose, region bodies)', () => {
+describe('The Witness painter v2 (rest pose, region bodies)', () => {
   it('is deterministic', () => {
     const b = paintWitness(1234, DEFAULT_LIGHTING);
     expect(b.regions.length).toBe(W.regions.length);
@@ -39,14 +39,14 @@ describe('The Witness painter v1 (rest pose, region bodies)', () => {
     }
   });
 
-  it('has the silhouette hierarchy as separate regions: eye, carapace + 3 interior layers, shrine, 4 halo arcs, 4 asymmetric arms', () => {
+  it('has the silhouette hierarchy as separate regions: eye, carapace + 3 interior layers, shrine, 5 halo arcs, 4 asymmetric arms', () => {
     const count = (k: string): number => W.regions.filter((r) => r.kind === k).length;
     expect(count('eye')).toBe(1);
     expect(count('carapace')).toBe(1);
     expect(count('interior')).toBe(3);
     expect(count('shrine')).toBe(1);
-    expect(count('halo')).toBe(4);
-    expect(count('arm')).toBe(12);
+    expect(count('halo')).toBe(5);
+    expect(count('arm')).toBe(14);
     // four arms with different joint counts (wrong at the second glance), each with its joint chain
     expect(W.arms).toHaveLength(4);
     expect(new Set(W.arms.map((a) => a.regions.length)).size).toBeGreaterThan(1);
