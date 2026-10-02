@@ -142,7 +142,8 @@ export class ArenaHazards {
           (c.y > a.maxY - a.softWall && c.vy > 0));
       const tooOld = c.mode === 0 && roundTick - l.enteredTick > MAX_AGE_TICKS;
       if (leaving || tooOld) {
-        w.retireChunk?.(l.id) ?? w.releaseChunk?.(l.id);
+        if (w.retireChunk) w.retireChunk(l.id);
+        else w.releaseChunk?.(l.id);
         events.push({ t: 'hazard', kind: 'comet-retire', id: l.id, x: c.x, y: c.y, vx: c.vx, vy: c.vy });
         this.live.splice(i, 1);
         continue;
