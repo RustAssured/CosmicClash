@@ -16,6 +16,7 @@ async function main(): Promise<void> {
     footwork: params.orbit ? 'orbit' : 'classic',
     zdepth: params.zdepth,
     witness: params.witness,
+    aftermath: params.aftermath,
   });
   await installHarness(app, params);
 }

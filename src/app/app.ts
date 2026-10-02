@@ -134,6 +134,8 @@ export class App {
   aftermath: Aftermath | null = null;
   private aftermathAt = -1;
   private aftermathDone = false;
+  /** False with the harness's `aftermath=0` (captures and tests go straight to results). */
+  private aftermathEnabled = true;
   private saveNext = false;
   private uiHiddenBefore = false;
   private afterTick = 0;
@@ -194,9 +196,11 @@ export class App {
       footwork?: 'classic' | 'orbit';
       zdepth?: boolean;
       witness?: boolean;
+      aftermath?: boolean;
     } = {},
   ): Promise<void> {
     this.canvas = canvas;
+    this.aftermathEnabled = opts.aftermath ?? true;
     this.footwork = opts.footwork ?? 'classic';
     this.zdepth = !!opts.zdepth;
     this.witness = !!opts.witness;
@@ -554,6 +558,7 @@ export class App {
         e.phase === 'ko' &&
         e.winner !== -1 &&
         !s.attract &&
+        this.aftermathEnabled &&
         !this.aftermathDone &&
         m.wins[e.winner] + 1 >= ROUNDS_TO_WIN
       )

@@ -219,7 +219,7 @@ const extra = opt('flags', '')
   .filter(Boolean)
   .map((f) => `&${f}`)
   .join('');
-const url = `${base}/?${sc.params}&freeze=1&tele=${tele}&q=${quality}${lum ? '' : '&lum=0'}${extra}`;
+const url = `${base}/?${sc.params}&freeze=1&aftermath=0&tele=${tele}&q=${quality}${lum ? '' : '&lum=0'}${extra}`;
 console.log(`${name}: ${url}`);
 const browser = await launchRealtime();
 const { page, errors } = await openGame(browser, url, null);
