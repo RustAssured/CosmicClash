@@ -196,29 +196,34 @@ describe('the Witness in game (witness=1)', () => {
     expect(broken.guard).toBeCloseTo(0.25 + 0.75 * (2 / 5), 5);
   });
 
-  it('SWEEPING ARCHITECTURE: severed arms shorten the reach (less damage dealt)', () => {
+  it('SWEEPING ARCHITECTURE: severed arms shorten the reach (fewer blades land)', () => {
+    // counted by the blades that connect (the kit's per-blade hit bits): damage alone also counts the lunge's body contact
+    // and the severed arms' debris
     const sweep = (sever: string[]): number => {
       const { m, w, beh } = witnessMatch(7, 'asteroid');
-      const foe = m.fighters[1] as FighterImpl;
-      (foe as unknown as { px: number }).px = w.px + 120;
+      (m.fighters[1] as unknown as { px: number }).px = w.px + 120;
       for (const k of sever) beh.debugSever(k);
       m.setSources(
         createScriptSource(parseScript('4:crush'), m.tick + 1),
         createScriptSource([], m.tick + 1),
       );
-      const i0 = foe.view.integrityPct;
-      for (let t = 0; t < 150; t++) m.step();
-      return i0 - foe.view.integrityPct;
+      let mask = 0;
+      for (let t = 0; t < 150; t++) {
+        m.step();
+        mask |= (beh as unknown as { kit: { hitMask: number } }).kit.hitMask;
+      }
+      let blades = 0;
+      for (let b = 8; b < 12; b++) if (mask & (1 << b)) blades++;
+      return blades;
     };
     // the two front arms (0 and 2) do the sweeping: cut one to its root segment and lose the other, then lose both
     const whole = sweep([]);
     const stub = sweep(['arm0.1', 'arm2.0']);
     const none = sweep(['arm0.0', 'arm2.0']);
-    expect(whole).toBeGreaterThan(5);
-    expect(stub).toBeLessThan(whole * 0.85);
-    expect(none).toBeLessThan(whole * 0.3);
+    expect(whole).toBeGreaterThanOrEqual(2);
+    expect(stub).toBeLessThan(whole);
+    expect(none).toBe(0);
   });
-
   it('FRACTURE GAZE: breaking the carapace open opens inner eyes, and every open eye adds a beam (more damage)', () => {
     const gaze = (openUp: boolean): { eyes: number; dealt: number } => {
       const { m, w, beh } = witnessMatch(7, 'asteroid');

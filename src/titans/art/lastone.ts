@@ -1029,11 +1029,12 @@ export function paintWitness(
   seed: number,
   lighting: StageLighting,
   armStyle: WitnessArmStyle = WITNESS_ARM_STYLE,
+  opts: { micro?: boolean } = {},
 ): WitnessBody {
   const ramps = buildLitRamps(WITNESS_MATERIALS, lighting, 0.85);
   const regions: WitnessRegion[] = [];
   const add = (r: WitnessRegion): number => regions.push(r) - 1;
-  const eye = add(paintEyeCradle(ramps, lighting));
+  const eye = add(paintEyeCradle(ramps, lighting, opts.micro ?? true));
   const car = add(paintCarapace(ramps, lighting, seed, eye));
   add(paintInterior(ramps, lighting, seed, car, 1));
   add(paintInterior(ramps, lighting, seed, car, 2));
@@ -1114,7 +1115,7 @@ function armTurn(S: { x: Float64Array; y: Float64Array }): number {
 
 /* ---------------------------------------------------------------- the eye (root, KO core) */
 
-function paintEyeCradle(ramps: number[][], lighting: StageLighting): WitnessRegion {
+function paintEyeCradle(ramps: number[][], lighting: StageLighting, micro: boolean): WitnessRegion {
   const R = WE.eyeR;
   const rc = regionCanvas(-WE.rimR, -WE.rimR, WE.rimR, WE.rimR);
   const { cv, ox, oy } = rc;
@@ -1149,7 +1150,7 @@ function paintEyeCradle(ramps: number[][], lighting: StageLighting): WitnessRegi
     rc,
     ramps,
     lighting,
-    (colors, c) => paintWitnessEye(colors, c, ox, oy, lighting),
+    (colors, c) => paintWitnessEye(colors, c, ox, oy, lighting, micro),
     WE.pupilDX,
     WE.pupilDY,
     9,
@@ -1168,23 +1169,62 @@ function paintEyeCradle(ramps: number[][], lighting: StageLighting): WitnessRegi
   );
 }
 
-/** Bone sclera shaded as a sphere, a celadon → tarnished-gold radial iris, an abyssal pupil, ONE sharp catchlight. */
+/**
+ * Bone sclera shaded as a sphere, a celadon → tarnished-gold radial iris, an abyssal pupil, ONE sharp catchlight.
+ *
+ * With `micro` (the default) the eye is also a WORLD on close inspection: the value structure is the same at 1× (every
+ * microfeature moves the local tone by at most one or two ramp steps, sparse, never a new edge), but zoomed in:
+ *  - the sclera is an ice world: faint latitude seams, plate boundaries (Worley edges), a few hairline fissures, and where
+ *    it meets the iris a crenellated ring wall;
+ *  - the iris is a crater landscape: radial canyons with lit ridges beside them, three concentric terraces stepping down
+ *    to the pupil, three warm points of light in the valleys (settlements, vents), and a collarette of regular built
+ *    notches;
+ *  - the pupil is a shaft: rims step down into it and one deep teal glow sits at the very bottom;
+ *  - the catchlight resolves into a lens facet with a structural seam across it.
+ */
 function paintWitnessEye(
   colors: Uint32Array,
   cv: ArtCanvas,
   ox: number,
   oy: number,
   lighting: StageLighting,
+  micro: boolean,
 ): void {
   const R = WE.eyeR;
   const bone = W_BONE.map(hex);
   const irisR = W_IRIS.map(hex);
   const pup = ['#010205', '#04060c', '#090c18', '#14182a'].map(hex);
+  const warm = ['#a88a44', '#e2c77e'].map(hex);
+  const deep = hex('#0a2228');
   const sclera = WID('sclera');
   const iris = WID('iris');
   const pupil = WID('pupil');
   const lx = lighting.dir[0] * 0.7;
   const ly = lighting.dir[1];
+  const wor = makeWorley();
+  // hairline fissures across the sclera: short polylines (body px), drawn 1 px wide
+  const fissures: [number, number, number, number][] = [
+    [-24, -9, -17, -4],
+    [-17, -4, -13, -6],
+    [16, 18, 22, 11],
+    [9, -24, 14, -20],
+    [-20, 14, -14, 20],
+  ];
+  const onFissure = (bx: number, by: number): boolean => {
+    for (const [ax, ay, cx, cy] of fissures) {
+      const dx = cx - ax;
+      const dy = cy - ay;
+      const u = clamp01(((bx - ax) * dx + (by - ay) * dy) / (dx * dx + dy * dy));
+      if (Math.hypot(bx - ax - u * dx, by - ay - u * dy) < 0.5) return true;
+    }
+    return false;
+  };
+  // settlements / vents: angle (rad) and radius (iris fraction t), in valleys between canyons
+  const lights: [number, number][] = [
+    [2.35, 0.62],
+    [-0.55, 0.48],
+    [0.95, 0.74],
+  ];
   for (let y = 0; y < cv.h; y++)
     for (let x = 0; x < cv.w; x++) {
       const i = y * cv.w + x;
@@ -1207,7 +1247,21 @@ function paintWitnessEye(
       if (m === sclera) {
         const v = 1.2 + lit * 3.6 - (q > 0.92 ? 1.2 : 0) - (by < -R * 0.55 ? 0.8 : 0);
         const fl = Math.floor(v);
-        c = bone[clamp(fl + (v - fl > th8 ? 1 : 0), 1, 5)]!;
+        let k = fl + (v - fl > th8 ? 1 : 0);
+        if (micro) {
+          // microfeatures move the DITHERED level by whole steps (no new dither noise), sparse 1-px marks:
+          // ice-shelf plate boundaries (large Worley cells, broken), latitude seams every ~6 px (every other pixel),
+          // a few hairline fissures, and a crenellated ring wall where the sclera meets the iris
+          worley(bx * 0.11, by * 0.11, 9131, wor);
+          const lat = Math.asin(clamp(by / R, -1, 1)) * (R / 6);
+          let d = 0;
+          if (wor.f2 - wor.f1 < 0.045 && hash01(x, y, 71) > 0.3) d = -1;
+          else if (Math.abs(lat - Math.round(lat)) < 0.08 && (x + y) % 2 === 0) d = -1;
+          if (onFissure(bx, by)) d = -1;
+          if (qi < 0.7) d = Math.floor(((th + Math.PI) / (Math.PI * 2)) * 40) % 2 === 0 ? 1 : -1;
+          k += d;
+        }
+        c = bone[clamp(k, 1, 5)]!;
       } else if (m === iris) {
         const t = (qi - 0.27) / (0.66 - 0.27); // 0 at the pupil, 1 at the limbus
         const fibre = ridged(th * 5.1 + 2, qi * 5.5, 4177, 2) - 0.5;
@@ -1215,15 +1269,45 @@ function paintWitnessEye(
         let v = t < 0.2 ? 4.3 + fibre * 1.2 : 3.4 - t * 2.2 + fibre * 1.8 + (lit - 0.5) * 1.0;
         if (t > 0.86) v = 0.2;
         const fl = Math.floor(v);
-        c = irisR[clamp(fl + (v - fl > th8 ? 1 : 0), 0, 5)]!;
+        let k = fl + (v - fl > th8 ? 1 : 0);
+        if (micro && t <= 0.86) {
+          if (t < 0.2) {
+            // the collarette is BUILT: 16 regular slots round it
+            if ((((th + Math.PI) / (Math.PI * 2)) * 16) % 1 < 0.16) k -= 1;
+          } else {
+            // canyons: 14 radial cuts, slightly meandering, one step down; three terrace lips one step up (broken)
+            const a = ((th + Math.PI) / (Math.PI * 2)) * 14 + 0.3 * Math.sin(qi * 9 + th * 3);
+            if (a - Math.floor(a) < 0.07) k -= 1;
+            else
+              for (const tt of [0.4, 0.58, 0.74]) if (Math.abs(t - tt) < 0.022 && (x + y) % 2 === 0) k += 1;
+          }
+        }
+        c = irisR[clamp(k, 0, 5)]!;
+        if (micro && t > 0.2 && t < 0.86)
+          for (const [la, lt] of lights) {
+            const px = WE.pupilDX + Math.cos(la) * (0.27 + lt * 0.39) * R;
+            const py = WE.pupilDY + (Math.sin(la) * (0.27 + lt * 0.39) * R) / 0.94;
+            if (Math.floor(bx) === Math.floor(px) && Math.floor(by) === Math.floor(py))
+              c = warm[lt > 0.6 ? 0 : 1]!;
+          }
       } else {
-        const v = qi < 0.18 ? 0 : qi < 0.24 ? 1 : 2;
+        let v = qi < 0.18 ? 0 : qi < 0.24 ? 1 : 2;
+        if (micro) {
+          // the shaft: rims step down into it (one ramp step, broken), and a deep glow at the bottom
+          if (Math.abs(qi - 0.2) < 0.012 || (Math.abs(qi - 0.13) < 0.012 && hash01(x, y, 5) > 0.4))
+            v = Math.min(3, v + 1);
+          if (Math.abs(ix) < 0.6 && Math.abs(iy) < 0.6) {
+            colors[i] = deep;
+            continue;
+          }
+        }
         c = pup[v]!;
       }
       colors[i] = c;
     }
-  // ONE sharp catchlight, up toward the light
+  // ONE sharp catchlight, up toward the light; with microdetail it is a lens facet with a seam across it
   const white = hex('#ffffff');
+  const facet = hex('#cfe9ee');
   const cx = Math.round(-R * 0.34 + (lighting.dir[0] < 0 ? 0 : R * 0.68)) - ox;
   const cy = Math.round(-R * 0.36) - oy;
   const dots: [number, number][] = [
@@ -1236,7 +1320,9 @@ function paintWitnessEye(
   ];
   for (const [dx, dy] of dots) {
     const i = (cy + dy) * cv.w + cx + dx;
-    if (cv.mat[i] !== 0 && cv.mat[i] !== WID('gold')) colors[i] = white;
+    if (cv.mat[i] === 0 || cv.mat[i] === WID('gold')) continue;
+    // the seam runs diagonally through the facet: two of its six pixels a step down from white
+    colors[i] = micro && dx + dy === 0 && !(dx === 0 && dy === 0) ? facet : white;
   }
 }
 
@@ -1675,7 +1761,7 @@ function paintHaloArc(
 export type WitnessArmStyle = 'limb' | 'root' | 'truss';
 export const WITNESS_ARM_STYLES: readonly WitnessArmStyle[] = ['limb', 'root', 'truss'];
 /** The style the game uses. */
-export const WITNESS_ARM_STYLE: WitnessArmStyle = 'limb';
+export const WITNESS_ARM_STYLE: WitnessArmStyle = 'truss';
 
 interface ArmCell {
   m: number;

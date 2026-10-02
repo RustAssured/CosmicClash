@@ -29,6 +29,36 @@ const isWarmWound = (c: number): boolean => {
   return (h < 30 / 360 || h > 340 / 360) && s > 0.45 && l > 0.25 && l < 0.8;
 };
 
+describe('The Witness eye microdetail', () => {
+  it('adds texture inside the shapes only: same materials, the 1× read (3×3 blur) moves < 5 luma on average', () => {
+    const flat = paintWitness(1234, DEFAULT_LIGHTING, undefined, { micro: false }).regions[0]!.map;
+    const micro = W.regions[0]!.map;
+    // no new shapes: the material map (and so the matter, hit masks and silhouette) is identical
+    expect(Array.from(micro.material)).toEqual(Array.from(flat.material));
+    const lum = (c: number): number => 0.299 * pr(c) + 0.587 * pg(c) + 0.114 * pb(c);
+    let changed = 0;
+    let sum = 0;
+    let n = 0;
+    for (let y = 1; y < flat.h - 1; y++)
+      for (let x = 1; x < flat.w - 1; x++) {
+        if (flat.material[y * flat.w + x] === 0) continue;
+        let a = 0;
+        let b = 0;
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            a += lum(flat.baseColor[(y + dy) * flat.w + x + dx]!);
+            b += lum(micro.baseColor[(y + dy) * flat.w + x + dx]!);
+          }
+        sum += Math.abs(a - b) / 9;
+        n++;
+        if (flat.baseColor[y * flat.w + x] !== micro.baseColor[y * flat.w + x]) changed++;
+      }
+    expect(sum / n).toBeLessThan(5);
+    // and there IS detail: a real share of the eye's pixels carry it
+    expect(changed / n).toBeGreaterThan(0.08);
+  });
+});
+
 describe('The Witness painter v2 (rest pose, region bodies)', () => {
   it('is deterministic', () => {
     const b = paintWitness(1234, DEFAULT_LIGHTING);
