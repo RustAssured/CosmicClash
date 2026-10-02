@@ -391,6 +391,7 @@ export class Match implements MatchApi {
         q(v.spin, 4096),
         q(v.z, 16),
       );
+      if (f.stateHash) h = f.stateHash(h);
     }
     return h >>> 0;
   }

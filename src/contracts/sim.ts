@@ -303,6 +303,8 @@ export interface Fighter {
    * live tick, after both fighters ticked and before world.tick(), so neither slot's order (D17) biases contact.
    */
   resolvePair?(foe: Fighter, ctx: FighterTickCtx): void;
+  /** Fold fighter-private simulation state (rig regions, behaviour state) into a determinism hash (proposal 160/162). */
+  stateHash?(h: number): number;
   /** Called by the match when the foe's KO is final/round decided (victory pose). */
   setVictory(): void;
   /** For the AI's short-horizon lookahead: frame data lookup by move id. */
