@@ -16,14 +16,23 @@ import {
   type WebGLRenderer,
   type WebGLRenderTarget,
 } from 'three';
-import { LOGICAL_H, LOGICAL_W, type RenderLayer, type ViewRect } from '@/contracts';
+import { LOGICAL_H, LOGICAL_W, type RenderLayer, type RenderPart, type ViewRect } from '@/contracts';
 import { compileScene, unitQuad } from './gl';
 import { makePlacement, placeLayer, type LayerPlacement } from './layerMap';
 import type { LayerTextures } from './layerTextures';
-import { LAYER_FRAG, LAYER_VERT } from './shaders';
+import { LAYER_FRAG, LAYER_VERT, PART_FRAG } from './shaders';
+import { ROT_LUT, rotBoundsEx } from './rotsprite';
 
 /** Maximum number of 2D layers composited per frame (extra layers are dropped with one warning). */
 export const MAX_LAYERS = 48;
+/** Maximum number of rig parts (RenderLayer.parts) drawn per frame, over all layers. */
+export const MAX_PARTS = 96;
+
+interface PartSlot {
+  mesh: Mesh;
+  material: RawShaderMaterial;
+  rect: Vector4;
+}
 
 interface Slot {
   mesh: Mesh;
@@ -42,9 +51,14 @@ export class LayerCompositor {
   private readonly scene = new Scene();
   private readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private readonly slots: Slot[] = [];
+  private readonly partSlots: PartSlot[] = [];
+  private readonly partOrder: RenderPart[] = [];
   private readonly sorted: RenderLayer[] = [];
   private readonly place: LayerPlacement = makePlacement();
   private warned = false;
+  private warnedParts = false;
+  /** Rig parts drawn last frame. */
+  drawnParts = 0;
   /** Layers drawn last frame (for stats/tests). */
   drawn = 0;
   private readonly res = new Vector2(LOGICAL_W, LOGICAL_H);
@@ -54,6 +68,41 @@ export class LayerCompositor {
     private readonly emisGain: { value: number },
   ) {
     for (let i = 0; i < MAX_LAYERS; i++) this.slots.push(this.makeSlot(i));
+    for (let i = 0; i < MAX_PARTS; i++) this.partSlots.push(this.makePartSlot());
+  }
+
+  private makePartSlot(): PartSlot {
+    const rect = new Vector4();
+    const material = new RawShaderMaterial({
+      glslVersion: GLSL3,
+      vertexShader: LAYER_VERT,
+      fragmentShader: PART_FRAG,
+      uniforms: {
+        uRes: { value: this.res },
+        uRect: { value: rect },
+        uPart: { value: null },
+        uEmis: { value: null },
+        uHasEmis: { value: 0 },
+        uPartOrigin: { value: [0, 0] },
+        uPartSize: { value: [0, 0] },
+        uPivot: { value: [0, 0] },
+        uRotCS: { value: [0, 0] },
+        uFacing: { value: 1 },
+        uDest: { value: [0, 0] },
+        uAlpha: { value: 1 },
+        uEmisGain: this.emisGain,
+      },
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      side: DoubleSide,
+    });
+    setLayerBlend(material, 'normal');
+    const mesh = new Mesh(unitQuad(), material);
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    this.scene.add(mesh);
+    return { mesh, material, rect };
   }
 
   private makeSlot(i: number): Slot {
@@ -126,9 +175,69 @@ export class LayerCompositor {
   ): number {
     const n = this.sortLayers(layers);
     let used = 0;
+    let usedParts = 0;
+    let order = 0;
     for (let i = 0; i < MAX_LAYERS; i++) this.slots[i]!.mesh.visible = false;
+    for (let i = 0; i < MAX_PARTS; i++) this.partSlots[i]!.mesh.visible = false;
     for (let i = 0; i < n; i++) {
       const layer = this.sorted[i]!;
+      if (layer.parts && layer.parts.length > 0 && layer.space === 'world') {
+        // a rig: the layer is an atlas, each part drawn rotated (and mirrored by `facing`) about its pivot, in part-z order
+        const gpu = this.textures.acquire(layer);
+        const ps = this.partOrder;
+        ps.length = 0;
+        for (const part of layer.parts) {
+          let j = ps.length;
+          while (j > 0 && ps[j - 1]!.z > part.z) {
+            ps[j] = ps[j - 1]!;
+            j--;
+          }
+          ps[j] = part;
+        }
+        for (const part of ps) {
+          if (usedParts >= MAX_PARTS) {
+            if (!this.warnedParts) {
+              console.warn(`renderer: more than ${MAX_PARTS} rig parts in a frame; extra parts dropped`);
+              this.warnedParts = true;
+            }
+            break;
+          }
+          const qx = part.wx - view.x0;
+          const qy = part.wy - view.y0;
+          const b = rotBoundsEx({
+            pixels: layer.pixels,
+            w: part.sw,
+            h: part.sh,
+            px: part.px,
+            py: part.py,
+            step: part.step,
+            facing: layer.facing,
+          });
+          const x0 = Math.max(0, qx + b.x0);
+          const y0 = Math.max(0, qy + b.y0);
+          const x1 = Math.min(LOGICAL_W, qx + b.x1);
+          const y1 = Math.min(LOGICAL_H, qy + b.y1);
+          if (x1 <= x0 || y1 <= y0) continue;
+          const s = this.partSlots[usedParts++]!;
+          s.mesh.visible = true;
+          s.mesh.renderOrder = ++order;
+          s.rect.set(x0, y0, x1, y1);
+          const u = s.material.uniforms;
+          u.uPart!.value = gpu.tex;
+          u.uEmis!.value = gpu.emis;
+          u.uHasEmis!.value = gpu.emis ? 1 : 0;
+          u.uPartOrigin!.value = [part.sx, part.sy];
+          u.uPartSize!.value = [part.sw, part.sh];
+          u.uPivot!.value = [part.px, part.py];
+          const st = ((part.step % ROT_LUT.cos.length) + ROT_LUT.cos.length) % ROT_LUT.cos.length;
+          u.uRotCS!.value = [ROT_LUT.cos[st]!, ROT_LUT.sin[st]!];
+          u.uFacing!.value = layer.facing === -1 ? -1 : 1;
+          u.uDest!.value = [qx, qy];
+          u.uAlpha!.value = layer.alpha;
+          setLayerBlend(s.material, layer.blend);
+        }
+        continue;
+      }
       const p = this.place;
       placeLayer(layer, view, alpha, p);
       // Off-screen world layers cost nothing: skip if the destination rect misses the frame entirely.
@@ -139,7 +248,7 @@ export class LayerCompositor {
       const gpu = this.textures.acquire(layer);
       const slot = this.slots[used++]!;
       slot.mesh.visible = true;
-      slot.mesh.renderOrder = used;
+      slot.mesh.renderOrder = ++order;
       const u = slot.material.uniforms;
       // Clip the quad to the frame (the shader still maps by absolute pixel, so clipping is invisible).
       slot.rect.set(
@@ -158,27 +267,32 @@ export class LayerCompositor {
       u.uAlpha!.value = layer.alpha;
       setLayerBlend(slot.material, layer.blend);
     }
-    this.drawn = used;
+    this.drawn = used + usedParts;
+    this.drawnParts = usedParts;
     // The target is a dedicated layer target: it starts each frame transparent, so what it holds afterwards is exactly
     // the premultiplied "over" chain of this frame's layers (colour + alpha, and emissive + alpha).
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, false, false);
-    if (used > 0) renderer.render(this.scene, this.camera);
-    return used;
+    if (used + usedParts > 0) renderer.render(this.scene, this.camera);
+    return used + usedParts;
   }
 
-  /** Compile the layer program (all slots share it) before the first frame. */
+  /** Compile the layer and part programs (all slots share them) before the first frame. */
   compile(renderer: WebGLRenderer): Promise<void> {
     for (const s of this.slots) s.mesh.visible = false;
+    for (const s of this.partSlots) s.mesh.visible = false;
     this.slots[0]!.mesh.visible = true;
+    this.partSlots[0]!.mesh.visible = true;
     return compileScene(renderer, this.scene, this.camera).then(() => {
       this.slots[0]!.mesh.visible = false;
+      this.partSlots[0]!.mesh.visible = false;
     });
   }
 
   dispose(): void {
     for (const s of this.slots) s.material.dispose();
+    for (const s of this.partSlots) s.material.dispose();
   }
 }
 

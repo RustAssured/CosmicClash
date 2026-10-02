@@ -6,6 +6,7 @@ import {
   type ArenaInfo,
   type StageId,
   type StageInfo,
+  type CometSchedule,
   type StageLighting,
 } from '@/contracts';
 
@@ -174,6 +175,47 @@ const tussenRamps: readonly RampSpec[] = [
   ramp(0.22, 0.3, 4, 0.5, 0.92, 0.32, 0.16), // pale sage: the bridge from celadon to the warm stars
 ];
 
+/* ---------------------------------------------------------------------------------------------- *
+ *  6. FRACTURED ORBITAL MAUSOLEUM — red-violet nebula, bone monoliths, slate megastructure, dead moons, sacred gold
+ * ---------------------------------------------------------------------------------------------- */
+const mausoleumLighting: StageLighting = {
+  dir: unit(0.45, -0.6, 0.66),
+  color: '#ff7b9c',
+  ambient: '#1a0a1e',
+  rim: '#ffa8d4',
+  screenPos: [0.8125, 0.0611], // the dying red-violet sun behind the broken ring
+};
+const mausoleumRamps: readonly RampSpec[] = [
+  ramp(0.78, 0.5, 7, 0.015, 0.22, 0.8, 0.84), // void: violet-black
+  ramp(0.9, 0.62, 8, 0.08, 0.66, 0.84, 0.96), // red-violet nebula
+  ramp(0.98, 0.7, 6, 0.08, 0.5, 0.94, 1.02), // crimson veins
+  ramp(0.07, 0.16, 7, 0.05, 0.62, 0.0, 0.1), // bone: the monoliths and cathedral stone
+  ramp(0.66, 0.18, 6, 0.04, 0.42, 0.7, 0.62), // slate: the megastructure and the orbital rings
+  ramp(0.12, 0.7, 5, 0.45, 0.95, 0.09, 0.15), // sacred gold: glyphs, the last lit windows
+  ramp(0.74, 0.1, 5, 0.1, 0.58, 0.72, 0.7), // dead-moon ash
+  ramp(0.95, 0.4, 4, 0.2, 0.7, 0.9, 1.0), // rose: the bridge from the nebula to the gold
+];
+
+/* ---------------------------------------------------------------------------------------------- *
+ *  7. STAR-BIRTH SHEARFIELD — rose gas lanes, orange plasma, umber asteroid rivers, a white-hot protostar
+ * ---------------------------------------------------------------------------------------------- */
+const shearfieldLighting: StageLighting = {
+  dir: unit(-0.6, -0.45, 0.66),
+  color: '#ffc88a',
+  ambient: '#140a1c',
+  rim: '#ff8a5c',
+  screenPos: [0.0938, 0.1389], // the protostar, top left
+};
+const shearfieldRamps: readonly RampSpec[] = [
+  ramp(0.7, 0.5, 7, 0.015, 0.2, 0.72, 0.76), // void: blue-violet black
+  ramp(0.94, 0.6, 8, 0.08, 0.7, 0.88, 1.0), // rose gas lanes
+  ramp(0.06, 0.9, 8, 0.15, 0.84, 0.0, 0.12), // orange plasma
+  ramp(0.12, 0.6, 4, 0.75, 0.98, 0.1, 0.16), // white-hot
+  ramp(0.05, 0.35, 6, 0.04, 0.42, -0.02, 0.09), // umber rock: the asteroid rivers
+  ramp(0.76, 0.4, 5, 0.05, 0.38, 0.72, 0.82), // violet dust
+  ramp(0.5, 0.55, 5, 0.12, 0.7, 0.55, 0.45), // cyan ions (far accent)
+  ramp(0.01, 0.6, 4, 0.3, 0.75, -0.04, 0.05), // coral: the bridge from rose to orange
+];
 /**
  * Number of colours in each ramp of every palette, in palette order (also published as `StageInfo.ramps`). The renderer uses
  * it to dither ONLY between neighbouring steps of one ramp, the way a pixel artist does, instead of guessing boundaries.
@@ -184,6 +226,8 @@ export const STAGE_RAMPS: Readonly<Record<StageId, readonly number[]>> = {
   redgiant: redgiantRamps.map((r) => r.n),
   quasar: quasarRamps.map((r) => r.n),
   tussenruimte: tussenRamps.map((r) => r.n),
+  mausoleum: mausoleumRamps.map((r) => r.n),
+  shearfield: shearfieldRamps.map((r) => r.n),
 };
 
 const mk = (
@@ -193,19 +237,20 @@ const mk = (
   blurb: string,
   lighting: StageLighting,
   specs: readonly RampSpec[],
+  comets?: CometSchedule,
 ): StageInfo => ({
   id,
   index: STAGE_IDS.indexOf(id),
   name,
   nameKo,
   blurb,
-  arena: arena(),
+  arena: comets ? { ...arena(), comets } : arena(),
   lighting,
   palette: buildPalette(specs),
   ramps: specs.map((r) => r.n),
 });
 
-/** All five stages, complete and final. Other modules read `lighting` and `arena` from here. */
+/** Every stage (the five originals and the two slice arenas). Other modules read `lighting` and `arena` from here. */
 export const STAGE_INFO: Readonly<Record<StageId, StageInfo>> = {
   nursery: mk(
     'nursery',
@@ -246,5 +291,23 @@ export const STAGE_INFO: Readonly<Record<StageId, StageInfo>> = {
     'Between two galaxies there is only stillness.',
     tussenLighting,
     tussenRamps,
+  ),
+  mausoleum: mk(
+    'mausoleum',
+    'Orbital Mausoleum',
+    '궤도 영묘',
+    'Broken rings and dead moons keep watch over the fallen.',
+    mausoleumLighting,
+    mausoleumRamps,
+  ),
+  shearfield: mk(
+    'shearfield',
+    'Star Shearfield',
+    '별의 전단장',
+    'Gas lanes tear and rocks run in rivers where suns are born.',
+    shearfieldLighting,
+    shearfieldRamps,
+    // arena comets (src/sim/hazards.ts): one every 5–7 s, with a 1.5 s warning glint at the entry point
+    { every: [300, 420], warn: 90, speed: [170, 240], mass: 90, maxLive: 2 },
   ),
 };

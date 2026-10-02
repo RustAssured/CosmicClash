@@ -202,8 +202,10 @@ export class FakePanner extends FakeNode {
 export class FakeBufferSource extends FakeNode {
   buffer: FakeBuffer | null = null;
   loop = false;
+  playbackRate: FakeParam;
   constructor(ctx: FakeContext) {
     super(ctx, 'bufferSource');
+    this.playbackRate = P(ctx, 'playbackRate', 1);
   }
   override start(when = 0, offset = 0, duration?: number): void {
     if (!this.buffer) fail('bufferSource.start without a buffer');

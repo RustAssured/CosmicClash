@@ -43,7 +43,6 @@ import {
   MAX_IMPULSES,
   MAX_SHOCKS,
   MAX_WELLS,
-  type FrameFxExt,
   type PrepareStep,
   type SceneryForces,
   type SceneryFrame,
@@ -955,10 +954,9 @@ class PixelRenderer implements DebuggableRenderer {
       m++;
     }
     f.nImpulse = m;
-    // proposed FrameFx additions (proposal 165): gravity wells bend the scenery's matter, the arena comets get tails and paths
-    const ext = fx as FrameFxExt;
+    // FrameFx.wells / .comets (proposal 165): gravity wells bend the scenery's matter, the arena comets get tails and paths
     let nw = 0;
-    for (const w of ext.wells ?? []) {
+    for (const w of fx.wells ?? []) {
       if (nw >= MAX_WELLS || !(w.radius > 1) || !(w.strength > 0)) continue;
       f.well[nw * 4] = w.x - vx;
       f.well[nw * 4 + 1] = w.y - vy;
@@ -968,7 +966,7 @@ class PixelRenderer implements DebuggableRenderer {
     }
     f.nWell = nw;
     let nc = 0;
-    for (const c of ext.comets ?? []) {
+    for (const c of fx.comets ?? []) {
       if (nc >= MAX_COMETS) break;
       f.comet[nc * 4] = c.x - vx;
       f.comet[nc * 4 + 1] = c.y - vy;

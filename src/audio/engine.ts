@@ -36,6 +36,10 @@ import { GLASS, makeOut, noiseHit, partials, riser, thump, tone, whistlePass } f
 import type { TitanVoice, VoiceCtx } from './voices/types';
 import { createTitanVoice } from './voices/index';
 import { UI_TRIM, playUi } from './voices/ui';
+import { cometEnter, cometWarn } from './voices/materials';
+
+/** Length of the arena comet's warning riser (the Shearfield's CometSchedule.warn is 90 ticks = 1.5 s). */
+const COMET_WARN_SEC = 1.5;
 
 /** Time between an event reaching `handle()` and its first sample: schedules a little ahead so start times are exact. */
 const LOOKAHEAD = 0.006;
@@ -672,6 +676,12 @@ class Engine implements AudioEngineExt {
         const tc = this.trimmed(CUE_TRIM[ev.titan] ?? 1);
         if (v.onCue) v.onCue(tc, t, ev);
         else playCueGeneric(tc, t, ev.amount, c.panOf(ev.x));
+        return;
+      }
+      case 'hazard': {
+        if (ev.kind === 'comet-retire' || !c.take(0)) return;
+        if (ev.kind === 'comet-warn') cometWarn(c, t, c.panOf(ev.x), COMET_WARN_SEC);
+        else cometEnter(c, t, c.panOf(ev.x), ev.vx, Math.hypot(ev.vx, ev.vy));
         return;
       }
       case 'timescale':

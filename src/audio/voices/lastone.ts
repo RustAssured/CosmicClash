@@ -13,6 +13,14 @@ import {
   whistlePass,
 } from './synth';
 import type { TitanVoice, VoiceCtx } from './types';
+import {
+  ceramicFracture,
+  filamentSnap,
+  resonance,
+  stoneShear,
+  strainedMetal,
+  wrongHarmonics,
+} from './materials';
 
 /**
  * THE LAST ONE — glassy celadon. A single ancient eye and a halo of tendrils; the sound is struck glass and ceramic:
@@ -43,6 +51,8 @@ interface Pad {
 export function createLastOneVoice(): TitanVoice {
   const charging = new Map<number, Charging>();
   const pads = new Map<number, Pad>();
+  /** Remaining mass per slot: a hollowed Witness rings lower, longer and further out of tune. */
+  const massBy: [number, number] = [1, 1];
 
   const startGaze = (c: VoiceCtx, t: number, slot: number, pan: number): void => {
     stopGaze(slot, c.ac.currentTime);
@@ -148,6 +158,8 @@ export function createLastOneVoice(): TitanVoice {
             detune: i * 5,
           });
         tone(c, o, t, { f0: 62, f1: 110, dur: 0.6, gain: 0.16, attack: 0.3, type: 'triangle' });
+        // the sacred metal of its frame strains under the load it is about to move
+        strainedMetal(c, o, t, 0.6, 196, 0.03, resonance(massBy[ev.slot]));
       } else if (!id.endsWith('gaze') && !id.endsWith('lastlight') && !id.endsWith('sidestep')) {
         noiseHit(c, makeOut(c, pan, 0.2), t, {
           dur: 0.15,
@@ -201,11 +213,13 @@ export function createLastOneVoice(): TitanVoice {
         const o = makeOut(c, pan, 0.3);
         noiseHit(c, o, t, { dur: 0.018, gain: 0.4, filter: { type: 'highpass', f0: 4500 }, attack: 0.0005 });
         partials(c, o, t, pick(c, BELLS) * 2, TINK, { decay: 0.16, gain: 0.11 });
+        filamentSnap(c, o, t + 0.005, 880, p * 0.5, resonance(massBy[ev.slot]));
       } else if (id.endsWith('shatter')) {
         const o = makeOut(c, pan, 0.55);
         thump(c, makeOut(c, pan * 0.3, 0), t, 80, 28, 0.9, 0.55);
         gravel(c, o, t, { dur: 0.7, grains: 30, f: 6000, spread: 1.6, gain: 0.16, q: 2.4 });
         partials(c, o, t, 1174.66, GLASS, { decay: 0.9, gain: 0.07, shimmer: 0.35 });
+        stoneShear(c, o, t + 0.02, p, resonance(massBy[ev.slot]));
       } else if (id.endsWith('lunge')) {
         noiseHit(c, makeOut(c, pan, 0.2), t, {
           dur: 0.1,
@@ -249,9 +263,15 @@ export function createLastOneVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const ring = 1 - clamp01(ev.blocked) * 0.85;
       const o = makeOut(c, pan, 0.55);
-      const f = pick(c, BELLS.slice(0, 4)) * (2.7 - 0.7 * mag);
+      // damage changes the resonance: the more of the body is gone (and the more damaged the struck spot), the lower, longer
+      // and more out of tune it rings — and past a point its overtones go wrong
+      const res = resonance(massBy[ev.target], ev.onDamaged);
+      const f = pick(c, BELLS.slice(0, 4)) * (2.7 - 0.7 * mag) * res.pitch;
+      ceramicFracture(c, o, t, mag * ring, res);
+      if (ev.heavy) stoneShear(c, o, t + 0.01, mag * ring, res);
+      if (res.spread > 0.4) wrongHarmonics(c, o, t + 0.02, f * 0.5, 0.04 * res.spread * ring, res);
       partials(c, o, t, f, GLASS, {
-        decay: 0.35 + 1.1 * mag,
+        decay: (0.35 + 1.1 * mag) * res.decay,
         gain: (0.07 + 0.1 * mag) * ring,
         shimmer: 0.4,
         attack: 0.001,
@@ -293,6 +313,8 @@ export function createLastOneVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.9);
       gravel(c, o, t, { dur: 1.8, grains: 70, f: 6500, spread: 1.8, gain: 0.55, q: 1.6, decayShape: 1.2 });
+      // its last sound is wrong: a sacred chord with its overtones slipping out of their series
+      wrongHarmonics(c, o, t + 0.3, 293.66, 0.06, resonance(0.2, 1));
       for (const [i, f] of [987.77, 739.99, 587.33, 440, 293.66].entries())
         partials(c, o, t + 0.12 * i, f, GLASS, { decay: 2.2, gain: 0.07, shimmer: 0.4 });
     },
@@ -323,8 +345,10 @@ export function createLastOneVoice(): TitanVoice {
     onCue(c, t, ev) {
       const pan = c.panOf(ev.x);
       const a = clamp01(ev.amount);
-      if (ev.id === 'tendril-sever') {
+      if (ev.id.includes('sever')) {
         const o = makeOut(c, pan, 0.4);
+        // a taut filament (an arm, a tendril) snaps
+        filamentSnap(c, o, t, 660 + 400 * a, a, resonance(massBy[ev.slot]));
         partials(c, o, t, pick(c, BELLS) * 2, TINK, { decay: 0.14, gain: 0.1 });
         tone(c, o, t + 0.01, { f0: 1800, f1: 500, dur: 0.14, gain: 0.05 });
       } else if (ev.id === 'eye-exposed') {
@@ -336,6 +360,7 @@ export function createLastOneVoice(): TitanVoice {
 
     update(c, scene, slot, dt) {
       void dt;
+      massBy[slot] = scene.massFrac;
       const ac = c.ac;
       let p = pads.get(slot);
       if (!p) {

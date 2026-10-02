@@ -84,6 +84,30 @@ export const STAGE_MUSIC: Record<StageId, StageMusic> = {
       [0, 2, 3],
     ],
   },
+  // the Fractured Orbital Mausoleum: solemn, sacred — Dorian's raised sixth is the hope in the ruin
+  mausoleum: {
+    root: 34,
+    mode: 'dorian',
+    bpm: 54,
+    chords: [
+      [0, 2, 4],
+      [3, 5, 0],
+      [5, 0, 2],
+      [1, 3, 5],
+    ],
+  },
+  // the Star-birth Shearfield: violent and alive — open pentatonic over a driving pulse
+  shearfield: {
+    root: 37,
+    mode: 'pentatonic',
+    bpm: 72,
+    chords: [
+      [0, 1, 3],
+      [2, 3, 0],
+      [1, 3, 4],
+      [0, 2, 4],
+    ],
+  },
 };
 
 /**
@@ -128,6 +152,28 @@ export const STAGE_FEEL: Record<StageId, StageFeel> = {
     space: 2.2,
     tension: 0,
     motes: 3,
+  },
+  // solemn and sacred: a slow wide space, a low pad like a choir in a ruin, a little ache, bells falling now and then
+  mausoleum: {
+    density: 0.5,
+    body: 1.2,
+    dark: 0.8,
+    pad: 1.1,
+    padOct: 12,
+    space: 2.0,
+    tension: 0.15,
+    motes: 0.8,
+  },
+  // violent and alive: the densest rhythm, a mid drone, an open pad, a strain of tension that never settles
+  shearfield: {
+    density: 1.15,
+    body: 1.05,
+    dark: 1.0,
+    pad: 0.8,
+    padOct: 24,
+    space: 0.9,
+    tension: 0.25,
+    motes: 0.1,
   },
 };
 

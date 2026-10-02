@@ -448,6 +448,7 @@ async function verify(
         +(q.get('seconds') ?? 60),
         +(q.get('seed') ?? 21),
         +(q.get('level') ?? 4),
+        q.get('orbit') === '0' ? 'classic' : 'orbit',
       );
     } else if (mode === 'titans') out = window.__titans = await runTitanVerification();
     else if (mode === 'stages') out = window.__stages = await runStageVerification();

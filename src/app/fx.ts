@@ -8,11 +8,13 @@ import {
   type LightFx,
   type TitanId,
   type MatchApi,
+  type CometFx,
   type ShockwaveFx,
+  type WellFx,
   type SimEvent,
   type StageImpulseFx,
 } from '@/contracts';
-import { MAX_COMETS, type CometFx, type FrameFxExt } from '@/stages/types';
+import { MAX_COMETS, MAX_WELLS } from '@/stages/types';
 
 /**
  * Turns the sim's event stream into the non-pixel per-frame inputs of the renderer: expanding shockwave rings, scenery
@@ -28,7 +30,9 @@ import { MAX_COMETS, type CometFx, type FrameFxExt } from '@/stages/types';
  *
  * Arena comets (src/sim/hazards.ts): a comet-warn becomes a warning entry (an edge glint and the planned line), a
  * comet-enter a live comet read back every tick from the world's chunk state (so gravity bends it and a capture shows),
- * dropped on comet-retire or when the chunk is gone. Handed to the renderer as FrameFxExt.comets (proposal 165).
+ * dropped on comet-retire or when the chunk is gone. Handed to the renderer as FrameFx.comets (proposal 165).
+ * Gravity wells: each slot's world gravity source (MatterWorld.gravitySourceOf: the Planet's well and Tidal Draw, a Black
+ * Hole's well) becomes FrameFx.wells, its pull mapped to 0..1 (WELL_FULL px/s² = 1), so the scenery's matter bends toward it.
  */
 interface CometTrack {
   /** Matter chunk id; −1 while it is still a warning. */
@@ -114,6 +118,12 @@ const SLEW_DOWN = 0.25;
 /** Blows below this energy (and not heavy) strike no light. */
 const LIGHT_MIN_ENERGY = 900;
 
+/**
+ * Gravity pull (px/s² at half radius) that bends the scenery fully: the Planet's full Tidal Draw (~26 + 150, plus 140 while
+ * shepherding a comet) reaches it; its ambient well (12–26) only stirs nearby debris.
+ */
+const WELL_FULL = 300;
+
 export class FxState {
   private readonly rings: Ring[] = [];
   private heat = 0;
@@ -153,6 +163,8 @@ export class FxState {
   private readonly cometTracks: CometTrack[] = [];
   private readonly cometPool: CometFx[] = [];
   private readonly cometsOut: CometFx[] = [];
+  private readonly wellPool: WellFx[] = [];
+  private readonly wellsOut: WellFx[] = [];
   private readonly chunk = {
     x: 0,
     y: 0,
@@ -185,6 +197,7 @@ export class FxState {
         slot: i < 2 ? i : -1,
         kind: i < 2 ? 'body' : 'impact',
       });
+    for (let i = 0; i < MAX_WELLS; i++) this.wellPool.push({ x: 0, y: 0, radius: 0, strength: 0 });
     for (let i = 0; i < MAX_COMETS; i++)
       this.cometPool.push({ x: 0, y: 0, vx: 0, vy: 0, r: 0, captured: 0, warn: 0 });
     for (let i = 0; i < IMPACT_SLOTS; i++)
@@ -213,6 +226,7 @@ export class FxState {
     this.newest = -1;
     for (const l of this.impacts) l.live = false;
     this.cometTracks.length = 0;
+    this.wellsOut.length = 0;
   }
 
   private addRing(
@@ -378,6 +392,7 @@ export class FxState {
       }
     }
     this.trackComets(match);
+    this.trackWells(match);
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i]!;
       if (++r.age >= r.life) this.rings.splice(i, 1);
@@ -455,6 +470,22 @@ export class FxState {
       c.vy = st.vy;
       c.r = st.radius;
       c.captured = st.mode === 1 || st.owner >= 0 ? 1 : 0;
+    }
+  }
+
+  /** Each slot's gravity source this tick (positions are sim state, so no sub-tick extrapolation). */
+  private trackWells(match: MatchApi): void {
+    const ws = this.wellsOut;
+    ws.length = 0;
+    for (let s = 0; s < 2 && ws.length < MAX_WELLS; s++) {
+      const g = match.world.gravitySourceOf?.(s as 0 | 1);
+      if (!g || !(g.radius > 1) || !(g.strength > 0)) continue;
+      const w = this.wellPool[ws.length]!;
+      w.x = g.x;
+      w.y = g.y;
+      w.radius = g.radius;
+      w.strength = clamp(g.strength / WELL_FULL, 0, 1);
+      ws.push(w);
     }
   }
 
@@ -570,7 +601,8 @@ export class FxState {
       cf.warn = live ? 0 : clamp((c.age + alpha) / c.life, 0.01, 1);
       cs.push(cf);
     }
-    (o as FrameFxExt).comets = cs;
+    o.comets = cs;
+    o.wells = this.wellsOut;
     return o;
   }
 

@@ -25,6 +25,7 @@ import { measureRender, type RoundReport } from './audio-round';
 export interface FightReport extends RoundReport {
   seed: number;
   level: number;
+  footwork: 'classic' | 'orbit';
   matches: number;
   hits: number;
   heavyHits: number;
@@ -34,11 +35,12 @@ const SR = 48000;
 const TICK = 1 / 60;
 const HEAVY_ENERGY = 400;
 
-function newMatch(seed: number, level: number): MatchApi {
+function newMatch(seed: number, level: number, footwork: 'classic' | 'orbit'): MatchApi {
   const cfg: MatchConfig = {
     seed,
     stage: 'nursery',
     mode: 'aivai',
+    footwork,
     slots: [
       { titan: 'lastone', controller: 'ai', aiLevel: level as 4 },
       { titan: 'planet', controller: 'ai', aiLevel: level as 4 },
@@ -52,13 +54,18 @@ function newMatch(seed: number, level: number): MatchApi {
     lighting: DEFAULT_LIGHTING,
   });
   m.setSources(
-    createAiSource(m, 0, createAI(cfg.slots[0].aiLevel!, getTitanDef('lastone'), seed * 7 + 1)),
-    createAiSource(m, 1, createAI(cfg.slots[1].aiLevel!, getTitanDef('planet'), seed * 7 + 2)),
+    createAiSource(m, 0, createAI(cfg.slots[0].aiLevel!, getTitanDef('lastone'), seed * 7 + 1, { footwork })),
+    createAiSource(m, 1, createAI(cfg.slots[1].aiLevel!, getTitanDef('planet'), seed * 7 + 2, { footwork })),
   );
   return m;
 }
 
-export async function runFightVerification(seconds = 60, seed = 21, level = 4): Promise<FightReport> {
+export async function runFightVerification(
+  seconds = 60,
+  seed = 21,
+  level = 4,
+  footwork: 'classic' | 'orbit' = 'orbit',
+): Promise<FightReport> {
   const ctx = new OfflineAudioContext(4, Math.ceil(SR * seconds), SR);
   ctx.destination.channelCountMode = 'explicit';
   ctx.destination.channelInterpretation = 'discrete';
@@ -72,7 +79,7 @@ export async function runFightVerification(seconds = 60, seed = 21, level = 4): 
   split.connect(merge, 1, 3);
   merge.connect(ctx.destination);
 
-  let m = newMatch(seed, level);
+  let m = newMatch(seed, level, footwork);
   let matches = 1;
   const fx = new FxState();
   let tickAt = 0; // audio time of the next tick
@@ -84,7 +91,7 @@ export async function runFightVerification(seconds = 60, seed = 21, level = 4): 
     // run every tick due before the next step, each at its own audio time
     while (tickAt <= now + TICK) {
       if (m.phase === 'matchend') {
-        m = newMatch(seed + matches, level);
+        m = newMatch(seed + matches, level, footwork);
         matches++;
         fx.reset();
       }
@@ -114,5 +121,5 @@ export async function runFightVerification(seconds = 60, seed = 21, level = 4): 
   const buf = await ctx.startRendering();
   await new Promise((res) => setTimeout(res, 50));
   const r = measureRender(buf, seconds, heavy, gr, eng.limiterReductionDb());
-  return { ...r, seed, level, matches, hits, heavyHits: heavy.length };
+  return { ...r, seed, level, footwork, matches, hits, heavyHits: heavy.length };
 }

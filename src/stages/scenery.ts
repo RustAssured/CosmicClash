@@ -4,15 +4,19 @@ import { QuasarScenery } from './quasar/quasar';
 import { RedGiantScenery } from './redgiant/redgiant';
 import { RimScenery } from './rim/rim';
 import { TussenruimteScenery } from './tussenruimte/tussenruimte';
+import { MausoleumScenery } from './mausoleum/mausoleum';
+import { ShearfieldScenery } from './shearfield/shearfield';
 import type { StageScenery } from './types';
 
-/** Every stage now has bespoke, showpiece scenery. */
+/** Every stage has bespoke scenery (the five originals and the two slice arenas). */
 const FACTORIES: Readonly<Record<StageId, () => StageScenery>> = {
   nursery: () => new NurseryScenery(),
   rim: () => new RimScenery(),
   redgiant: () => new RedGiantScenery(),
   quasar: () => new QuasarScenery(),
   tussenruimte: () => new TussenruimteScenery(),
+  mausoleum: () => new MausoleumScenery(),
+  shearfield: () => new ShearfieldScenery(),
 };
 
 /** True when the stage has its own scenery (all five do; kept so callers written against the earlier partial roster keep working). */

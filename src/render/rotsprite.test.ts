@@ -7,6 +7,8 @@ import {
   rotBounds,
   rotRaster,
   rotSample,
+  rotRasterAt,
+  rotSampleAt,
   type RotPart,
 } from './rotsprite';
 
@@ -112,5 +114,49 @@ describe('rotsprite (clean-edge rotation, CPU twin of the GPU sampler)', () => {
           expect(rotSample(part, x, y)).toBe(0);
         }
     }
+  });
+});
+
+describe('proposal 161: alpha-first vote and mirroring (rotSampleAt, the twin of the compositor shader)', () => {
+  it('coverage never depends on colour: recolouring a body cannot change which pixels are drawn (or hit)', () => {
+    for (let step = 0; step < ANGLE_STEPS; step += 5) {
+      const a = testPart(step);
+      const b = { ...a, pixels: a.pixels.slice() };
+      // a "crack": recolour a scatter of opaque pixels
+      for (let i = 0; i < b.pixels.length; i += 7) if (b.pixels[i]! >>> 24) b.pixels[i] = 0xff101820;
+      const ra = rotRasterAt(a);
+      const rb = rotRasterAt(b);
+      let diff = 0;
+      for (let i = 0; i < ra.pixels.length; i++) if ((ra.pixels[i] !== 0) !== (rb.pixels[i] !== 0)) diff++;
+      expect(diff, `step ${step}`).toBe(0);
+    }
+  });
+
+  it('a one-colour part draws exactly the coverage of the colour-majority sampler', () => {
+    for (let step = 0; step < ANGLE_STEPS; step += 3) {
+      const p = solidRect(33, 51, step);
+      const ref = rotRaster(p);
+      const got = rotRasterAt(p);
+      expect(got.w).toBe(ref.w);
+      expect([...got.pixels]).toEqual([...ref.pixels]);
+    }
+  });
+
+  it('facing −1 mirrors about the pivot corner: at angle 0 it is the exact mirror of the source', () => {
+    const p = { ...testPart(0), facing: -1 as const };
+    for (let y = 0; y < p.h; y++)
+      for (let x = 0; x < p.w; x++)
+        expect(rotSampleAt(p, -(x - p.px) - 1, y - p.py)).toBe(p.pixels[y * p.w + x]! >>> 0);
+  });
+
+  it('never invents a colour, mirrored or not', () => {
+    const allowed = new Set([0, 0xff3060c0, 0xff20a0e0]);
+    for (let step = 0; step < ANGLE_STEPS; step += 9)
+      for (const facing of [1, -1] as const) {
+        const r = rotRasterAt({ ...testPart(step), facing });
+        let bad = 0;
+        for (const c of r.pixels) if (!allowed.has(c >>> 0)) bad++;
+        expect(bad).toBe(0);
+      }
   });
 });

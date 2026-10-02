@@ -15,6 +15,7 @@ import {
   type Out,
 } from './synth';
 import type { TitanVoice, VoiceCtx } from './types';
+import { atmosphericTear, magmaVent, resonance, subPressure, tectonicCrack } from './materials';
 
 /**
  * THE PLANET: tectonic rumble and wind. Slow, vast, low. The body is rock under an atmosphere, so the sound is the ground
@@ -41,6 +42,8 @@ export function createPlanetVoice(): TitanVoice {
   const grounds = new Map<number, Ground>();
   /** 0 = full atmosphere, 1 = stripped bare, per fighter slot. */
   const stripped: [number, number] = [0, 0];
+  /** Remaining mass per slot (from the continuous scene): damage changes how the world rings. */
+  const massBy: [number, number] = [1, 1];
 
   /** Crust under strain: a low saw that sags in pitch with a slow tremble, closed down by a low-pass. */
   const groan = (c: VoiceCtx, t: number, o: Out, dur: number, gain: number, f = 58): void => {
@@ -153,9 +156,9 @@ export function createPlanetVoice(): TitanVoice {
           gust(c, t, pan, 0.25, 0.38, 260, 1100, 0.5);
           break;
         case 'crush':
-          // gravity compressing: a groan rising in strain and a sub swell
+          // gravity compressing: a groan rising in strain and the PRESSURE building under it
           groan(c, t, o, 0.6, 0.08, 62);
-          tone(c, o, t, { f0: 40, f1: 66, dur: 0.6, gain: 0.1, attack: 0.3 });
+          subPressure(c, t, pan, 0.6, 0.14);
           break;
         case 'signature':
           // the moon is slung: a swirl of air and a low bell note as it leaves
@@ -237,7 +240,17 @@ export function createPlanetVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const open = 1 - clamp01(ev.blocked) * 0.75;
       impact(c, t, pan, mag * open, 0.45);
-      if (ev.onDamaged > 0.3 || mag > 0.7) crack(c, t + 0.02, pan, mag * open);
+      const res = resonance(massBy[ev.target], ev.onDamaged);
+      if (ev.onDamaged > 0.3 || mag > 0.7) tectonicCrack(c, makeOut(c, pan, 0.45), t + 0.02, mag * open, res);
+      // a hollowed world rings like a drum: a cavity mode in the 100–200 Hz band, longer and lower the more is gone
+      if (res.hollow > 0.25 && open > 0.5)
+        noiseHit(c, makeOut(c, pan, 0.5), t + 0.01, {
+          dur: 0.4 * res.decay,
+          gain: 0.12 * res.hollow * mag,
+          kind: 'brown',
+          filter: { type: 'bandpass', f0: 190 * res.pitch, f1: 120 * res.pitch, q: 6 },
+          attack: 0.004,
+        });
       if (ev.blocked > 0.3)
         noiseHit(c, makeOut(c, pan, 0.4), t, {
           dur: 0.4,
@@ -256,9 +269,12 @@ export function createPlanetVoice(): TitanVoice {
     },
 
     onKo(c, t, ev) {
-      // the world comes apart: a long sub drop, crust groans, a landslide of rock and the wind dying out
+      // the world comes apart: a long sub drop, crust groans, a landslide of rock, magma breaking out and the air torn away
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan * 0.4, 0.85);
+      tectonicCrack(c, o, t, 1, resonance(massBy[ev.slot], 1));
+      magmaVent(c, o, t + 0.3, 2.2, 1);
+      atmosphericTear(c, o, t + 0.6, 1);
       thump(c, subOut(c, pan), t, 50, 16, 3.0, 0.55);
       for (let i = 0; i < 4; i++) groan(c, t + 0.1 + i * 0.55, o, 1.6, 0.06, 72 - 8 * i);
       gravel(c, o, t + 0.05, {
@@ -350,6 +366,97 @@ export function createPlanetVoice(): TitanVoice {
     onCue(c, t, ev) {
       const pan = c.panOf(ev.x);
       const a = clamp01(ev.amount);
+      const o = makeOut(c, pan, 0.5);
+      const res = resonance(massBy[ev.slot]);
+      // the slice Planet's own ids (proposal 134 §2) first, then the keyword fallback
+      switch (ev.id) {
+        case 'world-phase-2':
+        case 'world-phase-3':
+        case 'world-phase-4':
+          // the world gives a stage further: the crust cracks, pressure builds, and from phase 4 the magma shows
+          tectonicCrack(c, o, t, 0.5 + 0.5 * a, res);
+          subPressure(c, t, pan, 0.9, 0.1 + 0.08 * a);
+          if (ev.id === 'world-phase-4') magmaVent(c, o, t + 0.25, 1.6, 0.8);
+          return;
+        case 'moon-shatter':
+          impact(c, t, pan, 0.9, 0.6, 0.7);
+          orbit(c, t + 0.01, pan, 150, 0.6);
+          gravel(c, o, t + 0.02, { dur: 0.9, grains: 34, f: 1400, spread: 2.4, gain: 0.14, q: 1.4 });
+          return;
+        case 'comet-call':
+          // the gravity reaches out: pressure, and a far bell answering
+          subPressure(c, t, pan, 0.8, 0.09);
+          orbit(c, t + 0.3, pan, 196, 0.4);
+          return;
+        case 'comet-capture':
+          orbit(c, t, pan, 147, 0.7);
+          gust(c, t, pan, 0.8, 0.3, 300, 900);
+          return;
+        case 'comet-sling':
+          whistlePass(c, t, {
+            f: 260 + 300 * a,
+            dur: 0.7,
+            gain: 0.12,
+            panFrom: pan,
+            panTo: clamp(-pan, -1, 1),
+            wet: 0.5,
+            approach: 1.4,
+            recede: 0.7,
+          });
+          atmosphericTear(c, o, t, 0.4 + 0.6 * a);
+          return;
+        case 'comet-impact':
+          impact(c, t, pan, 1, 0.7, 0.9);
+          tectonicCrack(c, o, t + 0.02, 0.9, res);
+          return;
+        case 'crust-armor':
+          // the crust grows back over the wound: a slow grinding of rock knitting together
+          gravel(c, o, t, {
+            dur: 0.8,
+            grains: 18 + Math.round(20 * a),
+            f: 260,
+            spread: 1.8,
+            gain: 0.1,
+            q: 1,
+            lowpass: 700,
+          });
+          groan(c, t, o, 0.8, 0.05, 70);
+          return;
+        case 'core-pulse':
+          subPressure(c, t, pan, 0.5, 0.18);
+          magmaVent(c, o, t + 0.1, 0.9, 0.7);
+          return;
+        case 'atmo-vent':
+          // failure 1/4: the atmosphere vents away
+          atmosphericTear(c, o, t, 1);
+          gust(c, t, pan, 2.2, 0.6, 1500, 200, 0.45);
+          return;
+        case 'moons-drift':
+          // failure 2/4: the moons' bells ring once more, lower, and recede
+          orbit(c, t, pan, 98, 0.9);
+          orbit(c, t + 0.5, pan, 73, 0.7);
+          return;
+        case 'crust-slab':
+          // failure 3/4: the crust comes away in slabs
+          tectonicCrack(c, o, t, 1, resonance(0.3, 1));
+          gravel(c, o, t + 0.1, {
+            dur: 1.4,
+            grains: 50,
+            f: 300,
+            spread: 2.4,
+            gain: 0.16,
+            q: 0.9,
+            lowpass: 600,
+          });
+          return;
+        case 'core-out':
+          // failure 4/4: the core goes out — the pressure falls away to nothing
+          thump(c, subOut(c, pan), t, 70, 18, 2.6, 0.5);
+          magmaVent(c, o, t, 2.4, 0.3);
+          return;
+        default:
+          break;
+      }
       switch (cueKind(ev.id)) {
         case 'lost': {
           // a moon knocked out of orbit: the bell rings, sags and recedes, over a low boom
@@ -362,15 +469,19 @@ export function createPlanetVoice(): TitanVoice {
           // atmosphere torn away: a rush of wind that does not come back
           stripped[ev.slot] = clamp01(stripped[ev.slot] + 0.3 + 0.3 * a);
           gust(c, t, pan, 1.6, 0.85, 1400, 250, 0.45);
+          atmosphericTear(c, makeOut(c, pan, 0.5), t, a);
           return;
         }
         case 'boil':
           boil(c, t, pan, 1.1, a, 2.8);
           return;
+        case 'vent':
+          magmaVent(c, makeOut(c, pan, 0.5), t, 1.4, a);
+          return;
         case 'break':
         case 'crack':
         case 'collapse':
-          crack(c, t, pan, 0.6 + 0.4 * a);
+          tectonicCrack(c, makeOut(c, pan, 0.45), t, 0.6 + 0.4 * a, resonance(massBy[ev.slot]));
           impact(c, t + 0.05, pan, 0.4 + 0.3 * a, 0.5);
           return;
         case 'shed':
@@ -382,6 +493,7 @@ export function createPlanetVoice(): TitanVoice {
     },
 
     update(c, scene, slot, dt) {
+      massBy[slot] = scene.massFrac;
       const ac = c.ac;
       let g = grounds.get(slot);
       if (!g) {

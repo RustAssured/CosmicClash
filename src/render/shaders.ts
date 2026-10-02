@@ -7,6 +7,8 @@
  *  - render targets are GL-native (row 0 = bottom), so `pxToUv` flips y once, here, and nowhere else.
  */
 
+import { ROTSPRITE_GLSL } from './rotsprite';
+
 const HEAD = /* glsl */ `
 precision highp float;
 precision highp int;
@@ -268,6 +270,31 @@ void main() {
 }
 `;
 
+/* ------------------------------------------------------------------------------------------------ *
+ *  Rig parts (RenderLayer.parts, proposals 151/161): one quad per part over its rotated bounds; the fragment shader runs the
+ *  shared clean-edge sampler (rotsprite.ts, bit-identical to contracts/rotation via proposal 161) on the layer's atlas, and
+ *  takes the emissive of the texel that won the vote. Same outputs and blending as LAYER_FRAG.
+ * ------------------------------------------------------------------------------------------------ */
+export const PART_FRAG = /* glsl */ `${HEAD}${COMMON}
+uniform sampler2D uEmis;     // R8, same layout as the atlas
+uniform int uHasEmis;
+uniform ivec2 uDest;         // destination pivot corner (logical px)
+uniform float uAlpha;
+uniform float uEmisGain;
+${ROTSPRITE_GLSL}
+layout(location = 0) out vec4 oColor;
+layout(location = 1) out vec4 oEmis;
+void main() {
+  ivec2 P = ivec2(floor(gl_FragCoord.x), int(floor(uRes.y - gl_FragCoord.y)));
+  ivec2 texel;
+  vec4 c = rotSampleGL(P - uDest, texel);
+  if (c.a <= 0.0) discard;
+  float e = uHasEmis == 1 ? texelFetch(uEmis, texel, 0).r : 0.0;
+  float a = c.a * uAlpha;
+  oColor = vec4(c.rgb, a);
+  oEmis = vec4(c.rgb * e * uEmisGain, a);
+}
+`;
 /* ------------------------------------------------------------------------------------------------ *
  *  Bloom: dual-filter pyramid (down), tent (up, accumulated additively into the level above).
  * ------------------------------------------------------------------------------------------------ */

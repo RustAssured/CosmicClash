@@ -31,10 +31,19 @@ export interface SceneryForces {
   /** Impulse extras: age 0..1, hue 0..1 (or -1), unused, unused. */
   impulse2: Float32Array;
   nImpulse: number;
+  /** Gravity wells: x, y (screen px), radius px, pull (px of displacement at the centre). Up to MAX_WELLS. */
+  well: Float32Array;
+  nWell: number;
+  /** Comets: x, y (screen px), vx, vy (px/s) and r, captured, warn progress (0 = in play), - per comet. Up to MAX_COMETS. */
+  comet: Float32Array;
+  comet2: Float32Array;
+  nComet: number;
 }
 
 export const MAX_SHOCKS = 8;
 export const MAX_IMPULSES = 6;
+export const MAX_WELLS = 2;
+export const MAX_COMETS = 4;
 
 export interface SceneryFrame {
   /** Scenery clock in seconds: advances with `fx.timeScale`, so the universe slows with a KO. */
@@ -98,7 +107,7 @@ export interface SceneryLook {
   /** 0..1: how much bloom / god rays are damped ON a sprite's own pixels (they still glow around it). [bloom, rays] */
   glowDamp?: [number, number];
   /** Foreground dust and small rocks passing in front of the fighters (renderer pass): linear tint (default neutral dark), alpha multiplier and density. */
-  foreground?: { color: [number, number, number]; alpha?: number; density?: number };
+  foreground?: { color: [number, number, number]; alpha?: number; density?: number; shards?: number };
 }
 
 /**

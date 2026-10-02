@@ -209,6 +209,94 @@ describe('lifecycle', () => {
   });
 });
 
+describe('slice material voices (Phase 2)', () => {
+  it('every Planet cue id of proposal 134 has its own sound, built without violating the Web Audio rules', async () => {
+    const ids = [
+      'world-phase-2',
+      'world-phase-3',
+      'world-phase-4',
+      'moon-shatter',
+      'comet-call',
+      'comet-capture',
+      'comet-sling',
+      'comet-impact',
+      'crust-armor',
+      'core-pulse',
+      'atmo-vent',
+      'moons-drift',
+      'crust-slab',
+      'core-out',
+    ];
+    for (const id of ids) {
+      const { eng, ctx } = await ready();
+      eng.update(scene({}, 'lastone', 'planet'), 1 / 60);
+      const before = ctx.nodes.length;
+      eng.handleAt([{ t: 'cue', slot: 1, titan: 'planet', id, x: 900, y: 300, amount: 0.7 }], 1);
+      expect(ctx.nodes.length - before, id).toBeGreaterThan(8);
+      expect(takeViolations(), id).toEqual([]);
+    }
+  });
+  it('the arena comet warns and enters with its own sounds (and a retire is silent)', async () => {
+    for (const kind of ['comet-warn', 'comet-enter', 'comet-retire'] as const) {
+      const { eng, ctx } = await ready();
+      eng.update(scene({}, 'lastone', 'planet'), 1 / 60);
+      const before = ctx.nodes.length;
+      eng.handleAt(
+        [{ t: 'hazard', kind, id: kind === 'comet-warn' ? -1 : 4, x: 40, y: 220, vx: 200, vy: -30 }],
+        1,
+      );
+      if (kind === 'comet-retire') expect(ctx.nodes.length - before).toBe(0);
+      else expect(ctx.nodes.length - before, kind).toBeGreaterThan(6);
+      expect(takeViolations(), kind).toEqual([]);
+    }
+  });
+  it('damage changes the resonance of the Witness: a hollowed body rings lower and longer when struck', async () => {
+    const ring = async (massFrac: number): Promise<{ f: number; stop: number }> => {
+      const { eng, ctx } = await ready(5);
+      const s = scene({}, 'planet', 'lastone');
+      s.fighters![1].massFrac = massFrac;
+      eng.update(s, 1 / 60);
+      const before = ctx.nodes.length;
+      eng.handleAt(
+        [
+          {
+            t: 'hit',
+            attacker: 0,
+            target: 1,
+            titan: 'lastone',
+            x: 900,
+            y: 300,
+            dirX: -1,
+            dirY: 0,
+            type: 'CRUSH',
+            energy: 3000,
+            cellsRemoved: 90,
+            massRemoved: 40,
+            blocked: 0,
+            heavy: true,
+            onDamaged: 0,
+          },
+        ],
+        1,
+      );
+      // the glass body's ring (the sub thumps of the blow are not the body's voice)
+      const oscs = ctx.nodes
+        .slice(before)
+        .filter(
+          (n): n is FakeOsc =>
+            n instanceof FakeOsc && n.type === 'sine' && (n.frequency.events[0]?.v ?? 0) > 300,
+        );
+      const lowest = Math.min(...oscs.map((o) => o.frequency.events[0]?.v ?? 1e9));
+      const stop = Math.max(...oscs.map((o) => o.stopAt));
+      expect(takeViolations()).toEqual([]);
+      return { f: lowest, stop };
+    };
+    const whole = await ring(1);
+    const hollow = await ring(0.3);
+    expect(hollow.f).toBeLessThan(whole.f);
+    expect(hollow.stop).toBeGreaterThan(whole.stop);
+  });
+});
 describe('master chain (the "nothing clips" guarantee)', () => {
   it('ends in high-pass → calibration → master → limiter → safety clip → destination; the impacts never pass a compressor', async () => {
     const { ctx, eng } = await ready();

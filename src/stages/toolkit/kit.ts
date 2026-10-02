@@ -28,7 +28,14 @@ import {
   type Texture,
   type WebGLRenderTarget,
 } from 'three';
-import { MAX_IMPULSES, MAX_SHOCKS, type SceneryFrame, type SceneryInit } from '../types';
+import {
+  MAX_COMETS,
+  MAX_IMPULSES,
+  MAX_SHOCKS,
+  MAX_WELLS,
+  type SceneryFrame,
+  type SceneryInit,
+} from '../types';
 import { FORCES_GLSL, NOISE_GLSL, SCENERY_HEAD } from './glsl';
 import { animationFrame } from '@/render/slicer';
 import { noiseTextureData } from './noise';
@@ -89,6 +96,12 @@ export interface KitUniforms {
   uImp2: IUniform<Float32Array>;
   uNImp: IUniform<number>;
   uGlowK: IUniform<number>;
+  uWell: IUniform<Float32Array>;
+  uNWell: IUniform<number>;
+  /** Arena comets (screen px): x, y, vx, vy / r, captured, -, -; count. Read by the stages that draw comet tails. */
+  uComet: IUniform<Float32Array>;
+  uComet2: IUniform<Float32Array>;
+  uNComet: IUniform<number>;
   uDolly: IUniform<number>;
   uKick: IUniform<Vector2>;
   uNoise: IUniform<Texture>;
@@ -349,6 +362,11 @@ export class SceneryKit {
       uImp2: { value: new Float32Array(MAX_IMPULSES * 4) },
       uNImp: { value: 0 },
       uGlowK: { value: 1 },
+      uWell: { value: new Float32Array(MAX_WELLS * 4) },
+      uNWell: { value: 0 },
+      uComet: { value: new Float32Array(MAX_COMETS * 4) },
+      uComet2: { value: new Float32Array(MAX_COMETS * 4) },
+      uNComet: { value: 0 },
       uDolly: { value: 0 },
       uKick: { value: new Vector2(0, 0) },
       uNoise: { value: this.noiseTex },
@@ -720,6 +738,11 @@ ${opts.fragment}`;
     u.uImp2.value.set(f.forces.impulse2);
     u.uNImp.value = f.forces.nImpulse;
     u.uGlowK.value = f.comfort;
+    u.uWell.value.set(f.forces.well);
+    u.uNWell.value = f.forces.nWell;
+    u.uComet.value.set(f.forces.comet);
+    u.uComet2.value.set(f.forces.comet2);
+    u.uNComet.value = f.forces.nComet;
     u.uDolly.value = f.cam.dolly;
     u.uKick.value.set(f.cam.kickX, f.cam.kickY);
   }

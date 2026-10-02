@@ -17,7 +17,7 @@ import { WebGLRenderer } from 'three';
 import { createRenderer, type DebuggableRenderer } from '@/render';
 import { makeRT } from '@/render/gl';
 import { GpuTimer } from '@/render/gpuTimer';
-import { ANGLE_STEPS, rotRaster, type RotPart } from '@/render/rotsprite';
+import { ANGLE_STEPS, rotRasterAt, type RotPart, type RotPartEx } from '@/render/rotsprite';
 import { RotSpritePass } from '@/render/rotspritePass';
 import { FxState } from '@/app/fx';
 import { createMatch } from '@/sim';
@@ -258,6 +258,94 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
     );
   }
 
+  /* ---------- 10f. the compositor draws RenderLayer.parts: GPU = CPU twin per part, mirrored by facing, emissive follows ---------- */
+  {
+    const bg = blackBackdrop();
+    const aw = 64;
+    const ah = 48;
+    const atlas = makeLayer('rig', 'world', 0, aw, ah);
+    atlas.emissive = new Uint8Array(aw * ah);
+    for (let y = 0; y < ah; y++)
+      for (let x = 0; x < aw; x++) {
+        const inA = x < 30 && y < 40 && ((x - 15) / 14) ** 2 + ((y - 20) / 19) ** 2 < 1;
+        const inB = x >= 32 && y < 20;
+        if (inA) atlas.pixels[y * aw + x] = rgba(40 + x * 5, 90 + y * 3, 200, 255);
+        if (inB) atlas.pixels[y * aw + x] = rgba(230, 200 - x, 60 + y * 4, 255);
+        if (inA && x > 10 && x < 20 && y > 12 && y < 26) atlas.emissive[y * aw + x] = 255;
+      }
+    atlas.version = 1;
+    atlas.facing = -1;
+    atlas.parts = [
+      { sx: 0, sy: 0, sw: 30, sh: 40, px: 15, py: 30, wx: view.x0 + 200, wy: view.y0 + 150, step: 37, z: 0 },
+      { sx: 32, sy: 0, sw: 32, sh: 20, px: 4, py: 10, wx: view.x0 + 330, wy: view.y0 + 170, step: 211, z: 1 },
+    ];
+    r.draw(frameOf([bg, atlas], { tick: 1500 }));
+    const col = r.debugReadFrame(0);
+    const emis = r.debugReadFrame(1);
+    let bad = 0;
+    let drawn = 0;
+    let glow = 0;
+    for (const part of atlas.parts) {
+      const sub = new Uint32Array(part.sw * part.sh);
+      for (let y = 0; y < part.sh; y++)
+        for (let x = 0; x < part.sw; x++)
+          sub[y * part.sw + x] = atlas.pixels[(part.sy + y) * aw + part.sx + x]!;
+      const cpu = rotRasterAt({
+        pixels: sub,
+        w: part.sw,
+        h: part.sh,
+        px: part.px,
+        py: part.py,
+        step: part.step,
+        facing: -1,
+      });
+      for (let y = 0; y < cpu.h; y++)
+        for (let x = 0; x < cpu.w; x++) {
+          const want = cpu.pixels[y * cpu.w + x]! >>> 0;
+          if (want === 0) continue;
+          const X = part.wx - view.x0 - cpu.ox + x;
+          const Y = part.wy - view.y0 - cpu.oy + y;
+          drawn++;
+          if (col[Y * LOGICAL_W + X]! >>> 0 !== want) bad++;
+          if (emis[Y * LOGICAL_W + X]! & 0xffffff) glow++;
+        }
+    }
+    check(
+      'compositor parts: each RenderLayer part = the CPU twin pixel for pixel (rotated, mirrored by facing), emissive follows',
+      drawn > 1000 && bad === 0 && glow > 50,
+      `${drawn} part pixels, ${bad} differ, ${glow} emissive`,
+    );
+  }
+  /* ---------- 10g. Shearfield comets (proposal 165): a tail behind and a dotted path ahead, in the comet's own place ---------- */
+  {
+    r.setStage('shearfield');
+    r.draw(frameOf([], { tick: 1600, stage: 'shearfield' }));
+    const plain = r.captureLogical();
+    const fx: FrameFx = noFx();
+    fx.comets = [{ x: view.x0 + 320, y: view.y0 + 180, vx: 260, vy: -60, r: 10 }];
+    r.draw(frameOf([], { tick: 1600, stage: 'shearfield', fx }));
+    const withComet = r.captureLogical();
+    const tail = meanAbsDiff(plain, withComet, 320 - 70, 180 - 6, 320 - 10, 180 + 22);
+    const ahead = meanAbsDiff(plain, withComet, 320 + 30, 180 - 30, 320 + 150, 180 + 4);
+    const far = meanAbsDiff(plain, withComet, 20, 20, 120, 80);
+    check(
+      'Shearfield: an arena comet gets a bright tail behind it and a dotted path ahead, nothing elsewhere',
+      tail > 4 && ahead > 0.3 && far < 0.2,
+      `tail Δ ${tail.toFixed(1)}, path Δ ${ahead.toFixed(2)}, far Δ ${far.toFixed(2)}`,
+    );
+    // the warning (comet-warn): an entry point OFF screen to the left pins a glint to the left edge, pointing in
+    fx.comets = [{ x: view.x0 - 40, y: view.y0 + 200, vx: 200, vy: -20, r: 0, warn: 0.8 }];
+    r.draw(frameOf([], { tick: 1600, stage: 'shearfield', fx }));
+    const warned = r.captureLogical();
+    const edge = meanAbsDiff(plain, warned, 0, 190, 40, 210);
+    const right = meanAbsDiff(plain, warned, 400, 20, 620, 340);
+    check(
+      'Shearfield: a comet warning shows a glint at the frame edge it will come through, nothing on the far side',
+      edge > 3 && right < 0.2,
+      `edge Δ ${edge.toFixed(1)}, far side Δ ${right.toFixed(2)}`,
+    );
+    r.setStage('tussenruimte');
+  }
   /* ---------- 10e. rotation spike: GPU clean-edge sampler = CPU twin at EVERY quantised angle (dense grid), and its cost ---------- */
   {
     const glc = document.createElement('canvas');
@@ -283,14 +371,15 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
     let mismatches = 0;
     let pixels = 0;
     for (let step = 0; step < ANGLE_STEPS; step++) {
-      const part = { ...part0, step };
+      // proposal 161: alpha-first vote, and every other angle mirrored (facing −1)
+      const part: RotPartEx = { ...part0, step, facing: step % 2 ? -1 : 1 };
       three.setRenderTarget(rt);
       three.setClearColor(0x000000, 0);
       three.clear(true, false, false);
       pass.draw(three, rt, [{ part, tex, qx: 128, qy: 128 }]);
       three.readRenderTargetPixels(rt, 0, 0, 256, 256, bytes);
       const got = new Uint32Array(bytes.buffer);
-      const cpu = rotRaster(part);
+      const cpu = rotRasterAt(part);
       let bad = 0;
       for (let y = 0; y < 256; y++)
         for (let x = 0; x < 256; x++) {
@@ -306,7 +395,7 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
       worst = Math.max(worst, bad);
     }
     check(
-      `rotation spike: GPU sampler = CPU twin, pixel for pixel, at all ${ANGLE_STEPS} quantised angles`,
+      `rotation: GPU sampler = CPU twin (alpha-first vote, mirrored on odd steps), pixel for pixel, at all ${ANGLE_STEPS} angles`,
       mismatches === 0,
       `${mismatches} mismatching of ${pixels} pixels (worst angle ${worst})`,
     );
@@ -349,7 +438,7 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
       }
     }
     const c0 = performance.now();
-    for (let i = 0; i < 24; i++) rotRaster({ ...bigPart, step: (i * 11) % ANGLE_STEPS });
+    for (let i = 0; i < 24; i++) rotRasterAt({ ...bigPart, step: (i * 11) % ANGLE_STEPS });
     const msCpu = (performance.now() - c0) / 24;
     check(
       'rotation spike: cost of 24 rotated 64×96 parts per frame (GPU) and of one CPU-twin mask (64×96)',
@@ -1086,7 +1175,7 @@ async function main(): Promise<void> {
     /* ---------- 12. stage switching and quality tiers ---------- */
     {
       const bg = blackBackdrop();
-      for (const st of ['nursery', 'rim', 'quasar'] as const) {
+      for (const st of ['nursery', 'rim', 'quasar', 'mausoleum', 'shearfield'] as const) {
         r.setStage(st);
         r.draw(frameOf([], { stage: st, tick: 1200 }));
         const f = r.captureLogical();
@@ -1286,7 +1375,15 @@ async function main(): Promise<void> {
     const luma = (p: number): number =>
       0.2126 * (p & 255) + 0.7152 * ((p >>> 8) & 255) + 0.0722 * ((p >>> 16) & 255);
     const SIZE = 96;
-    const stages = ['nursery', 'rim', 'redgiant', 'quasar', 'tussenruimte'] as const;
+    const stages = [
+      'nursery',
+      'rim',
+      'redgiant',
+      'quasar',
+      'tussenruimte',
+      'mausoleum',
+      'shearfield',
+    ] as const;
     for (const style of ['celadon', 'basalt'] as const) {
       const body = makeRockBody(`read-${style}`, 4242, SIZE, style);
       body.pulse(1);
@@ -1457,9 +1554,17 @@ async function main(): Promise<void> {
     r.setStage('tussenruimte');
   }
 
-  /* ---------- 16. the five stages are visibly distinct (never a recolour of one another) ---------- */
+  /* ---------- 16. the seven stages are visibly distinct (never a recolour of one another) ---------- */
   {
-    const stages = ['nursery', 'rim', 'redgiant', 'quasar', 'tussenruimte'] as const;
+    const stages = [
+      'nursery',
+      'rim',
+      'redgiant',
+      'quasar',
+      'tussenruimte',
+      'mausoleum',
+      'shearfield',
+    ] as const;
     const BINS = 12;
     const sigs: { hue: number[]; mean: number; spread: number; layout: number[] }[] = [];
     for (const st of stages) {
@@ -1527,7 +1632,7 @@ async function main(): Promise<void> {
         }
       }
     check(
-      'the five stages are pairwise visibly distinct (hue mix, brightness and light layout)',
+      'the seven stages are pairwise visibly distinct (hue mix, brightness and light layout)',
       minD > 0.3,
       `closest pair ${pair} = ${minD.toFixed(2)}; ${dists.join(', ')}`,
     );

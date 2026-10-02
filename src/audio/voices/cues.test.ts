@@ -37,8 +37,9 @@ describe('cueKind', () => {
     expect(cueKind('eye-exposed')).toBeNull();
     expect(cueKind('')).toBeNull();
     expect(cueKind('momentum')).toBeNull();
+    expect(cueKind('magma-vent')).toBe('vent');
   });
-  it('knows the eleven kinds the Lead documented and the six ids the newer titans added', () => {
+  it('knows the eleven kinds the Lead documented, the six ids the newer titans added and and the vent of the slice Planet', () => {
     expect([...CUE_KINDS].sort()).toEqual(
       [
         'sever',
@@ -58,6 +59,7 @@ describe('cueKind', () => {
         'latch',
         'consume',
         'hawking',
+        'vent',
       ].sort(),
     );
   });

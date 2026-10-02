@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { MatchApi, SimEvent } from '@/contracts';
+import type { FrameFx, GravitySource, MatchApi, SimEvent } from '@/contracts';
 import { createMatch } from '@/sim';
 import { fakeDeps } from '@/sim/testing/fakes';
-import type { FrameFxExt } from '@/stages/types';
 import { FxState, IMPACT_SLOTS, ONSET_GAP, buildAudioScene } from './fx';
 
 const mkMatch = (): MatchApi =>
@@ -203,7 +202,7 @@ describe('FxState arena comets', () => {
         },
       },
     }) as MatchApi;
-    const comets = (): NonNullable<FrameFxExt['comets']> => (fx.sample(0) as FrameFxExt).comets ?? [];
+    const comets = (): NonNullable<FrameFx['comets']> => fx.sample(0).comets ?? [];
 
     fx.tick([{ t: 'hazard', kind: 'comet-warn', id: -1, x: -40, y: 210, vx: 180, vy: -20 }], m);
     for (let i = 0; i < 14; i++) fx.tick([], m);
@@ -216,7 +215,7 @@ describe('FxState arena comets', () => {
     expect(comets()).toHaveLength(1);
     expect(comets()[0]).toMatchObject({ x: 100, y: 200, vx: 180, r: 11, warn: 0, captured: 0 });
     // sub-tick extrapolation by the render alpha
-    expect((fx.sample(0.5) as FrameFxExt).comets![0]!.x).toBeCloseTo(100 + (180 * 0.5) / 60, 5);
+    expect(fx.sample(0.5).comets![0]!.x).toBeCloseTo(100 + (180 * 0.5) / 60, 5);
     chunk.x = 160;
     chunk.mode = 1;
     chunk.owner = 1;
@@ -231,9 +230,29 @@ describe('FxState arena comets', () => {
     const fx = new FxState();
     const m = mkMatch();
     fx.tick([{ t: 'hazard', kind: 'comet-enter', id: 99, x: 0, y: 0, vx: 1, vy: 0 }], m);
-    expect((fx.sample(0) as FrameFxExt).comets).toHaveLength(0);
+    expect(fx.sample(0).comets).toHaveLength(0);
     fx.tick([{ t: 'hazard', kind: 'comet-warn', id: -1, x: 0, y: 0, vx: 1, vy: 0 }], m);
     for (let i = 0; i < 90 + 31; i++) fx.tick([], m);
-    expect((fx.sample(0) as FrameFxExt).comets).toHaveLength(0);
+    expect(fx.sample(0).comets).toHaveLength(0);
+  });
+});
+
+describe('FxState gravity wells', () => {
+  it("publishes each slot's gravity source as a well, pull mapped to 0..1, and drops it when the source goes", () => {
+    const fx = new FxState();
+    const base = mkMatch();
+    const src: (GravitySource | null)[] = [null, { x: 500, y: 300, strength: 150, radius: 340 }];
+    const world = Object.create(base.world, {
+      gravitySourceOf: { value: (s: 0 | 1): GravitySource | null => src[s] ?? null },
+    }) as MatchApi['world'];
+    const m = Object.create(base, { world: { value: world } }) as MatchApi;
+    fx.tick([], m);
+    expect(fx.sample(0).wells).toEqual([{ x: 500, y: 300, radius: 340, strength: 0.5 }]);
+    src[0] = { x: 100, y: 200, strength: 900, radius: 200 };
+    fx.tick([], m);
+    expect(fx.sample(0).wells!.map((w) => w.strength)).toEqual([1, 0.5]);
+    src[0] = src[1] = null;
+    fx.tick([], m);
+    expect(fx.sample(0).wells).toHaveLength(0);
   });
 });

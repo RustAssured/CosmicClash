@@ -61,7 +61,7 @@ try {
   });
   const extra =
     mode === 'fight'
-      ? `&seconds=${arg('seconds', '60')}&seed=${arg('seed', '21')}&level=${arg('level', '4')}`
+      ? `&seconds=${arg('seconds', '60')}&seed=${arg('seed', '21')}&level=${arg('level', '4')}&orbit=${arg('orbit', '1')}`
       : '';
   await page.goto(`${url}/dev/ui/audio.html?verify=${mode}${extra}`);
   if (mode === 'round' || mode === 'fight') {

@@ -40,6 +40,11 @@ export interface ForegroundLook {
   alpha?: number;
   /** Multiplier on the instance count (default 1). */
   density?: number;
+  /**
+   * Share 0..1 of the instances drawn as RUIN SHARDS (the Mausoleum): long, hard-edged, near-opaque dark silhouettes that
+   * cross in front of the action at the frame edges. Still kept out of the fight band and off the bodies.
+   */
+  shards?: number;
 }
 
 export const FOREGROUND_MAX = 72;
@@ -74,7 +79,8 @@ void main() {
   float a = aF1.y * uAlphaK;
   // across the fight band the foreground is only a whisper
   float inBand = smoothstep(uBand.x - 30.0, uBand.x + 10.0, c.y) * (1.0 - smoothstep(uBand.y - 10.0, uBand.y + 30.0, c.y));
-  a *= 1.0 - 0.6 * inBand;
+  bool shard = aF1.w > 1.5;
+  a *= 1.0 - (shard ? 0.92 : 0.6) * inBand;
   // and it never sits on a body: the fighters carry lights
   for (int i = 0; i < 4; i++) {
     if (i >= uNLt) break;
@@ -88,7 +94,7 @@ void main() {
   vec2 p = c + off;
   gl_Position = vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0);
   vQ = q * 1.4;
-  vP = vec4(aF0.w, aF1.z, aF1.w, min(a, 0.35));
+  vP = vec4(aF0.w, aF1.z, aF1.w, min(a, shard ? 0.85 : 0.35));
 }
 `;
 
@@ -102,7 +108,14 @@ void main() {
   float r2 = dot(vQ, vQ);
   float a;
   vec3 col = uColor;
-  if (vP.z > 0.5) {
+  if (vP.z > 1.5) {
+    // a ruin shard: a long jagged sliver, dark, with a faint lit edge on its upper side
+    float x = vQ.x / 1.4;
+    float jag = 0.06 * sin(x * 23.0 + vP.x * 31.0) + 0.04 * sin(x * 57.0 + vP.x * 7.0);
+    float wdt = 0.3 * pow(max(0.0, 1.0 - abs(x)), 0.8) + jag;
+    a = step(abs(vQ.y / 1.4 + 0.1 * x), wdt) * step(abs(x), 1.0);
+    col *= 0.55 + 0.9 * smoothstep(wdt - 0.06, wdt, -(vQ.y / 1.4 + 0.1 * x));
+  } else if (vP.z > 0.5) {
     // a small drifting rock: hard, lumpy silhouette, a little darker than the dust, one lit edge
     float ang = atan(vQ.y, vQ.x);
     float rr = 1.0 - 0.3 * sin(ang * 3.0 + vP.x * 40.0) - 0.16 * sin(ang * 5.0 + vP.x * 17.0);
@@ -211,15 +224,16 @@ export class Foreground {
       const u = rng.next();
       const camY = 110 * par; // composed for the reference camera (arena centre)
       const sy = u < 0.4 ? rng.range(-30, 70) : u < 0.8 ? rng.range(280, 390) : rng.range(0, 360);
-      const rock = i % 6 === 5;
-      const size = rock ? rng.range(7, 16) : rng.range(26, 80);
+      const shard = rng.next() < (look.shards ?? 0);
+      const rock = !shard && i % 6 === 5;
+      const size = shard ? rng.range(9, 20) : rock ? rng.range(7, 16) : rng.range(26, 80);
       f0.set([rng.range(x0, x1), Math.min(Math.max(sy + camY, y0), y1), par, rng.next()], i * 4);
       f1.set(
         [
           size,
-          rock ? rng.range(0.22, 0.34) : rng.range(0.16, 0.35),
+          shard ? rng.range(0.5, 0.72) : rock ? rng.range(0.22, 0.34) : rng.range(0.16, 0.35),
           size > 34 ? rng.range(1.0, 1.5) : rng.range(1.8, 2.6),
-          rock ? 1 : 0,
+          shard ? 2 : rock ? 1 : 0,
         ],
         i * 4,
       );

@@ -65,6 +65,8 @@ uniform vec4 uImp[6];       // x, y (screen px), radius px, swirl strength
 uniform vec4 uImp2[6];      // age 0..1, hue, -, -
 uniform int uNImp;
 uniform float uGlowK;       // comfort scale of the tinted impulse glow (1 = full)
+uniform vec4 uWell[2];      // gravity wells: x, y (screen px), radius px, pull px (Tidal Draw bends the scenery's matter)
+uniform int uNWell;
 uniform float uDolly;      // scenery push-in: screen scale at parallax 1 is 1 + uDolly (D27; sprites stay 1:1)
 uniform vec2 uKick;         // impact parallax kick in px at depth 1: a layer moves by uKick × (parallax − 1)
 
@@ -98,6 +100,14 @@ vec2 warpByForces(vec2 c, float k) {
     float cs = cos(a);
     float sn = sin(a);
     c = m.xy + vec2(cs * d.x - sn * d.y, sn * d.x + cs * d.y);
+  }
+  for (int i = 0; i < uNWell; i++) {
+    vec4 g = uWell[i];
+    vec2 d = g.xy - c;
+    float r = length(d) + 1e-3;
+    // pulled toward the well, most at mid-range, nothing beyond its reach (and never past its centre)
+    float pull = g.w * k * smoothstep(g.z, g.z * 0.25, r) * min(1.0, r / 24.0);
+    c += d / r * pull;
   }
   return c;
 }

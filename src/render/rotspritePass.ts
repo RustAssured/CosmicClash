@@ -16,10 +16,10 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { unitQuad } from './gl';
-import { ROTSPRITE_GLSL, ROT_LUT, rotBounds, type RotPart } from './rotsprite';
+import { ROTSPRITE_GLSL, ROT_LUT, rotBoundsEx, type RotPartEx } from './rotsprite';
 
 /**
- * Rotation spike, GPU side: draws `RotPart`s (sub-rect sprite + pivot + quantised angle) with the clean-edge sampler of
+ * Rotation spike, GPU side: draws `RotPartEx`s (sub-rect sprite + pivot + quantised angle) with the clean-edge sampler of
  * `rotsprite.ts` into a target. Not wired into the compositor or the contracts yet (docs/proposals/151-S5-render-parts.md);
  * the verification page uses it to prove GPU = CPU twin and to measure the cost.
  */
@@ -42,7 +42,8 @@ ${ROTSPRITE_GLSL}
 out vec4 o;
 void main() {
   ivec2 P = ivec2(floor(gl_FragCoord.x), int(floor(uRes.y - gl_FragCoord.y)));
-  vec4 c = rotSampleGL(P - uDest);
+  ivec2 texel;
+  vec4 c = rotSampleGL(P - uDest, texel);
   if (c.a == 0.0) discard;
   o = c;
 }
@@ -76,7 +77,9 @@ export class RotSpritePass {
           uRes: { value: this.res },
           uDest: { value: [0, 0] },
           uPart: { value: null },
+          uPartOrigin: { value: [0, 0] },
           uPartSize: { value: [0, 0] },
+          uFacing: { value: 1 },
           uPivot: { value: [0, 0] },
           uRotCS: { value: [0, 0] },
         },
@@ -95,7 +98,7 @@ export class RotSpritePass {
   }
 
   /** Upload a part's pixels (once per part; the spike's parts are static). */
-  texture(part: RotPart): DataTexture {
+  texture(part: RotPartEx): DataTexture {
     const t = new DataTexture(
       new Uint8Array(part.pixels.buffer, part.pixels.byteOffset, part.w * part.h * 4),
       part.w,
@@ -116,12 +119,12 @@ export class RotSpritePass {
   draw(
     renderer: WebGLRenderer,
     target: WebGLRenderTarget,
-    parts: readonly { part: RotPart; tex: DataTexture; qx: number; qy: number }[],
+    parts: readonly { part: RotPartEx; tex: DataTexture; qx: number; qy: number }[],
   ): void {
     for (let i = 0; i < this.slots.length; i++) this.slots[i]!.mesh.visible = false;
     parts.forEach((p, i) => {
       const s = this.slot(i);
-      const b = rotBounds(p.part);
+      const b = rotBoundsEx(p.part);
       const u = s.mat.uniforms;
       (u.uRect!.value as Vector4).set(p.qx + b.x0, p.qy + b.y0, p.qx + b.x1, p.qy + b.y1);
       u.uDest!.value = [p.qx, p.qy];
@@ -129,6 +132,7 @@ export class RotSpritePass {
       u.uPartSize!.value = [p.part.w, p.part.h];
       u.uPivot!.value = [p.part.px, p.part.py];
       u.uRotCS!.value = [ROT_LUT.cos[p.part.step]!, ROT_LUT.sin[p.part.step]!];
+      u.uFacing!.value = p.part.facing === -1 ? -1 : 1;
       s.mesh.visible = true;
       s.mesh.renderOrder = i;
     });

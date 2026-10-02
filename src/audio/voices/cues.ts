@@ -22,6 +22,8 @@ export const CUE_KINDS = [
   'latch',
   'consume',
   'hawking',
+  // the slice's Planet (Phase 2): Magma Vent / Core Pulse
+  'vent',
 ] as const;
 export type CueKind = (typeof CUE_KINDS)[number];
 
