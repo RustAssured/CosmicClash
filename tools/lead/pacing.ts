@@ -18,13 +18,14 @@ import {
   type Difficulty,
   type MatchConfig,
   type MatterLedger,
+  type TitanDef,
   type TitanId,
 } from '@/contracts';
 import { createAI } from '@/ai';
 import { createFighter } from '@/combat';
 import { createMatterWorld } from '@/matter';
 import { createAiSource, createMatch } from '@/sim';
-import { getTitanDef } from '@/titans';
+import { getTitanDef, witnessDef } from '@/titans';
 
 const args = process.argv.slice(2);
 const opt = (k: string, d: string): string =>
@@ -40,6 +41,10 @@ const OUT = opt('out', '');
 /** Orbit is the slice's footwork (D28); `--classic` for comparison; `--zdepth` adds the depth-offset prototype. */
 const FOOTWORK: 'classic' | 'orbit' = args.includes('--classic') ? 'classic' : 'orbit';
 const ZDEPTH = args.includes('--zdepth');
+/** `--witness`: the Last One plays as the rebuilt Witness (and its AI reads the Witness's definition). */
+const WITNESS = args.includes('--witness');
+const defOf = (id: TitanId): TitanDef =>
+  WITNESS && id === 'lastone' ? witnessDef(getTitanDef(id)) : getTitanDef(id);
 
 interface RoundRec {
   fight: number;
@@ -82,6 +87,7 @@ for (let i = 0; i < N; i++) {
     mode: 'aivai',
     footwork: FOOTWORK,
     zdepth: ZDEPTH,
+    witness: WITNESS,
     slots: [
       { titan: ta, controller: 'ai', aiLevel: swapped ? LB : LA },
       { titan: tb, controller: 'ai', aiLevel: swapped ? LA : LB },
@@ -98,12 +104,12 @@ for (let i = 0; i < N; i++) {
     createAiSource(
       m,
       0,
-      createAI(cfg.slots[0].aiLevel!, getTitanDef(ta), cfg.seed * 7 + 1, { footwork: FOOTWORK }),
+      createAI(cfg.slots[0].aiLevel!, defOf(ta), cfg.seed * 7 + 1, { footwork: FOOTWORK }),
     ),
     createAiSource(
       m,
       1,
-      createAI(cfg.slots[1].aiLevel!, getTitanDef(tb), cfg.seed * 7 + 2, { footwork: FOOTWORK }),
+      createAI(cfg.slots[1].aiLevel!, defOf(tb), cfg.seed * 7 + 2, { footwork: FOOTWORK }),
     ),
   );
   const titans = [ta, tb] as const;

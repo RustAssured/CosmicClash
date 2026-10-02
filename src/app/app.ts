@@ -37,7 +37,7 @@ import { createMatterWorld, warmUp } from '@/matter';
 import { createRenderer, type DebuggableRenderer } from '@/render';
 import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
 import { STAGES, isStageImplemented } from '@/stages';
-import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, renderPortrait } from '@/titans';
+import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, renderPortrait, witnessDef } from '@/titans';
 import { PixelCanvas, createUI, drawText, titanInfoFromDef, type TitanInfo } from '@/ui';
 import { FIXTURE_TITANS, fixturePortraitProvider } from '@/ui/fixtures';
 import { AudioMeter } from '@/telemetry/audioMeter';
@@ -413,10 +413,10 @@ export class App {
       zdepth: cfg.zdepth ?? this.zdepth,
       witness: cfg.witness ?? this.witness,
     };
-    const defs: [TitanDef, TitanDef] = [
-      getTitanDef(config.slots[0].titan),
-      getTitanDef(config.slots[1].titan),
-    ];
+    // the AI reads the definition the fighter really plays (the Witness's moves with witness=1, not the old Last One's)
+    const defOf = (id: TitanId): TitanDef =>
+      config.witness && id === 'lastone' ? witnessDef(getTitanDef(id)) : getTitanDef(id);
+    const defs: [TitanDef, TitanDef] = [defOf(config.slots[0].titan), defOf(config.slots[1].titan)];
     const stage = STAGES[config.stage];
     const match = createMatch(config, {
       createWorld: createMatterWorld,

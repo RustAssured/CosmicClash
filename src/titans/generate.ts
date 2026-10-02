@@ -77,7 +77,8 @@ function cloneMap(src: MatterMap): MatterMap {
  * (titan, seed, lighting) and every call returns a private copy of the map, so tournaments and rematches are cheap.
  */
 export function generateTitanBody(def: TitanDef, seed: number, lighting: StageLighting): GeneratedTitan {
-  const key = `${def.id}|${seed >>> 0}|${lighting.dir.join(',')}|${lighting.color}|${lighting.ambient}|${lighting.rim}`;
+  // the Witness shares the Last One's id (witness=1): key it apart, or one would be handed the other's body and rig
+  const key = `${isWitnessDef(def) ? 'witness' : def.id}|${seed >>> 0}|${lighting.dir.join(',')}|${lighting.color}|${lighting.ambient}|${lighting.rim}`;
   let painted = PAINT_CACHE.get(key);
   if (!painted) {
     painted = paintTitanMap(def, seed, lighting);

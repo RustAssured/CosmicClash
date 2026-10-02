@@ -82,7 +82,7 @@ export const BED_GLUE = { threshold: -18, knee: 10, ratio: 2, attack: 0.03, rele
 /** The score at neutral sits this many dB under its full, committed level. */
 export const SCORE_NEUTRAL_DB = 8;
 /** The whole bed sits this far under the impacts (dB): the floor a blow rises from. */
-export const BED_LEVEL_DB = -2.5;
+export const BED_LEVEL_DB = -3.5;
 /**
  * Bed duck under heavy blows: gain depth (dB) and time held (s) from the lightest to the heaviest qualifying event. Telemetry
  * reads the duck through 400 ms momentary loudness. Phase 2: the live meter read the old 6.5–10 dB gains as a 12 dB median dip, so
