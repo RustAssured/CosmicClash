@@ -254,6 +254,21 @@ function newResult(): DamageResult {
   };
 }
 
+/** Reset a reused result to `newResult()`'s values. */
+function clearResult(r: DamageResult): DamageResult {
+  r.cellsTouched = 0;
+  r.cellsRemoved = 0;
+  r.massRemoved = 0;
+  r.massTransferred = 0;
+  r.contactX = NaN;
+  r.contactY = NaN;
+  r.impulseX = 0;
+  r.impulseY = 0;
+  r.onDamagedFraction = 0;
+  r.revealedInterior = false;
+  return r;
+}
+
 const pt: WorldPoint = { x: 0, y: 0 };
 const f64 = new Float64Array(1);
 const u32 = new Uint32Array(f64.buffer);
@@ -279,6 +294,23 @@ class MatterWorldImpl implements MatterWorldEx {
     flags: 0,
     params: { scatter: 1 },
   };
+  /** Reused event of a debris chunk's capped impact (no garbage per impact). */
+  private readonly debrisEv: DamageEvent = {
+    type: 'KINETIC',
+    shape: { kind: 'point', x: 0, y: 0, r: 2 },
+    energy: 0,
+    dirX: 1,
+    dirY: 0,
+    duration: 1,
+    sourceMass: 1,
+    sourceBodyId: -1,
+    originX: 0,
+    originY: 0,
+    flags: 0,
+    params: { scatter: 0.6 },
+  };
+  /** Reused result of the world's internal applications (debris impacts, job slices), whose results nobody reads. */
+  private readonly scratchRes: DamageResult = newResult();
 
   constructor(seed: number) {
     this.core = new WorldCore(seed);
@@ -295,21 +327,18 @@ class MatterWorldImpl implements MatterWorldEx {
       energy = Math.min(energy, DEBRIS_TICK_BUDGET - body.debrisEnergy);
       if (energy < 2) return;
       body.debrisEnergy += energy;
-      const ev: DamageEvent = {
-        type: 'KINETIC',
-        shape: { kind: 'point', x, y, r: Math.max(1.6, Math.min(6, Math.sqrt(chunk.cells) * 0.55)) },
-        energy,
-        dirX: dx,
-        dirY: dy,
-        duration: 1,
-        sourceMass: Math.min(2, chunk.mass * 0.15),
-        sourceBodyId: -1,
-        originX: x,
-        originY: y,
-        flags: 0,
-        params: { scatter: 0.6 },
-      };
-      this.applySlice(body, ev, energy, true, newResult());
+      const ev = this.debrisEv;
+      const sh = ev.shape as { kind: 'point'; x: number; y: number; r: number };
+      sh.x = x;
+      sh.y = y;
+      sh.r = Math.max(1.6, Math.min(6, Math.sqrt(chunk.cells) * 0.55));
+      ev.energy = energy;
+      ev.dirX = dx;
+      ev.dirY = dy;
+      ev.sourceMass = Math.min(2, chunk.mass * 0.15);
+      ev.originX = x;
+      ev.originY = y;
+      this.applySlice(body, ev, energy, true, clearResult(this.scratchRes));
       this.core.emitMatter('impact', x, y, chunk.mass, body.ownerSlot);
     };
     this.core.launchImpact = (body, chunk, x, y, dx, dy, speed) => {
@@ -329,7 +358,7 @@ class MatterWorldImpl implements MatterWorldEx {
       ev.sourceBodyId = chunk.credit;
       ev.originX = x;
       ev.originY = y;
-      this.applySlice(body, ev, energy, true, newResult());
+      this.applySlice(body, ev, energy, true, clearResult(this.scratchRes));
       this.core.emitMatter('impact', x, y, chunk.mass, body.ownerSlot);
     };
   }
@@ -784,15 +813,14 @@ class MatterWorldImpl implements MatterWorldEx {
     b.lastX = t.x;
     b.lastY = t.y;
     if (b.rotStep() !== 0) {
-      // A rotated region: the disc around its pivot that holds the map at any angle.
-      const r =
-        Math.sqrt(Math.max(t.anchorX, b.w - t.anchorX) ** 2 + Math.max(t.anchorY, b.h - t.anchorY) ** 2) + 2;
-      const px = Math.round(t.x);
-      const py = Math.round(t.y);
-      b.aabbX0 = px - r;
-      b.aabbX1 = px + r;
-      b.aabbY0 = py - r;
-      b.aabbY1 = py + r;
+      // A rotated region: the rectangle that holds every pixel drawn at its current angle (debris broadphase only).
+      const box = b.rotBounds();
+      const px = Math.round(t.x) + box.x0;
+      const py = Math.round(t.y) + box.y0;
+      b.aabbX0 = px;
+      b.aabbX1 = px + box.w;
+      b.aabbY0 = py;
+      b.aabbY1 = py + box.h;
       return;
     }
     const xa = t.x + (0 - t.anchorX) * t.facing;
@@ -845,7 +873,7 @@ class MatterWorldImpl implements MatterWorldEx {
         j.active = false;
         continue;
       }
-      this.applySlice(body, j.ev, j.energy, false, newResult());
+      this.applySlice(body, j.ev, j.energy, false, clearResult(this.scratchRes));
       if (--j.remaining <= 0) j.active = false;
     }
     this.lap(0);
@@ -1161,24 +1189,46 @@ class MatterWorldImpl implements MatterWorldEx {
     if (!b) return false;
     const s = b.refreshStats();
     if (s.cells === 0) return false;
-    // Scan region grid for the local live bbox, then map to world.
+    // The local live bbox, scanned inward from the map edges (stops at the first live row / column: a compact body costs a few
+    // rows and columns, not the whole map; fighters ask for every region body every tick), then mapped to world.
     const w = b.w;
+    const h = b.h;
     const mat = b.map.material;
-    let x0 = w;
-    let y0 = b.h;
-    let x1 = -1;
-    let y1 = -1;
-    for (let y = 0; y < b.h; y++) {
-      const base = y * w;
-      for (let x = 0; x < w; x++) {
-        if (mat[base + x] === 0) continue;
-        if (x < x0) x0 = x;
-        if (x > x1) x1 = x;
-        if (y < y0) y0 = y;
-        if (y > y1) y1 = y;
-      }
+    let y0 = 0;
+    for (; y0 < h; y0++) {
+      const base = y0 * w;
+      let x = 0;
+      while (x < w && mat[base + x] === 0) x++;
+      if (x < w) break;
     }
-    if (x1 < 0) return false;
+    if (y0 >= h) return false;
+    let y1 = h - 1;
+    for (; y1 > y0; y1--) {
+      const base = y1 * w;
+      let x = 0;
+      while (x < w && mat[base + x] === 0) x++;
+      if (x < w) break;
+    }
+    let x0 = 0;
+    for (; x0 < w; x0++) {
+      let c = y0 * w + x0;
+      let y = y0;
+      while (y <= y1 && mat[c] === 0) {
+        y++;
+        c += w;
+      }
+      if (y <= y1) break;
+    }
+    let x1 = w - 1;
+    for (; x1 > x0; x1--) {
+      let c = y0 * w + x1;
+      let y = y0;
+      while (y <= y1 && mat[c] === 0) {
+        y++;
+        c += w;
+      }
+      if (y <= y1) break;
+    }
     const t = b.transform;
     if (b.rotStep() !== 0) {
       // the rotated corners of the live box

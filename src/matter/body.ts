@@ -19,7 +19,7 @@ import { K_CONE, K_LINE, type ShapeQ } from './shape';
 import { WoundBook } from './wound';
 import { isMolten } from './materials';
 import type { ShellFace } from './shell';
-import { RotMaskCache, rotCellAt, rotCellWorld, rotCollect, rotWorldToLocal, type RotMask } from './rotation';
+import { RotBox, rotCellAtDirect, rotCellWorld, rotCollectDirect, rotWorldToLocal } from './rotation';
 
 export const TILE = 16;
 export const TILE_SHIFT = 4;
@@ -394,16 +394,19 @@ export class Body implements MatterBody {
     return r === undefined || r === 0 ? 0 : ((r % ANGLE_STEPS) + ANGLE_STEPS) % ANGLE_STEPS;
   }
 
-  private rotCache: RotMaskCache | null = null;
+  /**
+   * The rotated destination rectangle for the current step and facing (memoised). Rotated queries run mask-free
+   * (rotation.ts `drawnCellAt`): a rig region turns through many of the 256 steps, so per-angle masks were rebuilt (and
+   * allocated) nearly every tick.
+   */
+  private readonly rotBox = new RotBox();
+  /** The rotated destination rectangle (relative to the pivot pixel) at the current step and facing; rotated bodies only. */
+  rotBounds(): RotBox {
+    return this.rotBox.of(this, this.rotStep());
+  }
   /** Generation stamps for the rotated collect (cells drawn by several pixels are taken once). */
   private rotStamp: Uint32Array | null = null;
   private rotGen = 0;
-
-  /** The cached rotated mask for the current step and facing (built once per (body, angle, facing)). */
-  rotMask(): RotMask {
-    if (!this.rotCache) this.rotCache = new RotMaskCache(this);
-    return this.rotCache.get(this.rotStep());
-  }
 
   /** World position of the CENTRE of local cell (i, j). */
   cellWorld(i: number, j: number, out: WorldPoint): void {
@@ -420,7 +423,8 @@ export class Body implements MatterBody {
   /** Local cell index containing world point, or -1 if outside the map (rotated: the cell DRAWN there, or -1). */
   cellAtWorld(wx: number, wy: number): number {
     const t = this.transform;
-    if (this.rotStep() !== 0) return rotCellAt(this, this.rotMask(), wx, wy);
+    const k = this.rotStep();
+    if (k !== 0) return rotCellAtDirect(this, k, this.rotBox.of(this, k), wx, wy);
     const ly = wy - t.y + t.anchorY;
     const j = Math.floor(ly);
     if (j < 0 || j >= this.h) return -1;
@@ -556,7 +560,8 @@ export class Body implements MatterBody {
       this.rotStamp.fill(0);
       this.rotGen = 1;
     }
-    let n = rotCollect(this, this.rotMask(), q, idx, wgt, this.rotStamp, this.rotGen);
+    const k = this.rotStep();
+    let n = rotCollectDirect(this, k, this.rotBox.of(this, k), q, idx, wgt, this.rotStamp, this.rotGen);
     if (looseOnly) {
       const flags = this.map.flags;
       const mat = this.map.material;

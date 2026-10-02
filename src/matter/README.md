@@ -71,7 +71,7 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 | `visual.ts` | `map.pixels`/`emissive` refresh (lighting, heat glow, crack lines, lattice…) |
 | `lifecycle.ts` | restore / heal / grow / shed / carve |
 | `wound.ts` | wounds and held slabs: hairline outlines, shear schedule, wound momentum and lever-arm spin (DESTRUCTION Round 8) |
-| `rotation.ts` | rotated region bodies (`BodyTransform.rot`): hit masks matching the contract sampler's alpha-first vote (proposal 140/161) |
+| `rotation.ts` | rotated region bodies (`BodyTransform.rot`): hit-tests matching the contract sampler's alpha-first vote (proposal 140/161). Bodies query mask-free (`drawnCellAt`, `rotCollectDirect`: a rig region turns through many of the 256 steps, so per-angle masks were rebuilt almost every tick); the cached `RotMask` stays as the test/bench reference and is bit-identical |
 | `shell.ts` | the two-hemisphere shell: far face storage, exact swap, restore |
 | `materials.ts`, `archetypes.ts` | `buildMaterialTable`, `MATERIAL_ARCHETYPES` |
 | `debug.ts`, `hash.ts`, `shape.ts`, `dmg.ts`, `core.ts`, `util.ts` | overlays, state hash, shape queries, damage context/result, shared world state, helpers |
@@ -96,6 +96,7 @@ npx tsx tools/matter/calibrate.ts                  # % of a titan-size disc remo
 npx tsx tools/matter/wounds.ts                     # D1 wound sequencing of the slice's heavy blows on the real titans (shear, momentum, FX clear)
 npx tsx tools/matter/rotbench.ts                   # rotation: mask build / hit-test cost, undrawn cells per angle
 npx tsx tools/matter/gc.ts                         # 3-minute fight, GC pauses (target: none > 4 ms)
+npx tsx tools/matter/worldprof.ts [--stage=shearfield] [--classic-lastone] [--hash]   # world-tick sections in the slice match (the Witness), slowest-1% breakdown, GC, match hashes
 npx tsx tools/matter/gallery.ts all                # contact sheets into .scratch/
 npx vite --port 5202 --strictPort  ->  http://localhost:5202/dev/matter/   # interactive sandbox
 ```

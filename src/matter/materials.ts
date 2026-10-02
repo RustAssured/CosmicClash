@@ -53,13 +53,40 @@ function resolvePhysics(spec: MaterialSpec): MaterialPhysics {
   return { ...arch, ...rest, resist: { ...arch.resist, ...(resistOverride ?? {}) } };
 }
 
+/**
+ * Every MaterialDef is built with the SAME literal (fixed key order, same as `emptyMaterial`), so all defs share one hidden class:
+ * the hot loops that read `md.ignition`, `md.vaporize`, … (thermal, visual, damage models) stay monomorphic. (Spreading the
+ * archetype and the titan's overrides gave each material its own key order: megamorphic property loads in every tick.)
+ */
 function makeDef(id: number, key: string, phys: MaterialPhysics, vis: MaterialVisual): MaterialDef {
   const ramp = vis.ramp.map(hex);
+  const r = phys.resist;
   return {
-    ...phys,
-    resist: { ...phys.resist },
     id,
     key,
+    density: phys.density,
+    bond: phys.bond,
+    toughness: phys.toughness,
+    brittleness: phys.brittleness,
+    resist: {
+      FRACTURE: r.FRACTURE,
+      ASSIMILATION: r.ASSIMILATION,
+      TIDAL: r.TIDAL,
+      THERMAL: r.THERMAL,
+      CRUSH: r.CRUSH,
+      KINETIC: r.KINETIC,
+    },
+    heatCapacity: phys.heatCapacity,
+    conductivity: phys.conductivity,
+    ignition: phys.ignition,
+    burnRate: phys.burnRate,
+    vaporize: phys.vaporize,
+    heatAbsorb: phys.heatAbsorb,
+    flammableGas: phys.flammableGas,
+    assimilable: phys.assimilable,
+    debris: phys.debris,
+    ashTo: phys.ashTo,
+    fluid: phys.fluid,
     ramp,
     emissive: Math.max(0, Math.min(255, vis.emissive | 0)),
     glowRamp: (vis.glowRamp && vis.glowRamp.length ? vis.glowRamp : DEFAULT_GLOW_RAMP).map(hex),

@@ -593,6 +593,7 @@ export function stepChunks(core: WorldCore): void {
   const kd = 1 - CHUNK_DRAG * dt;
   const sd = 1 - SPIN_DRAG * dt;
   const wall = 60; // soft wall zone
+  buildGroupBoxes(core);
   for (let s = 0; s < pool.hi; s++) {
     const c = pool.list[s]!;
     if (!c.alive) continue;
@@ -744,21 +745,61 @@ function consumeChunk(core: WorldCore, pool: ChunkPool, c: Chunk, slot: number, 
   pool.freeAt(slot);
 }
 
-/** Chunk vs bodies: fast heavy chunks deal a capped KINETIC impact and bounce; slow ones are nudged out. */
-function collideBodies(core: WorldCore, c: Chunk): void {
+/**
+ * Broadphase for `collideBodies`: the union of the debris-taking bodies' boxes per owner group (slot 0, slot 1, none), taken at
+ * the start of `stepChunks` (bodies do not move while chunks step). A chunk outside every union touches no body box, so the
+ * per-body loop (which would only `continue`) is skipped. [x0, y0, x1, y1] × 3; empty groups hold an inverted box.
+ */
+const groupBox = new Float64Array(12);
+
+function buildGroupBoxes(core: WorldCore): void {
+  for (let g = 0; g < 3; g++) {
+    groupBox[g * 4] = Infinity;
+    groupBox[g * 4 + 1] = Infinity;
+    groupBox[g * 4 + 2] = -Infinity;
+    groupBox[g * 4 + 3] = -Infinity;
+  }
   const bl = core.bodyList;
-  const launched = c.mode === CHUNK_LAUNCHED;
   for (let bi = 0; bi < bl.length; bi++) {
     const b = bl[bi]!;
     if (!b.takesDebrisImpacts) continue;
+    const o = (b.ownerSlot === 0 ? 0 : b.ownerSlot === 1 ? 1 : 2) * 4;
+    if (b.aabbX0 < groupBox[o]!) groupBox[o] = b.aabbX0;
+    if (b.aabbY0 < groupBox[o + 1]!) groupBox[o + 1] = b.aabbY0;
+    if (b.aabbX1 > groupBox[o + 2]!) groupBox[o + 2] = b.aabbX1;
+    if (b.aabbY1 > groupBox[o + 3]!) groupBox[o + 3] = b.aabbY1;
+  }
+}
+
+/** Chunk vs bodies: fast heavy chunks deal a capped KINETIC impact and bounce; slow ones are nudged out. */
+function collideBodies(core: WorldCore, c: Chunk): void {
+  const r = c.radius;
+  let near = false;
+  for (let o = 0; o < 12 && !near; o += 4)
+    near = !(
+      c.x + r < groupBox[o]! ||
+      c.x - r > groupBox[o + 2]! ||
+      c.y + r < groupBox[o + 1]! ||
+      c.y - r > groupBox[o + 3]!
+    );
+  if (!near) return;
+  const bl = core.bodyList;
+  const launched = c.mode === CHUNK_LAUNCHED;
+  // the chunk's rotated axes (computed once, on the first body whose box it touches)
+  let cs = 2;
+  let sn = 0;
+  for (let bi = 0; bi < bl.length; bi++) {
+    const b = bl[bi]!;
+    if (!b.takesDebrisImpacts) continue;
+    if (c.x + r < b.aabbX0 || c.x - r > b.aabbX1 || c.y + r < b.aabbY0 || c.y - r > b.aabbY1) continue;
     if (b.id === c.origin && c.age < c.grace + 40 && !launched) continue;
     // a launched projectile never hits its thrower (any of its bodies)
     if (launched && (b.id === c.credit || (c.owner >= 0 && b.ownerSlot === c.owner))) continue;
-    const r = c.radius;
-    if (c.x + r < b.aabbX0 || c.x - r > b.aabbX1 || c.y + r < b.aabbY0 || c.y - r > b.aabbY1) continue;
     // Probe the centre and four points at 0.55 radius on the chunk's rotated axes.
-    const cs = Math.cos(c.angle);
-    const sn = Math.sin(c.angle);
+    if (cs === 2) {
+      cs = Math.cos(c.angle);
+      sn = Math.sin(c.angle);
+    }
     const rr = r * 0.55;
     let hits = 0;
     let hx = 0;

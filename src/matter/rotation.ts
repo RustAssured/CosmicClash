@@ -95,29 +95,70 @@ export class RotMask {
   ) {}
 }
 
+/**
+ * The destination rectangle of `b` at (step, current facing), relative to the pivot pixel: every pixel outside it draws
+ * nothing. A memo of the last (step, facing, anchor, size) it was computed for (callers keep one per body: no garbage).
+ */
+export class RotBox {
+  step = -1;
+  facing: 1 | -1 = 1;
+  ax = NaN;
+  ay = NaN;
+  bw = -1;
+  bh = -1;
+  x0 = 0;
+  y0 = 0;
+  w = 0;
+  h = 0;
+
+  /** Refresh for `b` at `step` (a no-op when nothing it depends on changed). Returns itself. */
+  of(b: RotBody, step: number): RotBox {
+    const t = b.transform;
+    if (
+      step === this.step &&
+      t.facing === this.facing &&
+      t.anchorX === this.ax &&
+      t.anchorY === this.ay &&
+      b.w === this.bw &&
+      b.h === this.bh
+    )
+      return this;
+    const c = ROT_COS[step]! / ROT_ONE;
+    const s = ROT_SIN[step]! / ROT_ONE;
+    let mnx = Infinity;
+    let mny = Infinity;
+    let mxx = -Infinity;
+    let mxy = -Infinity;
+    for (let k = 0; k < 4; k++) {
+      const lx = ((k & 1 ? b.w : 0) - t.anchorX) * t.facing;
+      const ly = (k & 2 ? b.h : 0) - t.anchorY;
+      const wx = c * lx - s * ly;
+      const wy = s * lx + c * ly;
+      if (wx < mnx) mnx = wx;
+      if (wx > mxx) mxx = wx;
+      if (wy < mny) mny = wy;
+      if (wy > mxy) mxy = wy;
+    }
+    this.step = step;
+    this.facing = t.facing;
+    this.ax = t.anchorX;
+    this.ay = t.anchorY;
+    this.bw = b.w;
+    this.bh = b.h;
+    this.x0 = Math.floor(mnx) - 1;
+    this.y0 = Math.floor(mny) - 1;
+    this.w = Math.ceil(mxx) + 1 - this.x0;
+    this.h = Math.ceil(mxy) + 1 - this.y0;
+    return this;
+  }
+}
+
+const maskBox = new RotBox();
+
 /** Build the mask of `b` at `step` (pure function of the map size, anchor, facing and angle). */
 export function buildRotMask(b: RotBody, step: number): RotMask {
   const t = b.transform;
-  const c = ROT_COS[step]! / ROT_ONE;
-  const s = ROT_SIN[step]! / ROT_ONE;
-  let mnx = Infinity;
-  let mny = Infinity;
-  let mxx = -Infinity;
-  let mxy = -Infinity;
-  for (let k = 0; k < 4; k++) {
-    const lx = ((k & 1 ? b.w : 0) - t.anchorX) * t.facing;
-    const ly = (k & 2 ? b.h : 0) - t.anchorY;
-    const wx = c * lx - s * ly;
-    const wy = s * lx + c * ly;
-    if (wx < mnx) mnx = wx;
-    if (wx > mxx) mxx = wx;
-    if (wy < mny) mny = wy;
-    if (wy > mxy) mxy = wy;
-  }
-  const x0 = Math.floor(mnx) - 1;
-  const y0 = Math.floor(mny) - 1;
-  const w = Math.ceil(mxx) + 1 - x0;
-  const h = Math.ceil(mxy) + 1 - y0;
+  const { x0, y0, w, h } = maskBox.of(b, step);
   const centre = new Int32Array(w * h);
   const uniform = new Uint8Array(w * h);
   for (let v = 0; v < h; v++)
@@ -263,6 +304,85 @@ export function rotCollect(
       const wt = q.weight(PX + m.x0 + u + 0.5, wy);
       if (wt <= 0) continue;
       const c = drawnCell(b, m, u, v);
+      if (c < 0 || b.map.integrity[c] === 0 || stamp[c] === gen) continue;
+      stamp[c] = gen;
+      idx[n] = c;
+      wgt[n] = wt;
+      n++;
+    }
+  }
+  return n;
+}
+
+/* ---- mask-free queries (the default for bodies: a rig region turns through many of the 256 steps, so per-angle masks
+ *      would be rebuilt nearly every tick). Bit-identical to the cached-mask answers (rotation.test.ts checks every pixel). ---- */
+
+/**
+ * The cell DRAWN at destination pixel (dx, dy) — relative to the pivot pixel, inside `box` — of `b` at `step`, or -1: exactly
+ * `drawnCell` of the mask at that step, computed on the spot. The nine sub-samples' source coordinates are monotone in the
+ * sub-sample offsets, so they all read one texel iff the extreme ones do (4 divisions instead of 16).
+ */
+export function drawnCellAt(b: RotBody, step: number, box: RotBox, dx: number, dy: number): number {
+  if (dx < box.x0 || dy < box.y0 || dx >= box.x0 + box.w || dy >= box.y0 + box.h) return -1;
+  const c = ROT_COS[step]!;
+  const s = ROT_SIN[step]!;
+  const X = DEN * dx + 3;
+  const Y = DEN * dy + 3;
+  const A = c * X + s * Y;
+  const B = -s * X + c * Y;
+  const ea = 2 * (Math.abs(c) + Math.abs(s));
+  const u = floorDiv(A);
+  const v = floorDiv(B);
+  const t = b.transform;
+  if (floorDiv(A - ea) === u && floorDiv(A + ea) === u && floorDiv(B - ea) === v && floorDiv(B + ea) === v) {
+    // interior pixel: all nine sub-samples read texel (u, v)
+    const i = t.facing === 1 ? t.anchorX + u : t.anchorX - 1 - u;
+    const j = t.anchorY + v;
+    if (i < 0 || j < 0 || i >= b.w || j >= b.h) return -1;
+    const cc = j * b.w + i;
+    return b.map.material[cc] === 0 || b.map.pixels[cc]! >>> 24 === 0 ? -1 : cc;
+  }
+  part.pixels = b.map.pixels;
+  part.w = b.w;
+  part.h = b.h;
+  part.px = t.anchorX;
+  part.py = t.anchorY;
+  part.step = step;
+  part.facing = t.facing;
+  if (rotSampleAt(part, dx, dy) === 0) return -1;
+  const cell = rotWinner.y * b.w + rotWinner.x;
+  return b.map.material[cell] === 0 ? -1 : cell;
+}
+
+/** `rotCellAt` without a mask: the cell drawn at world point (wx, wy), or -1. `box` = `RotBox.of(b, step)`. */
+export function rotCellAtDirect(b: RotBody, step: number, box: RotBox, wx: number, wy: number): number {
+  return drawnCellAt(b, step, box, Math.floor(wx) - pivotX(b), Math.floor(wy) - pivotY(b));
+}
+
+/** `rotCollect` without a mask: the same cells, weights and order (destination pixels row-major inside `box`). */
+export function rotCollectDirect(
+  b: RotBody,
+  step: number,
+  box: RotBox,
+  q: ShapeQ,
+  idx: Int32Array,
+  wgt: Float32Array,
+  stamp: Uint32Array,
+  gen: number,
+): number {
+  const PX = pivotX(b);
+  const PY = pivotY(b);
+  const u0 = Math.max(0, Math.floor(q.bx0) - PX - box.x0);
+  const v0 = Math.max(0, Math.floor(q.by0) - PY - box.y0);
+  const u1 = Math.min(box.w - 1, Math.ceil(q.bx1) - PX - box.x0);
+  const v1 = Math.min(box.h - 1, Math.ceil(q.by1) - PY - box.y0);
+  let n = 0;
+  for (let v = v0; v <= v1; v++) {
+    const wy = PY + box.y0 + v + 0.5;
+    for (let u = u0; u <= u1; u++) {
+      const wt = q.weight(PX + box.x0 + u + 0.5, wy);
+      if (wt <= 0) continue;
+      const c = drawnCellAt(b, step, box, box.x0 + u, box.y0 + v);
       if (c < 0 || b.map.integrity[c] === 0 || stamp[c] === gen) continue;
       stamp[c] = gen;
       idx[n] = c;

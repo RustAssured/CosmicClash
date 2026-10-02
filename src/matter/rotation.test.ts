@@ -7,11 +7,15 @@ import { ShapeQ } from './shape';
 import { celadonBody, ribbedSlab } from './testing/bodies';
 import {
   ANGLE_STEPS,
+  RotBox,
   RotMaskCache,
   buildRotMask,
   drawnCell,
+  drawnCellAt,
   rotCellAt,
+  rotCellAtDirect,
   rotCollect,
+  rotCollectDirect,
   rotSolidAt,
 } from './rotation';
 
@@ -71,9 +75,13 @@ describe('rotation spike: one cached rotated mask per (body, angle) is the hit t
         let pixelsChecked = 0;
         let drawnPx = 0;
         let bad = 0;
+        let badDirect = 0;
+        const box = new RotBox();
         for (let k = 0; k < ANGLE_STEPS; k++) {
           const m = cache.get(k);
           const part = asPart(b, k);
+          box.of(b, k);
+          expect([box.x0, box.y0, box.w, box.h]).toEqual([m.x0, m.y0, m.w, m.h]);
           for (let v = -2; v < m.h + 2; v++)
             for (let u = -2; u < m.w + 2; u++) {
               const dx = m.x0 + u;
@@ -83,6 +91,9 @@ describe('rotation spike: one cached rotated mask per (body, angle) is the hit t
               pixelsChecked++;
               if (col >>> 24 !== 0) drawnPx++;
               if (col >>> 24 === 0 ? c !== -1 : c !== rotWinner.y * b.w + rotWinner.x) bad++;
+              // the mask-free query bodies use is bit-identical to the cached mask
+              if (drawnCellAt(b, k, box, dx, dy) !== c) badDirect++;
+              if (rotCellAtDirect(b, k, box, PX + dx + 0.5, PY + dy + 0.5) !== c) badDirect++;
               // a few sub-pixel points of the pixel hit the same cell
               if ((u + v) % 7 === 0)
                 for (const [sx, sy] of [
@@ -98,6 +109,7 @@ describe('rotation spike: one cached rotated mask per (body, angle) is the hit t
         expect(pixelsChecked).toBeGreaterThan(500000);
         expect(drawnPx).toBeGreaterThan(100000);
         expect(bad).toBe(0);
+        expect(badDirect).toBe(0);
         expect(cache.builds).toBe(ANGLE_STEPS);
       }
   }, 120_000);
@@ -118,6 +130,13 @@ describe('rotation spike: one cached rotated mask per (body, angle) is the hit t
       ] as const) {
         q.set({ kind: 'point', x, y, r });
         const n = rotCollect(b, m, q, idx, wgt, stamp, ++gen);
+        // the mask-free collect bodies use: same cells, same weights, same order
+        const idx2 = new Int32Array(b.n);
+        const wgt2 = new Float32Array(b.n);
+        const n2 = rotCollectDirect(b, k, new RotBox().of(b, k), q, idx2, wgt2, stamp, ++gen);
+        expect(n2).toBe(n);
+        expect(Array.from(idx2.subarray(0, n2))).toEqual(Array.from(idx.subarray(0, n)));
+        expect(Array.from(wgt2.subarray(0, n2))).toEqual(Array.from(wgt.subarray(0, n)));
         const got = new Set<number>();
         for (let i = 0; i < n; i++) {
           expect(got.has(idx[i]!)).toBe(false);
