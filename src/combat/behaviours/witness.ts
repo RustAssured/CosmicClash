@@ -93,6 +93,9 @@ const FAIL = {
 const JOINT_FAIL_HEALTH = 0.15;
 const JOINT_FAIL_TICKS = 30;
 
+/** A root move larger than this in one tick (px) is a jump, not motion: the rig is carried along rigidly. */
+const ROOT_JUMP = 24;
+
 const ATLAS_ROW = 1024;
 const WHITE_GOLD = rgba(255, 241, 201, 255);
 const CYAN = rgba(127, 232, 255, 255);
@@ -129,6 +132,8 @@ export class WitnessBehaviour extends Behaviour {
   /** Tick the failure process began (−1 = alive). */
   private dying = -1;
   private light = 1;
+  /** Root jumps the rig was carried across (instrumentation; see ROOT_JUMP). */
+  jumps = 0;
   private pupilX = 0;
   private pupilY = 0;
   private readonly fr = { x: 0, y: 0, a: 0 };
@@ -299,14 +304,25 @@ export class WitnessBehaviour extends Behaviour {
     return { x: x + (-eye.ox - t.anchorX) * t.facing, y: y + (-eye.oy - t.anchorY) };
   }
 
-  /** Mirror the rig state (the facing frame flips with the fighter). */
+  /**
+   * The fighter turned round. The rig works in the facing frame (x · facing), where the structure is always the canonical,
+   * unmirrored one: turning round mirrors it in the world about the eye, which in the facing frame is a pure translation that
+   * brings the eye to its new place. The pose (angles, spins, the motion relative to the eye) is kept; only the eye's own
+   * velocity changes sign, because the root keeps its world velocity. (Negating x, angle and spin instead mirrored each part's
+   * pose inside the canonical frame: every joint anchor landed up to twice its lever arm away, and the solver blew the rig
+   * apart, flinging the regions hundreds of px each tick and severing them.)
+   */
   private flipRig(): void {
-    const rig = this.wr.rig;
+    const wr = this.wr;
+    const rig = wr.rig;
+    const e = wr.eye;
+    rig.frame(e, this.fr);
+    const eye = this.eyeCentre(true);
+    const dx = eye.x * this.facing - this.fr.x;
+    const dvx = -2 * rig.vx[e]!;
     for (let i = 0; i < rig.n; i++) {
-      rig.x[i] = -rig.x[i]!;
-      rig.vx[i] = -rig.vx[i]!;
-      rig.a[i] = -rig.a[i]!;
-      rig.w[i] = -rig.w[i]!;
+      rig.x[i] = rig.x[i]! + dx;
+      rig.vx[i] = rig.vx[i]! + dvx;
     }
   }
 
@@ -487,6 +503,15 @@ export class WitnessBehaviour extends Behaviour {
       // the intent: the eye is placed where the fighter is and turned by its angular state (facing-relative). The rig follows
       // the CONTINUOUS root, not the integer transform: a one-pixel step of the transform would kick the whole structure.
       const eye = this.eyeCentre(true);
+      // a root that jumps (a respawn, a tether snap) carries the structure with it rigidly: dragged through the joints, a
+      // jump of hundreds of px would fling every part (and a severed part would leave with that speed)
+      wr.rig.frame(wr.eye, this.fr);
+      const jx = eye.x * this.facing - this.fr.x;
+      const jy = eye.y - this.fr.y;
+      if (jx * jx + jy * jy > ROOT_JUMP * ROOT_JUMP) {
+        wr.rig.translate(jx, jy);
+        this.jumps++;
+      }
       const heading = f.ang.angle;
       wr.rig.setKinematic(wr.eye, eye.x * this.facing, eye.y, heading);
       setWitnessHeading(wr, heading, f.tickNo);

@@ -295,6 +295,26 @@ describe('the Witness in game (witness=1)', () => {
     expect(w.regions.length).toBeLessThan(regions);
   });
 
+  it('a root that jumps hundreds of px carries the structure rigidly (nothing flung, nothing severed)', () => {
+    const { m, w, beh } = witnessMatch();
+    for (let k = 0; k < 10; k++) m.step();
+    const regions = w.regions.length;
+    w.px += 300;
+    w.py -= 120;
+    const rig = beh.rig.rig;
+    // the tick of the jump: dragged through the joints the parts would leave at hundreds of px/s and rad/s
+    m.step();
+    let jumpW = 0;
+    for (let i = 0; i < rig.n; i++) jumpW = Math.max(jumpW, Math.abs(rig.w[i]!));
+    let jumpV = 0;
+    for (let i = 0; i < rig.n; i++) jumpV = Math.max(jumpV, Math.hypot(rig.vx[i]!, rig.vy[i]!));
+    for (let k = 0; k < 30; k++) m.step();
+    expect(beh.jumps).toBeGreaterThanOrEqual(1);
+    expect(jumpW).toBeLessThan(0.2);
+    expect(jumpV).toBeLessThan(60);
+    expect(w.regions.length).toBe(regions);
+  });
+
   it('is deterministic (world + rig hashes)', () => {
     const run = (): number => {
       const { m, w } = witnessMatch(11);

@@ -127,6 +127,18 @@ const emptyBodyStats = (): BodyStats => ({
 const TAU = Math.PI * 2;
 const TETHER_SOFT_DX = 330;
 const TETHER_SOFT_DY = 140;
+/**
+ * Scale of motion (docs/briefs/scale-spec.md): the most a positional correction may move a root in ONE tick (px). The tether
+ * caps and the soft contact are corrections, not motion: in play they move a root a pixel or two, and whatever exceeds this
+ * (a foe that was itself moved, an overlap measured against bounds that jumped) is worked off over the next ticks instead of
+ * teleporting the body. CORE_STEP_MAX is the same bound for the hard core-to-core limit, which must also stop a lunge.
+ */
+export const CORRECTION_STEP_MAX = 8;
+export const CORE_STEP_MAX = 24;
+/** The root's hard arena bounds sit this far inside the arena rectangle (px): sides, top, bottom. */
+const ARENA_MARGIN_X = 36;
+const ARENA_MARGIN_TOP = 90;
+const ARENA_MARGIN_BOTTOM = 60;
 /** Ramped impulses that may be in flight at once (movement and spin keys overlap at most a few at a time). */
 const RAMP_SLOTS = 6;
 
@@ -1569,21 +1581,33 @@ export class FighterImpl implements Fighter {
 
     // soft arena walls
     const a = this.arena;
-    const margin = 36;
+    const margin = ARENA_MARGIN_X;
     const soft = Math.max(1, a.softWall);
     const dl = this.px - (a.minX + margin);
     const dr = a.maxX - margin - this.px;
     if (dl < soft) this.vx += (1 - Math.max(0, dl) / soft) ** 2 * 900 * dt;
     if (dr < soft) this.vx -= (1 - Math.max(0, dr) / soft) ** 2 * 900 * dt;
-    const du = this.py - (a.minY + 90);
-    const dd = a.maxY - 60 - this.py;
+    const du = this.py - (a.minY + ARENA_MARGIN_TOP);
+    const dd = a.maxY - ARENA_MARGIN_BOTTOM - this.py;
     if (du < 80) this.vy += (1 - Math.max(0, du) / 80) ** 2 * 700 * dt;
     if (dd < 80) this.vy -= (1 - Math.max(0, dd) / 80) ** 2 * 700 * dt;
 
     this.px += this.vx * dt;
     this.py += this.vy * dt;
-    const minX = a.minX + margin;
-    const maxX = a.maxX - margin;
+    this.clampToArena();
+
+    this.faceFoe();
+    if (this.footwork === 'orbit') this.tetherOrbit(top);
+    else this.tetherClassic();
+    // the arena always wins: clamped again after the tether's correction
+    this.clampToArena();
+  }
+
+  /** Hard arena bounds for the root (inside the soft walls' margin); kills the velocity into the wall. */
+  private clampToArena(): void {
+    const a = this.arena;
+    const minX = a.minX + ARENA_MARGIN_X;
+    const maxX = a.maxX - ARENA_MARGIN_X;
     if (this.px < minX) {
       this.px = minX;
       if (this.vx < 0) this.vx = 0;
@@ -1591,8 +1615,8 @@ export class FighterImpl implements Fighter {
       this.px = maxX;
       if (this.vx > 0) this.vx = 0;
     }
-    const minY = a.minY + 90;
-    const maxY = a.maxY - 60;
+    const minY = a.minY + ARENA_MARGIN_TOP;
+    const maxY = a.maxY - ARENA_MARGIN_BOTTOM;
     if (this.py < minY) {
       this.py = minY;
       if (this.vy < 0) this.vy = 0;
@@ -1600,10 +1624,6 @@ export class FighterImpl implements Fighter {
       this.py = maxY;
       if (this.vy > 0) this.vy = 0;
     }
-
-    this.faceFoe();
-    if (this.footwork === 'orbit') this.tetherOrbit(top);
-    else this.tetherClassic();
   }
 
   /**
@@ -1772,12 +1792,15 @@ export class FighterImpl implements Fighter {
     this.leanV = -this.leanV;
   }
 
-  /** Classic tether: never further apart than MAX_FIGHTER_DX/DY, with a graded bleed of outward speed before the cap. */
+  /**
+   * Classic tether: never further apart than MAX_FIGHTER_DX/DY, with a graded bleed of outward speed before the cap. Past the
+   * cap the root is drawn back at most CORRECTION_STEP_MAX px a tick (in play the overshoot is a pixel or two: exact).
+   */
   private tetherClassic(): void {
     const fv = this.foe.view;
     const dx = this.px - fv.x;
     if (Math.abs(dx) > MAX_FIGHTER_DX) {
-      this.px = fv.x + Math.sign(dx) * MAX_FIGHTER_DX;
+      this.px -= Math.sign(dx) * Math.min(Math.abs(dx) - MAX_FIGHTER_DX, CORRECTION_STEP_MAX);
       if (this.vx * dx > 0) this.vx = 0;
     } else if (Math.abs(dx) > TETHER_SOFT_DX && this.vx * dx > 0) {
       // graded pull-back: the outward speed bleeds off ever faster toward the hard cap (knockback still carries, it just tires)
@@ -1786,7 +1809,7 @@ export class FighterImpl implements Fighter {
     }
     const dy = this.py - fv.y;
     if (Math.abs(dy) > MAX_FIGHTER_DY) {
-      this.py = fv.y + Math.sign(dy) * MAX_FIGHTER_DY;
+      this.py -= Math.sign(dy) * Math.min(Math.abs(dy) - MAX_FIGHTER_DY, CORRECTION_STEP_MAX);
       if (this.vy * dy > 0) this.vy = 0;
     } else if (Math.abs(dy) > TETHER_SOFT_DY && this.vy * dy > 0) {
       const s = (Math.abs(dy) - TETHER_SOFT_DY) / (MAX_FIGHTER_DY - TETHER_SOFT_DY);
@@ -1796,7 +1819,9 @@ export class FighterImpl implements Fighter {
 
   /**
    * Orbit tether: radial in the scaled plane (graded bleed of outward radial speed from `tetherSoft`, hard cap at
-   * `tetherMax`), plus the view's vertical limit (|dy| ≤ MAX_FIGHTER_DY) so both bodies always fit on screen.
+   * `tetherMax`), plus the view's vertical limit (|dy| ≤ MAX_FIGHTER_DY) so both bodies always fit on screen. Both caps draw
+   * the root back at most CORRECTION_STEP_MAX px a tick: each fighter tethers to the OTHER's view, which may itself have just
+   * been corrected (arena, contact), so a hard snap could jump a body tens of px and the two snaps could chase each other.
    */
   private tetherOrbit(top: number): void {
     const O = ORBIT;
@@ -1810,8 +1835,13 @@ export class FighterImpl implements Fighter {
       const ny = dyS / r;
       const vOut = this.vx * nx + this.vy * EY * ny;
       if (r > O.tetherMax) {
-        this.px = fv.x + nx * O.tetherMax;
-        this.py = fv.y + (ny * O.tetherMax) / EY;
+        // back toward the cap along the radius (in S), never more than CORRECTION_STEP_MAX screen px in one tick
+        const back = r - O.tetherMax;
+        const sx = nx * back;
+        const sy = (ny * back) / EY;
+        const k = Math.min(1, CORRECTION_STEP_MAX / Math.max(1e-9, Math.hypot(sx, sy)));
+        this.px -= sx * k;
+        this.py -= sy * k;
         if (vOut > 0) {
           this.vx -= nx * vOut;
           this.vy -= (ny * vOut) / EY;
@@ -1825,7 +1855,7 @@ export class FighterImpl implements Fighter {
     }
     const dy = this.py - fv.y;
     if (Math.abs(dy) > MAX_FIGHTER_DY) {
-      this.py = fv.y + Math.sign(dy) * MAX_FIGHTER_DY;
+      this.py -= Math.sign(dy) * Math.min(Math.abs(dy) - MAX_FIGHTER_DY, CORRECTION_STEP_MAX);
       if (this.vy * dy > 0) this.vy = 0;
     }
     // classification for the view (AI, camera, telemetry)
@@ -1892,14 +1922,21 @@ export class FighterImpl implements Fighter {
     // Scale of motion (D28): colossal bodies meet like cushions of rock, not billiard balls. The overlap is worked out over
     // several ticks and the momentum is exchanged over several ticks (a soft contact, ≈ 0.2 s), so a collision bends the
     // path instead of snapping the velocity. The cores are a hard limit: inside them the full correction applies at once.
+    // Every correction is bounded per tick (CORRECTION_STEP_MAX soft, CORE_STEP_MAX for the cores): an overlap measured
+    // against bounds that jumped (a multi-body fighter's region union) must never throw a body across the arena.
     const dist = Math.abs(A.footwork === 'orbit' || B.footwork === 'orbit' ? Math.hypot(dx, dy) : dx);
     const hard = dist < coreGap;
     const k = hard ? 1 : T.contactSoftness;
-    const c = hard ? Math.max(corr, coreGap - dist) : corr * k;
+    const c = hard
+      ? Math.min(Math.max(corr, coreGap - dist), CORE_STEP_MAX)
+      : Math.min(corr * k, CORRECTION_STEP_MAX);
     A.px -= nx * c * shareA;
     A.py -= ny * c * shareA;
     B.px += nx * c * shareB;
     B.py += ny * c * shareB;
+    // the arena wins over contact too (a body pinned to a wall is not pushed through it)
+    A.clampToArena();
+    B.clampToArena();
     // momentum: the closing part of the relative velocity is exchanged (nearly inelastic): a lunge shoves, a heavier body yields less
     const vrel = (B.vx - A.vx) * nx + (B.vy - A.vy) * ny;
     if (vrel < 0) {
