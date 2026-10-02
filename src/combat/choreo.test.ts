@@ -58,7 +58,7 @@ describe('heavy moves: load → commit → recover (SLICE_PLAN §6)', () => {
     const f = lab.f0;
     const alt = f.moveById('planet.crustbreaker');
     expect(alt).toBeDefined();
-    f.behaviour.holdAlternative = (): typeof alt => alt!;
+    f.behaviour.holdAlternative = () => alt!;
     lab.events.length = 0;
     lab.a.held = Btn.CRUSH;
     for (let i = 0; i < 14; i++) lab.step();
@@ -68,7 +68,7 @@ describe('heavy moves: load → commit → recover (SLICE_PLAN §6)', () => {
     expect(accepts).toHaveLength(1);
     // released before the hold tick: the plain move plays
     const lab2 = makeLab({ a: 'planet', b: 'lastone', gap: 300 });
-    lab2.f0.behaviour.holdAlternative = (): typeof alt => alt!;
+    lab2.f0.behaviour.holdAlternative = () => alt!;
     lab2.a.held = Btn.CRUSH;
     lab2.step();
     lab2.a.held = 0;
