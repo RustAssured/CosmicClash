@@ -15,6 +15,7 @@ async function main(): Promise<void> {
     full: new URLSearchParams(location.search).get('full') === '1',
     footwork: params.orbit ? 'orbit' : 'classic',
     zdepth: params.zdepth,
+    witness: params.witness,
   });
   await installHarness(app, params);
 }

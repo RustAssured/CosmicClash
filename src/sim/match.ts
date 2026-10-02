@@ -107,6 +107,7 @@ export class Match implements MatchApi {
         facing: slot === 0 ? 1 : -1,
         footwork: config.footwork ?? 'classic',
         zdepth: !!config.zdepth,
+        witness: !!config.witness,
       });
     this.fighters = [mk(0), mk(1)];
 

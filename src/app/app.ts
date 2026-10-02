@@ -122,6 +122,7 @@ export class App {
   /** Prototype flags from the URL (`orbit=1`, `zdepth=1`), applied to every match that does not set them itself. */
   private footwork: 'classic' | 'orbit' = 'classic';
   private zdepth = false;
+  private witness = false;
   /** Per-tick sim cost samples for the harness benchmark. */
   simSamples: number[] = [];
   measureSim = false;
@@ -159,11 +160,13 @@ export class App {
       full?: boolean;
       footwork?: 'classic' | 'orbit';
       zdepth?: boolean;
+      witness?: boolean;
     } = {},
   ): Promise<void> {
     this.canvas = canvas;
     this.footwork = opts.footwork ?? 'classic';
     this.zdepth = !!opts.zdepth;
+    this.witness = !!opts.witness;
     // the vertical slice (D26/D27): only its titans in menus and attract mode unless `?full=1`
     this.roster = opts.full
       ? IMPLEMENTED_TITANS.slice()
@@ -257,6 +260,7 @@ export class App {
       ...cfg,
       footwork: cfg.footwork ?? this.footwork,
       zdepth: cfg.zdepth ?? this.zdepth,
+      witness: cfg.witness ?? this.witness,
     };
     const defs: [TitanDef, TitanDef] = [
       getTitanDef(config.slots[0].titan),

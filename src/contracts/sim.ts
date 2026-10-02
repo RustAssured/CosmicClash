@@ -240,6 +240,8 @@ export interface FighterOptions {
   /** From MatchConfig: locomotion model and depth-offset prototype. */
   footwork?: 'classic' | 'orbit';
   zdepth?: boolean;
+  /** From MatchConfig: build the Last One as the Witness. */
+  witness?: boolean;
 }
 
 export interface FighterTickCtx {
@@ -338,6 +340,8 @@ export interface MatchConfig {
   footwork?: 'classic' | 'orbit';
   /** Shallow depth offset prototype (draw order, ±12 % scale, parallax; collision suppressed while |Δz| is large). */
   zdepth?: boolean;
+  /** The Last One is played as the rebuilt Witness (rig regions, new kit) — Phase 2, behind `witness=1` until it plays. */
+  witness?: boolean;
 }
 
 export type RoundPhase = 'intro' | 'fight' | 'ko' | 'timeover' | 'roundend' | 'matchend';
