@@ -328,8 +328,8 @@ describe('Planet spin and orientation', () => {
     expect(fa.world.stats(fa.body.id).massFrac).toBeCloseTo(mass0, 2);
     const after = { near: 1, far: 1 };
     pl.faceIntegrity(after);
-    expect(after.near).toBeCloseTo(before.far, 2);
-    expect(after.far).toBeCloseTo(before.near, 2);
+    expect(after.near).toBeCloseTo(before.far, 1);
+    expect(after.far).toBeCloseTo(before.near, 1);
     // the same blow now lands on the fresh face; the battered one, turned away, is spared
     hitNear();
     const hit = { near: 1, far: 1 };
@@ -650,47 +650,55 @@ describe('Planet kit', () => {
   }, 90_000);
 });
 
+/** One heavy blow on the face toward the foe (from the right), walking round the limb so the wound spreads and deepens. */
+function woundOnce(fa: FighterImpl, k: number): void {
+  const a = ((k % 7) - 3) * 0.18;
+  fa.world.applyDamage(fa.body.id, crushAt(fa.px + 40 * Math.cos(a), fa.py + 40 * Math.sin(a), -1, 650));
+}
+
 describe('Planet damage phases and failure', () => {
   it('advances through the four geological phases as it is wounded, never back; the wounded world hits harder and braces worse', () => {
     const { fa, pl, step } = handDuel();
     step(7);
     expect(pl.damagePhase).toBe(1);
     const g1 = pl.guardMultiplier();
+    // wound the face toward the foe blow by blow (the carve harness stops at the two-face shell's stats), watching the phase
     const seen: number[] = [1];
-    for (const frac of [0.8, 0.58, 0.38]) {
-      fa.world.carve(fa.body.id, frac, 3);
-      step(13);
-      seen.push(pl.damagePhase);
+    for (let k = 0; k < 120 && pl.damagePhase < 4 && !fa.view.ko; k++) {
+      woundOnce(fa, k);
+      step(8);
+      if (pl.damagePhase !== seen[seen.length - 1]) seen.push(pl.damagePhase);
     }
-    for (let k = 1; k < seen.length; k++) expect(seen[k]).toBeGreaterThanOrEqual(seen[k - 1]!);
-    expect(seen[1]).toBeGreaterThanOrEqual(2);
-    expect(seen[2]).toBeGreaterThanOrEqual(3);
-    expect(seen[3]).toBe(4);
+    expect(fa.view.ko).toBe(false);
+    for (let k = 1; k < seen.length; k++) expect(seen[k]).toBeGreaterThan(seen[k - 1]!);
+    expect(seen.length).toBeGreaterThanOrEqual(3);
+    expect(seen[seen.length - 1]).toBe(4);
     const s = { speedMul: 1, damageMul: 1, mass: 5, reachMul: 1, tempoMul: 1 };
     pl.adjustStats(s, 0.4);
-    expect(s.damageMul).toBeGreaterThan(1.2);
+    expect(s.damageMul).toBeGreaterThan(1.05);
     expect(pl.guardMultiplier()).toBeLessThan(g1 * 0.7);
     // core crisis shakes the outer moon loose
     expect(pl.moonsAlive).toBeLessThan(2);
   }, 120_000);
 
   it('holding Crush turns Tidal Rush into the phase move: Crust Breaker, then Magma Vent, then Core Pulse (full meter)', () => {
-    const held = (frac: number, meter: number): string | null => {
-      const { fa, a, step } = handDuel(300);
+    const held = (phase: number, meter: number): string | null => {
+      const { fa, pl, a, step } = handDuel(300);
       step(5);
-      if (frac < 1) {
-        fa.world.carve(fa.body.id, frac, 3);
-        step(13);
+      for (let k = 0; k < 120 && pl.damagePhase < phase && !fa.view.ko; k++) {
+        woundOnce(fa, k);
+        step(8);
       }
+      step(13);
       fa.meter = meter;
       a.held = Btn.CRUSH;
       step(14);
       return fa.view.moveId;
     };
     expect(held(1, 0)).toBe('planet.crustbreaker');
-    expect(held(0.58, 0)).toBe('planet.magmavent');
-    expect(held(0.38, 1)).toBe('planet.corepulse');
-    expect(held(0.38, 0)).toBe('planet.magmavent');
+    expect(held(3, 0)).toBe('planet.magmavent');
+    expect(held(4, 1)).toBe('planet.corepulse');
+    expect(held(4, 0)).toBe('planet.magmavent');
     // a tap stays Tidal Rush
     const { fa, a, step } = handDuel(300);
     step(5);

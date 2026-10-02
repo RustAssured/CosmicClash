@@ -95,6 +95,9 @@ const MOON_LAG_ZETA = 0.6;
 /** Rotational Brace: a half-turn (with a counter-swing first) takes this many ticks; only if the far face is this much better. */
 const TURN_TICKS = 36;
 const BRACE_MARGIN = 0.04;
+/** The shell swap starts this many ticks into the half-turn and runs over SWAP_TICKS (the cover is above 70 % throughout). */
+const SWAP_AT = 9;
+const SWAP_TICKS = 18;
 /** How fast the moons swing into the Guard's shield position and back: a critically damped spring of this ω (rad/s; ~0.7 s). */
 const GUARD_OMEGA = 3;
 /** Cloud-texture px of smear per rad/s of atmospheric spin (bands streak), capped. */
@@ -118,7 +121,7 @@ const AURORA_RAMP = ['#2a1a58', '#3048b0', '#28b888', '#78f0a8', '#e0fff0'].map(
  * harder blows; the Brace holds less); 4 Core Crisis (the moons are shaken loose, the core glows through; Core Pulse; fragile).
  * The wounded world is MORE dangerous: outgoing damage rises with the phase.
  */
-const PHASE_POWER = [1, 1, 1.07, 1.16, 1.3];
+const PHASE_POWER = [1, 1, 1.01, 1.05, 1.08];
 const PHASE_BRACE = [1, 1, 0.94, 0.8, 0.64];
 const PHASE_GRAVITY = [12, 12, 18, 22, 26];
 const PHASE_MOTES = [44, 44, 64, 72, 84];
@@ -289,7 +292,7 @@ interface FarFace {
  */
 interface WorldExtras {
   defineShell?(bodyId: number, shell: number | Uint8Array, far?: FarFace): boolean;
-  swapShell?(bodyId: number): boolean;
+  swapShell?(bodyId: number, ticks?: number): boolean;
   shellFace?(bodyId: number): number;
   setOrbit?(
     slot: 0 | 1,
@@ -730,9 +733,11 @@ export class PlanetBehaviour extends Behaviour {
       out.far = out.near;
       return;
     }
+    // stats count the world as one: the near face plus the far face's LOSSES (cells = near + farCells − farInitialCells, against
+    // the near face's initial count), so a turn never changes the world's health; the far face's integrity is what it has lost
+    // against its pristine shell (the same shell, seen from the other side)
     const s = this.f.world.stats(this.f.body.id);
-    const farPristine = Math.max(1, s.initialCells - this.nearPristineAll);
-    out.far = clamp01((s.cells - this.nearAll) / farPristine);
+    out.far = clamp01(1 + (s.cells - this.nearAll) / this.nearPristineShell);
   }
 
   /** Live cells of the near face: all of them, and those of its shell (outside the shared magma and core). */
@@ -866,8 +871,8 @@ export class PlanetBehaviour extends Behaviour {
       const e0 = turnEase(k / TURN_TICKS);
       const e1 = turnEase((k + 1) / TURN_TICKS);
       this.turnRate = ((this.omega >= 0 ? 1 : -1) * Math.PI * (e1 - e0)) / dt;
-      // the faces change over where the ease crosses half-way, under the thickest cloud cover
-      if (e0 < 0.5 && e1 >= 0.5 && this.shellOn) this.wx.swapShell?.(f.body.id);
+      // the faces change over in row bands (matter time-slices the swap over SWAP_TICKS) while the cloud cover is thickest
+      if (k === SWAP_AT && this.shellOn) this.wx.swapShell?.(f.body.id, SWAP_TICKS);
       if (++this.turnTick >= TURN_TICKS) {
         this.turnTick = -1;
         // the stop overshoots: the world swings on past its day rate, then the spring settles it
@@ -971,7 +976,7 @@ export class PlanetBehaviour extends Behaviour {
   /** The phase the world's wounds put it in now (the round's phase never goes back: see `monitor`). */
   private phaseNow(): number {
     const s = this.f.view.bodyStats;
-    // what is left of the face toward the viewer (stats count the far face too: a fresh far face must not hide the wound)
+    // what is left of the world (its total loss, wherever it is) and of the face toward the viewer: the worse of the two
     const near = Math.min(s.massFrac, this.nearAll / this.nearPristineAll);
     if (near < 0.42 || s.coreIntegrity < 0.62 || s.exposedCoreFrac > 0.2) return 4;
     if (this.expoDeep > 260 || near < 0.64) return 3;
