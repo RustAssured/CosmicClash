@@ -27,6 +27,8 @@ const flag = (k: string): boolean => args.includes(`--${k}`);
 const TITANS = opt('titans', 'lastone,planet').split(',') as TitanId[];
 const FOOTWORK = flag('classic') ? 'classic' : 'orbit';
 const REAL = flag('real');
+/** `--witness`: the Last One plays as the rebuilt Witness (MatchConfig.witness). */
+const WITNESS = flag('witness');
 const JSON_OUT = opt('json', '');
 const COMPARE = opt('compare', '');
 
@@ -169,7 +171,7 @@ const rows: Row[] = [];
 for (const titan of TITANS) {
   const foe: TitanId = titan === 'planet' ? 'lastone' : 'planet';
   for (const sc of SCENARIOS) {
-    const lab = makeLab({ a: titan, b: foe, gap: 260, real: REAL, footwork: FOOTWORK });
+    const lab = makeLab({ a: titan, b: foe, gap: 260, real: REAL, footwork: FOOTWORK, witness: WITNESS });
     // the 'hit' scenario needs the foe to strike the subject: a lab view with the slots swapped
     lab.swap = { ...lab, f0: lab.f1, f1: lab.f0 } as Lab;
     const { s, hitAt } = record(lab, sc);
@@ -264,6 +266,6 @@ for (const titan of TITANS) {
 }
 if (JSON_OUT) {
   mkdirSync(dirname(JSON_OUT), { recursive: true });
-  writeFileSync(JSON_OUT, JSON.stringify({ footwork: FOOTWORK, real: REAL, rows }, null, 1));
+  writeFileSync(JSON_OUT, JSON.stringify({ footwork: FOOTWORK, real: REAL, witness: WITNESS, rows }, null, 1));
   console.log(`written ${JSON_OUT}`);
 }

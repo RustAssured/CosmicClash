@@ -33,6 +33,7 @@ export interface LabOptions {
   seed?: number;
   footwork?: 'classic' | 'orbit';
   zdepth?: boolean;
+  witness?: boolean;
 }
 
 export function makeLab(o: LabOptions = {}): Lab {
@@ -43,6 +44,7 @@ export function makeLab(o: LabOptions = {}): Lab {
     createWorld: o.real ? (s): MatterWorld => createMatterWorld(s) : createFakeWorld,
     footwork: o.footwork,
     zdepth: o.zdepth,
+    witness: o.witness,
   });
   const a = new ManualSource();
   const b = new ManualSource();

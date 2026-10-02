@@ -27,6 +27,8 @@ export interface HarnessOptions {
   startGap?: number;
   footwork?: MatchConfig['footwork'];
   zdepth?: boolean;
+  /** Play the Last One as the rebuilt Witness (MatchConfig.witness). */
+  witness?: boolean;
 }
 
 /** A real Match driving real Fighters against a world (the real matter world unless another is supplied). */
@@ -44,6 +46,7 @@ export function makeMatch(o: HarnessOptions = {}): Match {
     startGap: o.startGap,
     footwork: o.footwork,
     zdepth: o.zdepth,
+    witness: o.witness,
   };
   return createMatch(cfg, {
     createWorld: o.createWorld ?? ((seed) => createMatterWorld(seed)),
