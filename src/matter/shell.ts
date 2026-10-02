@@ -1,9 +1,10 @@
-import { ACT_HEAT, ACT_INFECT, type Body } from './body';
+import { ACT_HEAT, ACT_INFECT, CONN_NOW, type Body } from './body';
+import { refreshSurfaceRect } from './cells';
 import { flushSlowCuts } from './cracks';
 import { runConnectivity } from './connectivity';
 import type { WorldCore } from './core';
-import { finishRebuild } from './lifecycle';
-import { REGION_GRID } from '@/contracts';
+import { CellFlag, REGION_GRID } from '@/contracts';
+import { buildBonds } from './bodyinit';
 import { clearWounds, finishReleases, flushWounds } from './wound';
 
 /**
@@ -15,9 +16,10 @@ import { clearWounds, finishReleases, flushWounds } from './wound';
  * and two swaps are the identity, bit for bit. At definition the far face is the near face mirrored about the core column (a
  * half-turn about the vertical axis carries the point at x to −x): the same world, its other side.
  *
- * Mass: the far face is real matter. It is booked as created when the shell is defined, counted in the ledger's cell term and in
- * the body's stats (mass, cells, initial mass: the whole planet), so a swap never changes stats.mass. The regionGrid and
- * coreIntegrity describe the near face (what the camera sees) and the shared core.
+ * Mass: the far face is real matter. It is booked as created when the shell is defined and counted in the ledger's cell term.
+ * Stats count it as tactics, not durability: initialMass stays the one-face mass and loss on either face counts 1:1
+ * (stats.mass = near + far − far's pristine mass), so a swap never changes stats and KO takes the same destruction as before.
+ * The regionGrid and coreIntegrity describe the near face (what the camera sees) and the shared core.
  */
 export class ShellFace {
   /** Shell cells (map indices) and the bond slots a swap exchanges (a bond whose either end is in the shell). */
@@ -26,8 +28,14 @@ export class ShellFace {
   readonly bD: Int32Array;
   /** The shell radius it was defined with (-1: defined by a mask). */
   readonly innerR: number;
-  /** 0 = the face the body was created with is toward the viewer, 1 = the other. */
+  /** 0 = the face the body was created with is toward the viewer, 1 = the other (flips when a swap completes). */
   face = 0;
+  /** A running swap: ticks still to run (0 = none), the next row, and cursors into cells / bR / bD (hashed). */
+  swapLeft = 0;
+  swapRow = 0;
+  pk = 0;
+  pr = 0;
+  pd = 0;
   /* far face, per shell cell (index k of `cells`) */
   readonly material: Uint8Array;
   readonly density: Uint8Array;
@@ -98,9 +106,10 @@ export class ShellFace {
 
 /** Settle every process in flight (held wound slabs, queued slow cuts, pending islands) so the shell holds no transient state. */
 function settle(core: WorldCore, body: Body): void {
+  const busy = body.wounds.held > 0 || body.slowPos < body.slowN || body.connDirty !== 0;
   flushSlowCuts(core, body);
   flushWounds(core, body);
-  runConnectivity(core, body);
+  if (busy) runConnectivity(core, body);
   finishReleases(core, body);
   clearWounds(body);
   // crack fronts and shrapnel fuses are short-lived and positional: a half-turn ends them
@@ -110,13 +119,24 @@ function settle(core: WorldCore, body: Body): void {
 
 /**
  * Define the shell of `body`: the cells farther than `shell` cells from the core centre (a number: the Planet passes magmaR),
- * or the cells where `shell[i] = 1` (a map-sized mask). The far face is the body's PRISTINE snapshot mirrored about the core
- * column (the other side of the world has not been hit). False if the body already has a shell or the shell is empty.
+ * or the cells where `shell[i] = 1` (a map-sized mask). The far face is either `far` — map-sized arrays painted exactly as the
+ * far side will be drawn after the next half-turn (S3's `paintPlanet` at lonShift π: its own continents, lit by the same sun;
+ * proposal 135) — or, without it, the body's PRISTINE snapshot mirrored about the core column. A painted far face gets the
+ * bonds a body of those materials is born with (`buildBonds`: grains, faults, layers, cohesion). False if the body already has
+ * a shell, the shell is empty or `far` is the wrong size.
  */
-export function defineShell(core: WorldCore, body: Body, shell: number | Uint8Array): boolean {
+export function defineShell(core: WorldCore, body: Body, shell: number | Uint8Array, far?: FarFace): boolean {
   if (body.shell !== null) return false;
   const map = body.map;
   const { w, h, n } = body;
+  if (
+    far !== undefined &&
+    (far.material.length !== n ||
+      far.density.length !== n ||
+      far.height.length !== n ||
+      far.baseColor.length !== n)
+  )
+    return false;
   const inShell = new Uint8Array(n);
   let count = 0;
   let innerR = -1;
@@ -197,6 +217,7 @@ export function defineShell(core: WorldCore, body: Body, shell: number | Uint8Ar
     sh.bondD[i] = s.bondD[src]!;
     sh.sBondD[i] = s.bondD[src]!;
   }
+  if (far !== undefined) paintFar(body, sh, inShell, far);
   sh.recount(body);
   const md = body.matDensity;
   let im = 0;
@@ -215,22 +236,152 @@ export function defineShell(core: WorldCore, body: Body, shell: number | Uint8Ar
   return true;
 }
 
+/** A painted far face (proposal 135): map-sized arrays, read only at the shell cells. */
+export interface FarFace {
+  material: Uint8Array;
+  density: Uint8Array;
+  height: Uint8Array;
+  baseColor: Uint32Array;
+}
+
+/** Fill the far face from S3's painting: its cells, its surface flags and the bonds a body of those materials is born with. */
+function paintFar(body: Body, sh: ShellFace, inShell: Uint8Array, far: FarFace): void {
+  const { w, h, n } = body;
+  const s = body.snap;
+  const nm = body.materials.length;
+  // the whole body as it will be after the turn: the shared core from the snapshot, the shell from the painting
+  const mat = s.material.slice();
+  for (let c = 0; c < n; c++) if (inShell[c]) mat[c] = far.material[c]! < nm ? far.material[c]! : 0;
+  const bR = new Uint8Array(n);
+  const bD = new Uint8Array(n);
+  buildBonds(body, mat, bR, bD);
+  for (let k = 0; k < sh.cells.length; k++) {
+    const c = sh.cells[k]!;
+    const m = mat[c]!;
+    const x = c % w;
+    const y = (c - x) / w;
+    const surf =
+      m !== 0 &&
+      (x === 0 ||
+        mat[c - 1] === 0 ||
+        x === w - 1 ||
+        mat[c + 1] === 0 ||
+        y === 0 ||
+        mat[c - w] === 0 ||
+        y === h - 1 ||
+        mat[c + w] === 0);
+    sh.material[k] = m;
+    sh.sMaterial[k] = m;
+    const dn = m !== 0 ? far.density[c]! || 128 : 0;
+    sh.density[k] = dn;
+    sh.sDensity[k] = dn;
+    sh.integrity[k] = m !== 0 ? 255 : 0;
+    sh.height[k] = far.height[c]!;
+    sh.sHeight[k] = far.height[c]!;
+    const bc = m !== 0 ? (far.baseColor[c]! | 0xff000000) >>> 0 : 0;
+    sh.baseColor[k] = bc;
+    sh.sBaseColor[k] = bc;
+    sh.flags[k] = surf ? CellFlag.SURFACE : 0;
+    sh.sFlags[k] = sh.flags[k]!;
+    sh.temperature[k] = 0;
+    sh.infection[k] = 0;
+  }
+  for (let k = 0; k < sh.bR.length; k++) {
+    sh.bondR[k] = bR[sh.bR[k]!]!;
+    sh.sBondR[k] = sh.bondR[k]!;
+  }
+  for (let k = 0; k < sh.bD.length; k++) {
+    sh.bondD[k] = bD[sh.bD[k]!]!;
+    sh.sBondD[k] = sh.bondD[k]!;
+  }
+}
+
 const swapU8 = (a: Uint8Array, i: number, b: Uint8Array, k: number): void => {
   const t = a[i]!;
   a[i] = b[k]!;
   b[k] = t;
 };
 
-/** Commit a half-turn: the far face comes toward the viewer, the near face goes round the back. False if no shell. */
-export function swapShell(core: WorldCore, body: Body): boolean {
+/** Default length of a half-turn's exchange: 18 ticks (0.3 s), so no tick pays more than a band of rows. */
+export const SWAP_TICKS = 18;
+
+/**
+ * Commit a half-turn: the far face comes toward the viewer, the near face goes round the back. The exchange is TIME-SLICED in
+ * row bands over `ticks` world ticks (top to bottom, ~h/ticks rows per tick, run inside `tick()`); `ticks` ≤ 1 swaps at once.
+ * While it runs:
+ *  - the map is always the truth: every row shows (and is hit-tested as) exactly one face, swapped rows the new face; drawing
+ *    and hit-testing agree on every tick (the band's tiles are refreshed the tick it moves);
+ *  - connectivity for the body is held (a half-swapped shell must not shed matter across the band edge); blows on it separate
+ *    at once instead of holding wound slabs (as in the harness), and what they free leaves when the swap completes;
+ *  - the in-progress state (rows done, ticks left, cursors) is hashed.
+ * The result is the same bytes as a one-shot swap (the exchange is per cell and per bond, order-free), so two swaps are still
+ * the identity. False if the body has no shell or a swap is already running.
+ */
+export function swapShell(core: WorldCore, body: Body, ticks = SWAP_TICKS): boolean {
   const sh = body.shell;
-  if (sh === null) return false;
+  if (sh === null || sh.swapLeft > 0) return false;
   settle(core, body);
+  sh.swapRow = 0;
+  sh.pk = 0;
+  sh.pr = 0;
+  sh.pd = 0;
+  sh.swapLeft = Math.max(1, Math.floor(ticks));
+  if (sh.swapLeft === 1) stepShellSwap(body);
+  return true;
+}
+
+/** One band of a running swap (called once per tick by the world, before connectivity). */
+export function stepShellSwap(body: Body): void {
+  const sh = body.shell;
+  if (sh === null || sh.swapLeft === 0) return;
+  const rows = Math.ceil((body.h - sh.swapRow) / sh.swapLeft);
+  const y0 = sh.swapRow;
+  const y1 = Math.min(body.h, y0 + rows);
+  exchangeRows(body, sh, y1);
+  sh.swapRow = y1;
+  sh.swapLeft--;
+  const w = body.w;
+  body.touch(0, y0 - 1, w - 1, y1);
+  refreshSurfaceRect(body, 0, Math.max(0, y0 - 1), w - 1, Math.min(body.h - 1, y1));
+  body.wakeRect(0, y0, w - 1, y1 - 1, ACT_HEAT | ACT_INFECT);
+  if (sh.swapLeft === 0) {
+    sh.face ^= 1;
+    recountPristine(body);
+    body.statsDirty = true;
+    body.connDirty = CONN_NOW;
+    body.connFull = true;
+    body.lastConnTick = -100;
+  }
+}
+
+/** Run a swap in progress to completion now (restore / heal / remove need a whole face). */
+export function finishShellSwap(body: Body): void {
+  const sh = body.shell;
+  while (sh !== null && sh.swapLeft > 0) stepShellSwap(body);
+}
+
+/** Exchange every shell cell and shell bond with index < y1·w that the cursors have not reached yet. */
+function exchangeRows(body: Body, sh: ShellFace, y1: number): void {
   const map = body.map;
   const s = body.snap;
+  const md = body.matDensity;
+  const end = y1 * body.w;
   const cells = sh.cells;
-  for (let k = 0; k < cells.length; k++) {
+  let k = sh.pk;
+  let dm = 0;
+  let dc = 0;
+  for (; k < cells.length && cells[k]! < end; k++) {
     const c = cells[k]!;
+    const mn = map.material[c]!;
+    const mf = sh.material[k]!;
+    if (mn !== 0) {
+      dm += (md[mn]! * map.density[c]!) / 128;
+      dc++;
+    }
+    if (mf !== 0) {
+      dm -= (md[mf]! * sh.density[k]!) / 128;
+      dc--;
+    }
     swapU8(map.material, c, sh.material, k);
     swapU8(map.density, c, sh.density, k);
     swapU8(map.integrity, c, sh.integrity, k);
@@ -254,28 +405,29 @@ export function swapShell(core: WorldCore, body: Body): boolean {
     map.detached[c] = 0;
     map.emissive[c] = 0;
   }
-  for (let k = 0; k < sh.bR.length; k++) {
-    const c = sh.bR[k]!;
-    swapU8(map.bondR, c, sh.bondR, k);
-    swapU8(s.bondR, c, sh.sBondR, k);
+  sh.pk = k;
+  sh.farMass += dm;
+  sh.farCells += dc;
+  let r = sh.pr;
+  for (; r < sh.bR.length && sh.bR[r]! < end; r++) {
+    const c = sh.bR[r]!;
+    swapU8(map.bondR, c, sh.bondR, r);
+    swapU8(s.bondR, c, sh.sBondR, r);
   }
-  for (let k = 0; k < sh.bD.length; k++) {
-    const c = sh.bD[k]!;
-    swapU8(map.bondD, c, sh.bondD, k);
-    swapU8(s.bondD, c, sh.sBondD, k);
+  sh.pr = r;
+  let d = sh.pd;
+  for (; d < sh.bD.length && sh.bD[d]! < end; d++) {
+    const c = sh.bD[d]!;
+    swapU8(map.bondD, c, sh.bondD, d);
+    swapU8(s.bondD, c, sh.sBondD, d);
   }
-  sh.face ^= 1;
-  sh.recount(body);
-  recountPristine(body);
-  body.wakeRect(0, 0, body.w - 1, body.h - 1, ACT_HEAT | ACT_INFECT);
-  finishRebuild(body);
-  return true;
+  sh.pd = d;
 }
-
 /** Between rounds: the far face returns to its pristine state too (restore() resets the near face). */
 export function restoreShell(core: WorldCore, body: Body): void {
   const sh = body.shell;
   if (sh === null) return;
+  finishShellSwap(body);
   const before = sh.farMass;
   sh.material.set(sh.sMaterial);
   sh.density.set(sh.sDensity);

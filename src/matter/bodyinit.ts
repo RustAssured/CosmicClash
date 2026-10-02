@@ -162,7 +162,7 @@ export function initBody(core: WorldCore, body: Body): void {
 }
 
 /** Jittered-grid Voronoi plates with a low-frequency warp so seams are organic, not gridded. Returns grain id per cell. */
-function computeGrains(body: Body): Uint16Array {
+function computeGrains(body: Body, mat: Uint8Array = body.map.material): Uint16Array {
   const { w, h } = body;
   const seed = body.seed;
   const grain = new Uint16Array(body.n);
@@ -175,7 +175,6 @@ function computeGrains(body: Body): Uint16Array {
       sx[j * gx + i] = (i - 1 + 0.5 + (noise2(i, j, seed ^ 0x11) - 0.5) * 0.85) * GRAIN;
       sy[j * gx + i] = (j - 1 + 0.5 + (noise2(i, j, seed ^ 0x77) - 0.5) * 0.85) * GRAIN;
     }
-  const mat = body.map.material;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const c = y * w + x;
@@ -250,11 +249,26 @@ function crossesFault(f: Fault, ax: number, ay: number, bx: number, by: number, 
   return faultSide(f, ax, ay, seed) * faultSide(f, bx, by, seed) < 0;
 }
 
-function initBonds(body: Body, grain: Uint16Array, faults: Fault[]): void {
-  const map = body.map;
+/**
+ * The bonds a body with materials `mat` would be born with (same grains, faults, layer and cohesion rules as `initBody`),
+ * written into `outR` / `outD`. Used for a two-face shell's far face (shell.ts), whose material differs from the near face.
+ */
+export function buildBonds(body: Body, mat: Uint8Array, outR: Uint8Array, outD: Uint8Array): void {
+  const grain = computeGrains(body, mat);
+  const faults = makeFaults(body, body.liveX0, body.liveY0, body.liveX1, body.liveY1);
+  initBonds(body, grain, faults, mat, outR, outD);
+}
+
+function initBonds(
+  body: Body,
+  grain: Uint16Array,
+  faults: Fault[],
+  mat: Uint8Array = body.map.material,
+  outR: Uint8Array = body.map.bondR,
+  outD: Uint8Array = body.map.bondD,
+): void {
   const { w, h } = body;
   const mats = body.materials;
-  const mat = map.material;
   const coh = cohesionBondScale(body.attributes.cohesion);
   const seed = body.seed;
   const bondFor = (
@@ -284,12 +298,12 @@ function initBonds(body: Body, grain: Uint16Array, faults: Fault[]): void {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       if (mat[i] === 0) {
-        map.bondR[i] = 0;
-        map.bondD[i] = 0;
+        outR[i] = 0;
+        outD[i] = 0;
         continue;
       }
-      map.bondR[i] = x < w - 1 && mat[i + 1] !== 0 ? bondFor(i, i + 1, x, y, x + 1, y, 1) : 0;
-      map.bondD[i] = y < h - 1 && mat[i + w] !== 0 ? bondFor(i, i + w, x, y, x, y + 1, 2) : 0;
+      outR[i] = x < w - 1 && mat[i + 1] !== 0 ? bondFor(i, i + 1, x, y, x + 1, y, 1) : 0;
+      outD[i] = y < h - 1 && mat[i + w] !== 0 ? bondFor(i, i + w, x, y, x, y + 1, 2) : 0;
     }
   }
 }

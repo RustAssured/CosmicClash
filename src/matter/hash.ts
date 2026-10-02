@@ -88,6 +88,10 @@ function hashBody(h: number, b: Body): number {
   const sh = b.shell;
   if (sh !== null) {
     h = mix32(h, sh.face | (sh.cells.length << 1));
+    h = mix32(h, sh.swapLeft | (sh.swapRow << 8));
+    h = mix32(h, sh.pk);
+    h = mix32(h, sh.pr);
+    h = mix32(h, sh.pd);
     h = hashBytes(h, sh.material);
     h = hashBytes(h, sh.density);
     h = hashBytes(h, sh.integrity);

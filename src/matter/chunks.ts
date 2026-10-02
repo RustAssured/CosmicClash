@@ -77,11 +77,8 @@ export const CHUNK_ORBIT = 1;
 export const CHUNK_LAUNCHED = 2;
 
 /** A gravity owner's capture ring (Tidal Draw): captured chunks are steered onto it and carried round. */
-/**
- * Debris chunk cap (D28 persistence): the contract's MAX_DEBRIS_CHUNKS raised to 640 within the frame budget (bench pools-full;
- * proposal 142 asks the Lead to raise the contract constant to match).
- */
-export const DEBRIS_CHUNK_CAP = Math.max(MAX_DEBRIS_CHUNKS, 640);
+/** Debris chunk cap: the contract's MAX_DEBRIS_CHUNKS (640 since D28 persistence; bench pools-full stays within budget). */
+export const DEBRIS_CHUNK_CAP = MAX_DEBRIS_CHUNKS;
 
 export interface OrbitState {
   active: boolean;

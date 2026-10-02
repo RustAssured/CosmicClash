@@ -58,9 +58,18 @@ Differences from S3's sketch (`createShellStore` / `swapShell(body, store, mask)
   after the next turn, so a swap is a plain per-cell exchange.
 - **A swap first settles everything in flight.** Held wound slabs shear and leave. Queued slow cuts sever. Crack fronts and
   shrapnel fuses end.
-- **Stats count the whole world.** `stats.mass`, `cells`, `initialMass` and `initialCells` include the far face, so a swap
-  never changes them. This covers S3's "KO and massFrac must count both faces" without a Behaviour hook. `regionGrid` and
-  `coreIntegrity` describe the near face and the shared core.
+- **Stats: the far face adds tactics, not durability** (the Lead's balance note; this supersedes the first version, which
+  counted both faces in full and doubled the Planet's HP).
+  - `initialMass` and `initialCells` stay the one-face values.
+  - `stats.mass = near + pool + far − far's pristine mass`, and `cells` likewise. Matter lost on either face counts 1:1, a
+    swap never changes stats, and KO takes the same total destruction as before the shell existed.
+  - `map.mass` is the near face and pool only. The ledger counts both faces exactly.
+  - `regionGrid` and `coreIntegrity` describe the near face and the shared core.
+- **Painted far face (S3's proposal 135).** `defineShell(bodyId, shell, far?)` takes `far = { material, density, height,
+  baseColor }` as map-sized arrays, of which only the shell cells are read. It is the far side as it will be drawn after
+  the next turn (S3's `paintPlanet` at `lonShift = π`), so its own sunlight is right. Its bonds are the ones a body of
+  those materials is born with (`bodyinit.buildBonds`: grains, faults, layer factor, cohesion). Without `far`, the pristine
+  body is mirrored as before.
 - **`restore` resets both faces.** `heal` heals only the near face (known gap).
 
 Cost: one swap on a 96×96 test planet (~8k shell cells) takes well under 1 ms. The exchange is linear in shell cells; the

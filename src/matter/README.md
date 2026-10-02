@@ -30,7 +30,7 @@ grow / shed / heal / restore / carve · setGravitySource(slot, src|null) · spaw
 | `core` | internal state (tests/bench only; `core.clock` + `core.prof` enable the section profiler; `core.forceFullConn = true` disables the local connectivity shortcut) |
 | `bodyToChunk`, `jointHealth` | rig regions (proposal 140): a severed region leaves as one chunk; health of a joint patch |
 | `spawnChunk` → id, `chunksInShape`, `chunkState`, `setOrbit`, `captureChunk`, `releaseChunk`, `launchChunk`, `strikeChunk`, `retireChunk` | Tidal Draw / comets / ring armour (proposal 142): captured chunks are pinned, launched ones land an uncapped KINETIC blow credited to the thrower |
-| `defineShell`, `swapShell`, `shellFace` | the Planet's two-hemisphere world (`shell.ts`, proposal 142): exact half-turn swap of the shell, core shared |
+| `defineShell`, `swapShell(id, ticks = 18)`, `shellFace`, `shellProgress` | the Planet's two-hemisphere world (`shell.ts`, proposal 142): exact half-turn swap of the shell in row bands over 0.3 s, core shared |
 | `setFissureGlow(bodyId, colour)` | the light in a body's CRUSH fissures (default: molten rock only on a magma-bearing body) |
 | `renderExport(view, k)` | aftermath PNG: the debris/particle layers supersampled k× from any view of the frozen world |
 

@@ -55,7 +55,7 @@ import { debugOverlay } from './debug';
 import { impactBurst } from './blowfx';
 import { HAIRLINE, finishReleases, shearDelay, stepWounds } from './wound';
 import { extractChunk } from './debris';
-import { defineShell, restoreShell, swapShell } from './shell';
+import { defineShell, finishShellSwap, restoreShell, stepShellSwap, swapShell, type FarFace } from './shell';
 
 /** A multi-tick damage application waiting to deliver its remaining slices. */
 class Job {
@@ -170,11 +170,17 @@ export interface MatterWorldEx extends MatterWorld {
   /**
    * Give a body a far face: every cell farther than `shell` cells from its core centre (the Planet: magmaR), or every cell of a
    * map-sized mask with `shell[i] = 1`, exists twice; the far face is the pristine body mirrored about the core column. False if
-   * it already has one.
+   * it already has one. `far` (proposal 135): the far face painted as it will be drawn after the next half-turn (map-sized
+   * material / density / height / baseColor; only the shell cells are read); omitted = the pristine body mirrored.
    */
-  defineShell(bodyId: number, shell: number | Uint8Array): boolean;
-  /** Commit a half-turn: exact swap of the near and far shell faces (the core stays). Settles wounds/cuts in flight first. */
-  swapShell(bodyId: number): boolean;
+  defineShell(bodyId: number, shell: number | Uint8Array, far?: FarFace): boolean;
+  /**
+   * Commit a half-turn: exact swap of the near and far shell faces (the core stays), time-sliced in row bands over `ticks` world
+   * ticks (default 18 = 0.3 s; ≤ 1 = at once). Settles wounds/cuts in flight first. False if no shell or a swap is running.
+   */
+  swapShell(bodyId: number, ticks?: number): boolean;
+  /** Fraction of the running swap done (rows moved / h); 1 when none is running; -1 if the body has no shell. */
+  shellProgress(bodyId: number): number;
   /** Which face is toward the viewer: 0 the original, 1 the other; -1 if the body has no shell. */
   shellFace(bodyId: number): number;
   /** Returns the new chunk's id (comets, lost moons). */
@@ -481,14 +487,20 @@ class MatterWorldImpl implements MatterWorldEx {
     b.visDirty = true;
   }
 
-  defineShell(bodyId: number, shell: number | Uint8Array): boolean {
+  defineShell(bodyId: number, shell: number | Uint8Array, far?: FarFace): boolean {
     const b = this.core.bodyById[bodyId];
-    return b ? defineShell(this.core, b, shell) : false;
+    return b ? defineShell(this.core, b, shell, far) : false;
   }
 
-  swapShell(bodyId: number): boolean {
+  swapShell(bodyId: number, ticks?: number): boolean {
     const b = this.core.bodyById[bodyId];
-    return b ? swapShell(this.core, b) : false;
+    return b ? swapShell(this.core, b, ticks) : false;
+  }
+
+  shellProgress(bodyId: number): number {
+    const b = this.core.bodyById[bodyId];
+    if (!b || b.shell === null) return -1;
+    return b.shell.swapLeft > 0 ? b.shell.swapRow / b.h : 1;
   }
 
   shellFace(bodyId: number): number {
@@ -520,7 +532,7 @@ class MatterWorldImpl implements MatterWorldEx {
     const b = core.bodyById[id];
     if (!b) return;
     b.refreshStats();
-    core.ledger.deleted += b.map.mass; // cells + pool vanish with the body
+    core.ledger.deleted += b.map.mass + (b.shell !== null ? b.shell.farMass : 0); // cells + pool (+ a far face) vanish with the body
     core.bodyById[id] = undefined;
     const i = core.bodyList.indexOf(b);
     if (i >= 0) core.bodyList.splice(i, 1);
@@ -607,8 +619,26 @@ class MatterWorldImpl implements MatterWorldEx {
     return res;
   }
 
-  /** Apply one tick's worth of an event to `body`. */
+  /** Apply one tick's worth of an event to `body`. A two-face shell mid-swap separates at once (no held slabs: shell.ts). */
   private applySlice(body: Body, ev: DamageEvent, energy: number, first: boolean, res: DamageResult): void {
+    const core = this.core;
+    if (body.shell === null || body.shell.swapLeft === 0) {
+      this.applySliceNow(body, ev, energy, first, res);
+      return;
+    }
+    const was = core.woundsOff;
+    core.woundsOff = true;
+    this.applySliceNow(body, ev, energy, first, res);
+    core.woundsOff = was;
+  }
+
+  private applySliceNow(
+    body: Body,
+    ev: DamageEvent,
+    energy: number,
+    first: boolean,
+    res: DamageResult,
+  ): void {
     const core = this.core;
     if (ev.type === 'TIDAL') {
       // Tidal fields cover whole bodies: apply every 3rd tick with the skipped energy carried (same total, a third of the cost).
@@ -806,9 +836,12 @@ class MatterWorldImpl implements MatterWorldEx {
       if (j.kind === 1) {
         // The blow that queued this chisel usually knocks the body away within the delay: chase it, or the pit lands on empty air.
         shiftEvent(j.ev, body.transform.x - j.bx, body.transform.y - j.by);
+        const was = core.woundsOff;
+        if (body.shell !== null && body.shell.swapLeft > 0) core.woundsOff = true;
         const ctx = beginDamage(core, this.ctx, body, j.ev, j.energy, false);
-        if (ctx !== null) chisel(ctx, j.energy, j.wound);
+        if (ctx !== null) chisel(ctx, j.energy, core.woundsOff ? -1 : j.wound);
         endSpray(core);
+        core.woundsOff = was;
         j.active = false;
         continue;
       }
@@ -819,6 +852,7 @@ class MatterWorldImpl implements MatterWorldEx {
 
     for (let i = 0; i < bodies.length; i++) {
       const b = bodies[i]!;
+      if (b.shell !== null && b.shell.swapLeft > 0) stepShellSwap(b);
       stepFronts(core, b);
       stepSlowCuts(core, b);
       stepFuses(core, b);
@@ -831,6 +865,8 @@ class MatterWorldImpl implements MatterWorldEx {
     this.lap(3);
     for (let i = 0; i < bodies.length; i++) {
       const b = bodies[i]!;
+      // a two-face shell mid-swap holds its connectivity until the last band has moved (shell.ts)
+      if (b.shell !== null && b.shell.swapLeft > 0) continue;
       if (
         b.connDirty !== 0 &&
         core.tick - b.lastConnTick >= (b.connDirty === CONN_NOW ? 1 : b.connDirty === CONN_STEADY ? 3 : 6)
@@ -896,12 +932,14 @@ class MatterWorldImpl implements MatterWorldEx {
     const b = this.core.bodyById[bodyId];
     if (!b) return;
     this.cancelProcesses(bodyId);
+    finishShellSwap(b);
     life.heal(this.core, b, fraction, seed);
   }
   restore(bodyId: number): void {
     const b = this.core.bodyById[bodyId];
     if (!b) return;
     this.cancelProcesses(bodyId);
+    finishShellSwap(b);
     life.restore(this.core, b);
     restoreShell(this.core, b);
   }

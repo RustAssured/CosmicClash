@@ -831,25 +831,24 @@ export class Body implements MatterBody {
       crack += this.regionCrack[r]!;
     }
     mass += this.pool;
-    // a two-hemisphere body is the whole world: its far face counts too (shell.ts)
-    const sh = this.shell;
-    let im = this.map.initialMass;
-    let ic = this.map.initialCells;
-    if (sh !== null) {
-      mass += sh.farMass;
-      cells += sh.farCells;
-      im += sh.farInitialMass;
-      ic += sh.farInitialCells;
-    }
     const map = this.map;
     map.mass = mass;
     map.liveCells = cells;
+    // A two-hemisphere body (shell.ts): the far face adds tactics, not durability. Stats keep the one-face initial mass, and
+    // matter lost on EITHER face counts 1:1 (mass = near + far − far's pristine mass), so a swap never changes them and KO
+    // needs exactly as much destruction as before the shell existed, however it is spread over the two faces.
+    const sh = this.shell;
+    if (sh !== null) {
+      mass += sh.farMass - sh.farInitialMass;
+      cells += sh.farCells - sh.farInitialCells;
+    }
+    const im = map.initialMass;
     const s = this.stats;
     s.mass = mass;
     s.initialMass = im;
     s.massFrac = im > 0 ? mass / im : 0;
     s.cells = cells;
-    s.initialCells = ic;
+    s.initialCells = map.initialCells;
     s.burningCells = burn;
     s.infectedCells = infect;
     s.crackedCells = crack;
