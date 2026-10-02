@@ -257,6 +257,8 @@ export interface AdeukHarnessApi {
   >;
   /** Renderer stats (quality tier, GPU/frame ms where measurable). */
   renderStats(): unknown;
+  /** The aftermath view if it is open (deciding KO + 1 s), else null. */
+  aftermath(): { x: number; y: number; zoom: number; roll: number; hud: boolean } | null;
   /** Resume/create the AudioContext (real-time capture runs without a user gesture). */
   unlockAudio(): Promise<boolean>;
   /** A MediaStream of exactly what reaches the speakers (for recording next to canvas.captureStream), or null. */

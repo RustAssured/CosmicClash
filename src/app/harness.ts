@@ -186,6 +186,10 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
         frames: s.frames.map((f) => ({ tick: f.tick, wallMs: f.wallMs, b64: toBase64(f.rgba) })),
       }));
     },
+    aftermath() {
+      const a = app.aftermath;
+      return a ? { x: a.x, y: a.y, zoom: a.zoom, roll: a.roll, hud: a.hud } : null;
+    },
     renderStats(): unknown {
       return JSON.parse(JSON.stringify(app.renderer.stats)) as unknown;
     },

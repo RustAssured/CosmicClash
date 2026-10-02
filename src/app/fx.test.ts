@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { MatchApi, SimEvent } from '@/contracts';
 import { createMatch } from '@/sim';
 import { fakeDeps } from '@/sim/testing/fakes';
+import type { FrameFxExt } from '@/stages/types';
 import { FxState, IMPACT_SLOTS, ONSET_GAP, buildAudioScene } from './fx';
 
 const mkMatch = (): MatchApi =>
@@ -178,5 +179,61 @@ describe('FxState', () => {
     expect(sc.fighters).toHaveLength(2);
     expect(sc.fighters![0].titan).toBe('lastone');
     expect(sc.lowestIntegrity).toBe(1);
+  });
+});
+
+describe('FxState arena comets', () => {
+  it('turns a warning into a glint, follows the live chunk (and its capture), and drops it on retire', () => {
+    const fx = new FxState();
+    const base = mkMatch();
+    // the world's chunk 7: moving right, then captured by slot 1
+    const chunk = { x: 100, y: 200, vx: 180, vy: -20, radius: 11, mode: 0, owner: -1 };
+    const world = Object.create(base.world, {
+      chunkState: {
+        value: (id: number, out: typeof chunk): boolean =>
+          id === 7 ? (Object.assign(out, chunk), true) : false,
+      },
+    }) as MatchApi['world'];
+    const m = Object.create(base, {
+      world: { value: world },
+      arena: {
+        value: {
+          ...base.arena,
+          comets: { every: [300, 300], warn: 30, speed: [180, 180], mass: 90, maxLive: 2 },
+        },
+      },
+    }) as MatchApi;
+    const comets = (): NonNullable<FrameFxExt['comets']> => (fx.sample(0) as FrameFxExt).comets ?? [];
+
+    fx.tick([{ t: 'hazard', kind: 'comet-warn', id: -1, x: -40, y: 210, vx: 180, vy: -20 }], m);
+    for (let i = 0; i < 14; i++) fx.tick([], m);
+    expect(comets()).toHaveLength(1);
+    expect(comets()[0]!.warn).toBeCloseTo(15 / 30, 5);
+    expect(comets()[0]!.x).toBe(-40);
+
+    // enter: the warning is replaced by the live comet, read back from the chunk every tick
+    fx.tick([{ t: 'hazard', kind: 'comet-enter', id: 7, x: -40, y: 210, vx: 180, vy: -20 }], m);
+    expect(comets()).toHaveLength(1);
+    expect(comets()[0]).toMatchObject({ x: 100, y: 200, vx: 180, r: 11, warn: 0, captured: 0 });
+    // sub-tick extrapolation by the render alpha
+    expect((fx.sample(0.5) as FrameFxExt).comets![0]!.x).toBeCloseTo(100 + (180 * 0.5) / 60, 5);
+    chunk.x = 160;
+    chunk.mode = 1;
+    chunk.owner = 1;
+    fx.tick([], m);
+    expect(comets()[0]).toMatchObject({ x: 160, captured: 1 });
+
+    fx.tick([{ t: 'hazard', kind: 'comet-retire', id: 7, x: 700, y: 180, vx: 180, vy: -20 }], m);
+    expect(comets()).toHaveLength(0);
+  });
+
+  it('drops a comet whose chunk is gone and a warning whose comet never came', () => {
+    const fx = new FxState();
+    const m = mkMatch();
+    fx.tick([{ t: 'hazard', kind: 'comet-enter', id: 99, x: 0, y: 0, vx: 1, vy: 0 }], m);
+    expect((fx.sample(0) as FrameFxExt).comets).toHaveLength(0);
+    fx.tick([{ t: 'hazard', kind: 'comet-warn', id: -1, x: 0, y: 0, vx: 1, vy: 0 }], m);
+    for (let i = 0; i < 90 + 31; i++) fx.tick([], m);
+    expect((fx.sample(0) as FrameFxExt).comets).toHaveLength(0);
   });
 });

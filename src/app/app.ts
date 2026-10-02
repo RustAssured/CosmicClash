@@ -135,6 +135,8 @@ export class App {
   private saveNext = false;
   private uiHiddenBefore = false;
   private afterTick = 0;
+  /** Input for the aftermath when no human slot exists (AI vs AI). */
+  private afterSrc: TappedSource | null = null;
   private readonly afterInput: InputFrame = emptyInput();
   private readonly aftCam: CameraState = {
     x: 0,
@@ -252,7 +254,12 @@ export class App {
   private enterAftermath(m: Match): void {
     this.aftermathAt = -1;
     const a = m.arena;
-    this.aftermath = new Aftermath(this.frame.camera.x, this.frame.camera.y, {
+    // frame the remains: the centre of both bodies' live bounds, not wherever the KO camera happened to be
+    const v0 = m.fighters[0].view;
+    const v1 = m.fighters[1].view;
+    const cx = (Math.min(v0.boundsX0, v1.boundsX0) + Math.max(v0.boundsX1, v1.boundsX1)) / 2;
+    const cy = (Math.min(v0.boundsY0, v1.boundsY0) + Math.max(v0.boundsY1, v1.boundsY1)) / 2;
+    this.aftermath = new Aftermath(cx, cy, {
       minX: a.minX + LOGICAL_W / 4,
       maxX: a.maxX - LOGICAL_W / 4,
       minY: a.minY + LOGICAL_H / 4,
@@ -261,6 +268,13 @@ export class App {
     this.uiHiddenBefore = this.hideUi;
     this.hideUi = true;
     this.renderer.setInspect(true);
+    // AI-vs-AI (no human slot): the aftermath still answers to the first keyboard layout / an assigned pad
+    const s = this.session;
+    this.afterSrc = null;
+    if (s && !s.taps.some((t) => t)) {
+      if (this.input.assignment()[0] === null) this.input.assign(0, 'kb:kb1');
+      this.afterSrc = tapSource(this.input.source(0));
+    }
   }
 
   private exitAftermath(): void {
@@ -274,7 +288,7 @@ export class App {
   private updateAftermath(s: Session, dtSec: number): void {
     const a = this.aftermath!;
     const inp = this.afterInput;
-    let tap: TappedSource | null = null;
+    let tap: TappedSource | null = this.afterSrc;
     for (const t of s.taps) if (t && !tap) tap = t;
     let edges = { pause: false, training: false };
     if (tap) {
@@ -620,7 +634,16 @@ export class App {
       f.view = cam.view;
       if (a) {
         // whole-number zoom and free orbit are applied in the final pass (renderer inspect mode)
-        Object.assign(this.aftCam, cam.state, { zoom: a.zoom, roll: a.roll, shakeX: 0, shakeY: 0 });
+        // the scenery comes back to rest (no windup dolly, no impact kick): the aftermath shows the battlefield in context
+        Object.assign(this.aftCam, cam.state, {
+          zoom: a.zoom,
+          roll: a.roll,
+          shakeX: 0,
+          shakeY: 0,
+          dolly: 0,
+          kickX: 0,
+          kickY: 0,
+        });
         f.camera = this.aftCam;
       }
       f.stage = s.config.stage;
@@ -665,7 +688,11 @@ export class App {
       this.drawTelemetry();
       this.layers.push(this.teleLayer);
     }
-    if (this.aftermath && this.aftermath.drawHints()) this.layers.push(this.aftermath.layer);
+    if (this.aftermath) {
+      // the hint goes in the UI slot (composited after the zoom/orbit of the frame), or the HUD does when it is on
+      const hint = this.aftermath.drawHints();
+      f.ui = this.aftermath.hud ? this.ui.layer : hint ? this.aftermath.layer : null;
+    }
     this.renderer.draw(f);
     if (this.saveNext) {
       // toBlob snapshots the canvas NOW (same task as the draw), so no preserveDrawingBuffer is needed

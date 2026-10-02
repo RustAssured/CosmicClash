@@ -12,6 +12,7 @@ import {
   type SimEvent,
   type StageImpulseFx,
 } from '@/contracts';
+import { MAX_COMETS, type CometFx, type FrameFxExt } from '@/stages/types';
 
 /**
  * Turns the sim's event stream into the non-pixel per-frame inputs of the renderer: expanding shockwave rings, scenery
@@ -24,7 +25,25 @@ import {
  *  - decay in WALL time (a tick lasts 1 / (60 × timeScale) s), so KO slow-motion does not stretch a light into a held wash;
  *  - are scaled by the comfort setting (`flashScale`), as is the refraction.
  * The intensity handed to the renderer (stage brightness, flow) is slew-limited so a hit can never step the frame's brightness.
+ *
+ * Arena comets (src/sim/hazards.ts): a comet-warn becomes a warning entry (an edge glint and the planned line), a
+ * comet-enter a live comet read back every tick from the world's chunk state (so gravity bends it and a capture shows),
+ * dropped on comet-retire or when the chunk is gone. Handed to the renderer as FrameFxExt.comets (proposal 165).
  */
+interface CometTrack {
+  /** Matter chunk id; −1 while it is still a warning. */
+  id: number;
+  /** Warning: ticks elapsed and the warning's length. */
+  age: number;
+  life: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  captured: number;
+}
+
 interface Ring {
   x: number;
   y: number;
@@ -131,6 +150,23 @@ export class FxState {
   private readonly wavePool: ShockwaveFx[] = [];
   private readonly impPool: StageImpulseFx[] = [];
   private readonly lightsOut: LightFx[] = [];
+  private readonly cometTracks: CometTrack[] = [];
+  private readonly cometPool: CometFx[] = [];
+  private readonly cometsOut: CometFx[] = [];
+  private readonly chunk = {
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    angle: 0,
+    spin: 0,
+    mass: 0,
+    radius: 0,
+    mode: 0,
+    owner: -1,
+    origin: -1,
+    temp: 0,
+  };
 
   constructor() {
     for (let i = 0; i < MAX_RINGS; i++) {
@@ -149,6 +185,8 @@ export class FxState {
         slot: i < 2 ? i : -1,
         kind: i < 2 ? 'body' : 'impact',
       });
+    for (let i = 0; i < MAX_COMETS; i++)
+      this.cometPool.push({ x: 0, y: 0, vx: 0, vy: 0, r: 0, captured: 0, warn: 0 });
     for (let i = 0; i < IMPACT_SLOTS; i++)
       this.impacts.push({
         x: 0,
@@ -174,6 +212,7 @@ export class FxState {
     this.lastOnset = -1e9;
     this.newest = -1;
     for (const l of this.impacts) l.live = false;
+    this.cometTracks.length = 0;
   }
 
   private addRing(
@@ -333,8 +372,12 @@ export class FxState {
         case 'ultimate':
           if (e.phase === 'start') this.heat += 2;
           break;
+        case 'hazard':
+          this.hazard(e, match);
+          break;
       }
     }
+    this.trackComets(match);
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i]!;
       if (++r.age >= r.life) this.rings.splice(i, 1);
@@ -373,6 +416,48 @@ export class FxState {
       }
     }
   }
+  private hazard(e: Extract<SimEvent, { t: 'hazard' }>, match: MatchApi): void {
+    const tr = this.cometTracks;
+    if (e.kind === 'comet-warn') {
+      if (tr.length >= MAX_COMETS) return;
+      const life = Math.max(1, match.arena.comets?.warn ?? 90);
+      tr.push({ id: -1, age: 0, life, x: e.x, y: e.y, vx: e.vx, vy: e.vy, r: 0, captured: 0 });
+    } else if (e.kind === 'comet-enter') {
+      // the comet replaces its warning (the oldest one still pending)
+      const w = tr.findIndex((c) => c.id < 0);
+      if (w >= 0) tr.splice(w, 1);
+      if (tr.length >= MAX_COMETS) return;
+      tr.push({ id: e.id, age: 0, life: 0, x: e.x, y: e.y, vx: e.vx, vy: e.vy, r: 8, captured: 0 });
+    } else {
+      const i = tr.findIndex((c) => c.id === e.id);
+      if (i >= 0) tr.splice(i, 1);
+    }
+  }
+
+  /** Age the warnings, re-read the live comets from the world (gravity bends them, a capture pins them). */
+  private trackComets(match: MatchApi): void {
+    const tr = this.cometTracks;
+    for (let i = tr.length - 1; i >= 0; i--) {
+      const c = tr[i]!;
+      if (c.id < 0) {
+        // a warning outlives its entry tick only if the comet never came (round end): drop it then
+        if (++c.age > c.life + 30) tr.splice(i, 1);
+        continue;
+      }
+      const st = this.chunk;
+      if (!match.world.chunkState?.(c.id, st)) {
+        tr.splice(i, 1);
+        continue;
+      }
+      c.x = st.x;
+      c.y = st.y;
+      c.vx = st.vx;
+      c.vy = st.vy;
+      c.r = st.radius;
+      c.captured = st.mode === 1 || st.owner >= 0 ? 1 : 0;
+    }
+  }
+
   private readonly lensSrc: { x: number; y: number; r: number; s: number }[] = [
     { x: 0, y: 0, r: 0, s: 0 },
     { x: 0, y: 0, r: 0, s: 0 },
@@ -469,6 +554,23 @@ export class FxState {
     o.aberration = clamp(refr, 0, 1) * comfort;
     o.intensity = this.visI;
     o.timeScale = this.timeScale;
+    // arena comets: positions extrapolated by the render alpha (chunk velocities are px/s)
+    const cs = this.cometsOut;
+    cs.length = 0;
+    for (let i = 0; i < this.cometTracks.length && i < MAX_COMETS; i++) {
+      const c = this.cometTracks[i]!;
+      const cf = this.cometPool[i]!;
+      const live = c.id >= 0;
+      cf.x = c.x + (live ? (c.vx * alpha) / TICK_HZ : 0);
+      cf.y = c.y + (live ? (c.vy * alpha) / TICK_HZ : 0);
+      cf.vx = c.vx;
+      cf.vy = c.vy;
+      cf.r = c.r;
+      cf.captured = c.captured;
+      cf.warn = live ? 0 : clamp((c.age + alpha) / c.life, 0.01, 1);
+      cs.push(cf);
+    }
+    (o as FrameFxExt).comets = cs;
     return o;
   }
 

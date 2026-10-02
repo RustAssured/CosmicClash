@@ -30,6 +30,7 @@ export class Aftermath {
   /** Frames during which hints are hidden (the save frame itself). */
   hideHintsOnce = false;
   private readonly bounds: { minX: number; maxX: number; minY: number; maxY: number };
+  /** Drawn as the frame's UI layer (composited after the inspect zoom/orbit, so it never moves). */
   readonly layer: RenderLayer = makeLayer('aftermath-hint', 'screen', 103, LOGICAL_W, LOGICAL_H);
   private readonly cv = new PixelCanvas(LOGICAL_W, LOGICAL_H, this.layer.pixels);
 
