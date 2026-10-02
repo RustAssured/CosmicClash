@@ -318,6 +318,18 @@ export class XpbdRig {
     this.k0a[i] = this.k1a[i] = this.a[i]!;
   }
 
+  /** Move the whole rig rigidly (every body, every kinematic pose); velocities are kept. */
+  translate(dx: number, dy: number): void {
+    for (let i = 0; i < this.n; i++) {
+      this.x[i] = this.x[i]! + dx;
+      this.y[i] = this.y[i]! + dy;
+      this.k0x[i] = this.k0x[i]! + dx;
+      this.k0y[i] = this.k0y[i]! + dy;
+      this.k1x[i] = this.k1x[i]! + dx;
+      this.k1y[i] = this.k1y[i]! + dy;
+    }
+  }
+
   /** Update a body's mass properties (cells were destroyed); the frame stays put, the centre of mass moves. */
   setMass(i: number, mp: Pick<MassProps, 'mass' | 'cx' | 'cy' | 'inertia'>): void {
     if (this.kinematic[i]) return;

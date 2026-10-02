@@ -906,8 +906,8 @@ interface ArmDef {
 const ARMS: readonly ArmDef[] = [
   { c: [34, -16, 76, -82, 114, -20, 78, 74], joints: [0, 0.26, 0.52, 0.77], w: 1.15 },
   { c: [-34, -14, -76, -82, -108, -42, -84, 22], joints: [0, 0.25, 0.5, 0.75], w: 1.2 },
-  { c: [32, 24, 78, 34, 98, 90, 46, 102], joints: [0, 0.36, 0.7], w: 0.95 },
-  { c: [-30, 26, -66, 44, -74, 88, -40, 100], joints: [0, 0.4, 0.72], w: 0.85 },
+  { c: [32, 24, 78, 34, 98, 86, 46, 96], joints: [0, 0.36, 0.7], w: 0.95 },
+  { c: [-30, 26, -66, 44, -74, 84, -40, 94], joints: [0, 0.4, 0.72], w: 0.85 },
 ];
 
 interface RegionCanvas {
@@ -1025,7 +1025,11 @@ function samplesAt(
  * Paint the Witness in its rest pose: every region as its own matter map with its rig metadata (arms, membranes, fibres).
  * Pure and deterministic in (seed, lighting).
  */
-export function paintWitness(seed: number, lighting: StageLighting): WitnessBody {
+export function paintWitness(
+  seed: number,
+  lighting: StageLighting,
+  armStyle: WitnessArmStyle = WITNESS_ARM_STYLE,
+): WitnessBody {
   const ramps = buildLitRamps(WITNESS_MATERIALS, lighting, 0.85);
   const regions: WitnessRegion[] = [];
   const add = (r: WitnessRegion): number => regions.push(r) - 1;
@@ -1043,7 +1047,7 @@ export function paintWitness(seed: number, lighting: StageLighting): WitnessBody
     const segs: number[] = [];
     let parent = car;
     for (let seg = 0; seg < def.joints.length; seg++) {
-      parent = add(paintArmSegment(ramps, lighting, seed, parent, a, seg));
+      parent = add(paintArmSegment(ramps, lighting, seed, parent, a, seg, armStyle));
       segs.push(parent);
     }
     const points = def.joints.map((u) => samplesAt(S, u));
@@ -1656,7 +1660,28 @@ function paintHaloArc(
   });
 }
 
-/* ---------------------------------------------------------------- the scythe architectures */
+/* ---------------------------------------------------------------- the arms: limb, tendril, root, architecture */
+
+/**
+ * How the arms are built (WJ: "more ambiguity … now it's too much like blades"). Every style keeps the long sweeping
+ * silhouette, the joints and the asymmetry, and drops the single tapered cutting edge:
+ *  - 'limb':  a knotted sinew core swelling at the joints, ceramic plates over its outer side with gaps where the cyan
+ *             filament shows through, a ragged scrap of web on the inner side; the end frays into three fibres.
+ *  - 'root':  two strands braided round each other (bone over sinew, sinew over bone), bronze nodes, rootlets branching
+ *             off; the end splits into a fan of rootlets.
+ *  - 'truss': architecture: an outer ceramic rail and an inner bone rail held by alternating struts, some bays plated, a
+ *             cyan filament down the middle; the end is broken off and the filament hangs out of it.
+ */
+export type WitnessArmStyle = 'limb' | 'root' | 'truss';
+export const WITNESS_ARM_STYLES: readonly WitnessArmStyle[] = ['limb', 'root', 'truss'];
+/** The style the game uses. */
+export const WITNESS_ARM_STYLE: WitnessArmStyle = 'limb';
+
+interface ArmCell {
+  m: number;
+  rel: number;
+  tone: number;
+}
 
 function paintArmSegment(
   ramps: number[][],
@@ -1665,6 +1690,7 @@ function paintArmSegment(
   parent: number,
   arm: number,
   seg: number,
+  style: WitnessArmStyle,
 ): WitnessRegion {
   const def = ARMS[arm]!;
   const N = 200;
@@ -1673,12 +1699,26 @@ function paintArmSegment(
   const u1 = seg + 1 < def.joints.length ? def.joints[seg + 1]! : 1.0001;
   const turn = armTurn(S);
   const W = def.w;
-  const wo = (u: number): number => (1.6 + 3.2 * (1 - u)) * W; // spine half-width (outer side)
-  const wi = (u: number): number =>
-    ((1 + 7.5 * Math.sin(Math.PI * Math.min(1, u * 1.05))) * (1 - u ** 3) + 0.4) * W; // blade
+  // the arc length (px) of the whole arm: the rhythms below are in pixels, so every arm has the same grain
+  let L = 0;
+  {
+    const c = def.c;
+    let px = c[0]!;
+    let py = c[1]!;
+    for (let i = 1; i <= 400; i++) {
+      const t = i / 400;
+      const qx =
+        (1 - t) ** 3 * c[0]! + 3 * (1 - t) ** 2 * t * c[2]! + 3 * (1 - t) * t * t * c[4]! + t ** 3 * c[6]!;
+      const qy =
+        (1 - t) ** 3 * c[1]! + 3 * (1 - t) ** 2 * t * c[3]! + 3 * (1 - t) * t * t * c[5]! + t ** 3 * c[7]!;
+      L += Math.hypot(qx - px, qy - py);
+      px = qx;
+      py = qy;
+    }
+  }
   const joint = samplesAt(S, u0);
   const jointR = (seg === 0 ? 5.4 : 4.6 - 0.5 * seg) * W;
-  // bounding box of this segment's samples
+  // bounding box of this segment's samples (unchanged from art v2: region sizes and pivots stay put)
   let x0 = joint.x - jointR;
   let y0 = joint.y - jointR;
   let x1 = joint.x + jointR;
@@ -1692,13 +1732,140 @@ function paintArmSegment(
   }
   const rc = regionCanvas(x0, y0, x1, y1);
   const { cv, ox, oy } = rc;
-  const bone = WID('bone');
-  const spine = WID('carapace');
-  const membrane = WID('membrane');
-  const bronze = WID('bronze');
-  const orb = WID('orb');
-  const iris = WID('iris');
-  const pupil = WID('pupil');
+  const mat = {
+    plate: WID('carapace'),
+    sinew: WID('membrane'),
+    fibre: WID('vein'),
+    bone: WID('bone'),
+    bronze: WID('bronze'),
+    filament: WID('channel'),
+    glint: WID('hairline'),
+    orb: WID('orb'),
+    iris: WID('iris'),
+    pupil: WID('pupil'),
+  };
+  const ph = arm * 1.7 + (seed % 7) * 0.3;
+  const jointsT = def.joints.map((u) => u * L);
+  /** Core half-width at arc length t: tapering, swelling at every joint, with a slow knotted rhythm between. */
+  const core = (t: number): number => {
+    let r = W * (2.1 + 3.3 * Math.max(0, 1 - t / L));
+    for (const jt of jointsT) r += W * 1.9 * Math.exp(-(((t - jt) / 5) ** 2));
+    r += W * 0.8 * Math.max(0, Math.sin(t / (5.2 + arm * 0.4) + ph)) ** 3;
+    return r;
+  };
+  const tipStart = L - 12;
+  /** Fibres / rootlets fanning from the end: [lateral spread per px past the split, length past L]. */
+  const fan: readonly [number, number][] =
+    style === 'root'
+      ? [
+          [-0.6, 4],
+          [-0.2, 3],
+          [0.2, 4],
+          [0.6, 2],
+        ]
+      : [
+          [-0.55, 3],
+          [0.05, 4],
+          [0.6, 2],
+        ];
+  const cell = (t: number, s: number, bay: number): ArmCell | null => {
+    const r = core(t);
+    // ---- the end: no point, a split, frayed, broken or hanging finish
+    if (t > tipStart) {
+      if (style === 'truss') {
+        // broken off: the rails stop at ragged lengths, the filament hangs out of the break and droops
+        const brk = L - 2 - 3 * hash01(arm, 9, seed);
+        if (t < brk && Math.abs(s) <= r)
+          return { m: mat.plate, rel: 4, tone: -0.6 + 0.6 * hash01(bay, arm, seed) };
+        const sag = 0.06 * (t - brk) ** 2 * (arm % 2 ? 1 : -1);
+        if (t < L + 5 && Math.abs(s - sag) < 1.1)
+          return { m: t > L + 3.5 ? mat.glint : mat.filament, rel: 2, tone: 0.4 };
+        return null;
+      }
+      const d = t - tipStart;
+      for (let k = 0; k < fan.length; k++) {
+        const [spread, ext] = fan[k]!;
+        if (t > L + ext) continue;
+        const c = spread * d;
+        const w = Math.max(0.75, r * (0.55 - (0.35 * d) / (12 + ext)));
+        if (Math.abs(s - c) < w)
+          return {
+            m: t > L + ext - 1.5 ? mat.glint : style === 'root' ? mat.fibre : k === 1 ? mat.sinew : mat.fibre,
+            rel: 3,
+            tone: 0.2 * (k - 1),
+          };
+      }
+      return null;
+    }
+    if (style === 'limb') {
+      if (Math.abs(s) <= r) {
+        // ceramic plates over the OUTER side, bay by bay; a missing plate shows the sinew and the cyan filament
+        const plated = hash01(bay, arm * 13 + 1, seed) > 0.27;
+        const edge = t % 8 < 1.1;
+        if (s < -0.15 * r && plated)
+          return {
+            m: mat.plate,
+            rel: 5 + 2 * Math.sqrt(Math.max(0, 1 - (s / r) ** 2)),
+            tone: edge ? -1.4 : 0.1,
+          };
+        if (!plated && Math.abs(s + 0.2 * r) < 0.7) return { m: mat.filament, rel: 3, tone: 0.5 };
+        const tendon = bay % 2 === 0 && Math.abs(s - 0.45 * r) < 0.6;
+        return { m: tendon ? mat.bone : mat.sinew, rel: 3 + (tendon ? 1 : 0), tone: -0.3 + 0.4 * (s / r) };
+      }
+      // a ragged scrap of web on the inner side, early in the arm, full of holes: never one clean edge
+      const u = t / L;
+      if (s > r && u > 0.12 && u < 0.5) {
+        const web =
+          W *
+          3.2 *
+          Math.sin((Math.PI * (u - 0.12)) / 0.38) *
+          (0.45 + 0.55 * hash01(Math.floor(t / 3), arm, seed));
+        if (s < r + web && hash01(Math.floor(t), Math.floor(s), seed + arm) > 0.18)
+          return { m: mat.sinew, rel: 2, tone: -1.1 + 0.4 * ((s - r) / Math.max(1, web)) };
+      }
+      return null;
+    }
+    if (style === 'root') {
+      const node = (t + arm * 5) % 13 < 2.2 && t > 4;
+      if (node && Math.abs(s) <= r) return { m: mat.bronze, rel: 6, tone: -0.2 };
+      const a = t / 5 + ph;
+      const c0 = r * 0.45 * Math.sin(a);
+      const rs = r * 0.62;
+      const in0 = Math.abs(s - c0) < rs;
+      const in1 = Math.abs(s + c0) < rs;
+      if ((in0 || in1) && Math.abs(s) <= r) {
+        // over and under: which strand is in front alternates every half twist
+        const front0 = Math.cos(a) > 0;
+        const k0 = in0 && (!in1 || front0);
+        return {
+          m: k0 ? mat.bone : mat.fibre,
+          rel: 4 + (k0 === front0 ? 1 : 0),
+          tone: (k0 ? 0.2 : -0.2) + 0.3 * Math.cos(a),
+        };
+      }
+      // rootlets: a short branch every ~17 px on the inner side, reaching across and along
+      const tb = Math.floor((t + arm * 3) / 17) * 17 - arm * 3;
+      const side = 1; // toward the inner (concave) side: rootlets never widen the silhouette
+      const dt = t - tb;
+      if (dt >= 0 && dt < 5 && t < L - 14) {
+        const cs = side * (r * 0.8 + dt * 0.6);
+        if (Math.abs(s - cs) < 1.05) return { m: dt > 3.8 ? mat.glint : mat.fibre, rel: 2, tone: 0 };
+      }
+      return null;
+    }
+    // 'truss': two rails and alternating struts, some bays plated, a cyan filament down the middle
+    const rr = Math.max(1.6, r);
+    if (Math.abs(s + rr * 0.8) < 1.2) return { m: mat.plate, rel: 6, tone: 0.2 };
+    if (Math.abs(s - rr * 0.8) < 0.95) return { m: mat.bone, rel: 5, tone: 0.3 };
+    if (Math.abs(s) < 0.65) return { m: mat.filament, rel: 3, tone: 0.5 };
+    if (Math.abs(s) < rr * 0.8) {
+      const f = (t % 7) / 7;
+      const diag = (Math.floor(t / 7) % 2 ? 1 - 2 * f : -1 + 2 * f) * rr * 0.8;
+      if (Math.abs(s - diag) < 0.9) return { m: mat.bone, rel: 4, tone: 0 };
+      if (hash01(bay, arm * 7 + 3, seed) > 0.58) return { m: mat.plate, rel: 3, tone: -0.7 };
+    }
+    return null;
+  };
   // the orb-eye on this segment's start joint (every joint after the root), on the outer side
   let orbX = NaN;
   let orbY = NaN;
@@ -1707,10 +1874,10 @@ function paintArmSegment(
     const nx = -(S.y[Math.min(N, k + 1)]! - S.y[Math.max(0, k - 1)]!);
     const ny = S.x[Math.min(N, k + 1)]! - S.x[Math.max(0, k - 1)]!;
     const nl = Math.hypot(nx, ny) || 1;
-    orbX = joint.x - (turn * nx * (wo(u0) + 2.2)) / nl;
-    orbY = joint.y - (turn * ny * (wo(u0) + 2.2)) / nl;
+    const off = core(u0 * L) + 2.2;
+    orbX = joint.x - (turn * nx * off) / nl;
+    orbY = joint.y - (turn * ny * off) / nl;
   }
-  const ribStep = 0.11;
   for (let y = 0; y < cv.h; y++)
     for (let x = 0; x < cv.w; x++) {
       const bx = x + ox + 0.5;
@@ -1721,12 +1888,12 @@ function paintArmSegment(
       if (seg > 0 && Math.hypot(bx - orbX, by - orbY) < 2.8) {
         // dormant, but not quite closed: a gold lid with a thin slit of iris and a dark point
         const slit = Math.abs(by - orbY) < 0.55;
-        cv.mat[i] = slit ? (Math.abs(bx - orbX) < 0.6 ? pupil : iris) : orb;
+        cv.mat[i] = slit ? (Math.abs(bx - orbX) < 0.6 ? mat.pupil : mat.iris) : mat.orb;
         cv.relief[i] = 7;
         continue;
       }
       if (dj < jointR) {
-        cv.mat[i] = bronze;
+        cv.mat[i] = mat.bronze;
         cv.relief[i] = 6 + 4 * Math.sqrt(1 - (dj / jointR) ** 2);
         cv.tone[i] = dj > jointR - 1.2 ? -0.8 : 0;
         continue;
@@ -1748,28 +1915,17 @@ function paintArmSegment(
       const tdx = S.x[k1]! - S.x[k0]!;
       const tdy = S.y[k1]! - S.y[k0]!;
       const tl = Math.hypot(tdx, tdy) || 1;
-      // signed distance across: + toward the inner (concave) side
+      // signed distance across: + toward the inner (concave) side; arc length along, extended past the end
       const s = (((bx - S.x[best]!) * -tdy + (by - S.y[best]!) * tdx) / tl) * turn;
       const along = ((bx - S.x[best]!) * tdx + (by - S.y[best]!) * tdy) / tl;
-      if ((best === 0 || best === N) && Math.abs(along) > 0.8) continue;
-      if (s < -wo(u) || s > wi(u)) continue;
-      let m: number;
-      let rel: number;
-      let tone = 0;
-      if (s < 1.2) {
-        // the spine: jade-black carapace, ridged
-        m = spine;
-        rel = 6 + 3 * Math.sqrt(Math.max(0, 1 - ((s + wo(u) * 0.4) / (wo(u) + 1.2)) ** 2));
-      } else {
-        // the membrane blade: dark celadon, struts of bone across it, a brighter cutting edge
-        const rib = Math.abs((u % ribStep) - ribStep / 2) < 0.005 && s < wi(u) - 1.2;
-        m = rib ? bone : membrane;
-        rel = 3 + (rib ? 2 : 0);
-        tone = s > wi(u) - 1.1 ? 2.2 : -0.9 + 0.5 * (s / Math.max(1, wi(u)));
-      }
-      cv.mat[i] = m;
-      cv.relief[i] = rel;
-      cv.tone[i] = tone + (hash01(x, y, seed + arm * 7 + seg) - 0.5) * 0.25;
+      if (best === 0 && along < -0.8) continue;
+      if (best !== N && Math.abs(along) > 0.8 && best !== 0) continue;
+      const t = u * L + (best === N ? Math.max(0, along) : 0);
+      const c = cell(t, s, Math.floor((t + arm * 3) / 8));
+      if (!c) continue;
+      cv.mat[i] = c.m;
+      cv.relief[i] = c.rel;
+      cv.tone[i] = c.tone + (hash01(x, y, seed + arm * 7 + seg) - 0.5) * 0.25;
     }
   return finishRegion(rc, ramps, lighting, null, joint.x, joint.y, 2, {
     key: `arm${arm}.${seg}`,
