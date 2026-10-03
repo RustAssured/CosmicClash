@@ -13,6 +13,7 @@ import {
 } from '@/contracts';
 import { localToWorldF } from '../dmg';
 import { rasterParticles } from '../particles';
+import { SLAB_HELD } from '../wound';
 import type { MatterWorldEx } from '../world';
 
 /**
@@ -67,7 +68,10 @@ export interface BlowResult {
   maxTickShare: number;
   /** Rigid-chunk share of the removed solid matter (fluids and gas excepted). */
   chunkShare: number;
-  /** Wall ms from the impact frame to the first released slab (>= 5 mass); -1 = none. */
+  /**
+   * Wall ms from the impact frame to the shear: the first tick a held slab of the blow's wound lets go (fluid slabs included:
+   * they leave as gas / spray), else the first released chunk of >= 5 mass; -1 = none.
+   */
   shearMs: number;
   /** Cracked cells beside hairline/broken bonds on the impact frame (the visible crack). */
   crackCells: number;
@@ -240,7 +244,14 @@ export function measureBlow(spec: BlowSpec, deps: BenchDeps): BlowResult {
   let allClearMs = -1;
   let cleanAll = 0;
   const ticks = WINDOW - spec.hitstop;
+  const wb = b.wounds;
+  const heldBefore: number[] = [];
   for (let t = 0; t < ticks; t++) {
+    // the wound's slabs still held before this tick: one of them letting go during it is the shear
+    heldBefore.length = 0;
+    if (wound >= 0)
+      for (let s = 1; s < wb.state.length; s++)
+        if (wb.state[s] === SLAB_HELD && wb.woundOf[s] === wound) heldBefore.push(s);
     world.tick();
     const wallMs = t === 0 ? 0 : (spec.hitstop + t) * MS_PER_TICK;
     const mass = world.stats(id).mass;
@@ -258,7 +269,10 @@ export function measureBlow(spec: BlowSpec, deps: BenchDeps): BlowResult {
           crackCells++;
       }
     }
-    // New chunks of this body: the shear, and the wound's momentum carried by its slabs.
+    // The shear: the first tick a slab of the blow's wound lets go — whatever it is made of (an atmosphere / ocean slab leaves
+    // as gas and spray, not as a chunk: D1 excepts fluids) — or, failing a tracked wound, the first slab-sized chunk.
+    if (shearMs < 0 && heldBefore.some((s) => wb.state[s] !== SLAB_HELD)) shearMs = wallMs;
+    // New chunks of this body: the wound's momentum carried by its slabs.
     for (let i = 0; i < core.chunks.hi; i++) {
       const c = core.chunks.list[i]!;
       if (!c.alive || c.origin !== id || chunkIds.has(c.id)) continue;
