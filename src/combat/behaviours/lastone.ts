@@ -17,6 +17,7 @@ import { blend, type LastOneRig } from '@/titans';
 import { Behaviour, type HitInfo, type InterceptResult } from '../behaviour';
 import type { FighterImpl } from '../fighter';
 import { Overlay } from '../fx/overlay';
+import { WoundVeil } from '../fx/woundVeil';
 import { SplinePen, type SplineStyle } from '../fx/spline';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
@@ -60,6 +61,7 @@ export class LastOneBehaviour extends Behaviour {
   private front!: Overlay;
   private eye!: Overlay;
   private fx!: Overlay;
+  private readonly veil = new WoundVeil();
   private readonly post: Posture = { guard: 0, rise: 0, focus: 0, limp: 0, agitation: 0, eyeX: 0, eyeY: 0 };
   private readonly xy = { x: 0, y: 0 };
   private readonly wp = { x: 0, y: 0 };
@@ -126,8 +128,15 @@ export class LastOneBehaviour extends Behaviour {
     this.trailCount = 0;
   }
 
+  /** A heavy blow landed: its wound is kept clear of the fx overlay after the hit-stop (proposal 168). */
+  override onDealt(energy: number): void {
+    const f = this.f;
+    this.veil.note(f.events, f.slot, energy, f.foe.view.x, f.foe.view.y, f.tickNo);
+  }
+
   override reset(heal: number): void {
     const f = this.f;
+    this.veil.reset();
     this.sys.heal(Math.max(heal, 0.5), f.body.transform);
     this.sys.settle(f.body.transform);
     this.trailCount = 0;
@@ -696,6 +705,7 @@ export class LastOneBehaviour extends Behaviour {
     else if (m.def?.extra?.['eyeFlare']) halo = Math.max(halo, this.flare * 0.6);
     this.haloGlow += (halo - this.haloGlow) * 0.2;
     if (this.haloGlow > 0.03) this.drawHalo(fx, tick);
+    this.veil.apply(fx, f.foe.view.x, f.foe.view.y, f.tickNo, f.view.freezeTicks > 0);
     fx.end();
   }
 

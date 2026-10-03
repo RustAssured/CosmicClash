@@ -20,6 +20,7 @@ import type { FighterImpl } from '../fighter';
 import { buildWitnessRig, setWitnessHeading, type WitnessRig } from '../rig/witnessRig';
 import { WitnessKit, type WitnessKitHost } from './witnessKit';
 import { shapeBounds, type Bounds } from '../shapes';
+import { WoundVeil } from '../fx/woundVeil';
 
 /**
  * THE WITNESS in game (Phase 2, behind `witness=1`): one matter body per rigid region (D27), driven by the XPBD rig, drawn as
@@ -137,6 +138,7 @@ export class WitnessBehaviour extends Behaviour {
   /** Tick the failure process began (−1 = alive). */
   private dying = -1;
   private light = 1;
+  private readonly veil = new WoundVeil();
   /** Root jumps the rig was carried across (instrumentation; see ROOT_JUMP). */
   jumps = 0;
   private pupilX = 0;
@@ -286,6 +288,7 @@ export class WitnessBehaviour extends Behaviour {
     this.host = this.makeHost();
     for (const e of this.eyes) e.open = 0;
     this.kit.reset();
+    this.veil.reset();
     this.rigTick = -1;
     this.place();
   }
@@ -480,6 +483,12 @@ export class WitnessBehaviour extends Behaviour {
     const f = this.f;
     f.resource = this.haloCount();
     f.view.parts = f.resource;
+  }
+
+  /** A heavy blow landed: its wound is kept clear of this overlay after the hit-stop (proposal 168). */
+  override onDealt(energy: number): void {
+    const f = this.f;
+    this.veil.note(f.events, f.slot, energy, f.foe.view.x, f.foe.view.y, f.tickNo);
   }
 
   /** HALO CLOSE: the halo is the shield, every broken arc weakens it. */
@@ -841,6 +850,7 @@ export class WitnessBehaviour extends Behaviour {
       fx.glow(this.pt.x * s, this.pt.y, 2.2, 160, 230, 255, 0.8 * light);
     }
     if (this.dying < 0) kit.strike(h);
+    this.veil.apply(fx, fv.x, fv.y, f.tickNo, f.view.freezeTicks > 0);
     fx.end();
   }
 
