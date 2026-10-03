@@ -69,24 +69,24 @@ describe('The Witness painter v2 (rest pose, region bodies)', () => {
     }
   });
 
-  it('has the silhouette hierarchy as separate regions: eye, carapace + 3 interior layers, shrine, 5 halo arcs, 4 asymmetric arms', () => {
+  it('has the silhouette hierarchy as separate regions: eye, carapace + 3 interior layers, mantle, shrine, 5 halo arcs, 6 two-piece arms', () => {
     const count = (k: string): number => W.regions.filter((r) => r.kind === k).length;
     expect(count('eye')).toBe(1);
     expect(count('carapace')).toBe(1);
     expect(count('interior')).toBe(3);
+    expect(count('mantle')).toBe(1);
     expect(count('shrine')).toBe(1);
     expect(count('halo')).toBe(5);
-    expect(count('arm')).toBe(14);
-    // four arms with different joint counts (wrong at the second glance), each with its joint chain
-    expect(W.arms).toHaveLength(4);
-    expect(new Set(W.arms.map((a) => a.regions.length)).size).toBeGreaterThan(1);
+    expect(count('arm')).toBe(12);
+    // six crescent limbs, three per side, each two rigid pieces with its joint chain; fewer regions than art v2 (25)
+    expect(W.arms).toHaveLength(6);
+    for (const a of W.arms) expect(a.regions).toHaveLength(2);
     for (const a of W.arms) expect(a.points).toHaveLength(a.regions.length + 1);
-    expect(W.membranes.length).toBeGreaterThanOrEqual(2);
-    expect(W.fibres.length).toBeGreaterThanOrEqual(2);
+    expect(W.regions.length).toBeLessThanOrEqual(24);
     // the rig graph: one root (the eye), every parent precedes its child, interior layers are welded to the carapace
     expect(W.regions.filter((r) => r.parent < 0).map((r) => r.key)).toEqual(['eye']);
     W.regions.forEach((r, i) => expect(r.parent).toBeLessThan(i));
-    for (const r of W.regions.filter((q) => q.kind === 'interior')) {
+    for (const r of W.regions.filter((q) => q.kind === 'interior' || q.kind === 'mantle')) {
       expect(r.weld).toBe(true);
       expect(W.regions[r.parent]!.kind).toBe('carapace');
     }
@@ -120,11 +120,11 @@ describe('The Witness painter v2 (rest pose, region bodies)', () => {
     }
   });
 
-  it('hangs: 1.25–1.5× the Planet tall, ≤ 200 px wide, a big shrine, a large halo, a dominant eye, within budget', () => {
+  it('towers: about 2× the Planet tall, at most 1.5× as wide as tall, a big shrine, a large halo, the eye a third of it, within budget', () => {
     const height = W.y1 - W.y0;
     const ratio = height / planetDiameter();
-    expect(ratio).toBeGreaterThanOrEqual(1.25);
-    expect(ratio).toBeLessThanOrEqual(1.5);
+    expect(ratio).toBeGreaterThanOrEqual(1.8);
+    expect(ratio).toBeLessThanOrEqual(2.3);
     const eye = W.regions.find((r) => r.kind === 'eye')!;
     let ex0 = Infinity;
     let ex1 = -Infinity;
@@ -136,12 +136,12 @@ describe('The Witness painter v2 (rest pose, region bodies)', () => {
         ex1 = Math.max(ex1, x);
       }
     const eyeFrac = (ex1 - ex0 + 1) / height;
-    // the eye stays the central event; with the taller halo and chandelier it is a third of the height
-    expect(eyeFrac).toBeGreaterThanOrEqual(0.3);
+    // the eye stays the central event: about a third of the body
+    expect(eyeFrac).toBeGreaterThanOrEqual(0.25);
     expect(eyeFrac).toBeLessThanOrEqual(0.4);
     const width = W.x1 - W.x0;
-    expect(width).toBeLessThanOrEqual(200);
-    expect(height).toBeGreaterThanOrEqual(width * 0.9);
+    expect(width).toBeLessThanOrEqual(height * 1.5);
+    expect(width).toBeGreaterThanOrEqual(height);
     // the chandelier hangs well below the carapace: ≥ 25 % of the height
     const car = W.regions.find((r) => r.kind === 'carapace')!;
     const shrine = W.regions.find((r) => r.kind === 'shrine')!;
@@ -154,7 +154,7 @@ describe('The Witness painter v2 (rest pose, region bodies)', () => {
       for (let y = 0; y < r.map.h; y++)
         for (let x = 0; x < r.map.w; x++) if (r.map.material[y * r.map.w + x] !== 0) set(y + r.oy + 1);
     expect((shrineBottom - carBottom) / height).toBeGreaterThanOrEqual(0.25);
-    // the halo ring is 1.3–1.5× the carapace's radius
+    // the halo rings stand well clear of the head: 1.35–1.8× the carapace's radius
     const maxR = (kind: string): number => {
       let m = 0;
       for (const r of W.regions.filter((q) => q.kind === kind))
@@ -168,9 +168,9 @@ describe('The Witness painter v2 (rest pose, region bodies)', () => {
       .filter((r) => r.kind === 'halo')
       .map((r) => Math.hypot(r.map.coreX + r.ox + 0.5, r.map.coreY + r.oy + 0.5));
     const ratioHalo = Math.min(...haloMid) / maxR('carapace');
-    expect(ratioHalo).toBeGreaterThanOrEqual(1.25);
-    expect(ratioHalo).toBeLessThanOrEqual(1.5);
-    expect(W.cells).toBeLessThanOrEqual(26000);
+    expect(ratioHalo).toBeGreaterThanOrEqual(1.35);
+    expect(ratioHalo).toBeLessThanOrEqual(1.8);
+    expect(W.cells).toBeLessThanOrEqual(48000);
   });
 
   it('the eye is the KO core: its anchor is the (off-centre) pupil, with the largest core radius', () => {

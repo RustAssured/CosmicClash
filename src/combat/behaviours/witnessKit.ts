@@ -65,7 +65,7 @@ const BEAM_LEN = 230;
 /** Halo shards: launch tick of the first (move tick), flight time (ticks) and speed (px/tick). */
 const MAX_SHARDS = 8;
 const SHARD_LAUNCH = 12;
-const SHARD_TICKS = 22;
+const SHARD_TICKS = 34;
 const SHARD_SPEED = 9;
 
 export class WitnessKit {
@@ -225,8 +225,13 @@ export class WitnessKit {
         this.toWorld(h, this.pa);
         this.shX[k] = this.pa.x;
         this.shY[k] = this.pa.y;
-        this.shUx[k] = f.aimUx;
-        this.shUy[k] = f.aimUy;
+        // each shard flies from its arc at the foe (the arcs are spread round a 100 px ring: a parallel volley would miss)
+        const fv = f.foe.view;
+        const dx = fv.x - this.pa.x;
+        const dy = fv.y - this.pa.y;
+        const dl = Math.hypot(dx, dy);
+        this.shUx[k] = dl > 1 ? dx / dl : f.aimUx;
+        this.shUy[k] = dl > 1 ? dy / dl : f.aimUy;
         this.shT[k] = f.tickNo;
       });
     for (let k = 0; k < MAX_SHARDS; k++) {

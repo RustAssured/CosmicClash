@@ -13,7 +13,7 @@ import {
   type RenderPart,
   type ViewRect,
 } from '@/contracts';
-import type { WitnessBody, WitnessRegion, WitnessTitanRig } from '@/titans';
+import { WITNESS_SHRINE_LIGHT_Y, type WitnessBody, type WitnessRegion, type WitnessTitanRig } from '@/titans';
 import { Behaviour } from '../behaviour';
 import { addDamageResult, type DamageSum } from '../damageSum';
 import type { FighterImpl } from '../fighter';
@@ -688,7 +688,7 @@ export class WitnessBehaviour extends Behaviour {
     const e = this.eyeCentre();
     const torque = (hx - e.x) * dirY - (hy - e.y) * dirX;
     if (Math.abs(torque) < 1e-6) return;
-    const dw = Math.sign(torque) * this.facing * Math.min(1, energy / 1200);
+    const dw = Math.sign(torque) * this.facing * Math.min(1.25, energy / 850);
     if (dw === 0) return;
     const wr = this.wr;
     const now = this.f.tickNo + 1;
@@ -849,9 +849,58 @@ export class WitnessBehaviour extends Behaviour {
       fx.glow(this.pt.x * s, this.pt.y, 7, 120, 110, 80, 0.35 * light);
       fx.glow(this.pt.x * s, this.pt.y, 2.2, 160, 230, 255, 0.8 * light);
     }
+    this.drawFragments(f.tickNo, light);
     if (this.dying < 0) kit.strike(h);
     this.veil.apply(fx, fv.x, fv.y, f.tickNo, f.view.freezeTicks > 0);
     fx.end();
+  }
+
+  /**
+   * Presentation only: the arms' edges dissolve into fragments that drift off their tips and outer curves and fade, and the
+   * hanging city's lowest spire carries a slow light (art v3). Deterministic in the tick; nothing here is matter.
+   */
+  private drawFragments(tick: number, light: number): void {
+    const fx = this.kit.fx;
+    const rig = this.wr.rig;
+    const s = this.facing;
+    const W = this.W;
+    for (let a = 0; a < W.arms.length; a++) {
+      const arm = W.arms[a]!;
+      const last = arm.regions.length - 1;
+      const reg = this.byIndex[arm.regions[last]!];
+      if (!reg || reg.lost) continue;
+      const seg = W.regions[arm.regions[last]!]!;
+      const body = this.wr.bodyOf[arm.regions[last]!]!;
+      const jx = arm.points[last]!.x - seg.pivotX;
+      const jy = arm.points[last]!.y - seg.pivotY;
+      const tx = arm.points[last + 1]!.x - seg.pivotX;
+      const ty = arm.points[last + 1]!.y - seg.pivotY;
+      const dx = tx - jx;
+      const dy = ty - jy;
+      const dl = Math.hypot(dx, dy) || 1;
+      for (let k = 0; k < 7; k++) {
+        const period = 110 + 17 * k;
+        const age = (tick + a * 37 + k * 53) % period;
+        const u = age / period;
+        // born along the outer half of the piece, drifting outward past the tip, fading as it goes
+        const along = 0.35 + 0.65 * ((k * 0.381966 + a * 0.17) % 1) + u * 0.5;
+        const side = ((k * 7 + a) % 3) - 1;
+        const lx = jx + dx * along + (-dy / dl) * side * (3 + 9 * u) + (dx / dl) * 4 * u;
+        const ly = jy + dy * along + (dx / dl) * side * (3 + 9 * u) + (dy / dl) * 4 * u;
+        rig.worldPoint(body, lx, ly, this.pt);
+        const k2 = (1 - u) * (1 - u);
+        fx.add(Math.round(this.pt.x * s), Math.round(this.pt.y), 40 * k2, 95 * k2, 100 * k2);
+      }
+    }
+    // the light under the hanging city
+    const sh = this.byIndex[W.regions.findIndex((r) => r.kind === 'shrine')];
+    if (sh && !sh.lost) {
+      const reg = W.regions[sh.index]!;
+      rig.worldPoint(this.wr.bodyOf[sh.index]!, 1.5, WITNESS_SHRINE_LIGHT_Y - reg.pivotY, this.pt);
+      const pulse = 0.75 + 0.25 * Math.sin(tick * 0.035);
+      fx.glow(this.pt.x * s, this.pt.y, 9, 120, 105, 70, 0.55 * pulse * light);
+      fx.glow(this.pt.x * s, this.pt.y, 2.5, 255, 245, 210, 0.9 * pulse * light);
+    }
   }
 
   override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {

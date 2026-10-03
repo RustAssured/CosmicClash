@@ -746,7 +746,8 @@ function paintHaloDetail(
  *  never red or orange (crack and heat-glow colours included).
  * ================================================================================================================== */
 
-const W_JADE = ['#070d0d', '#0f1c1a', '#1a2f2a', '#284539', '#3c5f4c', '#5a7f63', '#86a585'];
+// art v3: the base is deep teal and dark bronze (no green); celadon appears only in the top highlight step
+const W_JADE = ['#05080b', '#0a141a', '#10212a', '#183139', '#22434b', '#31595d', '#5d8a80'];
 const W_BONE = ['#2c2820', '#4d4638', '#7a7058', '#a69c7f', '#cdc5a8', '#ece6d0'];
 const W_GOLD = ['#211a10', '#3d3018', '#5f4c24', '#857034', '#a89048', '#c8b068'];
 const W_CYAN = ['#1d4c55', '#3d8d96', '#7fd2d6', '#cdf6f2', '#f6fffd'];
@@ -786,8 +787,9 @@ export const WITNESS_MATERIALS: readonly MaterialSpec[] = Object.freeze([
   wmat('lattice', 'lattice', W_WHITEGOLD, 90, '#fff1c9'),
   wmat('abyss', 'glass', W_ABYSS, 0, '#7fd2d6'),
   wmat('star', 'glass', ['#7fd2d6', '#e9fbff', '#ffffff'], 210, '#ffffff'),
-  wmat('sclera', 'eye', W_BONE.slice(2), 22, '#5fc4c8'),
-  wmat('iris', 'eye', W_IRIS, 70, '#e2c77e'),
+  // art v3: the eye is crisp, not a lamp (the post bloom washed the iris out at 22 / 70)
+  wmat('sclera', 'eye', W_BONE.slice(2), 6, '#5fc4c8'),
+  wmat('iris', 'eye', W_IRIS, 24, '#e2c77e'),
   wmat('pupil', 'eye', ['#010205', '#04060c', '#090c18'], 0, '#7fd2d6'),
   wmat('gold', 'glass', W_GOLD, 30, '#fff1c9'),
   wmat('bronze', 'ironNickel', W_GOLD.slice(0, 5), 0, '#e2c77e'),
@@ -803,7 +805,7 @@ const WID = (key: string): number => {
   return i + 1;
 };
 
-export type WitnessRegionKind = 'eye' | 'carapace' | 'interior' | 'shrine' | 'halo' | 'arm';
+export type WitnessRegionKind = 'eye' | 'carapace' | 'interior' | 'mantle' | 'shrine' | 'halo' | 'arm';
 
 export interface WitnessRegion {
   key: string;
@@ -864,30 +866,35 @@ export interface WitnessBody {
 
 /** Shape constants (body px). */
 const WE = {
-  eyeR: 28,
-  rimR: 31.5,
-  socketR: 30.5,
+  eyeR: 34,
+  rimR: 39,
+  /** The burning socket ring's crystal teeth reach out to here. */
+  teethR: 43.5,
+  socketR: 38,
   carCX: 0,
   carCY: 4,
-  carR: 42,
-  haloR: 60,
-  haloT: 5,
-  shrineY: 42,
+  carR: 58,
+  /** The dark mantle behind the head that the arms grow out of (half-axes). */
+  mantleRX: 74,
+  mantleRY: 62,
+  haloR: 100,
+  haloT: 3.5,
+  shrineY: 54,
   /** The pupil is not quite centred and not quite round (it tracks at runtime). */
   pupilDX: 2.5,
   pupilDY: 1.5,
 };
 
 /**
- * Halo arcs: span (degrees, y down: −90 = straight up) and a radius offset. The top arc is long (92°, so it visibly bends with
- * the ring) and carries the sigil; the ring is BROKEN on the lower left: a 40° gap and a small fragment drifted inward.
+ * Halo arcs: span (degrees, y down: −90 = straight up) and a radius offset: THREE broken rings (−8, 0, +8 px). The long top
+ * arc of the middle ring carries the crosshair sigil; the rest are pieces of the inner and outer rings, with wide gaps.
  */
 const HALO_ARCS: readonly [number, number, number][] = [
-  [-152, -60, 0],
-  [-46, -6, 0],
-  [12, 64, 3.5],
-  [96, 128, 0],
-  [168, 190, -3],
+  [-150, -28, 0],
+  [-16, 44, -8],
+  [-64, -22, 8],
+  [134, 196, -8],
+  [160, 226, 8],
 ];
 
 interface ArmDef {
@@ -900,14 +907,18 @@ interface ArmDef {
 }
 
 /**
- * Four asymmetric scythe architectures sweeping down and around: the front upper one is the longest and hangs lowest, the
- * back upper one is shorter and held high (its blade ends level with the shrine), the lower pair are short and unequal.
+ * Six broad crescent limbs, three per side, growing out of the mantle and sweeping out and down (art v3, WJ's reference):
+ * an upper pair that arches over the halo, a middle pair, a lower pair that hangs past the spires. Right side first in each
+ * pair (arms 0, 2, 4 are the right side). Not mirror images: the left arms are a little shorter or held differently.
+ * Two rigid pieces per arm.
  */
 const ARMS: readonly ArmDef[] = [
-  { c: [34, -16, 76, -82, 114, -20, 78, 74], joints: [0, 0.26, 0.52, 0.77], w: 1.15 },
-  { c: [-34, -14, -76, -82, -108, -42, -84, 22], joints: [0, 0.25, 0.5, 0.75], w: 1.2 },
-  { c: [32, 24, 78, 34, 98, 86, 46, 96], joints: [0, 0.36, 0.7], w: 0.95 },
-  { c: [-30, 26, -66, 44, -74, 84, -40, 94], joints: [0, 0.4, 0.72], w: 0.85 },
+  { c: [40, -34, 80, -122, 160, -112, 178, -54], joints: [0, 0.5], w: 1.15 },
+  { c: [-40, -30, -86, -114, -166, -98, -180, -40], joints: [0, 0.48], w: 1.1 },
+  { c: [52, 2, 110, -30, 172, -12, 152, 42], joints: [0, 0.5], w: 1.0 },
+  { c: [-50, 6, -104, -22, -164, 6, -146, 54], joints: [0, 0.52], w: 0.95 },
+  { c: [38, 44, 84, 70, 142, 96, 124, 128], joints: [0, 0.5], w: 0.95 },
+  { c: [-34, 46, -74, 78, -128, 110, -104, 132], joints: [0, 0.5], w: 0.9 },
 ];
 
 interface RegionCanvas {
@@ -1039,6 +1050,7 @@ export function paintWitness(
   add(paintInterior(ramps, lighting, seed, car, 1));
   add(paintInterior(ramps, lighting, seed, car, 2));
   add(paintInterior(ramps, lighting, seed, car, 3));
+  add(paintMantle(ramps, lighting, seed, car));
   const shrine = add(paintShrine(ramps, lighting, seed, car));
   for (let k = 0; k < HALO_ARCS.length; k++) add(paintHaloArc(ramps, lighting, seed, eye, k));
   const arms: WitnessArm[] = [];
@@ -1117,27 +1129,41 @@ function armTurn(S: { x: Float64Array; y: Float64Array }): number {
 
 function paintEyeCradle(ramps: number[][], lighting: StageLighting, micro: boolean): WitnessRegion {
   const R = WE.eyeR;
-  const rc = regionCanvas(-WE.rimR, -WE.rimR, WE.rimR, WE.rimR);
+  const rc = regionCanvas(-WE.teethR, -WE.teethR, WE.teethR, WE.teethR);
   const { cv, ox, oy } = rc;
   const sclera = WID('sclera');
   const iris = WID('iris');
   const pupil = WID('pupil');
   const gold = WID('gold');
+  const burn = WID('lattice');
+  const crystal = WID('bone');
   for (let y = 0; y < cv.h; y++)
     for (let x = 0; x < cv.w; x++) {
       const bx = x + ox + 0.5;
       const by = y + oy + 0.5;
       const rho = Math.hypot(bx, by);
       const i = y * cv.w + x;
-      if (rho > WE.rimR) continue;
+      const th = Math.atan2(by, bx);
+      if (rho > WE.rimR) {
+        // crystal teeth round the burning ring: 28 of them, uneven in length, tapering outward
+        if (rho > WE.teethR) continue;
+        const k = Math.floor(((th + Math.PI) / (Math.PI * 2)) * 28);
+        const f = (((th + Math.PI) / (Math.PI * 2)) * 28) % 1;
+        const len = (WE.teethR - WE.rimR) * (0.55 + 0.45 * hash01(k, 3, 77));
+        const u = (rho - WE.rimR) / len;
+        if (u > 1 || Math.abs(f - 0.5) > 0.42 * (1 - u)) continue;
+        cv.mat[i] = crystal;
+        cv.relief[i] = 10 - 4 * u;
+        cv.tone[i] = f < 0.5 ? 1.2 : -0.4;
+        continue;
+      }
       if (rho > R) {
-        // the socket rim: a raised ring of dead gold with notched inlays
-        cv.mat[i] = gold;
+        // the socket: a raised ring of gold that BURNS on its inner edge, with notched inlays
         const t = (rho - R) / (WE.rimR - R);
+        cv.mat[i] = t < 0.3 ? burn : gold;
         cv.relief[i] = 12 + 4 * Math.sqrt(Math.max(0, 1 - (2 * t - 1) ** 2));
-        const th = Math.atan2(by, bx);
-        const notch = Math.abs((((th / (Math.PI * 2)) * 30 + 30) % 1) - 0.5) > 0.44;
-        if (notch) cv.tone[i] = -1.4;
+        const notch = Math.abs((((th / (Math.PI * 2)) * 36 + 36) % 1) - 0.5) > 0.44;
+        if (notch && t >= 0.3) cv.tone[i] = -1.4;
         continue;
       }
       // the iris and pupil are offset from the sclera's centre (it looks; it is not a target)
@@ -1329,9 +1355,10 @@ function paintWitnessEye(
 /* ---------------------------------------------------------------- the carapace stack */
 
 const carapaceSd = (bx: number, by: number, seed: number): number => {
-  const wx = bx + fbm(bx * 0.05, by * 0.05, seed + 3, 2) * 1.0;
-  const wy = by + fbm(bx * 0.05 + 4.1, by * 0.05, seed + 5, 2) * 1.0;
-  let d = sdCircle(wx, wy, WE.carCX, WE.carCY, WE.carR);
+  // not a sphere: an irregular mosaic mass, wider than tall, lumpy at the rim
+  const wx = bx + fbm(bx * 0.04, by * 0.04, seed + 3, 3) * 6.0;
+  const wy = by + fbm(bx * 0.04 + 4.1, by * 0.04, seed + 5, 3) * 6.0;
+  let d = sdEllipse(wx, wy, WE.carCX, WE.carCY, WE.carR * 1.04, WE.carR * 0.94);
   // a few weathered notches on the rim (sparse and uneven: it is ancient, not ruined)
   for (const a of [-2.6, -1.95, -0.45, 0.4, 1.15, 2.35]) {
     const r = WE.carR + 1;
@@ -1357,7 +1384,7 @@ function paintCarapace(
   parent: number,
 ): WitnessRegion {
   const R = WE.carR;
-  const rc = regionCanvas(-R - 2, WE.carCY - R - 2, R + 2, WE.carCY + R + 2);
+  const rc = regionCanvas(-R * 1.04 - 9, WE.carCY - R - 9, R * 1.04 + 9, WE.carCY + R + 9);
   const { cv, ox, oy } = rc;
   const carapace = WID('carapace');
   const vein = WID('vein');
@@ -1374,8 +1401,8 @@ function paintCarapace(
     let px = Math.cos(a) * r;
     let py = Math.sin(a) * r;
     let branch = rng.int(3) + 2;
-    const glow = k === 1 || k === 4 || k === 6 ? 1 : 0;
-    while (r < R + 12) {
+    const glow = k === 4 ? 1 : 0;
+    while (r < R * 0.82) {
       a += rng.range(-0.18, 0.18);
       r += 3;
       const nx = Math.cos(a) * r;
@@ -1403,13 +1430,22 @@ function paintCarapace(
       cv.mat[i] = carapace;
       const rr = Math.hypot(bx - WE.carCX, by - WE.carCY) / R;
       let rel = 30 * Math.sqrt(Math.max(0, 1 - rr * rr)) + Math.max(0, WE.socketR + 5 - rho) * 1.3;
-      // large cracked plates with dark crevices; a little tone per plate
-      worley(bx / 14, by / 14, seed + 17, worleyOut, 0.85);
-      let tone = (worleyOut.id - 0.5) * 0.7;
-      if ((worleyOut.f2 - worleyOut.f1) * 14 < 0.65) {
-        tone -= 1.1;
-        rel -= 1.2;
+      // a MOSAIC of plates: dark seams between them that widen toward the rim, where the plates come apart (it frays)
+      worley(bx / 9, by / 9, seed + 17, worleyOut, 0.85);
+      let tone = (worleyOut.id - 0.5) * 0.9;
+      const gap = (worleyOut.f2 - worleyOut.f1) * 9;
+      const fray = smoothstep(0.7, 1.05, rr);
+      if (gap < 0.45 + 1.6 * fray) {
+        if (fray > 0.55) {
+          cv.mat[i] = 0;
+          continue;
+        }
+        tone -= 1.3;
+        rel -= 1.6;
       }
+      // the plates are domed: lit in their middles
+      rel += 2.2 * Math.min(1, gap / 3);
+      if (worleyOut.id > 0.9) cv.mat[i] = WID('bronze');
       for (let s = 0; s < veinSegs.length; s += 4)
         if (sdSegment(bx, by, veinSegs[s]!, veinSegs[s + 1]!, veinSegs[s + 2]!, veinSegs[s + 3]!) < 0.62) {
           cv.mat[i] = veinGlow[s >> 2] ? hairline : vein;
@@ -1451,7 +1487,7 @@ function paintInterior(
   layer: 1 | 2 | 3,
 ): WitnessRegion {
   const R = WE.carR - 1;
-  const rc = regionCanvas(-R, WE.carCY - R, R, WE.carCY + R);
+  const rc = regionCanvas(-R * 1.04 - 8, WE.carCY - R - 8, R * 1.04 + 8, WE.carCY + R + 8);
   const { cv, ox, oy } = rc;
   const channel = WID('channel');
   const lattice = WID('lattice');
@@ -1461,11 +1497,13 @@ function paintInterior(
   const pupil = WID('pupil');
   const inner = WE.socketR - 1.5;
   const innerEyes: [number, number, number][] = [
-    [-15, 31, 6.5],
-    [1, 36, 7.5],
-    [16, 30, 6],
-    [-29, 13, 4.5],
-    [29, 15, 4.5],
+    [-21, 43, 8],
+    [1, 49, 9],
+    [22, 42, 7.5],
+    [-41, 18, 5.5],
+    [40, 21, 5.5],
+    // the second eye: larger, upper right, the first thing the wounded carapace shows
+    [33, -27, 10],
   ];
   for (let y = 0; y < cv.h; y++)
     for (let x = 0; x < cv.w; x++) {
@@ -1556,20 +1594,72 @@ function paintInterior(
   });
 }
 
+/* ---------------------------------------------------------------- the mantle */
+
+/**
+ * The dark mantle behind the head that the arms grow out of, so head and arms read as one structure. It is welded to the
+ * carapace (one rig body) and drawn behind the arms; under the head it is hollow (nobody sees it there).
+ */
+function paintMantle(
+  ramps: number[][],
+  lighting: StageLighting,
+  seed: number,
+  parent: number,
+): WitnessRegion {
+  const RX = WE.mantleRX;
+  const RY = WE.mantleRY;
+  const cy = WE.carCY + 6;
+  const rc = regionCanvas(-RX - 8, cy - RY - 8, RX + 8, cy + RY + 8);
+  const { cv, ox, oy } = rc;
+  const mantle = WID('abyss');
+  const vein = WID('membrane');
+  const wor = makeWorley();
+  for (let y = 0; y < cv.h; y++)
+    for (let x = 0; x < cv.w; x++) {
+      const bx = x + ox + 0.5;
+      const by = y + oy + 0.5;
+      const wx = bx + fbm(bx * 0.05, by * 0.05, seed + 41, 2) * 7;
+      const wy = by + fbm(bx * 0.05 + 3.3, by * 0.05, seed + 43, 2) * 7;
+      if (sdEllipse(wx, wy, 0, cy, RX, RY) > 0) continue;
+      if (carapaceSd(bx, by, seed) < -7) continue;
+      const i = y * cv.w + x;
+      worley(bx / 6, by / 6, seed + 47, wor, 0.8);
+      const seam = (wor.f2 - wor.f1) * 6 < 0.7;
+      cv.mat[i] = seam && hash01(x, y, seed + 5) > 0.5 ? vein : mantle;
+      const e = -sdEllipse(wx, wy, 0, cy, RX, RY);
+      cv.relief[i] = 1 + Math.min(4, e * 0.15) + (seam ? -0.5 : 0.8 * (1 - wor.f1));
+      cv.tone[i] = seam ? -0.4 : 0.2;
+    }
+  return finishRegion(rc, ramps, lighting, null, RX - 10, cy, 3, {
+    key: 'mantle',
+    kind: 'mantle',
+    pivotX: 0,
+    pivotY: 0,
+    parent,
+    weld: true,
+    layer: -1,
+    z: 2,
+    arm: -1,
+    segment: -1,
+  });
+}
+
 /* ---------------------------------------------------------------- the shrine chandelier */
 
 /** x, length, root radius, snapped (0 = whole; else the fraction of the length that is left). Uneven; two have snapped. */
 const SPIRES: readonly [number, number, number, number][] = [
-  [-24, 22, 1.8, 0],
-  [-16, 34, 2.2, 0.5],
-  [-8, 40, 2.5, 0],
-  [1, 44, 3.0, 0],
-  [9, 36, 2.5, 0],
-  [17, 28, 2.2, 0],
-  [24, 18, 1.8, 0.6],
+  [-32, 30, 2.0, 0],
+  [-21, 48, 2.5, 0.5],
+  [-11, 58, 2.8, 0],
+  [1, 66, 3.4, 0],
+  [12, 52, 2.8, 0],
+  [22, 40, 2.5, 0],
+  [32, 26, 2.0, 0.6],
 ];
 /** Where a spire hangs from the dome (the dome is lowest in the middle). */
-const spireRootY = (x: number): number => WE.shrineY + 7 + 9 * (1 - Math.min(1, Math.abs(x) / 28));
+const spireRootY = (x: number): number => WE.shrineY + 8 + 11 * (1 - Math.min(1, Math.abs(x) / 36));
+/** Body y of the longest spire's tip, where the light under the hanging city hangs (drawn at runtime). */
+export const WITNESS_SHRINE_LIGHT_Y = spireRootY(SPIRES[3]![0]) + SPIRES[3]![1];
 
 function paintShrine(
   ramps: number[][],
@@ -1578,7 +1668,7 @@ function paintShrine(
   parent: number,
 ): WitnessRegion {
   const top = WE.shrineY;
-  const rc = regionCanvas(-36, top - 2, 38, top + 72);
+  const rc = regionCanvas(-46, top - 2, 48, top + 96);
   const { cv, ox, oy } = rc;
   const gold = WID('gold');
   const bone = WID('bone');
@@ -1589,9 +1679,9 @@ function paintShrine(
       const by = y + oy + 0.5;
       const i = y * cv.w + x;
       // crown: an inverted dome tucked under the carapace, narrowing to a hanging boss
-      const t = clamp01((by - top - 4) / 18);
-      const cone = smax(Math.abs(bx - 1) - lerp(27, 3, t * t), Math.max(top + 4 - by, by - (top + 23)), 2);
-      let d = smin(sdEllipse(bx, by, 0, top + 4, 27, 5.5), cone, 3);
+      const t = clamp01((by - top - 4) / 22);
+      const cone = smax(Math.abs(bx - 1) - lerp(36, 4, t * t), Math.max(top + 4 - by, by - (top + 27)), 2);
+      let d = smin(sdEllipse(bx, by, 0, top + 4, 36, 6.5), cone, 3);
       let spire = -1;
       let su = 0;
       for (let k = 0; k < SPIRES.length; k++) {
@@ -1758,10 +1848,10 @@ function paintHaloArc(
  *  - 'truss': architecture: an outer ceramic rail and an inner bone rail held by alternating struts, some bays plated, a
  *             cyan filament down the middle; the end is broken off and the filament hangs out of it.
  */
-export type WitnessArmStyle = 'limb' | 'root' | 'truss';
-export const WITNESS_ARM_STYLES: readonly WitnessArmStyle[] = ['limb', 'root', 'truss'];
-/** The style the game uses. */
-export const WITNESS_ARM_STYLE: WitnessArmStyle = 'truss';
+export type WitnessArmStyle = 'cells' | 'limb' | 'root' | 'truss';
+export const WITNESS_ARM_STYLES: readonly WitnessArmStyle[] = ['cells', 'limb', 'root', 'truss'];
+/** The style the game uses (art v3, WJ's reference: round limbs built of bulbous cells). */
+export const WITNESS_ARM_STYLE: WitnessArmStyle = 'cells';
 
 interface ArmCell {
   m: number;
@@ -1804,22 +1894,25 @@ function paintArmSegment(
   }
   const joint = samplesAt(S, u0);
   const jointR = (seg === 0 ? 5.4 : 4.6 - 0.5 * seg) * W;
-  // bounding box of this segment's samples (unchanged from art v2: region sizes and pivots stay put)
+  // bounding box of this segment's samples (the broad 'cells' crescents need a wider margin)
+  const margin = style === 'cells' ? 19 * W : 11;
   let x0 = joint.x - jointR;
   let y0 = joint.y - jointR;
   let x1 = joint.x + jointR;
   let y1 = joint.y + jointR;
   for (let k = 0; k <= N; k++) {
     if (S.s[k]! < u0 - 0.02 || S.s[k]! > u1 + 0.02) continue;
-    x0 = Math.min(x0, S.x[k]! - 11);
-    x1 = Math.max(x1, S.x[k]! + 11);
-    y0 = Math.min(y0, S.y[k]! - 11);
-    y1 = Math.max(y1, S.y[k]! + 11);
+    x0 = Math.min(x0, S.x[k]! - margin);
+    x1 = Math.max(x1, S.x[k]! + margin);
+    y0 = Math.min(y0, S.y[k]! - margin);
+    y1 = Math.max(y1, S.y[k]! + margin);
   }
   const rc = regionCanvas(x0, y0, x1, y1);
   const { cv, ox, oy } = rc;
   const mat = {
     plate: WID('carapace'),
+    edge: WID('lattice'),
+    speck: WID('gold'),
     sinew: WID('membrane'),
     fibre: WID('vein'),
     bone: WID('bone'),
@@ -1854,7 +1947,52 @@ function paintArmSegment(
           [0.05, 4],
           [0.6, 2],
         ];
+  const wor = makeWorley();
+  /** 'cells': the crescent's half-width at arc length t: thick at the root (it grows from the mantle), broadest early. */
+  const crescent = (t: number): number => {
+    const u = Math.min(1, t / L);
+    return W * (5.5 * (1 - u) ** 2 + 11 * Math.sin(Math.PI * Math.min(1, u * 1.08)) ** 0.85 + 1.0);
+  };
+  const cellArm = (t: number, s: number): ArmCell | null => {
+    if (t > L) return null;
+    const r = crescent(t);
+    if (Math.abs(s) > r) return null;
+    const u = t / L;
+    // across the width: −1 on the OUTER (convex) edge, +1 on the inner edge
+    const a = s / r;
+    // the lattice of bulbous cells, in arm-local coordinates (cells run along the limb)
+    worley(t / 4.2 + arm * 31, s / 3.6, seed + 211 + arm, wor, 0.85);
+    const gap = wor.f2 - wor.f1;
+    const id = wor.id;
+    // edges dissolve: whole cells drop out near the rims and toward the tip (they drift away as fx)
+    const edge = Math.max(0, Math.abs(a) - 0.72) / 0.28;
+    const drop = 0.75 * edge + 1.4 * Math.max(0, u - 0.86);
+    if (id < drop * 0.8 && Math.abs(a) > 0.35) return null;
+    // the keen edge: one bright line, only along the outer curve
+    if (a < -1 + 1.25 / r && u > 0.06 && u < 0.96) return { m: mat.edge, rel: 6, tone: 1.6 };
+    // half-lidded orb-eyes along the limb, a little outside the centre line, every ~32 px
+    const eT = (t + arm * 11) % 40;
+    const eS = s + 0.18 * r;
+    if (u > 0.08 && u < 0.88 && Math.hypot(eT - 20, eS) < 3.4) {
+      const lid = eS < -0.6 || Math.abs(eS) > 1.1; // the upper half is lidded, a slit of iris below
+      const slit = Math.abs(eS - 0.9) < 0.6;
+      return {
+        m: slit ? (Math.abs(eT - 20) < 0.7 ? mat.pupil : mat.iris) : mat.orb,
+        rel: 7,
+        tone: lid ? 0.4 : 0,
+      };
+    }
+    // dark gaps between the cells (matter, so the limb stays one body; they read as cracks of shadow)
+    if (gap < 0.16) return { m: mat.sinew, rel: 0.5 + 1.5 * (1 - a * a), tone: -1.8 };
+    // a bulb: lit in its middle, dark at its own edge; the whole limb lit across its width
+    const bulb = Math.sqrt(Math.max(0, 1 - (wor.f1 * 1.5) ** 2));
+    const across = Math.sqrt(Math.max(0, 1 - a * a));
+    // a sparse scatter of light in the lattice: gold specks and pale celadon cell-tops (the reference's glittering arms)
+    const m = id > 0.965 ? mat.speck : id > 0.9 ? mat.fibre : id > 0.84 ? mat.bronze : mat.plate;
+    return { m, rel: 2 + 3 * bulb + 6 * across, tone: (bulb - 0.6) * 0.8 + (id - 0.5) * 0.4 };
+  };
   const cell = (t: number, s: number, bay: number): ArmCell | null => {
+    if (style === 'cells') return cellArm(t, s);
     const r = core(t);
     // ---- the end: no point, a split, frayed, broken or hanging finish
     if (t > tipStart) {
@@ -1971,14 +2109,14 @@ function paintArmSegment(
       const i = y * cv.w + x;
       // the joint (and its orb-eye) belongs to the segment that starts there
       const dj = Math.hypot(bx - joint.x, by - joint.y);
-      if (seg > 0 && Math.hypot(bx - orbX, by - orbY) < 2.8) {
+      if (style !== 'cells' && seg > 0 && Math.hypot(bx - orbX, by - orbY) < 2.8) {
         // dormant, but not quite closed: a gold lid with a thin slit of iris and a dark point
         const slit = Math.abs(by - orbY) < 0.55;
         cv.mat[i] = slit ? (Math.abs(bx - orbX) < 0.6 ? mat.pupil : mat.iris) : mat.orb;
         cv.relief[i] = 7;
         continue;
       }
-      if (dj < jointR) {
+      if (style !== 'cells' && dj < jointR) {
         cv.mat[i] = mat.bronze;
         cv.relief[i] = 6 + 4 * Math.sqrt(1 - (dj / jointR) ** 2);
         cv.tone[i] = dj > jointR - 1.2 ? -0.8 : 0;

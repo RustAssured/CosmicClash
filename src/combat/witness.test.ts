@@ -218,10 +218,10 @@ describe('the Witness in game (witness=1)', () => {
       for (let b = 8; b < 12; b++) if (mask & (1 << b)) blades++;
       return blades;
     };
-    // the two front arms (0 and 2) do the sweeping: cut one to its root segment and lose the other, then lose both
+    // the right-side arms (0, 2, 4) face the foe: cut one to its root piece and lose another, then lose all three
     const whole = sweep([]);
     const stub = sweep(['arm0.1', 'arm2.0']);
-    const none = sweep(['arm0.0', 'arm2.0']);
+    const none = sweep(['arm0.0', 'arm2.0', 'arm4.0']);
     expect(whole).toBeGreaterThanOrEqual(2);
     expect(stub).toBeLessThan(whole);
     expect(none).toBe(0);
