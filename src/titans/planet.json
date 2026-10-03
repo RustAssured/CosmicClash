@@ -1835,7 +1835,7 @@
     }
   },
   "balance": {
-    "power": 0.85,
-    "durability": 0.868
+    "power": 0.75,
+    "durability": 0.75
   }
 }
