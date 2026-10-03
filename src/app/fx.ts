@@ -14,6 +14,7 @@ import {
   type SimEvent,
   type StageImpulseFx,
 } from '@/contracts';
+import { presentationEnergy } from '@/audio/balance';
 import { MAX_COMETS, MAX_WELLS } from '@/stages/types';
 
 /**
@@ -339,10 +340,12 @@ export class FxState {
           this.heat += e.strength * 0.6;
           break;
         case 'hit': {
-          this.heat += Math.min(1.5, e.energy / 1500) * (1 - e.blocked * 0.6);
-          if (e.energy > 800) this.addRing(e.x, e.y, 60 + e.energy * 0.04, 0.35, -1, true);
-          if (e.heavy || e.energy >= LIGHT_MIN_ENERGY) {
-            const k = clamp((e.energy - 600) / 3000, 0, 1);
+          // the move's energy, not the balance knobs (the attacker's balance.power out): lights, rings and heat stay put
+          const en = presentationEnergy(e.energy, match.fighters[e.attacker].view.titan);
+          this.heat += Math.min(1.5, en / 1500) * (1 - e.blocked * 0.6);
+          if (en > 800) this.addRing(e.x, e.y, 60 + en * 0.04, 0.35, -1, true);
+          if (e.heavy || en >= LIGHT_MIN_ENERGY) {
+            const k = clamp((en - 600) / 3000, 0, 1);
             const open = 1 - 0.6 * clamp(e.blocked, 0, 1);
             const c = e.titan === 'lastone' ? (e.heavy ? WITNESS_HEAVY : WITNESS_LIGHT) : TYPE_LIGHT[e.type];
             this.impact(

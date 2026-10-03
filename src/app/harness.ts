@@ -159,7 +159,11 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
       return app.session ? app.session.match.phase : 'none';
     },
     run(on: boolean): void {
-      if (on) app.loop.resume();
+      if (on) {
+        // frame statistics measure the running game, not the paused set-up before it (audio unlock, strip arming)
+        app.telemetry?.restartFrames();
+        app.loop.resume();
+      }
       else app.loop.pause();
     },
     gpu(): string {

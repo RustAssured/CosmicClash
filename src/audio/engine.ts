@@ -20,6 +20,7 @@ import {
   limiterWorkletSource,
 } from './worklets/limiter';
 import { ScoreEngine } from './score/engine';
+import { presentationEnergy } from './balance';
 import {
   magnitude,
   playCueGeneric,
@@ -70,8 +71,12 @@ export const OUTPUT_HIGHPASS_HZ = 50;
 /**
  * Gain before the limiter (default faders). Phase 2 re-stage: the live orbit capture read −27 LUFS against −21.3 offline, so the
  * mix went up +3 dB here and the bed +2 dB (BED_LEVEL_DB): offline orbit −17.9 LUFS, the live one should land ≈ −24..−23.
+ * (That −27 was the aftermath freeze, not the mix.) Gate C: with the D30 rebalance a fight carries ~3.5 heavy hits per round
+ * and the live 3-minute fights read −16.4 / −15.2 LUFS, so the mix came down 3.5 dB (Lead). That alone moved the level 1.5 dB:
+ * a repeated Planet cue (ring-capture, ~12 bells a second) made the loudest seconds of the fight and sat on the limiter.
+ * With CUE_REPEAT and balance-free impact energy: offline orbit fight −20.4 LUFS, LRA 17.5, limiter idle 98.8 %.
  */
-export const CALIBRATION_DB = 4.3;
+export const CALIBRATION_DB = 0.8;
 /** Menu / UI sounds sit this far under the calibrated impacts (they were authored against the old, quieter master). */
 const UI_LEVEL_DB = -9;
 /** Reverb returns: the impacts' space and the bed's. */
@@ -92,6 +97,10 @@ export const DUCK_DB: readonly [number, number] = [4, 6.5];
 export const DUCK_SEC: readonly [number, number] = [0.35, 0.55];
 /** Smallest blow that ducks the bed (the same line telemetry draws for a heavy hit). */
 export const DUCK_MIN_ENERGY = 400;
+/** The sim's heavy line (combat/fighter.ts: a blow of energy ≥ 700 is heavy whatever its slot). */
+const HEAVY_BLOW = 700;
+/** Shortest gap (s) between two sounds of the same cue from the same fighter (the sim may repeat a cue every tick). */
+const CUE_REPEAT = 0.3;
 
 /**
  * The automatic makeup gain (dB) a DynamicsCompressorNode applies (WebAudio spec: (1 / gain at 0 dBFS)^0.6). Approximates the
@@ -231,6 +240,8 @@ class Engine implements AudioEngineExt {
   private peakPost = 0;
   private resumeAt = 0;
   private duckUntil = 0;
+  /** When each (slot, cue id) last sounded. */
+  private readonly cueAt = new Map<string, number>();
   private readonly bypass: boolean;
   private readonly trims = new Map<number, VoiceCtx>();
 
@@ -238,6 +249,11 @@ class Engine implements AudioEngineExt {
     this.ac = o.context ?? null;
     this.seed = o.seed ?? 7;
     this.bypass = !!o.unsafeBypassLimiter;
+    // The reverb IR (≈ 40–50 ms of JS at 48 kHz) needs no AudioContext: synthesise it in idle time now, so the unlock (the first
+    // user gesture, which may land during a fight) only pays for the context and the graph.
+    const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+      .requestIdleCallback;
+    if (!o.context && idle) idle(() => void cachedImpulseResponse(48000, this.seed), { timeout: 4000 });
   }
 
   get ready(): boolean {
@@ -618,17 +634,22 @@ class Engine implements AudioEngineExt {
       }
       case 'hit': {
         if (!c.take(1)) return;
-        const mag = magnitude(ev.energy, ev.heavy);
+        // the mix follows the MOVE, not the balance knobs: the attacker's balance.power comes out of the energy, and a blow
+        // flagged heavy only because power pushed it over the sim's 700 line is not heavy here
+        const atkTitan = this.titanOf(ev.attacker);
+        const energy = presentationEnergy(ev.energy, atkTitan);
+        const hv = ev.heavy && ev.energy >= HEAVY_BLOW && energy < HEAVY_BLOW ? { ...ev, heavy: false } : ev;
+        const mag = magnitude(energy, hv.heavy);
         const pan = c.panOf(ev.x);
-        playImpact(c, t, ev, mag, pan);
+        playImpact(c, t, hv, mag, pan);
         playTypeLayer(c, t, ev.type, mag, pan, 1 - 0.7 * clamp01(ev.blocked));
-        const atk = this.voiceFor(this.titanOf(ev.attacker));
-        atk.onHitDealt?.(c, t, ev, mag);
+        const atk = this.voiceFor(atkTitan);
+        atk.onHitDealt?.(c, t, hv, mag);
         const tgt = this.voiceFor(this.titanOf(ev.target, ev.titan));
-        tgt.onHitTaken?.(c, t, ev, mag);
+        tgt.onHitTaken?.(c, t, hv, mag);
         // the bed gets out of the way of a heavy blow (sidechain-style): this is what lets an impact stand 10+ dB over it
         // every blow telemetry calls heavy (energy ≥ 400; continuous beam/field slices are flagged heavy but carry ~10–100)
-        if (ev.energy >= DUCK_MIN_ENERGY)
+        if (energy >= DUCK_MIN_ENERGY)
           this.duck(t, clamp01((mag - 0.3) / 0.6) * (1 - 0.7 * clamp01(ev.blocked)));
         return;
       }
@@ -675,6 +696,11 @@ class Engine implements AudioEngineExt {
         return;
       }
       case 'cue': {
+        // a cue the sim repeats tick after tick (Gate C: the Planet's ring-capture 12 times in one second, stacking bells into
+        // the loudest moments of the fight) sounds once per CUE_REPEAT
+        const key = `${ev.slot}:${ev.id}`;
+        if (t < (this.cueAt.get(key) ?? -1) + CUE_REPEAT) return;
+        this.cueAt.set(key, t);
         if (!c.take(0)) return;
         const v = this.voiceFor(ev.titan);
         const tc = this.trimmed(CUE_TRIM[ev.titan] ?? 1);

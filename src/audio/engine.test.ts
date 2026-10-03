@@ -236,6 +236,29 @@ describe('slice material voices (Phase 2)', () => {
       expect(takeViolations(), id).toEqual([]);
     }
   });
+  it('a cue the sim repeats every tick sounds once per CUE_REPEAT (the ring-capture bell stack)', async () => {
+    const { eng, ctx } = await ready();
+    eng.update(scene({}, 'lastone', 'planet'), 1 / 60);
+    const cue = {
+      t: 'cue',
+      slot: 1,
+      titan: 'planet',
+      id: 'ring-capture',
+      x: 900,
+      y: 300,
+      amount: 0.5,
+    } as const;
+    const n0 = ctx.nodes.length;
+    eng.handleAt([cue], 1);
+    const first = ctx.nodes.length - n0;
+    eng.handleAt([cue], 1 + 1 / 60);
+    eng.handleAt([cue], 1.2);
+    expect(first).toBeGreaterThan(4);
+    expect(ctx.nodes.length - n0).toBe(first);
+    eng.handleAt([cue], 1.35);
+    expect(ctx.nodes.length - n0).toBeGreaterThan(first);
+    expect(takeViolations()).toEqual([]);
+  });
   it('the arena comet warns and enters with its own sounds (and a retire is silent)', async () => {
     for (const kind of ['comet-warn', 'comet-enter', 'comet-retire'] as const) {
       const { eng, ctx } = await ready();

@@ -207,6 +207,16 @@ export class Telemetry {
     this.stickArmed = p;
   }
 
+  /**
+   * Restart the frame-timing window (fps, long frames). The harness calls it when a paused (`freeze=1`) run starts, so set-up
+   * work before the run — the audio unlock's first AudioContext, ~0.4–1 s — is not counted as a game frame.
+   */
+  restartFrames(): void {
+    this.frameDt.length = 0;
+    this.frames = 0;
+    this.wall0 = -1;
+  }
+
   /** Start of a rendered frame: gamepad edges carry the browser's own receive timestamp. */
   beginFrame(now: number, pads: readonly (Gamepad | null)[] | null): void {
     if (this.wall0 < 0) this.wall0 = now;
