@@ -4,7 +4,8 @@
 now the default Last One. Footage, numbers and open items are below.
 
 Every number is either a real-time run on this machine (Vega 7, ANGLE/D3D11, **true 1920×1080, ×3**) or a deterministic headless
-run. Sources: `docs/gates/evidence/gate-c/*.json`. Clips: `evidence/gate-c/`.
+run. Sources: `docs/gates/evidence/gate-c/*.json` (the final numbers are `final-mausoleum`, `final-shearfield` and `final-gc`;
+latency is `latency-*`). Clips: `evidence/gate-c/`.
 
 ## 1. How to play
 
@@ -66,25 +67,25 @@ planet-scale detail at 1× / 3× / 4×).
 |---|---|---|---|
 | Input → response ≤ 1 frame | sim responds on the input tick; key → frame 18–22 ms | Sim responds on the input tick. Key event → accept median 22–28 ms; → first pixel 28–29 ms. | ✓ |
 | Crack on impact, shear 80–300 ms, slabs not dust | shear 133–150 ms | **Shear median 150–183 ms** live. Planet crust still sheds slabs after the rebalance (chunk share 0.27–0.57 by move, unchanged). | ✓ |
-| FX peak ≤ 100 ms; occluding FX clear ≤ 400 ms | peak 83, clear 300 | **Peak median 179–184 ms ✗**, clear 90–252 ms ✓. See §4.1. | ✗ / ✓ |
+| FX peak ≤ 100 ms; occluding FX clear ≤ 400 ms | peak 83, clear 300 | **Peak median 14 ms (Mausoleum, 5 wounds), 149 ms (Shearfield, 4 wounds)**; clear 14–150 ms. Offline over 420 s of fights: Witness FRACTURE peak median 75 ms (was 200). | ✓ / ~ |
 | Flashes ≤ 20 % Δluminance, ≤ 3/s | ≤ 0.16 | **≤ 0.07 in fights**, 0.15 in the latency scenario; 0–1 per s. | ✓ |
-| Audio −23…−18 LUFS, TP ≤ −1, impact ≥ 10 dB over bed, duck 4–8 dB, LRA ≥ 10 | −19.0 | **−16.4 / −15.2 LUFS ✗ (hot)**. TP −1.2 ✓, impact +12–16 dB ✓, duck 4–6 dB ✓, LRA 16–21 ✓. See §4.1. | ✗ |
+| Audio −23…−18 LUFS, TP ≤ −1, impact ≥ 10 dB over bed, duck 4–8 dB, LRA ≥ 10 | −19.0 | **−22.8 / −21.6 LUFS**, TP −4.6 / −1.7 dBTP, impact +12 dB (short-term) / +13–17 (momentary), duck 4 dB, LRA 13–15. | ✓ |
 | Rounds 45–90 s, fewer and heavier contacts | 22–24 s ✗ | Headless, 24 fights per level: **L3 mean 51 s / median 53 s, L4 mean 59 s / median 56 s**. 68–80 % of rounds inside 45–90 s, timeouts 0–3.4 %. About 11 contacts and 3–3.6 heavy hits per round. Live (AI 4): 35 s and 54 s. | ✓ |
 | Matchup 45–55 % over ≥ 100 fights | 52 % (classic) | **Witness 47 – Planet 53 matches; rounds 123–125** (100 orbit fights, L3). | ✓ |
-| 60 fps at 1080p | 59.4–59.5 | **Shearfield 59.5–59.7**, Mausoleum 56.1 (includes a 1 s start-up stall, §4.1). 1 % low 24–32. | ~ |
-| Sim p99 ≤ 5 ms | browser 6.1–7.0 | **Browser p99 3.5–4.1 ms.** It was 10–12 ms mid-phase, before S4's and S3's perf work. | ✓ |
-| No GC pause > 4 ms in 3 minutes | 8, max 12.2 | **10 > 4 ms, max 9.9 ms**, 186 pauses. | ✗ |
+| 60 fps at 1080p | 59.4–59.5, 1 % low 24.5–25.6 | **60.0 / 59.9 fps, 1 % low 43–45**, worst frame 51 ms, 15–17 frames > 25 ms in 3 minutes. | ✓ |
+| Sim p99 ≤ 5 ms | browser 6.1–7.0 | **Browser p99 3.6–3.7 ms.** It was 10–12 ms mid-phase, before S4's and S3's perf work. | ✓ |
+| No GC pause > 4 ms in 3 minutes | 8, max 12.2 | **10 > 4 ms, max 9.2 ms**, 154 pauses. | ✗ |
 | Blind readability ≥ 16/20 | — | Phase 3 (Gate D). | — |
 
 ## 4. Known issues (not hidden)
 
-1. **Presentation regressions after the rebalance (S5, in progress):**
-   - loudness runs hot and the limiter holds it;
-   - the FX peak is late;
-   - there is a one-time ~1 s stall 2.5 s into each match, probably a first-use shader compile.
-
-   The likely cause of the first two is that the Witness's balance power (3.0) inflates the blow energies that drive the sound
-   and effect sizes. The fix is to make presentation independent of the balance knobs.
+1. **Fixed during the gate run.** Three presentation regressions turned up after the rebalance; all are fixed, and the numbers
+   in §3 are after the fixes.
+   - **Hot mix:** the Planet's ring-capture cue stacked 12 bells a second. Each cue may now sound at most once per 0.3 s.
+   - **Late FX peak:** wound spray and chisel dust now draw behind the titans, and the attacker's own overlay clears the wound by
+     the end of the hit-stop.
+   - **Balance-free presentation:** sound and FX size now ignore the balance knobs.
+   - **The "1 s stall":** it was the capture tool's audio unlock being counted as a game frame, not the game.
 2. **GC:** 10 pauses over 4 ms in 3 minutes. Matter's typed-array churn is gone; what remains is short-lived garbage (Planet
    spin, comet painting, number boxing). Phase 3.
 3. **Rare hit-tick spikes** of up to ~40–50 ms on a heavy blow landing on the Witness. Most hit ticks now stay under 10 ms
@@ -160,4 +161,17 @@ planet-scale detail at 1× / 3× / 4×).
 
 ## 7. Checks
 
-<!-- filled in after the final run -->
+- **Full suite: 1039 / 1039 tests in 88 files**; `tsc`, ESLint and Prettier are clean.
+- **New in Phase 2:**
+  - `passover.test.ts`: over/under passes, no teleports, no matter loss;
+  - Witness rig, kit, eye microdetail and sway tests;
+  - rotated-sampler parity across all 256 angles;
+  - D30 debris rules;
+  - AI patience and move coverage.
+- **Tests that changed, with the reason:**
+  - The D1 bench's shear is now "the first held slab of the blow lets go"; fluid slabs leave as spray, not chunks.
+  - Two AI rate thresholds follow the Gate C pacing (8–11 contacts per minute).
+  - The Witness sway test applies a blow of the same effective energy whatever the durability knob is.
+  - The Witness's front-to-back test now expects intact carapace to shield the layers behind it (stack exposure).
+- **Determinism:** match hashes fold the rig state. Every perf change was hash-checked before and after; the D30 debris rule
+  and the look-ahead ranking change hashes by design.

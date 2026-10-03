@@ -163,8 +163,7 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
         // frame statistics measure the running game, not the paused set-up before it (audio unlock, strip arming)
         app.telemetry?.restartFrames();
         app.loop.resume();
-      }
-      else app.loop.pause();
+      } else app.loop.pause();
     },
     gpu(): string {
       const gl = app.canvasEl.getContext('webgl2');
