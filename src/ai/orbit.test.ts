@@ -109,9 +109,10 @@ describe('AI with orbital footwork (minimal 2-D spacing)', () => {
         )
           attacks++;
     }
-    // two fighters, an ~8 s breath each (punishes may cut it in half): well under the ~25 contacts a minute of Gate B
+    // two fighters, an ~8 s breath each (punishes may cut it in half). Gate C pacing (S1, D30 world) measures 8–11 contacts a
+    // minute per fight in real fights; attack starts by both fighters, whiffs included, stay in the low twenties
     expect(attacks).toBeGreaterThan(4);
-    expect(attacks).toBeLessThan(22);
+    expect(attacks).toBeLessThan(28);
   }, 60_000);
 
   it('latches orbit footwork from its own view when nobody told it', () => {

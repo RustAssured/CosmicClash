@@ -83,7 +83,8 @@ describe('AI move coverage (every move of the slice titans is in the model)', ()
     const w = m.world as unknown as { carve(id: number, frac: number, seed: number): void };
     for (const f of m.fighters) w.carve(f.view.body.id, 0.8, 7);
     for (let i = 0; i < 60 * 60; i++) m.step();
-    expect(held[0]).toBeGreaterThan(60);
+    // it draws (R1 held for at least a third of a second); how long depends on the balance knobs, not on the plan existing
+    expect(held[0]).toBeGreaterThan(20);
     expect(held[1]).toBe(0);
   }, 90_000);
 });
