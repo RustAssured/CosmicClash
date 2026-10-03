@@ -147,6 +147,8 @@ export class ChunkPool {
   count = 0;
   nextId = 1;
   massLive = 0;
+  /** Render-only: chunks added while set are never thrown at the camera (`launchNear`); the deferred chisel sets it. */
+  noNear = false;
 
   constructor(cap = DEBRIS_CHUNK_CAP) {
     this.cap = cap;
@@ -283,7 +285,7 @@ export class ChunkPool {
     c.glowRamp = WHITE_GOLD;
     c.refX = NaN;
     c.refY = NaN;
-    c.launchNear = pxCount(pixels, w * h) >= 20 && vx * vx + vy * vy >= 140 * 140;
+    c.launchNear = !this.noNear && pxCount(pixels, w * h) >= 20 && vx * vx + vy * vy >= 140 * 140;
     this.massLive += mass;
     computeChunkGeometry(c);
     return c;
@@ -930,7 +932,9 @@ export function chunkDepth(c: Chunk): 0 | 1 | 2 {
   if (c.age < 6) return DEPTH_MID;
   if (c.launchNear && c.age < NEAR_LAUNCH_TICKS) return DEPTH_NEAR;
   const h = ((c.id * 2654435761) >>> 0) % 8;
-  return h < 4 ? DEPTH_BACK : h < 7 ? DEPTH_MID : DEPTH_NEAR;
+  // A wound's slab (`fast`) is the wound's matter: it never takes the 2x near class, where it would sweep across the wound at
+  // the camera after the hit (proposal 168: FX peak on the impact frame).
+  return h < 4 ? DEPTH_BACK : h < 7 || c.fast ? DEPTH_MID : DEPTH_NEAR;
 }
 
 /** Targets of the chunk rasteriser: three screen layers (pixels + emissive) and the rows each one touched. */

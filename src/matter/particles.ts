@@ -31,6 +31,13 @@ export const PF_STRETCH = 1;
 export const PF_HARVEST = 2;
 /** Near-camera puff: drawn into the 2x near layer with class parallax, growing as it ages (a plume thrown at the viewer). */
 export const PF_NEAR = 4;
+/**
+ * Drawn behind the titans (the debris-back layer), never over the wound: the deferred FRACTURE chisel's dust (proposal 168),
+ * which lands after the hit-stop and must not out-occlude the blow's frame-0 burst. Presentation only (flags are not hashed).
+ */
+export const PF_BACK = 8;
+/** A blow's flash disc: drawn at its full size on the impact frame, shrinking with its remaining life (render-only). */
+export const PF_FLASH = 16;
 
 const MAX_RAMPS = 512;
 const RAMP_STRIDE = 8;
@@ -59,6 +66,8 @@ export class ParticlePool {
   /** Homing acceleration toward the sink (px/s²); 0 = free flight. */
   readonly homing: Float32Array;
   readonly flags: Uint8Array;
+  /** Flag bits every new particle starts with (render-only tags such as PF_BACK, set around one emitter; normally 0). */
+  spawnTag = 0;
   private readonly freeList: Int32Array;
   private freeTop: number;
   private ring = 0;
@@ -189,7 +198,7 @@ export class ParticlePool {
     this.credit[s] = -1;
     this.origin[s] = -1;
     this.homing[s] = 0;
-    this.flags[s] = 0;
+    this.flags[s] = this.spawnTag;
     return s;
   }
 
@@ -351,6 +360,8 @@ export function rasterParticles(
   nearPix?: Uint32Array,
   nearEmi?: Uint8Array,
   nearRange?: { a: number; b: number },
+  /** false (default): every particle but the PF_BACK ones; true: only the PF_BACK ones (into the back layer's `pix`). */
+  back = false,
 ): void {
   const W = LOGICAL_W;
   const H = LOGICAL_H;
@@ -366,6 +377,7 @@ export function rasterParticles(
   for (let s = 0; s < hi; s++) {
     const l = life[s]!;
     if (l === 0) continue;
+    if (((flags[s]! & PF_BACK) !== 0) !== back) continue;
     if ((flags[s]! & PF_NEAR) !== 0) {
       if (nearPix && nearEmi && nearRange) drawNearPuff(pool, s, view, ext, nearPix, nearEmi, nearRange);
       continue;
@@ -392,6 +404,7 @@ export function rasterParticles(
       thr = Math.max(1, Math.ceil(f * 16));
     }
     if (k === PK.gas) sz = sz + Math.floor((1 - frac) * 2);
+    if (flags[s]! & PF_FLASH) sz = Math.max(1, Math.round(sz * frac));
     if (em > 0 && frac < 0.3) em = (em * frac) / 0.3;
     const e8 = em | 0;
     if (flags[s]! & PF_STRETCH) {

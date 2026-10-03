@@ -3,7 +3,7 @@ import { CONN_NOW } from './body';
 import type { Body, WorldPoint } from './body';
 import { breakBondD, breakBondR } from './cells';
 import { plantFrontToward, queueSlowEdge } from './cracks';
-import { RAMP_SHARD, MODE_MECH } from './debris';
+import { RAMP_SHARD, MODE_MECH, endSpray } from './debris';
 import { cohesionBondScale } from './bodyinit';
 import { defaultCutOptions, edgeBond, edgeCells, setEdgeBond, DX, DY, type CutFinder } from './cuts';
 import {
@@ -20,7 +20,7 @@ import {
   resistOf,
   type DamageCtx,
 } from './dmg';
-import { PK } from './particles';
+import { PF_BACK, PK } from './particles';
 import { findImpact, type Impact } from './impact';
 import { K_LINE } from './shape';
 import { carveCrater, type CraterOpts, type CraterOut } from './crater';
@@ -206,7 +206,16 @@ export function chisel(ctx: DamageCtx, budget: number, wound = -1): void {
   if (budget < 4) return;
   gougeOpts.budget = budget;
   gougeOpts.wound = wound;
+  // Presentation (proposal 168): the chisel lands after the hit-stop, so its dust goes behind the titans and its chips are not
+  // thrown at the camera; the blow's frame-0 burst stays the peak of its effects. The pit itself is unchanged.
+  const P = ctx.core.particles;
+  const pool = ctx.core.chunks;
+  P.spawnTag = PF_BACK;
+  pool.noNear = true;
   carveCrater(ctx, gougeOpts, gougeOut);
+  endSpray(ctx.core); // (the callers flush right after the chisel anyway: flushing here tags that dust too)
+  P.spawnTag = 0;
+  pool.noNear = false;
   gougeOpts.wound = -1;
 }
 

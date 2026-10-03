@@ -7,7 +7,8 @@ import { rasterParticles } from './particles';
  * The pooled screen-space debris/particle layers. Four layers, allocated lazily once and re-used every call:
  *   debris-back  z -20: settled/drifting chunks behind the titans (~3 of 4 chunks, deterministic from chunk id)
  *   debris-mid   z +9:  the fight-plane chunks (over the titans, under every particle), with an emissive mask
- *   fx-front     z +10: all particles (sparks, embers, dust, gas, streams), with an emissive mask
+ *   fx-front     z +10: the particles (sparks, embers, dust, gas, streams), with an emissive mask; PF_BACK particles (the
+ *                       deferred FRACTURE chisel's dust) go to debris-back instead
  *   debris-near  z +15: chunks near the camera (and near-camera puffs) drawn at 2x pixel doubling with extra parallax
  * Chunks are rasterised rotated with nearest sampling (angle quantised to 1/48 turn), edge-lit per tumble angle.
  */
@@ -88,6 +89,19 @@ export class MatterRender {
       nearEmi,
       this.nearRange,
     );
+    // PF_BACK particles (the deferred chisel's dust) behind the titans, over the back chunks
+    rasterParticles(
+      core.particles,
+      view,
+      alpha,
+      back.pixels,
+      backEmi,
+      this.backRange,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
     this.version++;
     back.version = this.version;
     mid.version = this.version;
@@ -151,6 +165,21 @@ export class MatterRender {
     });
     upscaleOver(fp, fe, front, s);
     upscaleOver(np, ne, near, s);
+    const bp = new Uint32Array(n1);
+    const be = new Uint8Array(n1);
+    rasterParticles(
+      core.particles,
+      view,
+      alpha,
+      bp,
+      be,
+      { a: LOGICAL_H, b: -1 },
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+    upscaleOver(bp, be, back, s);
     for (const l of [back, mid, front, near]) {
       l.version = 1;
       l.dirty = null;

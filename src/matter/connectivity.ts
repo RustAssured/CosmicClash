@@ -2,6 +2,7 @@ import { CONN_EVT_CAP, type Body, type WorldPoint } from './body';
 import type { WorldCore } from './core';
 import { MODE_MECH, detachVelocity, endSpray, extractChunk, sprayCell, type Launch } from './debris';
 import { killCell } from './cells';
+import { PF_BACK } from './particles';
 import {
   BIG_ISLAND,
   STAGGER_MIN,
@@ -524,10 +525,17 @@ function releaseIsland(
 
   // A wound's fluids leave with its slab's full momentum (they clear the wound instead of hanging over it).
   const fk = w >= 0 ? 1 / 0.6 : 1;
+  // Presentation (proposal 168): what a wound sheds AFTER its impact frame (the shear comes after the hit-stop) — its fluids'
+  // spray and gas, its crumbs — is drawn behind the titans, so it never out-occludes the blow's frame-0 burst on the wound.
+  // Render-only tag (particle flags are not simulation state).
+  const P = core.particles;
+  const tag0 = P.spawnTag;
+  if (w >= 0 && core.tick > body.wounds.tick[w]! + 1) P.spawnTag = tag0 | PF_BACK;
   if (solid >= MIN_CHUNK_CELLS) {
     // Fluid cells first (before solids are extracted their indices are still valid).
     for (let k = solid; k < count; k++) disperseCell(core, body, cells[k]!, launch.vx * fk, launch.vy * fk);
     endSpray(core);
+    P.spawnTag = tag0;
     const ch = extractChunk(core, body, cells, solid, launch.vx, launch.vy, launch.spin);
     if (ch !== null && w >= 0) {
       // Wound pieces tumble from the lever arm of their push, with the inertia of their own cells.
@@ -545,6 +553,7 @@ function releaseIsland(
   } else {
     for (let k = 0; k < count; k++) disperseCell(core, body, cells[k]!, launch.vx * fk, launch.vy * fk);
     endSpray(core);
+    P.spawnTag = tag0;
   }
   body.touch(0, 0, 0, 0);
 }

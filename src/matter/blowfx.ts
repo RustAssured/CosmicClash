@@ -1,7 +1,7 @@
 import { RAMP_DUST, RAMP_EMBER, RAMP_SHARD } from './debris';
 import { localToWorldF, type DamageCtx } from './dmg';
 import { findImpact, type Impact } from './impact';
-import { PF_NEAR, PF_STRETCH, PK } from './particles';
+import { PF_FLASH, PF_NEAR, PF_STRETCH, PK } from './particles';
 import type { WorldPoint } from './body';
 
 const imp: Impact = { fx: 0, fy: 0, nx: 1, ny: 0, hasNormal: false };
@@ -42,7 +42,7 @@ export function impactBurst(ctx: DamageCtx): void {
   // Flash disc (bloom): peaks on the impact frame and is gone within ~100 ms of world time after the hit-stop, so the wound
   // reads by ~300-400 ms wall.
   const fs = Math.min(15, Math.round(5 + 6 * k));
-  P.spawn(
+  const disc = P.spawn(
     core,
     PK.plasma,
     bx - nx * 2,
@@ -57,6 +57,8 @@ export function impactBurst(ctx: DamageCtx): void {
     5,
     0,
   );
+  // full size on the impact frame, shrinking after the hit-stop (render-only: proposal 168, FX peak on the impact frame)
+  P.flags[disc] = PF_FLASH;
 
   // Starburst streaks, already extended on frame 0 so the freeze frame reads as a star.
   const streaks = Math.min(22, Math.round(7 + 7 * k));
