@@ -138,6 +138,9 @@ export class WitnessBehaviour extends Behaviour {
   /** Tick the failure process began (−1 = alive). */
   private dying = -1;
   private light = 1;
+  /** The arm orb-eyes are all open (the staged wound state, see stageWounds). */
+  private awake = false;
+  private startChecked = false;
   private readonly veil = new WoundVeil();
   /** Root jumps the rig was carried across (instrumentation; see ROOT_JUMP). */
   jumps = 0;
@@ -237,7 +240,9 @@ export class WitnessBehaviour extends Behaviour {
       takesDebrisImpacts: true,
     });
     // the wound light: cyan in the channels, none in the abyss, white-gold everywhere else (never the default magma)
-    const glow = r.layer === 1 ? CYAN : r.layer === 3 ? null : WHITE_GOLD;
+    // (art v3: the arms and the mantle crack DARK, so the wound light gathers on the head and the cuts, not over every limb)
+    const glow =
+      r.layer === 1 ? CYAN : r.layer === 3 || r.kind === 'arm' || r.kind === 'mantle' ? null : WHITE_GOLD;
     (f.world as WorldWithWounds).setFissureGlow?.(body.id, glow);
     f.addRegion(body, r.kind !== 'halo', regrown);
     const part: RenderPart = {
@@ -463,7 +468,7 @@ export class WitnessBehaviour extends Behaviour {
   private eyeUncovered(s: EyeSpot): boolean {
     const reg = this.byIndex[s.cover];
     if (!reg || reg.lost) return true;
-    if (!s.inner) return this.f.world.stats(reg.body.id).massFrac < 0.9;
+    if (!s.inner) return this.awake || this.f.world.stats(reg.body.id).massFrac < 0.9;
     const m = reg.body.map;
     const r = this.W.regions[s.cover]!;
     const cx = Math.floor(s.bx - r.ox);
@@ -502,6 +507,12 @@ export class WitnessBehaviour extends Behaviour {
    */
   override placeRegions(): void {
     const f = this.f;
+    if (!this.startChecked) {
+      this.startChecked = true;
+      // a harness start state ('50' / '10') carves the PRIMARY body; for the Witness that would gut the eye. Heal it and
+      // stage the reference's wounded composition on the regions instead.
+      if (f.world.stats(f.body.id).massFrac < 0.97) this.stageWounds();
+    }
     if (f.tickNo !== this.rigTick) {
       this.rigTick = f.tickNo;
       if (f.facing !== this.facing) {
@@ -608,11 +619,15 @@ export class WitnessBehaviour extends Behaviour {
     const s = this.facing;
     let vx = rig.vx[rb]! * s;
     let vy = rig.vy[rb]!;
-    // a halo arc drifts outward from the eye
+    // a halo arc (or a whole staged arm) drifts outward from the eye
     if (drift > 0) {
       const e = this.eyeCentre();
       const arc = this.host.halo.find((a) => a.body === rb);
-      rig.worldPoint(rb, arc ? arc.mx : 0, arc ? arc.my : 0, this.pt);
+      if (arc) rig.worldPoint(rb, arc.mx, arc.my, this.pt);
+      else {
+        this.pt.x = rig.x[rb]!;
+        this.pt.y = rig.y[rb]!;
+      }
       const dx = this.pt.x * s - e.x;
       const dy = this.pt.y - e.y;
       const l = Math.hypot(dx, dy) || 1;
@@ -694,7 +709,7 @@ export class WitnessBehaviour extends Behaviour {
     const now = this.f.tickNo + 1;
     this.pulse(wr.carapace, dw, now);
     wr.arms.forEach((a, k) => {
-      if (!wr.rig.kinematic[a.bodies[0]!]) this.pulse(a.bodies[0]!, dw * 0.7, now + 8 + 3 * k);
+      if (!wr.rig.kinematic[a.bodies[0]!]) this.pulse(a.bodies[0]!, dw * 0.7, now + 12 + 3 * k);
     });
     wr.halo.forEach((b, k) => {
       if (!wr.rig.kinematic[b]) this.pulse(b, dw * 0.8, now + 16 + 3 * k);
@@ -723,6 +738,52 @@ export class WitnessBehaviour extends Behaviour {
       r.part.wy = t.y;
       r.part.step = t.rot;
     }
+  }
+
+  /**
+   * The Witness's wounded state (harness `state=50` / `state=10`, tests and tools), staged like WJ's reference: the eye is
+   * whole, the upper-left arm has been severed and drifts away whole, two halo arcs are broken off, the carapace is opened
+   * over the second eye (the gold lattice and the eye behind it show), and the arm orb-eyes are awake. Deterministic.
+   */
+  stageWounds(): void {
+    const f = this.f;
+    const W = this.W;
+    f.world.heal(f.body.id, 1, f.seed);
+    const byKey = (k: string): Region | undefined => this.byIndex[W.regions.findIndex((q) => q.key === k)];
+    const arm = byKey('arm1.0');
+    if (arm)
+      for (const ri of W.arms[W.regions[arm.index]!.arm]!.regions) this.severOne(this.byIndex[ri]!, 10);
+    for (const k of ['halo2', 'halo4']) {
+      const r = byKey(k);
+      if (r) this.severOne(r, 12);
+    }
+    // open the carapace (and the channels behind it) over the second eye, upper right
+    const e = this.eyeCentre();
+    for (const k of ['carapace', 'channels']) {
+      const r = byKey(k);
+      if (!r) continue;
+      for (let n = 0; n < 14; n++) {
+        const a = (n / 14) * Math.PI * 2;
+        const d = n % 2 ? 7 : 3;
+        const ev: DamageEvent = {
+          ...this.ev2,
+          type: 'KINETIC',
+          shape: {
+            kind: 'point',
+            x: e.x + (33 + Math.cos(a) * d) * this.facing,
+            y: e.y - 27 + Math.sin(a) * d,
+            r: 7,
+          },
+          energy: 2400,
+          dirX: 0,
+          dirY: 1,
+          sourceMass: 8,
+          params: {},
+        };
+        f.world.applyDamage(r.body.id, ev);
+      }
+    }
+    this.awake = true;
   }
 
   /** Halo arcs still bound to the Witness (the resource). */

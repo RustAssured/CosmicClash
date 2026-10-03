@@ -45,7 +45,7 @@ export const WITNESS_RIG_TUNING: Readonly<WitnessRigTuning> = Object.freeze({
   carapaceHz: 0.6,
   shrineHz: 0.5,
   haloHz: [0.42, 0.5, 0.33, 0.45, 0.38],
-  armRootHz: 0.5,
+  armRootHz: 0.45,
   armHz: 0.5,
   zeta: 0.9,
   armZeta: 0.95,

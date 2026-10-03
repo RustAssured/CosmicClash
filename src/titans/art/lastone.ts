@@ -19,7 +19,7 @@ import { blend } from './color';
 import { ArtCanvas, buildLitRamps, type ShadeParams } from './canvas';
 import { edt, keepLargestComponent } from './field';
 import { bayer8, fbm, hash01, makeWorley, ridged, worley } from './noise';
-import { sdCircle, sdEllipse, sdEllipseRot, sdSegment, sdTaperedCapsule, smax, smin, ssub } from './sdf';
+import { sdCircle, sdEllipse, sdEllipseRot, sdSegment, smax, smin, ssub } from './sdf';
 
 /**
  * THE LAST ONE — an ancient celadon idol: a weathered glazed pod-head with one great eye set in a bevelled socket, a tilted
@@ -797,6 +797,8 @@ export const WITNESS_MATERIALS: readonly MaterialSpec[] = Object.freeze([
   wmat('membrane', 'tendril', W_JADE.slice(2), 40, '#a6eef0'),
   wmat('orb', 'eye', W_GOLD.slice(1), 16, '#fff1c9'),
   wmat('hairline', 'celadon', W_CYAN.slice(1), 120, '#f6fffd', { bond: 46, toughness: 0.15 }),
+  // art v3: the arms' dark lattice body (deep teal, smooth: the glitter is in the specks, not in dither)
+  wmat('shell', 'celadon', W_JADE, 0, '#5fc4c8'),
 ]);
 
 const WID = (key: string): number => {
@@ -878,7 +880,7 @@ const WE = {
   mantleRX: 74,
   mantleRY: 62,
   haloR: 100,
-  haloT: 3.5,
+  haloT: 5.5,
   shrineY: 54,
   /** The pupil is not quite centred and not quite round (it tracks at runtime). */
   pupilDX: 2.5,
@@ -939,6 +941,7 @@ function regionCanvas(x0: number, y0: number, x1: number, y1: number): RegionCan
 function witnessShade(): (Partial<ShadeParams> | undefined)[] {
   const s: (Partial<ShadeParams> | undefined)[] = [];
   s[WID('carapace')] = { contrast: 1.25, bias: -0.1, dither: 0.35, ao: 0.6, rim: 0.3 };
+  s[WID('shell')] = { contrast: 1.1, bias: -0.25, dither: 0.08, ao: 0.3, rim: 0.25 };
   s[WID('vein')] = { contrast: 1.0, dither: 0.2, rim: 0.2, outline: 0 };
   s[WID('hairline')] = { contrast: 0.6, dither: 0.2, rim: 0, outline: 0 };
   s[WID('channel')] = { contrast: 0.8, dither: 0.2, rim: 0, outline: 0.3 };
@@ -1401,7 +1404,7 @@ function paintCarapace(
     let px = Math.cos(a) * r;
     let py = Math.sin(a) * r;
     let branch = rng.int(3) + 2;
-    const glow = k === 4 ? 1 : 0;
+    const glow = 0; // art v3: cyan only glints at the frayed rim (below), never along the veins
     while (r < R * 0.82) {
       a += rng.range(-0.18, 0.18);
       r += 3;
@@ -1443,9 +1446,14 @@ function paintCarapace(
         tone -= 1.3;
         rel -= 1.6;
       }
-      // the plates are domed: lit in their middles
+      // the plates are domed: lit in their middles; gold-flecked (some whole plates bronze), cyan glints at the frayed rim
       rel += 2.2 * Math.min(1, gap / 3);
-      if (worleyOut.id > 0.9) cv.mat[i] = WID('bronze');
+      const fleck = hash01(x, y, seed + 61);
+      if (worleyOut.id > 0.82) cv.mat[i] = WID('bronze');
+      if (fleck > 0.86) {
+        cv.mat[i] = WID('gold');
+        tone = 0.8;
+      } else if (rr > 0.84 && fleck < 0.06) cv.mat[i] = hairline;
       for (let s = 0; s < veinSegs.length; s += 4)
         if (sdSegment(bx, by, veinSegs[s]!, veinSegs[s + 1]!, veinSegs[s + 2]!, veinSegs[s + 3]!) < 0.62) {
           cv.mat[i] = veinGlow[s >> 2] ? hairline : vein;
@@ -1524,7 +1532,9 @@ function paintInterior(
           d -= Math.round(d / (Math.PI * 2)) * Math.PI * 2;
           if (Math.abs(d) * rho < 0.95) on = true;
         }
-        if (Math.abs(rr - (R - 10)) < 0.95 || Math.abs(rr - (R - 3)) < 0.95) on = true;
+        if (Math.abs(rr - (R - 20)) < 0.95 || Math.abs(rr - (R - 12)) < 0.95) on = true;
+        // (art v3: the channels stay inside; through the frayed rim one sees the gold lattice, not a cyan ring)
+        if (rr > R - 11) on = false;
         if (rho < inner + 1.5) on = true; // a collar around the socket keeps the network in one piece
         if (!on) continue;
         cv.mat[i] = channel;
@@ -1644,22 +1654,31 @@ function paintMantle(
   });
 }
 
-/* ---------------------------------------------------------------- the shrine chandelier */
+/* ---------------------------------------------------------------- the hanging city */
 
-/** x, length, root radius, snapped (0 = whole; else the fraction of the length that is left). Uneven; two have snapped. */
-const SPIRES: readonly [number, number, number, number][] = [
-  [-32, 30, 2.0, 0],
-  [-21, 48, 2.5, 0.5],
-  [-11, 58, 2.8, 0],
-  [1, 66, 3.4, 0],
-  [12, 52, 2.8, 0],
-  [22, 40, 2.5, 0],
-  [32, 26, 2.0, 0.6],
+/**
+ * The hanging city under the head (art v3): a small gold collar, from which hang long thin gold strands (beaded with bone)
+ * and three bone spires, the longest strand ending in a light. x, length, kind (0 strand, 1 spire). Uneven on purpose.
+ */
+const SPIRES: readonly [number, number, number][] = [
+  [-31, 36, 0],
+  [-26, 54, 0],
+  [-21, 32, 1],
+  [-16, 64, 0],
+  [-11, 44, 0],
+  [-6, 40, 1],
+  [1, 74, 0],
+  [6, 50, 0],
+  [11, 34, 1],
+  [16, 60, 0],
+  [21, 42, 0],
+  [26, 52, 0],
+  [31, 30, 0],
 ];
-/** Where a spire hangs from the dome (the dome is lowest in the middle). */
-const spireRootY = (x: number): number => WE.shrineY + 8 + 11 * (1 - Math.min(1, Math.abs(x) / 36));
-/** Body y of the longest spire's tip, where the light under the hanging city hangs (drawn at runtime). */
-export const WITNESS_SHRINE_LIGHT_Y = spireRootY(SPIRES[3]![0]) + SPIRES[3]![1];
+/** Where a strand hangs from the collar (the collar is lowest in the middle). */
+const spireRootY = (x: number): number => WE.shrineY + 4 + 2 * (1 - Math.min(1, Math.abs(x) / 34));
+/** Body y of the light at the end of the longest strand (it is matter: a white-gold emissive bead). */
+export const WITNESS_SHRINE_LIGHT_Y = spireRootY(1) + 74 + 2;
 
 function paintShrine(
   ramps: number[][],
@@ -1668,67 +1687,68 @@ function paintShrine(
   parent: number,
 ): WitnessRegion {
   const top = WE.shrineY;
-  const rc = regionCanvas(-46, top - 2, 48, top + 96);
+  const rc = regionCanvas(-40, top - 2, 40, WITNESS_SHRINE_LIGHT_Y + 6);
   const { cv, ox, oy } = rc;
   const gold = WID('gold');
   const bone = WID('bone');
-  const bronze = WID('bronze');
+  const light = WID('lattice');
   for (let y = 0; y < cv.h; y++)
     for (let x = 0; x < cv.w; x++) {
       const bx = x + ox + 0.5;
       const by = y + oy + 0.5;
       const i = y * cv.w + x;
-      // crown: an inverted dome tucked under the carapace, narrowing to a hanging boss
-      const t = clamp01((by - top - 4) / 22);
-      const cone = smax(Math.abs(bx - 1) - lerp(36, 4, t * t), Math.max(top + 4 - by, by - (top + 27)), 2);
-      let d = smin(sdEllipse(bx, by, 0, top + 4, 36, 6.5), cone, 3);
-      let spire = -1;
-      let su = 0;
-      for (let k = 0; k < SPIRES.length; k++) {
-        const [sx, len0, r0, snap] = SPIRES[k]!;
+      let m = 0;
+      let rel = 0;
+      let tone = 0;
+      // the collar: a thin gold band tucked under the head
+      const collar = sdEllipse(bx, by, 0, top + 4, 35, 3.2);
+      if (collar < 0) {
+        m = gold;
+        rel = 6 - Math.abs(by - top - 4);
+        tone = Math.abs(((bx + 40) % 5) - 2.5) < 0.6 ? -1 : 0.3;
+      }
+      // the light: a bright bead at the end of the longest strand
+      if (Math.hypot(bx - 1.5, by - WITNESS_SHRINE_LIGHT_Y) < 3.3) {
+        m = light;
+        rel = 9;
+        tone = 1.5;
+      }
+      for (let k = 0; k < SPIRES.length && m === 0; k++) {
+        const [sx, len, kind] = SPIRES[k]!;
         const ry = spireRootY(sx);
-        const len = snap > 0 ? len0 * snap : len0;
-        // a snapped spire keeps its taper but ends in a jagged break
-        const rTip = snap > 0 ? r0 * (1 - snap) * 0.9 : 0.35;
-        let ds = sdTaperedCapsule(bx, by, sx, ry, r0, sx * 1.12, ry + len, rTip);
-        if (snap > 0) {
-          const cut = ry + len - 0.8 + (hash01(Math.floor(bx * 2), k, seed + 3) - 0.5) * 2.2;
-          ds = smax(ds, by - cut, 0.5);
+        const v = (by - ry) / len;
+        if (v < 0 || v > 1) continue;
+        // a slow, slight curve: strands hang, they are not ruled lines
+        const cx = sx + Math.sin(v * 2.4 + k) * 1.2 * v + 0.5;
+        const half = kind === 1 ? 2.2 * (1 - v) + 0.5 : 0.8;
+        if (Math.abs(bx - cx) > half) continue;
+        const bead = kind === 0 && Math.abs(((by - ry + k * 3) % 13) - 6.5) < 1.1 && Math.abs(bx - cx) < 1.6;
+        m = kind === 1 || bead ? bone : gold;
+        rel = kind === 1 ? 6 * Math.sqrt(Math.max(0, 1 - ((bx - cx) / half) ** 2)) + 2 : 4;
+        tone = kind === 1 ? 0 : 0.6 + (bead ? 0.4 : 0);
+      }
+      // beads stand proud of their strand
+      if (m === 0)
+        for (let k = 0; k < SPIRES.length; k++) {
+          const [sx, len, kind] = SPIRES[k]!;
+          if (kind !== 0) continue;
+          const ry = spireRootY(sx);
+          const v = (by - ry) / len;
+          if (v < 0 || v > 1) continue;
+          const cx = sx + Math.sin(v * 2.4 + k) * 1.2 * v + 0.5;
+          if (Math.abs(((by - ry + k * 3) % 13) - 6.5) < 1.1 && Math.abs(bx - cx) < 1.6) {
+            m = bone;
+            rel = 5;
+            tone = 0.4;
+            break;
+          }
         }
-        if (ds < d) {
-          spire = k;
-          su = clamp01((by - ry) / len0);
-        }
-        d = smin(d, ds, 1.2);
-      }
-      // minor spires between the major ones
-      for (let k = 0; k < SPIRES.length - 1; k++) {
-        const mx = (SPIRES[k]![0] + SPIRES[k + 1]![0]) / 2;
-        const ml = 5 + 5 * hash01(k, 7, seed);
-        const ry = spireRootY(mx) - 1;
-        d = smin(d, sdTaperedCapsule(bx, by, mx, ry, 1.3, mx * 1.08, ry + ml, 0.3), 0.8);
-      }
-      if (d > 0) continue;
-      let m: number;
-      let rel: number;
-      if (spire >= 0 && su > 0.04) {
-        const [sx, , r0] = SPIRES[spire]!;
-        const across = Math.abs(bx - sx * (1 + 0.12 * su)) / Math.max(0.6, r0 * (1 - su));
-        rel = 7 * Math.sqrt(Math.max(0, 1 - across * across)) + 2;
-        // bone spires with gold collars; the centre spire is gold-tipped
-        const band = Math.abs(su - 0.24) < 0.04 || Math.abs(su - 0.5) < 0.03;
-        m = band || (spire === 3 && su > 0.82) ? gold : bone;
-      } else {
-        // the crown: a dark tarnished-bronze dome, ribbed with dead gold where the spires hang from it
-        const rib = Math.abs(((bx + 40) % 7) - 3.5) < 0.8 && by > top + 5;
-        m = rib ? gold : bronze;
-        rel = 9 - Math.abs(bx) * 0.15 + (rib ? 1 : 0);
-      }
+      if (m === 0) continue;
       cv.mat[i] = m;
       cv.relief[i] = Math.max(0.5, rel);
-      cv.tone[i] = (hash01(x, y, seed + 31) - 0.5) * 0.3;
+      cv.tone[i] = tone + (hash01(x, y, seed + 31) - 0.5) * 0.2;
     }
-  return finishRegion(rc, ramps, lighting, null, 0, top + 6, 3, {
+  return finishRegion(rc, ramps, lighting, null, 0, top + 4, 3, {
     key: 'shrine',
     kind: 'shrine',
     pivotX: 0,
@@ -1741,7 +1761,6 @@ function paintShrine(
     segment: -1,
   });
 }
-
 /* ---------------------------------------------------------------- the broken halo */
 
 function paintHaloArc(
@@ -1819,7 +1838,8 @@ function paintHaloArc(
       if (!on) continue;
       cv.mat[i] = gold;
       cv.relief[i] = rel;
-      cv.tone[i] = tick && rho > R ? -1.3 : (hash01(x, y, seed + 13) - 0.5) * 0.4;
+      // bright burnished gold (art v3: the rings must read against the dark arms in front of and behind them)
+      cv.tone[i] = tick && rho > R ? -0.9 : 0.9 + (hash01(x, y, seed + 13) - 0.5) * 0.4;
     }
   const mid = (a0 + a1) / 2;
   return finishRegion(rc, ramps, lighting, null, Math.cos(mid) * R, Math.sin(mid) * R, 2, {
@@ -1911,6 +1931,7 @@ function paintArmSegment(
   const { cv, ox, oy } = rc;
   const mat = {
     plate: WID('carapace'),
+    shell: WID('shell'),
     edge: WID('lattice'),
     speck: WID('gold'),
     sinew: WID('membrane'),
@@ -1951,7 +1972,8 @@ function paintArmSegment(
   /** 'cells': the crescent's half-width at arc length t: thick at the root (it grows from the mantle), broadest early. */
   const crescent = (t: number): number => {
     const u = Math.min(1, t / L);
-    return W * (5.5 * (1 - u) ** 2 + 11 * Math.sin(Math.PI * Math.min(1, u * 1.08)) ** 0.85 + 1.0);
+    // a broad root that tapers hard to a thin, elegant tip
+    return W * (6.2 * (1 - u) ** 1.6 + 6.4 * Math.sin(Math.PI * Math.min(1, u * 1.1)) * (1 - u) ** 0.6 + 0.9);
   };
   const cellArm = (t: number, s: number): ArmCell | null => {
     if (t > L) return null;
@@ -1960,36 +1982,36 @@ function paintArmSegment(
     const u = t / L;
     // across the width: −1 on the OUTER (convex) edge, +1 on the inner edge
     const a = s / r;
-    // the lattice of bulbous cells, in arm-local coordinates (cells run along the limb)
-    worley(t / 4.2 + arm * 31, s / 3.6, seed + 211 + arm, wor, 0.85);
-    const gap = wor.f2 - wor.f1;
+    // the lattice of cells, in arm-local coordinates: small cells in rows along the limb
+    worley(t / 3.6 + arm * 31, s / 3.0, seed + 211 + arm, wor, 0.6);
     const id = wor.id;
     // edges dissolve: whole cells drop out near the rims and toward the tip (they drift away as fx)
-    const edge = Math.max(0, Math.abs(a) - 0.72) / 0.28;
+    const edge = Math.max(0, Math.abs(a) - 0.7) / 0.3;
     const drop = 0.75 * edge + 1.4 * Math.max(0, u - 0.86);
     if (id < drop * 0.8 && Math.abs(a) > 0.35) return null;
+    const across = Math.sqrt(Math.max(0, 1 - a * a));
     // the keen edge: one bright line, only along the outer curve
     if (a < -1 + 1.25 / r && u > 0.06 && u < 0.96) return { m: mat.edge, rel: 6, tone: 1.6 };
-    // half-lidded orb-eyes along the limb, a little outside the centre line, every ~32 px
+    // gold-ringed, half-lidded orb-eyes along the limb, every ~40 px
     const eT = (t + arm * 11) % 40;
-    const eS = s + 0.18 * r;
-    if (u > 0.08 && u < 0.88 && Math.hypot(eT - 20, eS) < 3.4) {
-      const lid = eS < -0.6 || Math.abs(eS) > 1.1; // the upper half is lidded, a slit of iris below
-      const slit = Math.abs(eS - 0.9) < 0.6;
-      return {
-        m: slit ? (Math.abs(eT - 20) < 0.7 ? mat.pupil : mat.iris) : mat.orb,
-        rel: 7,
-        tone: lid ? 0.4 : 0,
-      };
+    const eS = s + 0.12 * r;
+    const ed = Math.hypot(eT - 20, eS);
+    if (u > 0.08 && u < 0.86 && ed < 4.3 && r > 4.5) {
+      if (ed > 3.0) return { m: mat.speck, rel: 7, tone: 1.2 };
+      // the upper half is a heavy lid; a slit of iris shows below it, with a dark point
+      if (eS < 0.3) return { m: mat.orb, rel: 6, tone: -0.4 };
+      return { m: Math.abs(eT - 20) < 0.8 ? mat.pupil : mat.iris, rel: 6, tone: 0.3 };
     }
-    // dark gaps between the cells (matter, so the limb stays one body; they read as cracks of shadow)
-    if (gap < 0.16) return { m: mat.sinew, rel: 0.5 + 1.5 * (1 - a * a), tone: -1.8 };
-    // a bulb: lit in its middle, dark at its own edge; the whole limb lit across its width
-    const bulb = Math.sqrt(Math.max(0, 1 - (wor.f1 * 1.5) ** 2));
-    const across = Math.sqrt(Math.max(0, 1 - a * a));
-    // a sparse scatter of light in the lattice: gold specks and pale celadon cell-tops (the reference's glittering arms)
-    const m = id > 0.965 ? mat.speck : id > 0.9 ? mat.fibre : id > 0.84 ? mat.bronze : mat.plate;
-    return { m, rel: 2 + 3 * bulb + 6 * across, tone: (bulb - 0.6) * 0.8 + (id - 0.5) * 0.4 };
+    // fine rows of bright specks: one pixel at many cell centres, gold or pale celadon (the glitter of the structure)
+    if (wor.f1 < 0.2 && id > 0.3)
+      return { m: id > 0.74 ? mat.speck : mat.fibre, rel: 5 + 4 * across, tone: 1.8 };
+    // the dark body: deep teal, bronze in places, a faint seam between cells; lit across its width, smoothly
+    const seam = wor.f2 - wor.f1 < 0.1;
+    return {
+      m: id < 0.08 ? mat.bronze : mat.shell,
+      rel: 2 + 6 * across,
+      tone: seam ? -0.9 : (id - 0.5) * 0.3,
+    };
   };
   const cell = (t: number, s: number, bay: number): ArmCell | null => {
     if (style === 'cells') return cellArm(t, s);

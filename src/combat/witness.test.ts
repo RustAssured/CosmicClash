@@ -13,7 +13,7 @@ import { getTitanDef, witnessDef } from '@/titans';
 import { createFighter } from './index';
 import type { FighterImpl } from './fighter';
 import type { WitnessBehaviour } from './behaviours/witness';
-import { skipIntro } from './testing/harness';
+import { makeMatch, skipIntro } from './testing/harness';
 
 /** A real match where the Last One is played as the Witness (what `witness=1` selects). */
 function witnessMatch(
@@ -320,6 +320,22 @@ describe('the Witness in game (witness=1)', () => {
     expect(jumpW).toBeLessThan(0.2);
     expect(jumpV).toBeLessThan(60);
     expect(w.regions.length).toBe(regions);
+  });
+
+  it('a harness wound state stages the reference: the eye whole, one arm and two halo arcs gone, the carapace opened, eyes awake', () => {
+    const m = makeMatch({ witness: true, b: 'planet', startState: '50' });
+    skipIntro(m);
+    m.step();
+    const w = m.fighters[0] as FighterImpl;
+    const beh = w.behaviour as unknown as WitnessBehaviour;
+    expect(m.world.stats(w.body.id).massFrac).toBeGreaterThan(0.97);
+    const lost = (beh as unknown as { regions: { kind: string; lost: boolean }[] }).regions.filter(
+      (r) => r.lost,
+    );
+    expect(lost.filter((r) => r.kind === 'arm')).toHaveLength(2);
+    expect(lost.filter((r) => r.kind === 'halo')).toHaveLength(2);
+    expect(beh.openEyes).toBeGreaterThanOrEqual(1);
+    expect(w.view.state).not.toBe('ko');
   });
 
   it('is deterministic (world + rig hashes)', () => {
