@@ -26,7 +26,7 @@ const LOG_MAX = 80;
 const PASSIVE_FROM = 360;
 const PASSIVE_RAMP = 360;
 /** Orbit footwork: the mean gap (ticks) between one AI's own attacks. */
-const ENGAGE_GAP_TICKS = 480;
+const ENGAGE_GAP_TICKS = 600;
 /**
  * Orbit: a blow that takes this share of the AI's own mass (within ~0.5 s of the stagger) makes it regroup for
  * REGROUP_TICKS (+ jitter) before it commits again.
@@ -41,6 +41,15 @@ const STALE_FROM = 480;
 const STALE_RAMP = 600;
 const STALE_CUT = 0.6;
 const LATE_TICKS = 25 * 60;
+/**
+ * Orbit, a round that has gone long presses on: from URGE_FROM ticks into the round the engagement gap shrinks, down to
+ * (1 − URGE_CUT) of itself URGE_RAMP ticks later (rounds should end inside 90 s, by KO, not on the clock).
+ */
+const URGE_FROM = 25 * 60;
+const URGE_RAMP = 35 * 60;
+const URGE_CUT = 0.8;
+/** At full urge a neutral attack's damage term weighs this much more, and its commitment and risk terms this much less. */
+const URGE_WEIGHT = 0.8;
 /** Tidal Draw: after about this many ticks of drawing since its last blow the ring is taken to be full. */
 const DRAW_FULL_TICKS = 300;
 
@@ -219,6 +228,8 @@ export class UtilityAI implements AIController {
   private exchangeTick = 0;
   /** Ticks of Tidal Draw held since the last own blow (the ring fills; it is not visible, so it is estimated). */
   private drawHeld = 0;
+  /** 0..1, how far a long round has gone past URGE_FROM (orbit; set per think). */
+  private urge = 0;
 
   /**
    * Planar orbital footwork (SLICE_PLAN §6): the stick is 2-D thrust and attacks aim straight at the foe. Set by the option, or
@@ -824,6 +835,7 @@ export class UtilityAI implements AIController {
   private think(ctx: AIContext, S: FighterView, F: Snapshot, age: number): void {
     this.lastThink = ctx.tick;
     this.nCands = 0;
+    this.urge = this.orbit ? clamp((ctx.roundTick - URGE_FROM) / URGE_RAMP, 0, 1) : 0;
     // perception noise is re-rolled per think, not per tick (a stable misjudgement, like a human's)
     this.noiseX = this.rng.gauss() * this.P.noisePx;
     this.noiseY = this.rng.gauss() * this.P.noisePx * 0.5;
@@ -1220,13 +1232,19 @@ export class UtilityAI implements AIController {
           let commit = react * (foeIdle ? 0.55 : 0.1);
           if (foeGuards && mi.slot === 'crush') commit -= 0.35; // crushes break guards
           const time = (mi.total / 60) * 0.32;
-          score = per * (0.4 + pers.aggression * 0.55) * 0.85 - time - commit * (0.5 + pers.patience);
+          // a long round (urge): the blow's weight counts for more and its commitment and risk for less, so the fight
+          // ends on heavy blows rather than on the clock
+          const urge = this.urge;
+          score =
+            per * (0.4 + pers.aggression * 0.55) * 0.85 * (1 + URGE_WEIGHT * urge) -
+            time -
+            commit * (0.5 + pers.patience) * (1 - URGE_WEIGHT * urge);
           const risk =
             ((mi.recovery + startupEff) / 100) *
             (1 - p) *
             (0.3 + 0.6 * pers.patience) *
             (1 - 0.5 * pers.retreat);
-          score -= risk;
+          score -= risk * (1 - URGE_WEIGHT * urge);
           if (F.phase === 'startup' || F.phase === 'charge') score -= 0.1; // do not walk into a windup
           // a foe that has done nothing for a long while (idle dummy, AFK, stunned-out) cannot punish anything: fade toward simply
           // maximising damage per second, with no commitment or risk terms
@@ -1367,6 +1385,7 @@ export class UtilityAI implements AIController {
             this.engageGap *
             (1 - 0.75 * (Number.isFinite(quiet) ? quiet : 0)) *
             (1 - STALE_CUT * stale) *
+            (1 - URGE_CUT * clamp((ctx.roundTick - URGE_FROM) / URGE_RAMP, 0, 1)) *
             (ctx.roundTicksLeft < LATE_TICKS ? 0.5 : 1);
           this.nextAttackTick = ctx.tick + Math.round(gap * (0.75 + 0.5 * this.rng.next()));
         }
