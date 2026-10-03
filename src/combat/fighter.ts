@@ -70,6 +70,7 @@ import {
   aimRotation,
   asShape,
   copyShape,
+  distToSegment,
   instantiateTemplate,
   makeFatShape,
   shapeIntersectsDisc,
@@ -135,6 +136,35 @@ const TETHER_SOFT_DY = 140;
  */
 export const CORRECTION_STEP_MAX = 8;
 export const CORE_STEP_MAX = 24;
+/** Slack (px) on a region's bounding disc in the probe's rejection test (cell extents, the sampler's rounding). */
+const REGION_PROBE_MARGIN = 3;
+/** deepestBite: a later tick of the window is a deeper bite only if it reaches this much closer to the foe's core (px). */
+const DEEPER_PX = 4;
+
+/** How far (px) a shape stays from the point (x, y); 0 when the shape covers it. Geometry only, no matter probe. */
+function shapeGap(s: FatShape, x: number, y: number): number {
+  switch (s.kind) {
+    case 'point':
+    case 'field':
+      return Math.max(0, Math.hypot(x - s.x, y - s.y) - s.r);
+    case 'line':
+      return Math.max(0, distToSegment(x, y, s.x0, s.y0, s.x1, s.y1) - s.width * 0.5);
+    case 'cone': {
+      const dx = x - s.x;
+      const dy = y - s.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 1e-6) return 0;
+      const ang = Math.acos(clamp((dx * s.dirX + dy * s.dirY) / d, -1, 1));
+      // inside the aperture: short of or within the range; outside it: the distance to the nearer edge ray
+      if (ang <= s.halfAngle) return Math.max(0, d - s.range);
+      return d * Math.sin(Math.min(Math.PI / 2, ang - s.halfAngle));
+    }
+    case 'ring': {
+      const d = Math.hypot(x - s.x, y - s.y);
+      return d < s.r0 ? s.r0 - d : Math.max(0, d - s.r1);
+    }
+  }
+}
 /** The root's hard arena bounds sit this far inside the arena rectangle (px): sides, top, bottom. */
 const ARENA_MARGIN_X = 36;
 const ARENA_MARGIN_TOP = 90;
@@ -2165,6 +2195,7 @@ export class FighterImpl implements Fighter {
       );
       // a once-per-move blow bites as deep as its own window allows (a lunge carries it further in a few ticks): see deepestBite
       let shape = this.liveShape;
+      this.biteKnown = null;
       if (!(hb.rehit && hb.rehit > 0) && hb.to - at > 1) {
         const deep = this.deepestBite(hb, at, span);
         if (deep) shape = deep;
@@ -2179,6 +2210,8 @@ export class FighterImpl implements Fighter {
           m.hitstop,
           def.slot,
           def.id,
+          1,
+          this.biteKnown,
         )
       ) {
         // a blow that only skimmed the foe's parts (tendrils, moons) stays armed until it reaches the body
@@ -2200,13 +2233,21 @@ export class FighterImpl implements Fighter {
     const m = this.mv;
     const foe = this.foe;
     if (foe.view.intangible) return null;
-    const now = foe.probe(asShape(this.liveShape), this.probeOut).cells;
+    // every probe made here is handed to `strike` (`biteKnown`): the same shape on the same tick, so it is not probed twice
+    const now = foe.probe(asShape(this.liveShape), this.biteNow).cells;
+    this.biteKnown = this.biteNow;
     if (now <= 0) return null;
+    // Look-ahead by geometry, then one real probe: a matter probe of a multi-body foe costs up to ~2 ms (the Witness: every
+    // rig region it covers), so the window's ticks are ranked by how close the shape comes to the foe's core (its anchor),
+    // and only the closest is probed against the foe's matter. A blow that already reaches the core bites as deep as it can.
+    const fx = foe.view.x;
+    const fy = foe.view.y;
+    let bestDepth = shapeGap(this.liveShape, fx, fy);
+    if (bestDepth <= 0) return null;
     const K = Math.min(hb.to - 1 - at, 8);
     const last = m.disp.length - 1;
     const nowEff = Math.min(last, this.effTick());
     const scale = this.lengthScale(hb.reachScale);
-    let best = now;
     let found = false;
     for (let k = 1; k <= K; k++) {
       const u = span > 1 ? (at + k - hb.from) / (span - 1) : 0;
@@ -2214,15 +2255,37 @@ export class FighterImpl implements Fighter {
       // the lunge carries the shape along the attack axis
       const d = m.disp[Math.min(last, nowEff + k)]! - m.disp[nowEff]!;
       translateShape(this.candShape, d * this.aimUx, d * this.aimUy);
-      const c = foe.probe(asShape(this.candShape), this.probeOut).cells;
-      if (c > best * 1.12) {
-        best = c;
+      const g = shapeGap(this.candShape, fx, fy);
+      if (g < bestDepth - DEEPER_PX) {
+        bestDepth = g;
         copyShape(this.deepShape, asShape(this.candShape));
         found = true;
       }
     }
-    return found ? this.deepShape : null;
+    if (!found) return null;
+    if (foe.probe(asShape(this.deepShape), this.biteCand).cells <= now * 1.12) return null;
+    this.biteKnown = this.biteCand;
+    return this.deepShape;
   }
+
+  /** deepestBite's probes of the current and the chosen look-ahead shape, and which one `strike` may reuse this tick. */
+  private readonly biteNow: OverlapResult = {
+    cells: 0,
+    x: NaN,
+    y: NaN,
+    nearestX: NaN,
+    nearestY: NaN,
+    coverage: 0,
+  };
+  private readonly biteCand: OverlapResult = {
+    cells: 0,
+    x: NaN,
+    y: NaN,
+    nearestX: NaN,
+    nearestY: NaN,
+    coverage: 0,
+  };
+  private biteKnown: OverlapResult | null = null;
 
   /**
    * World shape of hitbox `k` of the current move at tick `at` of the active phase (0 = first active tick), for behaviours'
@@ -2253,12 +2316,14 @@ export class FighterImpl implements Fighter {
     slot: MoveSlot,
     moveId: string,
     energyMul = 1,
+    known: OverlapResult | null = null,
   ): boolean {
     const foe = this.foe;
     if (foe.view.intangible) return false;
     // depth prototype: bodies far apart in depth pass each other
     if (this.zdepth && Math.abs(this.z - foe.view.z) > ZDEPTH.collide) return false;
-    const ov = foe.probe(asShape(shape), this.ovTmp);
+    // `known`: this exact shape was already probed against the foe this tick (deepestBite)
+    const ov = known ?? foe.probe(asShape(shape), this.ovTmp);
     if (ov.cells <= 0) return false;
 
     copyShape(this.evShape, asShape(shape));
@@ -2460,6 +2525,15 @@ export class FighterImpl implements Fighter {
     const o = this.regionOv;
     let best = r.cells;
     for (const b of this.regions) {
+      // cheap rejection: a region's matter lies within the disc round its anchor that holds its whole map at any rotation
+      // (plus its row shear); a shape that misses the disc cannot touch it, and the world's overlap would return 0 anyway
+      const t = b.transform;
+      const m = b.map;
+      const reach =
+        Math.hypot(Math.max(t.anchorX, m.w - t.anchorX), Math.max(t.anchorY, m.h - t.anchorY)) +
+        Math.abs(t.lean) +
+        REGION_PROBE_MARGIN;
+      if (!shapeIntersectsDisc(shape, t.x, t.y, reach)) continue;
       this.world.overlap(b.id, shape, o);
       if (o.cells <= 0) continue;
       const n = r.cells + o.cells;

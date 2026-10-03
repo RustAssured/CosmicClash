@@ -117,7 +117,8 @@ describe('the Witness in game (witness=1)', () => {
         const ev: DamageEvent = {
           type: 'KINETIC',
           shape: { kind: 'point', x: t.x + 30, y: t.y - 20, r: 6 },
-          energy: 1100,
+          // the same effective blow whatever the balance pass sets: receive divides incoming energy by durability
+          energy: 1100 * ((w.def as { balance?: { durability?: number } }).balance?.durability ?? 1),
           dirX: 0,
           dirY: 1,
           duration: 1,

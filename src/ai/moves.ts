@@ -98,6 +98,59 @@ function travel(
   return x;
 }
 
+/**
+ * The model of a move whose hit volumes come from the live body rather than JSON hitboxes (the Witness's kit): a union box
+ * (facing +1, px from the anchor), the window in which any volume is live (ticks from the first active tick), and what a
+ * clean connection is worth. A move may publish its own as `extra.aiReach` (one descriptor, or one per aim; proposal 167);
+ * otherwise the stand-ins below apply. The AI learns the real yield against each foe (`damageLearned`), so these only have
+ * to put the move in the right place and order of magnitude.
+ */
+export interface AiReach {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  from: number;
+  to: number;
+  energy: number;
+  line?: { x0: number; y0: number; x1: number; y1: number; width: number };
+  beam?: boolean;
+  projectile?: boolean;
+}
+
+/**
+ * Stand-ins derived from `src/combat/behaviours/witnessKit.ts` (c9e0b9b), keyed by `extra.witness`:
+ *  - halo: five arcs (radius 60 round the eye) swing through the lane and each sheds a shard down the attack axis at
+ *    9 px/tick for 22 ticks, launched at move tick 12 + 3k (110 energy per shard, 90 per arc that touches);
+ *  - sweep (up / forward): the arm blades (tips ≈ 120 px from the eye, 440 energy each) sweep the front during the active
+ *    phase and the first 60 % of recovery;
+ *  - revelation: 3 + open-eye gaze beams of 276 px fanned ±0.65 rad (± a slow 0.35 rad turn) round the aim, 70 energy every
+ *    6 ticks, each landing beam laying a 170-energy fracture.
+ */
+const KIT_REACH: Record<string, AiReach> = {
+  // measured against the Planet (D30 world, AI L3): a halo contact takes ~0.36x of a sweep contact's matter
+  halo: { x0: -20, y0: -45, x1: 250, y1: 45, from: 2, to: 36, energy: 260, projectile: true },
+  sweep: { x0: 10, y0: -120, x1: 135, y1: 110, from: 0, to: 34, energy: 700 },
+  revelation: {
+    x0: 20,
+    y0: -150,
+    x1: 276,
+    y1: 150,
+    from: 0,
+    to: 84,
+    energy: 1100,
+    line: { x0: -2, y0: -1, x1: 276, y1: 0, width: 60 },
+    beam: true,
+  },
+};
+
+function standInReach(m: MoveDef, aim: AimDir): AiReach | null {
+  const own = m.extra?.['aiReach'] as AiReach | Partial<Record<AimDir, AiReach>> | undefined;
+  if (own) return 'x0' in own ? (own as AiReach) : ((own as Partial<Record<AimDir, AiReach>>)[aim] ?? null);
+  const kit = m.extra?.['witness'] as string | undefined;
+  return kit ? (KIT_REACH[kit] ?? null) : null;
+}
+
 export function buildMoveInfos(def: TitanDef): MoveInfo[] {
   const out: MoveInfo[] = [];
   const reach = def.attributes.reach / 5;
@@ -144,7 +197,21 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
         hitFrom = Math.min(hitFrom, hb.from);
         hitTo = Math.max(hitTo, hb.to);
       }
-      const has = v.hitboxes.length > 0 && ext.x1 > -1e8;
+      let has = v.hitboxes.length > 0 && ext.x1 > -1e8;
+      // a move whose volumes come from the live body (no JSON hitboxes) is judged by its stand-in reach
+      const stand = has ? null : standInReach(m, aim);
+      if (stand) {
+        has = true;
+        ext.x0 = stand.x0;
+        ext.y0 = stand.y0;
+        ext.x1 = stand.x1;
+        ext.y1 = stand.y1;
+        energy = stand.energy;
+        hitFrom = stand.from;
+        hitTo = stand.to;
+        line = stand.line ?? null;
+        beam = stand.beam ?? false;
+      }
       out.push({
         idx: out.length,
         def: m,
@@ -162,7 +229,7 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
         energy,
         type,
         beam,
-        projectile: m.tags.includes('projectile') || m.tags.includes('swarm'),
+        projectile: m.tags.includes('projectile') || m.tags.includes('swarm') || !!stand?.projectile,
         heavy: m.slot === 'crush' || m.slot === 'ultimate' || energy >= 700,
         lungeBefore: travel(v.movement, fr.startup),
         lungeDuring: travel(v.movement, fr.startup + fr.active, fr.startup),

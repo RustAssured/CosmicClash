@@ -41,6 +41,8 @@ const STALE_FROM = 480;
 const STALE_RAMP = 600;
 const STALE_CUT = 0.6;
 const LATE_TICKS = 25 * 60;
+/** Tidal Draw: after about this many ticks of drawing since its last blow the ring is taken to be full. */
+const DRAW_FULL_TICKS = 300;
 
 interface Cand {
   score: number;
@@ -58,6 +60,7 @@ interface Cand {
     | 'ultimate'
     | 'feint'
     | 'probe'
+    | 'draw'
     | 'escape';
   info: MoveInfo | null;
   /** The model's own damage estimate for the move, before any learned correction (for the after-the-fact comparison). */
@@ -100,6 +103,11 @@ interface Persona {
   reserve: number;
   /** Preferred fighting range (px between anchors). */
   range: number;
+  /**
+   * Titans with a gravity well on Btn.GRAVITY (the Planet's Tidal Draw): how much it values drawing wreckage into its ring.
+   * `weights.draw`; the Planet defaults to 1 until its JSON carries the weight.
+   */
+  draw: number;
 }
 
 function personaOf(def: TitanDef): Persona {
@@ -119,6 +127,7 @@ function personaOf(def: TitanDef): Persona {
     reserve: g('reserve', 0),
     // aggressive titans fight closer; zoners keep their distance; reach matters
     range: 120 + def.attributes.reach * 14 + zoning * 110 - aggression * 50,
+    draw: g('draw', def.id === 'planet' ? 1 : 0),
   };
 }
 
@@ -208,6 +217,8 @@ export class UtilityAI implements AIController {
   private struckTick = -1e9;
   /** Last tick either side was seen staggered (round start counts): the engagement gap shrinks in a long lull. */
   private exchangeTick = 0;
+  /** Ticks of Tidal Draw held since the last own blow (the ring fills; it is not visible, so it is estimated). */
+  private drawHeld = 0;
 
   /**
    * Planar orbital footwork (SLICE_PLAN §6): the stick is 2-D thrust and attacks aim straight at the foe. Set by the option, or
@@ -293,6 +304,7 @@ export class UtilityAI implements AIController {
     this.regroupUntil = 0;
     this.struckTick = -1e9;
     this.exchangeTick = 0;
+    this.drawHeld = 0;
   }
 
   /**
@@ -318,6 +330,8 @@ export class UtilityAI implements AIController {
       // a new own move began (a cancel closes the previous one's books early)
       if (this.ownKey >= 0) this.closeOwn();
       this.ownKey = this.moveIndex.get(S.moveId) ?? -1;
+      // a blow spends (or scatters) what the well gathered
+      if (S.moveSlot === 'strike' || S.moveSlot === 'crush') this.drawHeld = 0;
       this.ownLoss = 0;
       this.ownTicks = 0;
       this.ownTail = 0;
@@ -385,6 +399,7 @@ export class UtilityAI implements AIController {
       this.exchangeTick = ctx.tick;
       this.regroupUntil = 0;
       this.hurt = 0;
+      this.drawHeld = 0;
       return;
     }
     if (this.pendIdx >= 0 && ctx.tick >= this.pendUntil) this.settleAttack(F, ctx.tick);
@@ -432,6 +447,7 @@ export class UtilityAI implements AIController {
     else if (busy && this.plan.kind === 'attack' && !this.plan.active) this.considerFeint(ctx, S, F, age);
 
     this.plan.run(out, dx, dy, this.orbit);
+    if (out.held & Btn.GRAVITY) this.drawHeld++;
   }
 
   /**
@@ -1045,6 +1061,31 @@ export class UtilityAI implements AIController {
       'let them come',
     );
     w.ticks = 8 + Math.round(this.rng.next() * 10);
+    // Tidal Draw (a gravity well on R1): between exchanges, with wreckage about, deepen the well and pull it into the ring
+    // (ammunition for a moonless Moon Slam, armour against the next blow, the foe's severed matter denied to it). The world
+    // slows while it draws, so only with the foe out of reach and nothing winding up.
+    if (this.persona.draw > 0 && vuln <= 0 && !foeWindup) {
+      const wreck = clamp((2 - S.bodyStats.massFrac - F.massFrac) / 0.3, 0, 1);
+      const moonsOut = S.resourceMax > 0 ? 1 - S.resource / S.resourceMax : 0;
+      const safe = clamp((dist - range) / 150, 0, 1);
+      const full = clamp(this.drawHeld / DRAW_FULL_TICKS, 0, 1);
+      if (wreck > 0.15 && safe > 0 && full < 1) {
+        const dr = this.add(
+          'tidal draw',
+          'space',
+          'draw',
+          this.persona.draw *
+            (0.08 + 0.4 * wreck * (0.5 + 0.5 * moonsOut)) *
+            safe *
+            (1 - full) *
+            (this.P.predicts ? 1 : 0.5) +
+            (resting ? 0.1 : 0),
+          `wreckage ${(wreck * 100).toFixed(0)}%, moons out ${(moonsOut * 100).toFixed(0)}%`,
+        );
+        dr.ticks = 50 + Math.round(this.rng.next() * 50);
+        dr.dirY = this.rng.chance(0.5) ? 1 : -1;
+      }
+    }
     // a pre-emptive guard only when an attack is genuinely expected AND the foe is close enough to deliver it
     if (dist < 240 && predAttack > 0.5 && vuln <= 0 && (F.moveId !== null || F.state === 'move')) {
       const g2 = this.add(
@@ -1283,6 +1324,10 @@ export class UtilityAI implements AIController {
       case 'retreat':
         p.add(0, Steer.Away, Math.max(6, c.ticks));
         break;
+      case 'draw':
+        // hold the well while drifting round the foe (the world is slowed: it does not try to go anywhere)
+        p.add(Btn.GRAVITY, this.orbit ? Steer.Circle : Steer.Neutral, Math.max(20, c.ticks), c.dirY);
+        break;
       case 'probe':
         // a committed-looking step in, then back out to the standoff
         p.add(0, Steer.Toward, c.ticks, 0, 0, 1);
@@ -1357,7 +1402,10 @@ export class UtilityAI implements AIController {
           );
           p.add(0, Steer.Toward, walk, 0, 0, 1);
         }
-        p.add(btn, Steer.Fixed, hold, 0, sy);
+        // a charged signature from a titan with a well (Comet Shepherd): deepen the well through the hold, so the comet falls in
+        // sooner and loose wreckage joins the ring
+        const well = this.persona.draw > 0 && mi.slot === 'signature' && mi.chargeMax > 0 ? Btn.GRAVITY : 0;
+        p.add(btn | well, Steer.Fixed, hold, 0, sy);
         // aimed variants need the stick held only while pressing; then let the fighter finish on its own
         if (
           this.P.feints &&
