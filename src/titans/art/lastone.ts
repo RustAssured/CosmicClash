@@ -915,12 +915,12 @@ interface ArmDef {
  * Two rigid pieces per arm.
  */
 const ARMS: readonly ArmDef[] = [
-  { c: [40, -34, 80, -122, 160, -112, 178, -54], joints: [0, 0.5], w: 1.15 },
-  { c: [-40, -30, -86, -114, -166, -98, -180, -40], joints: [0, 0.48], w: 1.1 },
-  { c: [52, 2, 110, -30, 172, -12, 152, 42], joints: [0, 0.5], w: 1.0 },
-  { c: [-50, 6, -104, -22, -164, 6, -146, 54], joints: [0, 0.52], w: 0.95 },
-  { c: [38, 44, 84, 70, 142, 96, 124, 128], joints: [0, 0.5], w: 0.95 },
-  { c: [-34, 46, -74, 78, -128, 110, -104, 132], joints: [0, 0.5], w: 0.9 },
+  { c: [40, -34, 82, -130, 148, -116, 172, -50], joints: [0, 0.5], w: 1.1 },
+  { c: [-40, -30, -104, -102, -140, -118, -178, -62], joints: [0, 0.47], w: 1.05 },
+  { c: [52, 2, 104, -40, 162, 8, 152, 48], joints: [0, 0.5], w: 1.0 },
+  { c: [-50, 6, -98, -8, -150, -32, -156, 36], joints: [0, 0.53], w: 0.95 },
+  { c: [38, 44, 78, 88, 150, 72, 128, 124], joints: [0, 0.5], w: 0.95 },
+  { c: [-34, 46, -86, 64, -110, 118, -92, 130], joints: [0, 0.5], w: 0.9 },
 ];
 
 interface RegionCanvas {
@@ -1638,7 +1638,7 @@ function paintMantle(
       cv.mat[i] = seam && hash01(x, y, seed + 5) > 0.5 ? vein : mantle;
       const e = -sdEllipse(wx, wy, 0, cy, RX, RY);
       cv.relief[i] = 1 + Math.min(4, e * 0.15) + (seam ? -0.5 : 0.8 * (1 - wor.f1));
-      cv.tone[i] = seam ? -0.4 : 0.2;
+      cv.tone[i] = seam ? -1.6 : -1.1; // barely visible: a shadow the arms grow out of
     }
   return finishRegion(rc, ramps, lighting, null, RX - 10, cy, 3, {
     key: 'mantle',
@@ -1915,7 +1915,7 @@ function paintArmSegment(
   const joint = samplesAt(S, u0);
   const jointR = (seg === 0 ? 5.4 : 4.6 - 0.5 * seg) * W;
   // bounding box of this segment's samples (the broad 'cells' crescents need a wider margin)
-  const margin = style === 'cells' ? 19 * W : 11;
+  const margin = style === 'cells' ? 24 * W : 11;
   let x0 = joint.x - jointR;
   let y0 = joint.y - jointR;
   let x1 = joint.x + jointR;
@@ -1972,14 +1972,26 @@ function paintArmSegment(
   /** 'cells': the crescent's half-width at arc length t: thick at the root (it grows from the mantle), broadest early. */
   const crescent = (t: number): number => {
     const u = Math.min(1, t / L);
-    // a broad root that tapers hard to a thin, elegant tip
-    return W * (6.2 * (1 - u) ** 1.6 + 6.4 * Math.sin(Math.PI * Math.min(1, u * 1.1)) * (1 - u) ** 0.6 + 0.9);
+    // beefy all round (WJ): a broad root, a broad belly, a blunt rounded end; a swelling and a narrowing along the length
+    const base =
+      W * (5.5 * (1 - u) ** 1.3 + 8.5 * Math.sin(Math.PI * Math.min(1, u * 1.05)) ** 0.8 + 3 * (1 - u) + 2.6);
+    return base * (1 + 0.16 * Math.sin(u * Math.PI * 2.6 + arm * 1.9));
   };
-  const cellArm = (t: number, s: number): ArmCell | null => {
-    if (t > L) return null;
-    const r = crescent(t);
+  /** The limb's own centre wanders off the curve as it grows: a slight S or kink, different per arm. */
+  const wander = (t: number): number => {
+    const u = Math.min(1, t / L);
+    return W * 2.4 * u * Math.sin(u * Math.PI * 1.7 + arm * 1.3);
+  };
+  const cellArm = (t: number, s0: number): ArmCell | null => {
+    const s = s0 - wander(t);
+    if (t > L) {
+      // a blunt, rounded end (no thin tip)
+      const re = crescent(L);
+      if (Math.hypot(t - L, s) > re) return null;
+    }
+    const r = t > L ? Math.sqrt(Math.max(1, crescent(L) ** 2 - (t - L) ** 2)) : crescent(t);
     if (Math.abs(s) > r) return null;
-    const u = t / L;
+    const u = Math.min(1, t / L);
     // across the width: −1 on the OUTER (convex) edge, +1 on the inner edge
     const a = s / r;
     // the lattice of cells, in arm-local coordinates: small cells in rows along the limb
@@ -1987,7 +1999,7 @@ function paintArmSegment(
     const id = wor.id;
     // edges dissolve: whole cells drop out near the rims and toward the tip (they drift away as fx)
     const edge = Math.max(0, Math.abs(a) - 0.7) / 0.3;
-    const drop = 0.75 * edge + 1.4 * Math.max(0, u - 0.86);
+    const drop = 0.75 * edge + 0.6 * Math.max(0, u - 0.86);
     if (id < drop * 0.8 && Math.abs(a) > 0.35) return null;
     const across = Math.sqrt(Math.max(0, 1 - a * a));
     // the keen edge: one bright line, only along the outer curve

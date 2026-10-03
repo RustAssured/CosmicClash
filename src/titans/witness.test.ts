@@ -170,7 +170,7 @@ describe('The Witness painter v2 (rest pose, region bodies)', () => {
     const ratioHalo = Math.min(...haloMid) / maxR('carapace');
     expect(ratioHalo).toBeGreaterThanOrEqual(1.35);
     expect(ratioHalo).toBeLessThanOrEqual(1.8);
-    expect(W.cells).toBeLessThanOrEqual(48000);
+    expect(W.cells).toBeLessThanOrEqual(52000);
   });
 
   it('the eye is the KO core: its anchor is the (off-centre) pupil, with the largest core radius', () => {

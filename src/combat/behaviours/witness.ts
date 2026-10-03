@@ -709,7 +709,7 @@ export class WitnessBehaviour extends Behaviour {
     const now = this.f.tickNo + 1;
     this.pulse(wr.carapace, dw, now);
     wr.arms.forEach((a, k) => {
-      if (!wr.rig.kinematic[a.bodies[0]!]) this.pulse(a.bodies[0]!, dw * 0.7, now + 12 + 3 * k);
+      if (!wr.rig.kinematic[a.bodies[0]!]) this.pulse(a.bodies[0]!, dw * 0.7, now + 15 + 3 * k);
     });
     wr.halo.forEach((b, k) => {
       if (!wr.rig.kinematic[b]) this.pulse(b, dw * 0.8, now + 16 + 3 * k);
