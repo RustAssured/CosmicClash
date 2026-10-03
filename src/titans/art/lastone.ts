@@ -2258,9 +2258,9 @@ export function witnessDef(def: TitanDef): TitanDef {
     },
     ui: { ...def.ui, tagline: 'The more it breaks, the more it sees.' },
     moves: witnessMoves(def.moves),
-    // D30(3) (S3's balance pass, proposal 164): the Witness's blows carry 3× energy (the knob's ceiling) and it takes blows at
-    // 1/2.6, so its heavy moves remove matter per hit within 2× of the Planet's; the Last One's own block is unchanged
-    ...({ balance: { power: 3, durability: 2.6 } } as object),
+    // S3's balance pass (D30(3), proposal 164; re-tuned for the v3 Witness, whose bigger body lands more): its blows carry 3×
+    // energy (it shears slabs off the crust: D1) and it takes blows at full strength; the Last One's block is unchanged
+    ...({ balance: { power: 3, durability: 1.0 } } as object),
     art: {
       w: eye.w,
       h: eye.h,
