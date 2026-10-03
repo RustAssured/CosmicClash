@@ -159,6 +159,30 @@ planet-scale detail at 1× / 3× / 4×).
   matter?
 - **Arenas:** does the space feel occupied? do the comets and debris change how you fight?
 
+## Addendum: Witness v3 (after Gate C, WJ's concept sheet)
+
+WJ kept D30, then asked for the Witness to match `docs/concept/witness-mouth.html` ("Proposed" / "Wounded").
+- **The body:**
+  - six broad, organic crescent arms (two rigid pieces each) with a cellular shell, gold specks and gold-ringed orb-eyes;
+  - a dark mantle;
+  - a gold-flecked mosaic head with a burning socket ring;
+  - a gold-strand hanging city and a thicker three-ring halo;
+  - about 2.25× the Planet tall.
+- **A staged wounded state** (harness `state=50`) matches the reference composition.
+- **Framing and contact for the bigger body (S1):**
+  - the camera frames full bodies; WJ likes it overflowing the screen;
+  - contact uses the core plus 30 % of limb reach, so over/under passes work.
+- **Rebalanced (S3):** Witness power 3 / durability 1.0, Planet 0.95 / 1.25.
+  - **Witness 45 – Planet 55 matches, rounds 122–125** (100 fights, L3).
+  - Rounds L3/L4 median 55–56 s, timeouts 3.4–4.9 %.
+  - A config that was dead even (51–49) cut the Witness's power and turned its Sweep's slabs to dust, so it was rejected for D1.
+- **Open for Phase 3:**
+  - contacts per minute are about 13 (target 8–11);
+  - a per-body slab ledger, because the in-fight D1 share swings 0.14–0.51 between seed sets;
+  - the arms' longer downward sweep and denser glitter.
+
+Comparisons: `docs/gallery/wip/witness-v3-compare.png` and `witness-v3-arms.png`.
+
 ## 7. Checks
 
 - **Full suite: 1039 / 1039 tests in 88 files**; `tsc`, ESLint and Prettier are clean.
