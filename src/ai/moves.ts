@@ -119,18 +119,19 @@ export interface AiReach {
 }
 
 /**
- * Stand-ins derived from `src/combat/behaviours/witnessKit.ts` (c9e0b9b), keyed by `extra.witness`:
- *  - halo: five arcs (radius 60 round the eye) swing through the lane and each sheds a shard down the attack axis at
- *    9 px/tick for 22 ticks, launched at move tick 12 + 3k (110 energy per shard, 90 per arc that touches);
- *  - sweep (up / forward): the arm blades (tips ≈ 120 px from the eye, 440 energy each) sweep the front during the active
- *    phase and the first 60 % of recovery;
+ * Stand-ins derived from `src/combat/behaviours/witnessKit.ts` and the v3 Witness (f4e48d6), keyed by `extra.witness`:
+ *  - halo: five arcs (radius 100 round the eye) swing through the lane and each sheds a shard AT THE FOE at 9 px/tick for
+ *    34 ticks, launched at move tick 12 + 3k (110 energy per shard, 90 per arc that touches): the volley converges on the
+ *    foe from a ±100 px spread and reaches ≈ 300 px;
+ *  - sweep (up / forward): the front arm blades (six crescent arms, tips ≈ 185 px from the eye, 440 energy each) sweep the
+ *    front during the active phase and the first 60 % of recovery;
  *  - revelation: 3 + open-eye gaze beams of 276 px fanned ±0.65 rad (± a slow 0.35 rad turn) round the aim, 70 energy every
  *    6 ticks, each landing beam laying a 170-energy fracture.
  */
 const KIT_REACH: Record<string, AiReach> = {
-  // measured against the Planet (D30 world, AI L3): a halo contact takes ~0.36x of a sweep contact's matter
-  halo: { x0: -20, y0: -45, x1: 250, y1: 45, from: 2, to: 36, energy: 260, projectile: true },
-  sweep: { x0: 10, y0: -120, x1: 135, y1: 110, from: 0, to: 34, energy: 700 },
+  // aimed shards land more of the volley than the old parallel ones (~3 of 5 against the Planet): 330
+  halo: { x0: -20, y0: -100, x1: 300, y1: 100, from: 2, to: 50, energy: 330, projectile: true },
+  sweep: { x0: 30, y0: -125, x1: 185, y1: 135, from: 0, to: 34, energy: 700 },
   revelation: {
     x0: 20,
     y0: -150,

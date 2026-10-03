@@ -31,7 +31,7 @@ import {
 import { createAudioEngine, type AudioEngineExt } from '@/audio';
 import { createAI } from '@/ai';
 import { createFighter } from '@/combat';
-import { createCamera, createLoop, type Loop } from '@/engine';
+import { cameraTargetOf, createCamera, createLoop, type Loop } from '@/engine';
 import { createInputManager } from '@/input';
 import { createMatterWorld, warmUp } from '@/matter';
 import { createRenderer, type DebuggableRenderer } from '@/render';
@@ -540,11 +540,8 @@ export class App {
     const v0 = m.fighters[0].view;
     const v1 = m.fighters[1].view;
     this.camera.tick(
-      {
-        a: { x: v0.x, y: v0.y, hw: (v0.boundsX1 - v0.boundsX0) / 2, hh: (v0.boundsY1 - v0.boundsY0) / 2 },
-        b: { x: v1.x, y: v1.y, hw: (v1.boundsX1 - v1.boundsX0) / 2, hh: (v1.boundsY1 - v1.boundsY0) / 2 },
-        arena: m.arena,
-      },
+      // frame the live bounds (arms and hanging city included), not the anchors
+      { a: cameraTargetOf(v0), b: cameraTargetOf(v1), arena: m.arena },
       this.cameraEvents(ev),
     );
     for (let i = 0; i < ev.length; i++) {

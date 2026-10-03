@@ -9,6 +9,7 @@ import {
   type ArenaInfo,
   type CameraApi,
   type CameraState,
+  type CameraTarget,
   type CameraTargets,
   type SimEvent,
   type ViewRect,
@@ -106,6 +107,25 @@ export const DEFAULT_CAMERA_TUNING: Readonly<CameraTuning> = {
   woundWeight: 0.3,
   woundTicks: 72,
 };
+
+/**
+ * What the camera frames for a fighter: the centre and half extents of its LIVE BOUNDS (arms, halo and hanging city
+ * included), not its anchor. A body need not hang symmetrically round its anchor (the Witness's eye sits high in a 255 px
+ * tall body), and a box centred on the anchor crops whatever hangs further on the far side.
+ */
+export function cameraTargetOf(v: {
+  boundsX0: number;
+  boundsY0: number;
+  boundsX1: number;
+  boundsY1: number;
+}): CameraTarget {
+  return {
+    x: (v.boundsX0 + v.boundsX1) / 2,
+    y: (v.boundsY0 + v.boundsY1) / 2,
+    hw: (v.boundsX1 - v.boundsX0) / 2,
+    hh: (v.boundsY1 - v.boundsY0) / 2,
+  };
+}
 
 const DT = 1 / 60;
 /** Critically damped: (1 + ωh)·e^(−ωh) = ½ at t = h  ⇒  ω·h ≈ 1.6783. */
@@ -546,22 +566,6 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
         woundT--;
       }
 
-      // ---- both fighters must stay on screen while the framing leans toward the active one ----
-      const left = Math.min(a.x - a.hw, b.x - b.hw);
-      const right = Math.max(a.x + a.hw, b.x + b.hw);
-      if (right - left <= W - 2 * T.marginX) {
-        tx = clamp(tx, right + T.marginX - W / 2, left - T.marginX + W / 2);
-      } else {
-        tx = (left + right) / 2; // cannot fit with margins: centre the union so both are clipped equally
-      }
-      const top = Math.min(a.y - a.hh, b.y - b.hh);
-      const bottom = Math.max(a.y + a.hh, b.y + b.hh);
-      if (bottom - top <= H - 2 * T.marginY) {
-        ty = clamp(ty, bottom + T.marginY - H / 2, top - T.marginY + H / 2);
-      } else {
-        ty = (top + bottom) / 2;
-      }
-
       // ---- director focus (ultimate choreography) ----
       let zoomTarget = 0;
       const f = targets.focus;
@@ -592,12 +596,45 @@ export function createCamera(tuning: Partial<CameraTuning> = {}): CameraApi {
       const kz = 1 - Math.pow(0.5, DT / 0.3);
       zoomBias += (zoomTarget - zoomBias) * kz;
 
+      // ---- both fighters (their whole bodies) stay on screen, whatever the lean, the wound or the director wants: the
+      // constraint comes last ----
+      const left = Math.min(a.x - a.hw, b.x - b.hw);
+      const right = Math.max(a.x + a.hw, b.x + b.hw);
+      if (right - left <= W - 2 * T.marginX) {
+        tx = clamp(tx, right + T.marginX - W / 2, left - T.marginX + W / 2);
+      } else {
+        tx = (left + right) / 2; // cannot fit with margins: centre the union so both are clipped equally
+      }
+      const top = Math.min(a.y - a.hh, b.y - b.hh);
+      const bottom = Math.max(a.y + a.hh, b.y + b.hh);
+      if (bottom - top <= H - 2 * T.marginY) {
+        ty = clamp(ty, bottom + T.marginY - H / 2, top - T.marginY + H / 2);
+      } else {
+        ty = (top + bottom) / 2;
+      }
+
       clampCentre(tx, ty, arena, centreTmp);
       springStep(sx, centreTmp.x, omegaX, DT);
       springStep(sy, centreTmp.y, omegaY, DT);
       // A jump of more than 96 px in one tick is a teleport (round reset, scripted move), not a launch: the renderer treats it the same way.
-      if (Math.max(Math.abs(vax), Math.abs(vay), Math.abs(vbx), Math.abs(vby)) * DT > 96)
+      if (Math.max(Math.abs(vax), Math.abs(vay), Math.abs(vbx), Math.abs(vby)) * DT > 96) {
         teleportCooldown = 45;
+        // a teleport that leaves a fighter outside the view is a cut, and the view cuts with it (a crane chasing a cut
+        // leaves a titan off screen for half a second, e.g. a training dummy rebuilt at its start mark)
+        const off = (t: CameraTargets['a']): boolean =>
+          t.x - t.hw < sx.x - W / 2 ||
+          t.x + t.hw > sx.x + W / 2 ||
+          t.y - t.hh < sy.x - H / 2 ||
+          t.y + t.hh > sy.x + H / 2;
+        if (off(a) || off(b)) {
+          sx.x = centreTmp.x;
+          sx.v = 0;
+          sy.x = centreTmp.y;
+          sy.v = 0;
+          lookX = 0;
+          lookY = 0;
+        }
+      }
       if (teleportCooldown > 0) teleportCooldown--;
       else edgeSafety(a, b, vax, vay, vbx, vby);
 

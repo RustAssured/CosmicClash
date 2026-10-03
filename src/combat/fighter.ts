@@ -11,6 +11,8 @@ import {
   KO_MASS_FRAC,
   MAX_FIGHTER_DX,
   MAX_FIGHTER_DY,
+  LOGICAL_H,
+  LOGICAL_W,
   TICK_DT,
   clamp,
   clamp01,
@@ -140,6 +142,35 @@ export const CORE_STEP_MAX = 24;
 const REGION_PROBE_MARGIN = 3;
 /** deepestBite: a later tick of the window is a deeper bite only if it reaches this much closer to the foe's core (px). */
 const DEEPER_PX = 4;
+/** Slack (px) kept between a body's live bounds and the arena edge. */
+const BODY_EDGE = 10;
+/**
+ * The frame tether: the union of both fighters' live bounds must fit the 640×360 view with this margin on every side (px), so
+ * the camera can show both titans whole (arms, halo, hanging city) at the 1:1 pixel scale. Over it, a fighter that sticks out
+ * is drawn back toward the foe, at most FRAME_STEP px a tick, and its outward speed is bled.
+ */
+const FRAME_MARGIN_X = 24;
+const FRAME_MARGIN_Y = 16;
+const FRAME_STEP = 4;
+/** Frame pull: inward speed (px/s) per px of excess, its cap, the time constant it is approached with, the hard slack (px). */
+const FRAME_PULL_GAIN = 5;
+const FRAME_PULL_MAX = 260;
+const FRAME_PULL_TAU = 0.25;
+const FRAME_HARD = 32;
+/** A multi-body fighter's contact radius: its core's, plus this share of how much further its whole live bounds reach. */
+const CONTACT_LIMB_SHARE = 0.3;
+
+/** Lower clamp for an anchor coordinate: the body-aware bound when the body-aware range exists, else the anchor margin. */
+const fitMin = (anchorMin: number, lo: number, hi: number): number =>
+  lo <= hi ? Math.max(anchorMin, lo) : anchorMin;
+const fitMax = (anchorMax: number, lo: number, hi: number): number =>
+  lo <= hi ? Math.min(anchorMax, hi) : anchorMax;
+/**
+ * Share of a body's vertical extent above / below its anchor that the arena clamp keeps inside the arena: the core and the
+ * near matter. A colossus passing over or under its foe must be able to lift its spires out past the arena's edge for a
+ * moment (the hanging city is not the solid core); horizontally the whole body is kept in.
+ */
+const BODY_CLAMP_Y = 0.5;
 
 /** How far (px) a shape stays from the point (x, y); 0 when the shape covers it. Geometry only, no matter probe. */
 function shapeGap(s: FatShape, x: number, y: number): number {
@@ -1584,9 +1615,87 @@ export class FighterImpl implements Fighter {
     }
   }
 
+  /** Live bounds relative to the anchor (px, ≥ 0), refreshed at the start of each integrate (the previous tick's pose). */
+  private readonly ext = { left: 0, right: 0, up: 0, down: 0 };
+
+  private refreshExtents(): void {
+    const b = this.liveBounds();
+    const t = this.body.transform;
+    const e = this.ext;
+    e.left = Math.max(0, t.x - b.x0);
+    e.right = Math.max(0, b.x1 - t.x);
+    e.up = Math.max(0, t.y - b.y0);
+    e.down = Math.max(0, b.y1 - t.y);
+  }
+
+  /**
+   * The frame tether (both footworks): the union of both bodies' live bounds must fit the view (FRAME_MARGIN_X/Y). The anchor
+   * tethers (MAX_FIGHTER_DX/DY, ORBIT.tetherMax) cannot know that a colossus is 2× the Planet's size; this one reads the bodies.
+   * Each fighter corrects only the side it sticks out on, by half the excess (its foe does the other half on its own tick).
+   */
+  private frameTether(): void {
+    const e = this.ext;
+    const fv = this.foe.view;
+    const x0 = this.px - e.left;
+    const x1 = this.px + e.right;
+    const y0 = this.py - e.up;
+    const y1 = this.py + e.down;
+    const exX = Math.max(x1, fv.boundsX1) - Math.min(x0, fv.boundsX0) - (LOGICAL_W - 2 * FRAME_MARGIN_X);
+    if (exX > 0) {
+      const dir = x0 < fv.boundsX0 && x1 <= fv.boundsX1 ? 1 : x1 > fv.boundsX1 && x0 >= fv.boundsX0 ? -1 : 0;
+      if (dir !== 0) this.frameEase(true, dir, exX * 0.5);
+    }
+    // vertically only while the bodies stand side by side: passing over or under the foe (cores level in x) is the
+    // orbit's whole point, and two colossi stacked can never fit 360 px whole (the camera then centres the pair)
+    const exY = Math.max(y1, fv.boundsY1) - Math.min(y0, fv.boundsY0) - (LOGICAL_H - 2 * FRAME_MARGIN_Y);
+    // "passing" = the cores are over / under each other (arms and spires may overlap the foe in any stance)
+    const apart = Math.abs(this.px - fv.x) > this.coreRadius() + this.radiusOf(fv);
+    if (exY > 0 && apart) {
+      const dir = y0 < fv.boundsY0 && y1 <= fv.boundsY1 ? 1 : y1 > fv.boundsY1 && y0 >= fv.boundsY0 ? -1 : 0;
+      if (dir !== 0) this.frameEase(false, dir, exY * 0.5);
+    }
+    // the arena clamp lets the hanging city leave the arena while it passes over or under the foe; side by side, the whole
+    // body is eased back inside (the camera never shows past the arena)
+    if (apart) {
+      const a = this.arena;
+      const below = y1 - (a.maxY - BODY_EDGE);
+      const above = a.minY + BODY_EDGE - y0;
+      // the arena edge is a wall, not a framing wish: eased, and stepped back FRAME_STEP px a tick while it is crossed
+      if (below > 0 && above <= 0) {
+        this.frameEase(false, -1, below);
+        this.py -= Math.min(below, FRAME_STEP);
+      } else if (above > 0 && below <= 0) {
+        this.frameEase(false, 1, above);
+        this.py += Math.min(above, FRAME_STEP);
+      }
+    }
+  }
+
+  /**
+   * Ease this fighter `excess` px back along `dir` (x or y): a heavy body is steered, not snapped (scale of motion: its root
+   * velocity turns over a quarter second), so the inward speed is approached with FRAME_PULL_TAU; only an overshoot beyond
+   * FRAME_HARD px (a launch, a cut) is also corrected in position, at most FRAME_STEP px a tick.
+   */
+  private frameEase(xAxis: boolean, dir: 1 | -1, excess: number): void {
+    const want = Math.min(FRAME_PULL_MAX, excess * FRAME_PULL_GAIN);
+    const k = 1 - Math.exp(-TICK_DT / FRAME_PULL_TAU);
+    const v = xAxis ? this.vx : this.vy;
+    const along = v * dir;
+    const nv = along < want ? v + dir * (want - along) * k : v;
+    const step = excess > FRAME_HARD ? dir * Math.min(excess - FRAME_HARD, FRAME_STEP) : 0;
+    if (xAxis) {
+      this.vx = nv;
+      this.px += step;
+    } else {
+      this.vy = nv;
+      this.py += step;
+    }
+  }
+
   private integrate(): void {
     const dt = TICK_DT;
     const m = this.mv;
+    this.refreshExtents();
     let top = topSpeed(this.def, this.stats);
     const sm = this.statusMul;
     if (sm < 1) {
@@ -1629,6 +1738,7 @@ export class FighterImpl implements Fighter {
     this.faceFoe();
     if (this.footwork === 'orbit') this.tetherOrbit(top);
     else this.tetherClassic();
+    this.frameTether();
     // the arena always wins: clamped again after the tether's correction
     this.clampToArena();
   }
@@ -1636,8 +1746,11 @@ export class FighterImpl implements Fighter {
   /** Hard arena bounds for the root (inside the soft walls' margin); kills the velocity into the wall. */
   private clampToArena(): void {
     const a = this.arena;
-    const minX = a.minX + ARENA_MARGIN_X;
-    const maxX = a.maxX - ARENA_MARGIN_X;
+    const e = this.ext;
+    // the anchor's margins, widened so the whole live body (arms, halo, hanging city) stays inside the arena: the camera
+    // never shows past the arena, so matter outside it is matter off screen (a range too narrow keeps the anchor margins)
+    const minX = fitMin(a.minX + ARENA_MARGIN_X, a.minX + e.left + BODY_EDGE, a.maxX - e.right - BODY_EDGE);
+    const maxX = fitMax(a.maxX - ARENA_MARGIN_X, a.minX + e.left + BODY_EDGE, a.maxX - e.right - BODY_EDGE);
     if (this.px < minX) {
       this.px = minX;
       if (this.vx < 0) this.vx = 0;
@@ -1645,8 +1758,10 @@ export class FighterImpl implements Fighter {
       this.px = maxX;
       if (this.vx > 0) this.vx = 0;
     }
-    const minY = a.minY + ARENA_MARGIN_TOP;
-    const maxY = a.maxY - ARENA_MARGIN_BOTTOM;
+    const up = e.up * BODY_CLAMP_Y + BODY_EDGE;
+    const down = e.down * BODY_CLAMP_Y + BODY_EDGE;
+    const minY = fitMin(a.minY + ARENA_MARGIN_TOP, a.minY + up, a.maxY - down);
+    const maxY = fitMax(a.maxY - ARENA_MARGIN_BOTTOM, a.minY + up, a.maxY - down);
     if (this.py < minY) {
       this.py = minY;
       if (this.vy < 0) this.vy = 0;
@@ -1902,8 +2017,29 @@ export class FighterImpl implements Fighter {
     return 0.25 * (v.boundsX1 - v.boundsX0 + (v.boundsY1 - v.boundsY0)) * 0.85;
   }
 
+  /**
+   * Contact radius (px) for body-to-body contact: a disc inside the silhouette's box. A multi-body fighter meets its foe with
+   * its core body only (the Witness's eye and carapace): its arms, halo and hanging city are not solid mass to shove with, so
+   * a colossus twice the foe's size slides over and under it instead of bulldozing it across the arena.
+   */
+  /** Radius (px) of the core body alone (a multi-body fighter's eye and carapace; anyone else's whole body). */
+  private coreRadius(): number {
+    const b = this.liveBounds();
+    if (this.regions.length === 0) return 0.25 * (b.x1 - b.x0 + (b.y1 - b.y0)) * 0.85;
+    const c = this.bnd;
+    return 0.25 * (c.x1 - c.x0 + (c.y1 - c.y0));
+  }
+
   private contactRadius(): number {
     const b = this.liveBounds();
+    if (this.regions.length > 0) {
+      // the core body's own bounds (liveBounds refreshed it before taking the union); the core is solid to its rim
+      const c = this.bnd;
+      const core = 0.25 * (c.x1 - c.x0 + (c.y1 - c.y0));
+      const whole = 0.25 * (b.x1 - b.x0 + (b.y1 - b.y0)) * 0.85;
+      // a little of the reach of its limbs still keeps the foe off (the arms are not ghosts)
+      return core + CONTACT_LIMB_SHARE * Math.max(0, whole - core);
+    }
     return 0.25 * (b.x1 - b.x0 + (b.y1 - b.y0)) * 0.85;
   }
 
