@@ -22,7 +22,7 @@ const PATH = 'src/titans/planet.json';
  * halo). Speeds, root motion, energies and frame data do not (balance is Phase 4). Edit, then re-run this tool and prettier.
  * Above about 175 px the map exceeds MAX_BODY_DIM / MAX_BODY_CELLS (src/contracts/constants.ts: Lead's to raise).
  */
-export const PLANET_DIAMETER = 220;
+export const PLANET_DIAMETER = 180;
 const BASE_DIAMETER = 121;
 const K = PLANET_DIAMETER / BASE_DIAMETER;
 /** A length at this size (to 0.1 px; exactly the authored value at the base size). */

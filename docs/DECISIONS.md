@@ -102,3 +102,12 @@ S1 measured that two thirds of all lost matter came from drifting debris, not fr
 - **(6)** The Planet is enlarged so it reads as an equal of 우리 and the Witness. WJ picked **220 px** (docs/gallery/integration/planet-sizes.png).
 - **(7)** 우리 and the Mouth join the roster after their final gates.
 - **Later (WJ):** new, vaster backdrops after the integration.
+
+**D32 — Gate 1 (WJ, 2026-10-06; docs/integration/GATE_1.md).**
+- **The unified look is approved.** The one sky becomes live in play (proposal 172).
+- **The Planet's atmosphere glow comes back** under the shared bloom.
+- **The Planet's size:** WJ found 220 px too big and asked the Lead to size it against 우리 and the Mouth. The Lead set **180 px**:
+  - the Mouth's jaw-ring span is about 180 px;
+  - about 0.66× the Witness (about 272 px) and about 0.6× 우리 (about 300 px);
+  - it fits the original body limits.
+- **Phase 2 (우리) starts.**
