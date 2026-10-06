@@ -1,16 +1,21 @@
 import {
   angleToStep,
+  DamageFlag,
   makeLayer,
   rgba,
+  type BlowWeight,
+  type DamageEvent,
   type FighterTickCtx,
   type MatterBody,
+  type MatterWorld,
+  type OverlapResult,
   type MatterMap,
   type RenderLayer,
   type RenderPart,
   type ViewRect,
 } from '@/contracts';
 import { registerDiagnostics, registerTuning, type DiagCtx, type TuningKnob } from '@/debug/tuning';
-import { cloneUriMap, URI_PRIMARY, type UriTitanRig } from '@/titans';
+import { cloneUriMap, URI_MATERIALS, URI_PRIMARY, type UriTitanRig } from '@/titans';
 import {
   apply,
   bodyTransforms,
@@ -25,8 +30,10 @@ import {
   type UriPose,
 } from '@/titans/uri/rig';
 import type { RenderLayerLit } from '@/render/unified';
-import type { UriLiveFx } from '@/render/uriLive';
+import type { UriLiveFx, UriPylon } from '@/render/uriLive';
+import { URI_MAT } from '@/titans/uri/maps';
 import { Behaviour } from '../behaviour';
+import { addDamageResult, type DamageSum } from '../damageSum';
 import type { ActiveMove } from '../move';
 import { UriKinetics, type UriKineticView, type UriMoveName, type UriTune } from '../uri/kinetics';
 import type { FighterImpl } from '../fighter';
@@ -44,6 +51,8 @@ import type { FighterImpl } from '../fighter';
  * - **Draw order** (spec §4): pylons behind the pelvis (the fighter's own body layer), everything else in front of it, in the
  *   asset's order: upper arms, domes, chamber, forearms, fists, moon.
  * - **Diagnostics** (spec §9, the debug overlay): centre of mass, barycentre of the cores, part pivots, the target vector.
+ * - **Damage** (2C, spec §7): the loop is the health; a blow tears the struck chunk out (S4's chunk groups), necks fail and send
+ *   the hanging chain away whole, a limb / pylon / moon at half goes in pieces, loop 0 breaks everything apart around the cores.
  */
 
 /** A region the fighter owns besides its primary body. */
@@ -59,6 +68,10 @@ interface Region {
   version: number;
   part: RenderPart;
   back: boolean;
+  /** Left the body (severed or shattered): no longer placed, drawn or hit. */
+  lost: boolean;
+  /** The load-bearing neck's cells (map indices) for a part carried by a neck (the oracle's `prepParts`), else null. */
+  neck: Int32Array | null;
 }
 
 /** Mass properties of a part in its local grid: cell count, centroid and second moment about the centroid. */
@@ -72,6 +85,92 @@ interface PartMass {
 const ATLAS_ROW = 1024;
 /** Pylons are drawn behind the pelvis (the primary); every other part in front of it. */
 const BACK_PARTS: readonly UriPartKey[] = ['pyL', 'pyR'];
+
+/**
+ * A blow's power in the oracle's terms (TUNING "Damage": the loop loses 3 × power per hit) from the weight it landed with
+ * (proposal 171). The values are the powers the oracle itself hits with: its light and heavy demo hits (1.1 / 2.2), a click
+ * (1.6), its test-hit button (2.4).
+ */
+export const URI_HIT_POWER: Readonly<Record<BlowWeight, number>> = {
+  light: 1.1,
+  medium: 1.6,
+  heavy: 2.2,
+  catastrophic: 2.4,
+};
+/** TUNING "Damage": a neck below this fails; a limb / pylon / moon below half of itself goes in pieces. */
+const NECK_FAIL = 0.38;
+const HALF_RULE = 0.5;
+/** The load-bearing connections (the oracle's `prepParts`): the part, the joint it is carried by, the neck radius (px). */
+const NECKS: readonly [UriPartKey, 'ja' | 'jb', UriPartKey, number][] = [
+  ['uaL', 'ja', 'uaL', 13],
+  ['faL', 'ja', 'faL', 13],
+  ['fistL', 'jb', 'faL', 14],
+  ['uaR', 'ja', 'uaR', 13],
+  ['faR', 'ja', 'faR', 13],
+  ['fistR', 'jb', 'faR', 14],
+  ['pyL', 'ja', 'pyL', 12],
+  ['pyR', 'ja', 'pyR', 12],
+];
+/** What hangs from each neck and drifts away with it. */
+const CHAIN: Partial<Record<UriPartKey, readonly UriPartKey[]>> = {
+  uaL: ['uaL', 'faL', 'fistL'],
+  faL: ['faL', 'fistL'],
+  fistL: ['fistL'],
+  uaR: ['uaR', 'faR', 'fistR'],
+  faR: ['faR', 'fistR'],
+  fistR: ['fistR'],
+  pyL: ['pyL'],
+  pyR: ['pyR'],
+};
+/** Domes and chamber stay whatever they lose (spec §7); the pelvis is the fighter's own body. */
+const KEEPS: readonly UriPartKey[] = ['chamber', 'domeL', 'domeR', URI_PRIMARY];
+const MAT_HABITAT = URI_MATERIALS.findIndex((m) => m.key === 'habitat') + 1;
+const MAT_CRACK = URI_MATERIALS.findIndex((m) => m.key === 'crack') + 1;
+/** Who takes a blow first: the front atlas top part down, then the pelvis (the fighter's own layer), then the pylons behind. */
+const FRONT_TO_BACK: readonly UriPartKey[] = [
+  ...URI_ORDER.filter((k) => k !== URI_PRIMARY && !BACK_PARTS.includes(k)).reverse(),
+  URI_PRIMARY,
+  ...URI_ORDER.filter((k) => BACK_PARTS.includes(k)).reverse(),
+];
+
+/**
+ * S4's chunk groups (src/matter/groups.ts, MatterWorldEx; Gate 2C): optional on the contract's world, like `bodyToChunk`.
+ * Without them 우리 takes blows the default way (the loop still loses integrity).
+ */
+type GroupWorld = MatterWorld & {
+  setCellGroups?(bodyId: number, groups: Uint16Array): boolean;
+  setFieldHeld?(bodyId: number, on: boolean): boolean;
+  hitTear?(bodyId: number, wx: number, wy: number, power: number): number;
+  groupAt?(bodyId: number, wx: number, wy: number): number;
+  releaseGroups?(bodyId: number, fx: number, fy: number, power: number, maxPieces?: number): number;
+  releaseBudgets?(bodyIds: readonly number[]): number[];
+  liveFraction?(bodyId: number, cells: ArrayLike<number>): number;
+};
+
+/** The break-apart (the oracle's `breakApart`): the loop snaps, everything flies apart slowly around the two cores. */
+const BREAK = {
+  /** Tear power of the pieces: the chamber 0.35, every other part 0.55. */
+  chamber: 0.35,
+  rest: 0.55,
+  /** The oracle's slowmo = 0.3, recovering at +0.35 per second: back to 1 after 2 s (120 ticks). */
+  timeScale: 0.3,
+  timeScaleTicks: 120,
+  /** The oracle's shake = 14 (px). */
+  shake: 14,
+  /** Parts released per tick (S4: ~35 ms all in one tick); the chamber (≈220 pieces) gets a tick of its own. */
+  perTick: 2,
+  /** …and at most this many pieces a tick unless one part alone has more (S4: ~0.05 ms a piece → ≤ ~6 ms). */
+  piecesPerTick: 120,
+} as const;
+/** A neck failing (the oracle's `hitAt`): shake = 8; the hanging chain drifts at (U − 0.5)·1.2, 0.3 + 0.3·U px per frame. */
+const NECK_SHAKE = 8;
+/** A limb that lost half of itself goes in pieces with tear power 1.2 (the oracle's `shatterPart(P, x, y, 1.2)`). */
+const SHATTER_POWER = 1.2;
+/**
+ * A CONTINUOUS blow (energy per tick) counts as one hit per second of contact. PROVISIONAL: the oracle has no continuous blows;
+ * 우리's opponents in the slice have none either.
+ */
+const CONTINUOUS_HIT_TICKS = 60;
 
 const DIAG = {
   cm: rgba(255, 238, 170),
@@ -136,9 +235,54 @@ export class UriBehaviour extends Behaviour {
     fistSpread: [1.14, 1.14],
   };
   private untune: (() => void) | null = null;
+  /** Atlas placement of every region part (fixed: a regrown part goes back where it was). */
+  private readonly atlasAt = new Map<UriPartKey, [number, number]>();
+  /** The pelvis's shade plane on the fighter's own body layer (a copy: wound cells re-code it) and its map version. */
+  private bodyShade: Uint8Array | null = null;
+  private bodyVersion = -1;
+  /** Part integrity (live cells / pristine cells; 0 once lost), refreshed once per tick for the kinetic system. */
+  private readonly integ = new Map<UriPartKey, number>();
+  /** The hits' own random stream (mulberry32 state; hashed). */
+  private rs = 0;
+  /** CONTINUOUS contact ticks toward the next counted hit. */
+  private contTicks = 0;
+  /** The loop has snapped (break-apart), the parts still to release, their piece budgets, and the cores' frozen world spots. */
+  private broken = false;
+  private releaseQueue: UriPartKey[] = [];
+  private readonly budgets = new Map<UriPartKey, number>();
+  private readonly coreAt = { hx: 0, hy: 0, cx: 0, cy: 0 };
+  private readonly pylons: [UriPylon, UriPylon] = [
+    { x: 0, y: 0, a: Math.PI / 2, th: 0 },
+    { x: 0, y: 0, a: Math.PI / 2, th: 0 },
+  ];
+  private readonly ov: OverlapResult = {
+    cells: 0,
+    x: NaN,
+    y: NaN,
+    nearestX: NaN,
+    nearestY: NaN,
+    coverage: 0,
+  };
 
   constructor(f: FighterImpl) {
     super(f);
+  }
+
+  /** Never mirrored (spec §5): arm roles come from the opponent's side, the body is drawn and hit as authored. */
+  override mirrors(): boolean {
+    return false;
+  }
+
+  private get gw(): GroupWorld {
+    return this.f.world as GroupWorld;
+  }
+
+  /** Mulberry32 over the behaviour's own state (hashed). */
+  private rand(): number {
+    this.rs = (this.rs + 0x6d2b79f5) | 0;
+    let t = Math.imul(this.rs ^ (this.rs >>> 15), 1 | this.rs);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
   override attach(): void {
@@ -179,48 +323,19 @@ export class UriBehaviour extends Behaviour {
     }
     this.regions = [];
     this.byKey.clear();
-    for (const k of regionKeys) {
-      const src = rig.parts.find((p) => p.key === k)!;
-      const meta = uriPart(k);
-      const map = cloneUriMap(src.map);
-      const ax = Math.round(meta.pivX);
-      const ay = Math.round(meta.pivY);
-      const body = f.world.createBody({
-        kind: 'part',
-        ownerSlot: f.slot,
-        map,
-        materials: f.body.materials,
-        attributes: f.def.attributes,
-        seed: f.seed + 1009 * (URI_ORDER.indexOf(k) + 1),
-        transform: { x: 0, y: 0, anchorX: ax, anchorY: ay, facing: 1, lean: 0, rot: 0 },
-        anchorCells: anchorPatch(map, ax, ay),
-        takesDebrisImpacts: true,
-        sampler: 'majority4', // proposal 174 (S4): hit-tested with 우리's own rotation rule
-      });
-      f.addRegion(body, true);
-      const isBack = BACK_PARTS.includes(k);
-      const [sx, sy] = (isBack ? pb : pf).at.get(k)!;
-      const part: RenderPart = {
-        sx,
-        sy,
-        sw: map.w,
-        sh: map.h,
-        px: ax,
-        py: ay,
-        wx: 0,
-        wy: 0,
-        step: 0,
-        z: URI_ORDER.indexOf(k),
-        sampler: 'majority4', // proposal 174 (S4): drawn with the same rule it is hit with
-      };
-      (isBack ? this.back : this.front).parts!.push(part);
-      const reg: Region = { key: k, body, ax, ay, sx, sy, version: -1, part, back: isBack };
-      this.regions.push(reg);
-      this.byKey.set(k, reg);
-    }
+    this.atlasAt.clear();
+    for (const k of backKeys) this.atlasAt.set(k, pb.at.get(k)!);
+    for (const k of frontKeys) this.atlasAt.set(k, pf.at.get(k)!);
+    for (const k of regionKeys) this.createRegion(k, false);
+    // the primary carries its chunk ids too (it tears like every part)
+    this.gw.setCellGroups?.(f.body.id, rig.parts.find((p) => p.key === URI_PRIMARY)!.chunks);
+    this.gw.setFieldHeld?.(f.body.id, true);
     for (const p of rig.parts) this.mass.set(p.key, massOf(p.map));
     this.packPlanes(rig);
     this.kin = new UriKinetics(f.seed);
+    this.kin.integrity = (k) => this.integ.get(k) ?? 1;
+    this.kin.gone = (k) => this.byKey.get(k)!.lost;
+    this.resetDamage();
     this.pose = this.kin.currentPose();
     this.kinTick = -1;
     this.wroteX = NaN;
@@ -229,10 +344,73 @@ export class UriBehaviour extends Behaviour {
   }
 
   /**
+   * Create part `k`'s matter body and its atlas part (attach, or grown back between rounds after it left), with its chunk ids
+   * (S4's cell groups: what a blow tears out) and its load-bearing neck.
+   */
+  private createRegion(k: UriPartKey, regrown: boolean): void {
+    const f = this.f;
+    const rig = f.rig as UriTitanRig;
+    const src = rig.parts.find((p) => p.key === k)!;
+    const meta = uriPart(k);
+    const map = cloneUriMap(src.map);
+    const ax = Math.round(meta.pivX);
+    const ay = Math.round(meta.pivY);
+    const body = f.world.createBody({
+      kind: 'part',
+      ownerSlot: f.slot,
+      map,
+      materials: f.body.materials,
+      attributes: f.def.attributes,
+      seed: f.seed + 1009 * (URI_ORDER.indexOf(k) + 1),
+      transform: { x: 0, y: 0, anchorX: ax, anchorY: ay, facing: 1, lean: 0, rot: 0 },
+      anchorCells: anchorPatch(map, ax, ay),
+      takesDebrisImpacts: true,
+      sampler: 'majority4', // proposal 174 (S4): hit-tested with 우리's own rotation rule
+    });
+    this.gw.setCellGroups?.(body.id, src.chunks);
+    // held by fields (URI_SPEC §1): a piece a hole cuts off stays put; matter leaves only by tears and releases (S4)
+    this.gw.setFieldHeld?.(body.id, true);
+    f.addRegion(body, true, regrown);
+    const isBack = BACK_PARTS.includes(k);
+    const [sx, sy] = this.atlasAt.get(k)!;
+    const part: RenderPart = {
+      sx,
+      sy,
+      sw: map.w,
+      sh: map.h,
+      px: ax,
+      py: ay,
+      wx: 0,
+      wy: 0,
+      step: 0,
+      z: URI_ORDER.indexOf(k),
+      sampler: 'majority4', // proposal 174 (S4): drawn with the same rule it is hit with
+    };
+    (isBack ? this.back : this.front).parts!.push(part);
+    const reg: Region = {
+      key: k,
+      body,
+      ax,
+      ay,
+      sx,
+      sy,
+      version: -1,
+      part,
+      back: isBack,
+      lost: false,
+      neck: uriNeckCells(k, map),
+    };
+    const old = this.byKey.get(k);
+    if (old) this.regions[this.regions.indexOf(old)] = reg;
+    else this.regions.push(reg);
+    this.byKey.set(k, reg);
+  }
+
+  /**
    * The part pass's static planes (S5, proposal 172 extension): per atlas cell `light` (nx, ny, nz, form), `shade` (surf, tone,
    * edge, material code) and `chunk` (the fists are drawn chunk by chunk), at the same (sx, sy) as the pixels. The primary
-   * (pelvis) is drawn by the fighter's own body layer: it gets its part's planes too (a structural bridge until a behaviour hook
-   * for the body layer exists; S1). 2C repacks torn cells and bumps the layer version.
+   * (pelvis) is drawn by the fighter's own body layer: it gets its part's planes in `decorateBodyLayer`. Wound cells (habitat /
+   * crack) are re-coded in the shade plane whenever a part's map changes (`recode`).
    */
   private packPlanes(rig: UriTitanRig): void {
     for (const L of [this.back, this.front] as RenderLayerLit[]) {
@@ -252,30 +430,77 @@ export class UriBehaviour extends Behaviour {
         L.chunk!.set(src.chunks.subarray(s, s + w), d);
       }
     }
-    const pel = rig.parts.find((p) => p.key === URI_PRIMARY)!;
-    const body = (this.f as unknown as { bodyLayer?: RenderLayerLit }).bodyLayer;
-    if (body) {
-      body.light = pel.light;
-      body.shade = pel.shade;
-      body.chunk = pel.chunks;
-    }
+  }
+
+  /** The pelvis's planes on the fighter's own body layer (S1's hook, 57afe0a); its shade plane is a copy (wounds re-code it). */
+  override decorateBodyLayer(layer: RenderLayer): void {
+    const pel = (this.f.rig as UriTitanRig).parts.find((p) => p.key === URI_PRIMARY)!;
+    const L = layer as RenderLayerLit;
+    this.bodyShade = pel.shade.slice();
+    L.light = pel.light;
+    L.shade = this.bodyShade;
+    L.chunk = pel.chunks;
+    this.bodyVersion = -1;
   }
 
   override reset(_heal: number): void {
-    // the fighter heals every region body itself; the kinetic system starts again at rest
+    // the fighter heals every region body still attached; the parts that left grow back; the kinetic system starts at rest
+    for (const r of [...this.regions]) if (r.lost) this.createRegion(r.key, true);
     this.kin.reset(this.f.seed);
+    this.resetDamage();
     this.pose = this.kin.currentPose();
     this.kinTick = -1;
     this.wroteX = NaN;
     this.place();
   }
 
-  override update(_ctx: FighterTickCtx): void {}
+  /** The damage state of a fresh round: the loop whole, nothing breaking, the hits' stream reseeded. */
+  private resetDamage(): void {
+    this.kin.hp = 100;
+    this.broken = false;
+    this.releaseQueue = [];
+    this.budgets.clear();
+    this.contTicks = 0;
+    this.rs = (this.f.seed ^ 0x5552) | 0;
+    this.refreshIntegrity();
+  }
+
+  /** Each tick: the parts' integrity for the kinetic system, the break-apart's releases, the loop as the HUD's integrity. */
+  override update(_ctx: FighterTickCtx): void {
+    if (this.releaseQueue.length) this.releaseSome();
+    this.showHealth();
+  }
+
+  /**
+   * The loop is 우리's health (D31-3). Until the fighter asks the behaviour for it (proposal 176, S1) the HUD bar is written here,
+   * after the fighter's own matter-based value.
+   */
+  healthPct(): number | null {
+    return this.kin.hp;
+  }
+  private showHealth(): void {
+    this.f.view.integrityPct = this.kin.hp;
+  }
+
+  /** Live cells / pristine cells per part (0 once it left), read by the kinetic system's integrity callbacks. */
+  private refreshIntegrity(): void {
+    const w = this.f.world;
+    for (const r of this.regions) {
+      if (r.lost) {
+        this.integ.set(r.key, 0);
+        continue;
+      }
+      const s = w.stats(r.body.id);
+      this.integ.set(r.key, s.initialCells > 0 ? s.cells / s.initialCells : 0);
+    }
+    const p = w.stats(this.f.body.id);
+    this.integ.set(URI_PRIMARY, p.initialCells > 0 ? p.cells / p.initialCells : 0);
+  }
 
   /** A move begins: the kinetic system plays the authored move this slot maps to (D31). */
   override onMoveStart(m: ActiveMove): void {
     const name = m.def?.extra?.['uri'] as UriMoveName | undefined;
-    if (name && !m.feint) this.kin.begin(name);
+    if (name && !m.feint && !this.broken) this.kin.begin(name);
   }
 
   /**
@@ -289,6 +514,7 @@ export class UriBehaviour extends Behaviour {
       // the opponent, in the rig's reference space (the reference → world offset of the last placement)
       const fv = f.foe?.view;
       if (fv) this.kin.target = [fv.x - this.ox, fv.y - this.oy];
+      this.refreshIntegrity();
       this.kin.step(1 / 60);
       this.pose = this.kin.currentPose();
       this.kin.view(this.kview);
@@ -327,6 +553,7 @@ export class UriBehaviour extends Behaviour {
     this.wroteX = t.x;
     this.wroteY = t.y;
     for (const r of this.regions) {
+      if (r.lost) continue;
       const meta = uriPart(r.key);
       const bt = r.body.transform;
       this.writeTransform(bt, this.places[r.key], meta.pivX, meta.pivY, r.ax, r.ay);
@@ -336,11 +563,19 @@ export class UriBehaviour extends Behaviour {
       r.part.wy = bt.y;
       r.part.step = bt.rot ?? 0;
     }
-    // the world-cores ride the torso and jolt in their cradles, never leaving them (the cold one answers −0.7 / −0.6)
-    const B = bodyTransforms(this.pose);
-    const c = this.kview.core;
-    apply(B.torso, URI_HOT_CORE[0] + c.x, URI_HOT_CORE[1] + c.y, this.hot);
-    apply(B.torso, URI_COLD_CORE[0] - c.x * 0.7, URI_COLD_CORE[1] - c.y * 0.6, this.cold);
+    // the world-cores ride the torso and jolt in their cradles, never leaving them (the cold one answers −0.7 / −0.6); once the
+    // loop has snapped they stay where they were while everything else flies apart around them
+    if (this.broken) {
+      this.hot.x = this.coreAt.hx - this.ox;
+      this.hot.y = this.coreAt.hy - this.oy;
+      this.cold.x = this.coreAt.cx - this.ox;
+      this.cold.y = this.coreAt.cy - this.oy;
+    } else {
+      const B = bodyTransforms(this.pose);
+      const c = this.kview.core;
+      apply(B.torso, URI_HOT_CORE[0] + c.x, URI_HOT_CORE[1] + c.y, this.hot);
+      apply(B.torso, URI_COLD_CORE[0] - c.x * 0.7, URI_COLD_CORE[1] - c.y * 0.6, this.cold);
+    }
     this.massCentre();
   }
 
@@ -362,23 +597,27 @@ export class UriBehaviour extends Behaviour {
     bt.rot = angleToStep(pl.a);
   }
 
-  /** World centre of mass, radius of gyration and outer radius of the whole body (live cells at rest proportions). */
+  /**
+   * World centre of mass, radius of gyration and outer radius of the whole body: each part at its rest proportions weighted by
+   * its integrity (live / pristine cells); a part that left counts for nothing.
+   */
   private massCentre(): void {
     let M = 0;
     let sx = 0;
     let sy = 0;
     for (const k of URI_ORDER) {
       const pm = this.mass.get(k);
-      if (!pm || pm.m <= 0) continue;
+      const q = this.integ.get(k) ?? 1;
+      if (!pm || pm.m <= 0 || q <= 0) continue;
       const meta = uriPart(k);
       const pl = this.places[k];
       const c = Math.cos(pl.a);
       const s = Math.sin(pl.a);
       const lx = pm.cx - meta.pivX;
       const ly = pm.cy - meta.pivY;
-      sx += pm.m * (this.ox + pl.x + lx * c - ly * s);
-      sy += pm.m * (this.oy + pl.y + lx * s + ly * c);
-      M += pm.m;
+      sx += pm.m * q * (this.ox + pl.x + lx * c - ly * s);
+      sy += pm.m * q * (this.oy + pl.y + lx * s + ly * c);
+      M += pm.m * q;
     }
     const cx = M > 0 ? sx / M : this.rootX;
     const cy = M > 0 ? sy / M : this.rootY;
@@ -386,7 +625,8 @@ export class UriBehaviour extends Behaviour {
     let R = 0;
     for (const k of URI_ORDER) {
       const pm = this.mass.get(k);
-      if (!pm || pm.m <= 0) continue;
+      const q = this.integ.get(k) ?? 1;
+      if (!pm || pm.m <= 0 || q <= 0) continue;
       const meta = uriPart(k);
       const pl = this.places[k];
       const c = Math.cos(pl.a);
@@ -395,7 +635,7 @@ export class UriBehaviour extends Behaviour {
       const ly = pm.cy - meta.pivY;
       const wx = this.ox + pl.x + lx * c - ly * s - cx;
       const wy = this.oy + pl.y + lx * s + ly * c - cy;
-      I += pm.i2 + pm.m * (wx * wx + wy * wy);
+      I += (pm.i2 + pm.m * (wx * wx + wy * wy)) * q;
       R = Math.max(R, Math.hypot(wx, wy) + Math.sqrt(pm.i2 / pm.m) * 1.5);
     }
     this.cm.x = cx;
@@ -412,9 +652,206 @@ export class UriBehaviour extends Behaviour {
     return true;
   }
 
-  /** The kinetic system is simulation state: fold it into the match hash. */
+  /** The kinetic system (the loop's hp included) and the damage state are simulation state: fold them into the match hash. */
   override hash(h: number): number {
-    return this.kin.hash(h);
+    let x = this.kin.hash(h);
+    x = Math.imul(x ^ this.rs, 0x01000193);
+    x = Math.imul(x ^ (this.contTicks | (this.broken ? 1 << 16 : 0)), 0x01000193);
+    x = Math.imul(x ^ this.releaseQueue.length, 0x01000193);
+    for (const r of this.regions) x = Math.imul(x ^ (r.lost ? 1 : 2), 0x01000193);
+    return x >>> 0;
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  damage and breaking (URI_SPEC §7, TUNING "Damage", the oracle's 30_breaking_compose.js)
+   * ---------------------------------------------------------------------------------------------- */
+
+  /**
+   * A blow (the oracle's `hitAt`): the front-most part under it takes it. Its struck chunk tears out as a tumbling piece with its
+   * own colours, a heavy blow takes neighbouring chunks, the hole's border glows (S4's `hitTear`). The loop loses 3 × power.
+   * Then the struck part's load-bearing neck may fail (the chain hanging from it drifts away whole), a limb / pylon / moon that
+   * has lost half of itself goes in pieces, and a loop at 0 breaks 우리 apart.
+   */
+  override routeDamage(ev: DamageEvent, out: DamageSum): boolean {
+    const f = this.f;
+    const w = this.gw;
+    if (this.broken || !w.hitTear) return false;
+    // the front-most part under the blow: the front atlas (top part first), the pelvis, the pylons behind it
+    const ov = this.ov;
+    let key: UriPartKey | null = null;
+    let id = -1;
+    for (const k of FRONT_TO_BACK) {
+      if (k !== URI_PRIMARY && this.byKey.get(k)!.lost) continue;
+      const bid = k === URI_PRIMARY ? f.body.id : this.byKey.get(k)!.body.id;
+      w.overlap(bid, ev.shape, ov);
+      if (ov.cells > 0) {
+        key = k;
+        id = bid;
+        break;
+      }
+    }
+    if (key === null) return false;
+    const power = URI_HIT_POWER[ev.weight ?? 'medium'];
+    // a CONTINUOUS blow counts as one hit per second of contact
+    let counts = true;
+    if ((ev.flags & DamageFlag.CONTINUOUS) !== 0) {
+      counts = ++this.contTicks >= CONTINUOUS_HIT_TICKS;
+      if (counts) this.contTicks = 0;
+    }
+    const s0 = w.stats(id);
+    const cells0 = s0.cells;
+    const mass0 = s0.mass;
+    let hx = ov.nearestX;
+    let hy = ov.nearestY;
+    if (counts) {
+      const at = this.tearAt(id, power);
+      hx = at.x;
+      hy = at.y;
+    }
+    const s1 = w.stats(id);
+    // what the fighter learns (DamageResult): the contract's impulse 30·√(energy·sourceMass)·√coverage along the blow
+    const J =
+      30 *
+      Math.sqrt(Math.max(0, ev.energy) * Math.max(0, ev.sourceMass)) *
+      Math.sqrt(Math.min(1, ov.coverage));
+    addDamageResult(out, {
+      cellsTouched: ov.cells,
+      cellsRemoved: Math.max(0, cells0 - s1.cells),
+      massRemoved: Math.max(0, mass0 - s1.mass),
+      massTransferred: 0,
+      contactX: hx,
+      contactY: hy,
+      impulseX: ev.dirX * J,
+      impulseY: ev.dirY * J,
+      onDamagedFraction: 0,
+      revealedInterior: false,
+    });
+    if (!counts) return true;
+    this.kin.hp = Math.max(0, this.kin.hp - 3 * power);
+    if (key !== URI_PRIMARY) {
+      const r = this.byKey.get(key)!;
+      if (CHAIN[key] && r.neck && (w.liveFraction?.(id, r.neck) ?? 1) < NECK_FAIL) this.severChain(key);
+      else if (!KEEPS.includes(key) && s1.initialCells > 0 && s1.cells / s1.initialCells < HALF_RULE)
+        this.shatter(r, hx, hy, SHATTER_POWER);
+    }
+    this.refreshIntegrity();
+    if (this.kin.hp <= 0) this.breakApart();
+    this.showHealth();
+    return true;
+  }
+
+  /**
+   * Tear at the blow's contact: the overlap's nearest cell, its centroid, then the cells around the nearest one (a rotated
+   * part's sampled cell may sit on a hole's edge). Returns the world point it tore at.
+   */
+  private tearAt(id: number, power: number): { x: number; y: number } {
+    const w = this.gw;
+    const ov = this.ov;
+    const tries: [number, number][] = [
+      [ov.nearestX, ov.nearestY],
+      [ov.x, ov.y],
+    ];
+    for (let r = 1; r <= 3; r++)
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++)
+          if (Math.max(Math.abs(dx), Math.abs(dy)) === r) tries.push([ov.nearestX + dx, ov.nearestY + dy]);
+    for (const [x, y] of tries) {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (w.groupAt && w.groupAt(id, x, y) < 0) continue;
+      if (w.hitTear!(id, x, y, power) > 0) return { x, y };
+    }
+    return { x: ov.nearestX, y: ov.nearestY };
+  }
+
+  /** A part leaves the fighter (its pristine mass keeps counting toward KO) and the drawing. */
+  private loseRegion(r: Region): void {
+    r.lost = true;
+    this.f.removeRegion(r.body.id);
+    const parts = (r.back ? this.back : this.front).parts!;
+    const i = parts.indexOf(r.part);
+    if (i >= 0) parts.splice(i, 1);
+    this.integ.set(r.key, 0);
+  }
+
+  /** A load-bearing neck failed: everything hanging from it drifts away whole, slowly (one velocity for the whole chain). */
+  private severChain(key: UriPartKey): void {
+    const f = this.f;
+    const vx = (this.rand() - 0.5) * 1.2 * 60;
+    const vy = (0.3 + this.rand() * 0.3) * 60;
+    const va = (this.rand() - 0.5) * 0.25 * 0.6;
+    for (const k of CHAIN[key]!) {
+      const r = this.byKey.get(k)!;
+      if (r.lost) continue;
+      this.loseRegion(r);
+      if (f.world.bodyToChunk) f.world.bodyToChunk(r.body.id, vx, vy, va);
+    }
+    f.events.push({ t: 'shake', dirX: 0, dirY: 1, amp: NECK_SHAKE });
+  }
+
+  /** A part goes in pieces (the 50 % rule, the break-apart): every chunk it still has tears out, flung from (x, y). */
+  private shatter(r: Region, x: number, y: number, power: number, maxPieces?: number): void {
+    const f = this.f;
+    const w = this.gw;
+    this.loseRegion(r);
+    if (w.releaseGroups) w.releaseGroups(r.body.id, x, y, power, maxPieces);
+    // the emptied body leaves the world (or, without chunk groups, the whole part goes as one piece)
+    if (f.world.bodyToChunk) f.world.bodyToChunk(r.body.id, 0, 0, 0);
+  }
+
+  /**
+   * The loop snaps (the oracle's `breakApart`): a white flash and a ring at the hot core, time slows to 0.3×, and every part
+   * flies apart into its chunks, slowly, around the two cores, which stay where they were. The releases are spread over ticks
+   * (two parts a tick, the chamber on a tick of its own; S4), the pelvis first so the fighter goes down at once.
+   */
+  private breakApart(): void {
+    if (this.broken) return;
+    const f = this.f;
+    this.broken = true;
+    this.kin.hp = 0;
+    this.coreAt.hx = this.ox + this.hot.x;
+    this.coreAt.hy = this.oy + this.hot.y;
+    this.coreAt.cx = this.ox + this.cold.x;
+    this.coreAt.cy = this.oy + this.cold.y;
+    const x = this.coreAt.hx;
+    const y = this.coreAt.hy;
+    f.events.push({ t: 'flash', amount: 1, x, y });
+    f.events.push({ t: 'shockwave', x, y, strength: 1, radius: 240, hue: 0.1 });
+    f.events.push({ t: 'shake', dirX: 0, dirY: 1, amp: BREAK.shake });
+    f.events.push({ t: 'timescale', scale: BREAK.timeScale, ticks: BREAK.timeScaleTicks });
+    const keys: UriPartKey[] = [URI_PRIMARY];
+    for (const k of URI_ORDER) if (k !== URI_PRIMARY && !this.byKey.get(k)!.lost) keys.push(k);
+    this.releaseQueue = keys;
+    this.budgets.clear();
+    const ids = keys.map((k) => (k === URI_PRIMARY ? f.body.id : this.byKey.get(k)!.body.id));
+    const b = this.gw.releaseBudgets?.(ids);
+    if (b) keys.forEach((k, i) => this.budgets.set(k, b[i]!));
+    this.releaseSome();
+  }
+
+  private releaseSome(): void {
+    let n = 0;
+    let pieces = 0;
+    while (this.releaseQueue.length && n < BREAK.perTick) {
+      const k = this.releaseQueue[0]!;
+      // a big part (the chamber, the pelvis) on a tick of its own; two small ones share one within the piece budget
+      const want = this.budgets.get(k) ?? 0;
+      if (n > 0 && (k === 'chamber' || pieces + want > BREAK.piecesPerTick)) break;
+      this.releaseQueue.shift();
+      n++;
+      pieces += want;
+      const power = k === 'chamber' ? BREAK.chamber : BREAK.rest;
+      const budget = this.budgets.get(k);
+      if (k === URI_PRIMARY)
+        this.gw.releaseGroups?.(this.f.body.id, this.coreAt.hx, this.coreAt.hy, power, budget);
+      else this.shatter(this.byKey.get(k)!, this.coreAt.hx, this.coreAt.hy, power, budget);
+      if (k === 'chamber') break;
+    }
+    this.refreshIntegrity();
+  }
+
+  /** Going down any other way (the matter's KO rule until proposal 176) breaks 우리 apart too. */
+  override onKo(): void {
+    if (!this.broken) this.breakApart();
   }
 
   /** The fists and the command moon (the parts that should move at colossal scale) for `tools/feel/scale.ts`. */
@@ -432,7 +869,7 @@ export class UriBehaviour extends Behaviour {
     for (const L of [this.back, this.front]) {
       let changed = false;
       for (const r of this.regions) {
-        if ((L === this.back) !== r.back) continue;
+        if ((L === this.back) !== r.back || r.lost) continue;
         const m = r.body.map;
         if (m.version === r.version) continue;
         r.version = m.version;
@@ -443,6 +880,7 @@ export class UriBehaviour extends Behaviour {
           L.pixels.set(m.pixels.subarray(src, src + m.w), dst);
           L.emissive!.set(m.emissive.subarray(src, src + m.w), dst);
         }
+        recode(m, this.pristineShade(r.key), (L as RenderLayerLit).shade!, r.sx, r.sy, L.w);
       }
       if (changed) {
         L.version++;
@@ -473,7 +911,35 @@ export class UriBehaviour extends Behaviour {
     live.loop.stress = kv.stress;
     live.loop.gain = this.kin.tune.loop;
     live.fistSpread = [kv.spread.L, kv.spread.R];
+    live.fistZ = FIST_Z;
+    // the pylons' plumes: the exhaust point (the bone's end joints.b, carried by the part), π/2 + part angle + vectoring, thrust
+    for (const s of ['L', 'R'] as const) {
+      const k = s === 'L' ? 'pyL' : 'pyR';
+      const meta = uriPart(k);
+      const pl = this.places[k];
+      const p = this.pylons[s === 'L' ? 0 : 1];
+      const dx = meta.jb![0] - meta.pgX;
+      const dy = meta.jb![1] - meta.pgY;
+      const c = Math.cos(pl.a);
+      const sn = Math.sin(pl.a);
+      p.x = this.ox + pl.x + dx * c - dy * sn;
+      p.y = this.oy + pl.y + dx * sn + dy * c;
+      p.a = Math.PI / 2 + pl.a + kv.pylon[s].ang;
+      p.th = this.byKey.get(k)!.lost ? 0 : kv.pylon[s].th;
+    }
+    live.pylons = this.pylons;
     (this.front as RenderLayerLit).uriLive = live;
+    // the pelvis's wound cells in the body layer's shade plane
+    const bm = this.f.body.map;
+    if (this.bodyShade && bm.version !== this.bodyVersion) {
+      this.bodyVersion = bm.version;
+      recode(bm, this.pristineShade(URI_PRIMARY), this.bodyShade, 0, 0, bm.w);
+    }
+    this.showHealth();
+  }
+
+  private pristineShade(k: UriPartKey): Uint8Array {
+    return (this.f.rig as UriTitanRig).parts.find((p) => p.key === k)!.shade;
   }
 
   /** The debug overlay (spec §9): the seven sliders of the oracle's panel, and the diagnostics. */
@@ -582,10 +1048,66 @@ export class UriBehaviour extends Behaviour {
   bodyOf(k: UriPartKey): MatterBody {
     return k === URI_PRIMARY ? this.f.body : this.byKey.get(k)!.body;
   }
+  /** The loop (0..100: 우리's health) and whether it has snapped. */
+  get loop(): number {
+    return this.kin.hp;
+  }
+  get brokenApart(): boolean {
+    return this.broken;
+  }
+  isLost(k: UriPartKey): boolean {
+    return k !== URI_PRIMARY && this.byKey.get(k)!.lost;
+  }
   /** Reference → world offset of this tick. */
   get offset(): { x: number; y: number } {
     return { x: this.ox, y: this.oy };
   }
+}
+
+/** The fists' RenderPart.z (left, right) for the live pass's rubble drawing. */
+const FIST_Z: readonly [number, number] = [URI_ORDER.indexOf('fistL'), URI_ORDER.indexOf('fistR')];
+
+/**
+ * Re-code a part's shade plane from its map (the shade's 4th byte is the asset's material code): wound cells read as exposed
+ * habitat (7) or crack (8), every other cell its pristine code (a healed part reads as authored again).
+ */
+function recode(
+  m: MatterMap,
+  pristine: Uint8Array,
+  shade: Uint8Array,
+  sx: number,
+  sy: number,
+  rowW: number,
+): void {
+  for (let y = 0; y < m.h; y++)
+    for (let x = 0; x < m.w; x++) {
+      const i = y * m.w + x;
+      const mat = m.material[i];
+      shade[((sy + y) * rowW + sx + x) * 4 + 3] =
+        mat === MAT_HABITAT ? URI_MAT.habitat : mat === MAT_CRACK ? URI_MAT.crack : pristine[i * 4 + 3]!;
+    }
+}
+
+/**
+ * A part's load-bearing neck (the oracle's `prepParts` / `neckInt`): its live cells within the neck radius of the joint it is
+ * carried by, in its own map. Null for a part no neck carries.
+ */
+export function uriNeckCells(k: UriPartKey, map: MatterMap): Int32Array | null {
+  const n = NECKS.find((e) => e[0] === k);
+  if (!n) return null;
+  const [, j, from, R] = n;
+  const J = uriPart(from)[j];
+  if (!J) return null;
+  const P = uriPart(k);
+  const lx = J[0] - P.pgX + P.pivX;
+  const ly = J[1] - P.pgY + P.pivY;
+  const out: number[] = [];
+  for (let iy = 0; iy < map.h; iy++)
+    for (let ix = 0; ix < map.w; ix++) {
+      const i = iy * map.w + ix;
+      if (map.material[i] !== 0 && Math.hypot(ix - lx, iy - ly) < R) out.push(i);
+    }
+  return out.length ? Int32Array.from(out) : null;
 }
 
 /** The joint patch a part is anchored by: its live cells within a few px of the pivot. */

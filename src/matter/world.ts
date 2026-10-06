@@ -57,6 +57,7 @@ import { debugOverlay } from './debug';
 import { impactBurst } from './blowfx';
 import { HAIRLINE, finishReleases, shearDelay, stepWounds } from './wound';
 import { extractChunk } from './debris';
+import { hitTear, liveFraction, releaseBudgets, releaseGroups, tearCellList, tearGroup } from './groups';
 import { defineShell, finishShellSwap, restoreShell, stepShellSwap, swapShell, type FarFace } from './shell';
 
 /** A multi-tick damage application waiting to deliver its remaining slices. */
@@ -170,6 +171,48 @@ export interface MatterWorldEx extends MatterWorld {
   setCellGroups(bodyId: number, groups: Uint16Array): boolean;
   /** The body's per-cell group ids (null if none were set). Read-only view. */
   cellGroups(bodyId: number): Uint16Array | null;
+  /**
+   * Held by fields (우리, URI_SPEC §1): connectivity never sheds a piece of this body that a hole cut off from its joint patch;
+   * it leaves only through tears, releases, `bodyToChunk` and wound slabs. False if the body is gone.
+   */
+  setFieldHeld(bodyId: number, on: boolean): boolean;
+  /* ---- chunk groups: 우리's damage (Gate 2C; matter/groups.ts) ---- */
+  /** Group id of the live cell drawn at world (wx, wy) of a grouped body, or -1. */
+  groupAt(bodyId: number, wx: number, wy: number): number;
+  /**
+   * A blow at world (wx, wy) of power `power` on a grouped body (the oracle's `hitAt`): the struck chunk tears out as one
+   * tumbling debris piece with its colours; power > 1 also takes neighbouring chunks; the hole's border glows (habitat /
+   * crack). Returns the chunks torn.
+   */
+  hitTear(bodyId: number, wx: number, wy: number, power: number): number;
+  /**
+   * Proposal 175 (S2): tear the listed cells (map indices) out as ONE tumbling chunk keeping their colours, at (vx, vy) px/s and
+   * `spin` rad/s; with `wound`, each live 4-neighbour of a torn cell takes `mats[0]` or `mats[1]` with probability `chance`
+   * (mass kept). Exact ledger transfer; deterministic (the body's RNG). Returns the chunk id, or -1 if no cell was live.
+   */
+  tearCells(
+    bodyId: number,
+    cells: Int32Array,
+    n: number,
+    vx: number,
+    vy: number,
+    spin: number,
+    wound?: { mats: readonly [number, number]; chance: number },
+  ): number;
+  /** Tear one group out (flung from world (ix, iy), tear power `power`); returns the chunk id or -1. */
+  tearGroup(bodyId: number, group: number, ix: number, iy: number, power: number): number;
+  /**
+   * Let a grouped body go as its chunks, flung from world (fx, fy) (the 50 % rule, a neck failing in pieces, the break-apart);
+   * groups are merged on a coarse grid when the debris pool has fewer free slots than `maxPieces`. Returns the pieces made.
+   */
+  releaseGroups(bodyId: number, fx: number, fy: number, power: number, maxPieces?: number): number;
+  /** Fraction of the given map-local cells still live (the oracle's neck integrity; wound cells count as live). */
+  liveFraction(bodyId: number, cells: ArrayLike<number>): number;
+  /**
+   * Piece budgets for releasing these bodies together (the break-apart): the debris pool's free slots shared in proportion to
+   * their live chunk groups. Pass each as `releaseGroups`' `maxPieces`. (Spread the releases over a few ticks: ~0.05 ms a piece.)
+   */
+  releaseBudgets(bodyIds: readonly number[]): number[];
   /**
    * Aftermath export: the debris/particle layers supersampled k× ((k·LOGICAL_W)×(k·LOGICAL_H), k 1..8, fresh buffers). Reads the
    * frozen world from any view; never steps or mutates the simulation.
@@ -534,6 +577,60 @@ class MatterWorldImpl implements MatterWorldEx {
 
   cellGroups(bodyId: number): Uint16Array | null {
     return this.core.bodyById[bodyId]?.cellGroups ?? null;
+  }
+
+  setFieldHeld(bodyId: number, on: boolean): boolean {
+    const b = this.core.bodyById[bodyId];
+    if (!b) return false;
+    b.fieldHeld = on;
+    return true;
+  }
+
+  groupAt(bodyId: number, wx: number, wy: number): number {
+    const b = this.core.bodyById[bodyId];
+    if (!b || b.cellGroups === null) return -1;
+    const c = b.cellAtWorld(wx, wy);
+    return c >= 0 && b.map.material[c] !== 0 ? b.cellGroups[c]! : -1;
+  }
+
+  hitTear(bodyId: number, wx: number, wy: number, power: number): number {
+    const b = this.core.bodyById[bodyId];
+    return b ? hitTear(this.core, b, wx, wy, power) : 0;
+  }
+
+  tearCells(
+    bodyId: number,
+    cells: Int32Array,
+    n: number,
+    vx: number,
+    vy: number,
+    spin: number,
+    wound?: { mats: readonly [number, number]; chance: number },
+  ): number {
+    const b = this.core.bodyById[bodyId];
+    const ch = b ? tearCellList(this.core, b, cells, n, vx, vy, spin, wound) : null;
+    return ch ? ch.id : -1;
+  }
+
+  tearGroup(bodyId: number, group: number, ix: number, iy: number, power: number): number {
+    const b = this.core.bodyById[bodyId];
+    const ch = b ? tearGroup(this.core, b, group, ix, iy, power) : null;
+    return ch ? ch.id : -1;
+  }
+
+  releaseGroups(bodyId: number, fx: number, fy: number, power: number, maxPieces?: number): number {
+    const b = this.core.bodyById[bodyId];
+    return b ? releaseGroups(this.core, b, fx, fy, power, maxPieces) : 0;
+  }
+
+  liveFraction(bodyId: number, cells: ArrayLike<number>): number {
+    const b = this.core.bodyById[bodyId];
+    return b ? liveFraction(b, cells) : 0;
+  }
+
+  releaseBudgets(bodyIds: readonly number[]): number[] {
+    const bodies = bodyIds.map((id) => this.core.bodyById[id]).filter((b): b is Body => b !== undefined);
+    return releaseBudgets(this.core, bodies);
   }
 
   defineShell(bodyId: number, shell: number | Uint8Array, far?: FarFace): boolean {

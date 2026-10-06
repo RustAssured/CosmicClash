@@ -112,6 +112,11 @@ export class Body implements MatterBody {
    * carried with the body for chunk tearing (Phase 2C). Not simulation state the world reads; set via `setCellGroups`.
    */
   cellGroups: Uint16Array | null = null;
+  /**
+   * Held by fields (우리's parts, URI_SPEC §1; MatterWorldEx.setFieldHeld): connectivity never sheds a piece a hole cuts off from
+   * the joint patch; only slabs a wound releases (and explicit tears / releases) leave. Off for every other body.
+   */
+  fieldHeld = false;
 
   /** Mass per cell at density 128, by material id. */
   readonly matDensity: Float32Array;

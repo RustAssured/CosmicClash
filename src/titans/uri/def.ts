@@ -119,7 +119,8 @@ export function uriDef(): TitanDef {
       coreX: pelvis.coreX,
       coreY: pelvis.coreY,
       coreRadius: pelvis.coreRadius,
-      params: { uri: true },
+      // the primary (pelvis) is drawn and hit with 우리's own rotation rule, like its regions (proposal 174; S1's hook, 57afe0a)
+      params: { uri: true, sampler: 'majority4' },
     },
     moves: MOVES.map((m) => structuredClone(m)),
     ai: {

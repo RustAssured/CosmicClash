@@ -114,7 +114,10 @@ function hashBody(h: number, b: Body): number {
 export function hashWorld(core: WorldCore, extra: (h: number) => number): number {
   let h = 0x811c9dc5 | 0;
   h = mix32(h, core.tick);
-  for (const b of core.bodyList) h = hashBody(h, b);
+  for (const b of core.bodyList) {
+    h = hashBody(h, b);
+    if (b.fieldHeld) h = mix32(h, 0x0f1e1d); // (only when set: every other body's hash is unchanged)
+  }
   const cp = core.chunks;
   h = mix32(h, cp.count);
   for (let i = 0; i < cp.hi; i++) {

@@ -1135,6 +1135,7 @@ export class UriKinetics {
     mix(this.moonS.a);
     mix(this.pyl.L.th);
     mix(this.pyl.R.th);
+    mix(this.hp);
     return h >>> 0;
   }
 }

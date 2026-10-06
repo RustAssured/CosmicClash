@@ -55,6 +55,8 @@ export function uriRestBodies(world: MatterWorldEx, dx: number, dy: number, slot
     };
     const id = world.createBody(spec).id;
     world.setCellGroups(id, src.chunks);
+    world.setFieldHeld(id, true); // held by fields (URI_SPEC §1): holes never shed what they cut off
+
     return id;
   });
 }

@@ -13,6 +13,7 @@ import {
   seedHeld,
   woundLaunch,
   woundSpin,
+  SLAB_HELD,
 } from './wound';
 
 const MIN_CHUNK_CELLS = 5;
@@ -30,9 +31,18 @@ const launch: Launch = { vx: 0, vy: 0, spin: 0 };
 export function runConnectivity(core: WorldCore, body: Body): void {
   body.connDirty = 0;
   body.lastConnTick = core.tick;
+  // A field-held body (우리's parts, "held by fields": URI_SPEC §1) never sheds a piece a hole cuts off; only slabs a wound is
+  // releasing leave (below, every other live cell anchors). With nothing releasing there is nothing to do.
+  if (body.fieldHeld && body.wounds.held === 0) {
+    body.anchoredFrac = 1;
+    body.connFull = false;
+    resetFrontier(body);
+    return;
+  }
   // (While a wound holds slabs the full flood runs: held matter anchors by its tag, not through bonds, which the local
   // shortcut's proof does not cover.)
   if (
+    !body.fieldHeld &&
     !body.connFull &&
     !body.hasFluid &&
     !core.forceFullConn &&
@@ -66,6 +76,15 @@ export function runConnectivity(core: WorldCore, body: Body): void {
   // --- seeds: live cells of the core disc (a disc cell a wound is shedding no longer anchors anything) ---
   const disc = body.coreDiscIdx;
   const det = map.detached;
+  if (body.fieldHeld) {
+    // field-held: every live cell anchors except the slabs a wound is releasing
+    const state = body.wounds.state;
+    for (let c = 0; c < n; c++)
+      if (mat[c] !== 0 && (det[c] === 0 || state[det[c]!] === SLAB_HELD) && stamp[c] !== gen) {
+        stamp[c] = gen;
+        st.push(c);
+      }
+  }
   for (let k = 0; k < disc.length; k++) {
     const c = disc[k]!;
     if (mat[c] !== 0 && det[c] === 0 && stamp[c] !== gen) {
