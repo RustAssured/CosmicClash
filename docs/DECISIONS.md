@@ -92,3 +92,13 @@ S1 measured that two thirds of all lost matter came from drifting debris, not fr
 - **(2) Debris speed:** debris wounds by the chunk's own speed, not the relative speed. Moving through the arena's wreckage is not a wound; a flung slab still is. This keeps "the arena is occupied space" meaningful (debris is struck, shoved, launched) without slow attrition deciding rounds.
 - **Confirmed by WJ at Gate C (2026-10-03):** keep D30.
 - **(3) Rebalance after (1)–(2):** heavy-move damage per hit for the pair within about 2× of each other (164), with the match 45–55 %. S3 runs the balance pass across both definitions. S1 re-tunes the AI engagement gap so rounds sit inside 45–90 s without timeouts.
+
+**D31 — Gate 0 of the 우리 / Mouth integration (WJ, 2026-10-06; docs/integration/GATE_0.md).**
+- **(1) Plan approved.** It runs now, in place of the slice's Phase 3; Gate C's open items carry into Phase 4.
+- **(2) 우리's buttons:** Strike = lead straight punch, Crush = rear cross-body smash, Signature = uppercut, Ultimate = double slam. For both new titans, Surge and Guard stay unbound when the packs give nothing to map.
+- **(3) Health:** 우리's loop integrity is its health. The Mouth needs **something other than a health bar** (WJ: health bars 'kinda suck'); propose a readout at Gate 3A. Best of three rounds as now.
+- **(4)** Master palette and one sky approved; show a before/after at Gate 1.
+- **(5)** The hitstop cap is raised for the heavy and catastrophic VFX weights only.
+- **(6)** The Planet is enlarged so it reads as an equal of 우리 and the Witness.
+- **(7)** 우리 and the Mouth join the roster after their final gates.
+- **Later (WJ):** new, vaster backdrops after the integration.

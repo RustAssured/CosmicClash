@@ -7,9 +7,21 @@ Resume from here. The rules and phases are in `MASTER_PROMPT.md`; the packs are 
   delivered (`docs/gates/GATE_C.md`), and D30 was confirmed. The other Gate C decisions are open.
 - **Phase 0 audit:** `docs/integration/GATE_0.md` (2026-10-06). No code changes.
 
+- **Gate 0 approved** (D31 in docs/DECISIONS.md).
+
+## In progress: Phase 1, shared foundations
+- **S5:** master palette with Bayer palette snap, one global light for titans, shared bloom and outline, the lit part pass
+  foundation, the shared VFX module (four weights).
+- **S1:** the debug overlay framework (toggle, sliders, diagnostics registry), and the hitstop/shake table by weight with
+  the cap raised for heavy and catastrophic.
+- **S3:** the Planet enlarged to read as an equal, with size options for WJ.
+
 ## Next gate
-- **Gate 0:** WJ approves the plan and answers decisions G0-1 … G0-7 in `docs/integration/GATE_0.md` §4.
+- **Gate 1:**
+  - captures of the four VFX weights on a neutral background;
+  - a before/after of the Witness, the Planet and the arenas through the master palette and one sky;
+  - the Planet size options.
 
 ## Open questions
-- See GATE_0 §4: input mapping for 우리 and the Mouth, health and rounds, master palette and one sky, the hitstop cap for
-  heavy and catastrophic, the Planet's size, the roster.
+- **The Mouth's health readout:** not a bar; propose at Gate 3A.
+- **Backdrops:** new, vaster ones after the integration (WJ).
