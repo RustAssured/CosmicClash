@@ -42,6 +42,19 @@ final @ canvas: nearest integer upscale (push=1: sharp-bilinear zoom ≤ 1.10) +
 * **Bloom / rays / vignette are pixel-art too:** their contribution is quantised with the same Bayer matrix (14 / 12 levels) instead of adding smooth gradients over crisp pixels.
 * **Grain** is pixel-sized and tick-locked (`frame.tick`), so identical frames render identically (checked in `verify`).
 
+## The unified look (shared/UNIFICATION.md, VFX_SPEC.md, D31) — on by default, `?unify=0` or the debug overlay turns it off
+
+* **Master palette** (`master.ts`): the union of the approved ramps — 우리 (s1, s2, civ, field, hot, cold), the Mouth (black, red, pale, bone, maw), the effect ramps (flash, dust, rock, outline) and the Witness's and Planet's
+  material ramps — merged closest-pair-first to 128 colours (locked oracle colours move ≤ 0.018 OKLab). Stage palettes are pulled toward it (`unifyStagePalette`: colours within 0.035 OKLab become the shared ones; the rest stay the arena's accents).
+* **Final snap** (end of `POST_FRAG`): every pixel — titan, effect and outline pixels to the master palette, scenery to the stage palette — with the oracles' ordered dither (Bayer offset of ±spread/2 before the pick: titans 12, scenery 18). No grain.
+  A non-glowing, non-wet titan pixel never takes a non-glowing ramp's top step (`ceiling`, carried in the master sRGB texture's alpha).
+* **Edges** (`TITAN_FINISH_FRAG`, replacing the plain layer composite): the layer target has a third attachment (titan flag, draw rank, wet). One outline pixel (two on the shadow side, right and below) around every titan silhouette, written in
+  the exact outline colour; a back part's edge pixels against a part drawn in front are darkened (×0.55, ×0.6 blue): the depth seams. Titan bodies = world layers, normal blend, z ∈ [0, 10) (`isTitanLayer`).
+* **Shared bloom**: the emissive attachment blurred twice (σ 3 px at half res, σ 10 px at quarter res), added at 0.38 and 0.28 (the oracles' compose), then snapped. Emissives enter at their own colour (`emisGain` 1). No glow is added on titan pixels.
+* **Lit parts** (`PART_FRAG`, `RenderLayer.light` / `.wet`, proposal 167): reference form light blended with live light from `TITAN_SKY` by `wForm = 0.82·cos³θ`.
+* **Shared VFX** (`vfx.ts`): anticipation, stepped star flash, distortion ring with a bright leading edge, debris and sparks, lingering dust — four weights, an analytic function of (age, seed), drawn instanced into the layer
+  target; the rings feed the post refraction (flattened 0.85 toward the camera). `FxState` keys them on `hit.weight`. Captures: `npx tsx tools/render/unify-capture.ts` → `docs/gallery/integration/`.
+
 ## Layer semantics (`RenderLayer`, contracts/render.ts)
 
 * Sorted by `z` (stable); ≤ 48 layers per frame. `visible = false`, `alpha ≤ 0` or an off-screen destination rect cost nothing.

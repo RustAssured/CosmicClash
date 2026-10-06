@@ -269,7 +269,9 @@ describe('palette + dither LUT', () => {
   it('rejects palettes that are too small or too large', () => {
     expect(() => preparePalette(['#000000'])).toThrow();
     expect(() =>
-      preparePalette(Array.from({ length: 65 }, (_, i) => `#${(i * 3).toString(16).padStart(2, '0')}0000`)),
+      preparePalette(
+        Array.from({ length: PALETTE_TEX_W + 1 }, (_, i) => `#${(i * 2).toString(16).padStart(6, '0')}`),
+      ),
     ).toThrow();
   });
 });

@@ -16,6 +16,14 @@ import {
 } from '@/contracts';
 import { presentationEnergy } from '@/audio/balance';
 import { MAX_COMETS, MAX_WELLS } from '@/stages/types';
+import {
+  MAX_VFX_IMPACTS,
+  VFX_MAX_AGE,
+  type FrameFxVfx,
+  type VfxImpact,
+  type VfxMatter,
+  type VfxWeight,
+} from '@/render/vfx';
 
 /**
  * Turns the sim's event stream into the non-pixel per-frame inputs of the renderer: expanding shockwave rings, scenery
@@ -162,6 +170,11 @@ export class FxState {
   private readonly impPool: StageImpulseFx[] = [];
   private readonly lightsOut: LightFx[] = [];
   private readonly cometTracks: CometTrack[] = [];
+  /** Shared impact VFX (VFX_SPEC): one per landed blow, keyed on the blow's weight (hit.weight, proposal 171). */
+  private readonly impactsVfx: VfxImpact[] = [];
+  private readonly vfxOut: VfxImpact[] = [];
+  /** Wall time of each attacker's last light-weight VFX (continuous slices land every few ticks: one spark burst per 0.1 s). */
+  private readonly lastLight = [-1, -1];
   private readonly cometPool: CometFx[] = [];
   private readonly cometsOut: CometFx[] = [];
   private readonly wellPool: WellFx[] = [];
@@ -227,6 +240,8 @@ export class FxState {
     this.newest = -1;
     for (const l of this.impacts) l.live = false;
     this.cometTracks.length = 0;
+    this.impactsVfx.length = 0;
+    this.lastLight[0] = this.lastLight[1] = -1;
     this.wellsOut.length = 0;
   }
 
@@ -340,6 +355,7 @@ export class FxState {
           this.heat += e.strength * 0.6;
           break;
         case 'hit': {
+          this.vfxHit(e, match);
           // the move's energy, not the balance knobs (the attacker's balance.power out): lights, rings and heat stay put
           const en = presentationEnergy(e.energy, match.fighters[e.attacker].view.titan);
           this.heat += Math.min(1.5, en / 1500) * (1 - e.blocked * 0.6);
@@ -396,6 +412,11 @@ export class FxState {
     }
     this.trackComets(match);
     this.trackWells(match);
+    for (let i = this.impactsVfx.length - 1; i >= 0; i--) {
+      const v = this.impactsVfx[i]!;
+      v.age += dtw;
+      if (v.age > VFX_MAX_AGE) this.impactsVfx.splice(i, 1);
+    }
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i]!;
       if (++r.age >= r.life) this.rings.splice(i, 1);
@@ -477,6 +498,33 @@ export class FxState {
   }
 
   /** Each slot's gravity source this tick (positions are sim state, so no sub-tick extrapolation). */
+  /**
+   * A landed blow → one shared impact VFX at its weight (VFX_SPEC; `hit.weight` from the sim, proposal 171: guarded one step
+   * lighter, a KO blow catastrophic). Events from before proposal 171 fall back to the sim's heavy flag. The debris matter
+   * follows the STRUCK titan (the Witness's gold, the Planet's rock and magma).
+   */
+  private vfxHit(e: Extract<SimEvent, { t: 'hit' }>, match: MatchApi): void {
+    const w = e.weight ?? (e.heavy ? 'heavy' : e.energy >= 400 ? 'medium' : 'light');
+    const weight = (['light', 'medium', 'heavy', 'catastrophic'] as const).indexOf(w) as VfxWeight;
+    if (weight === 0) {
+      if (this.wall - this.lastLight[e.attacker]! < 0.1) return;
+      this.lastLight[e.attacker] = this.wall;
+    }
+    const titan = match.fighters[e.target].view.titan;
+    const matter: VfxMatter = titan === 'lastone' ? 'witness' : titan === 'planet' ? 'planet' : 'rock';
+    if (this.impactsVfx.length >= MAX_VFX_IMPACTS) this.impactsVfx.shift();
+    this.impactsVfx.push({
+      x: e.x,
+      y: e.y,
+      weight,
+      age: 0,
+      dirX: e.dirX,
+      dirY: e.dirY,
+      seed: (Math.imul(match.tick, 2654435761) ^ (e.attacker * 7919 + this.impactsVfx.length)) >>> 0,
+      matter,
+    });
+  }
+
   private trackWells(match: MatchApi): void {
     const ws = this.wellsOut;
     ws.length = 0;
@@ -605,6 +653,11 @@ export class FxState {
       cs.push(cf);
     }
     o.comets = cs;
+    // shared impact VFX (ages in wall seconds, advanced per tick: the effects keep playing through hit-stop)
+    const vo = this.vfxOut;
+    vo.length = 0;
+    for (const v of this.impactsVfx) vo.push(v);
+    (o as FrameFxVfx).vfx = vo;
     o.wells = this.wellsOut;
     return o;
   }

@@ -61,6 +61,8 @@ import { animationFrame, runSliced, runToEnd, scaled } from './slicer';
 import {
   BLOOM_DOWN_FRAG,
   BLOOM_UP_FRAG,
+  BLUR_FRAG,
+  TITAN_FINISH_FRAG,
   FINAL_FRAG,
   GODRAYS_FRAG,
   GOVERN_FRAG,
@@ -72,6 +74,10 @@ import {
 } from './shaders';
 import { LumaReadback, type LumaSample } from './lumaReadback';
 import { computeViewport, type ViewportLayout } from './viewport';
+import { OUTLINE_COLOR, masterPalette, unifyStagePalette } from './master';
+import { SHARED_BLOOM } from './unified';
+import { registerTuning } from '@/debug/tuning';
+import { VfxPass, buildVfxInstances, type FrameFxVfx } from './vfx';
 
 /** Per-tier tuning: scenery supersampling, bloom pyramid depth, god-ray taps. (Scenery particle density is the kit's job.) */
 interface Tier {
@@ -114,6 +120,11 @@ export interface RenderInitOptions extends Omit<RendererOptions, 'quality'> {
    * Default: the page URL's `push=1`.
    */
   spritePush?: boolean;
+  /**
+   * The unified titan look (shared/UNIFICATION.md, D31-4): master palette snap, outlines and depth seams, the shared two-pass
+   * bloom and the shared VFX. Default: on, unless the page URL says `unify=0`.
+   */
+  unified?: boolean;
 }
 
 /**
@@ -237,6 +248,12 @@ export interface DebuggableRenderer extends Renderer {
   debugSetSpritePush(on: boolean): void;
   /** Aftermath screen: camera zoom becomes a whole-number nearest zoom (1–4×) and roll is unclamped; off in play. */
   setInspect(on: boolean): void;
+  /** Switch the unified titan look on or off (before / after captures); rebuilds the stage palette (blocking). */
+  debugSetUnified(on: boolean): void;
+  /** True when the unified path draws. */
+  readonly unified: boolean;
+  /** Shared-VFX elements drawn last frame. */
+  readonly vfxDrawn: number;
 }
 
 export function createRenderer(): DebuggableRenderer {
@@ -255,6 +272,8 @@ interface PreparedStage {
   id: StageId;
   scenery: StageScenery;
   palette: PaletteResources;
+  /** Built for the unified path (stage palette pulled toward the master palette). */
+  unified: boolean;
 }
 
 interface PrepareJob {
@@ -332,6 +351,20 @@ class PixelRenderer implements DebuggableRenderer {
   private spritePush = false;
   /** Aftermath inspect mode: whole-number zoom and free rotation of the final frame. */
   private inspect = false;
+  /** The unified titan look (shared/UNIFICATION.md). */
+  unified = false;
+  /** The master palette's LUT and textures (built once, during the first stage preparation). */
+  private master: PaletteResources | null = null;
+  private finishPass!: FullscreenPass;
+  private blurPass!: FullscreenPass;
+  private bloomNear: WebGLRenderTarget[] = [];
+  private bloomFar: WebGLRenderTarget[] = [];
+  private vfx!: VfxPass;
+  vfxDrawn = 0;
+  private readonly shockE = new Float32Array(MAX_SHOCKS).fill(1);
+  /** Shared bloom gains (debug overlay knobs; SHARED_BLOOM by default). */
+  private readonly bloomMix = { near: SHARED_BLOOM.nearGain as number, far: SHARED_BLOOM.farGain as number };
+  private untune: (() => void) | null = null;
 
   // passes
   private ditherPass!: FullscreenPass;
@@ -441,6 +474,8 @@ class PixelRenderer implements DebuggableRenderer {
     // rebuilt in the background (draw() shows black meanwhile); callers may `await prepareStage(id)` to know when it is back.
     this.lost = false;
     resetSharedGeometry();
+    this.ph3d = null;
+    this.master = null;
     this.layers = new LayerTextures(this.three);
     this.compositor = new LayerCompositor(this.layers, this.emisGain);
     this.captureRT = null;
@@ -471,6 +506,9 @@ class PixelRenderer implements DebuggableRenderer {
       opts.spritePush ??
       (typeof location !== 'undefined' && new URLSearchParams(location.search).get('push') === '1');
     this.stats.auto = q === 'auto';
+    this.unified =
+      opts.unified ??
+      !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('unify') === '0');
     this.tierNow = q === 'auto' ? 1 : q;
     this.tier = TIERS[this.tierNow];
     this.stats.tier = this.tierNow;
@@ -514,10 +552,63 @@ class PixelRenderer implements DebuggableRenderer {
     this.buildPasses();
     this.ready = true;
     this.resize(this.cssW, this.cssH, this.dpr);
+    this.registerKnobs();
     // Our own programs compile now (in parallel where the browser can), so the first frame does not pay for them.
     await this.compileOwnPasses();
     // Scenery (shader compile, palette LUT, pillar bakes ≈ seconds) is built by the first setStage()/prepareStage()/draw().
     if (this.stageRequested) this.setStage(this.wantedStage);
+  }
+
+  /** The unified look's live knobs in the debug overlay (src/debug/tuning.ts): on / off, bloom gains, ordered-dither spreads. */
+  private registerKnobs(): void {
+    const spread = (): Vector2 => this.postPass.uniforms.uSpread!.value as Vector2;
+    this.untune = registerTuning('render', [
+      {
+        key: 'unified',
+        label: 'unified look',
+        min: 0,
+        max: 1,
+        step: 1,
+        get: () => (this.unified ? 1 : 0),
+        set: (v) => this.debugSetUnified(v > 0.5),
+      },
+      {
+        key: 'bloomNear',
+        label: 'bloom 3px gain',
+        min: 0,
+        max: 1,
+        step: 0.02,
+        get: () => this.bloomMix.near,
+        set: (v) => (this.bloomMix.near = v),
+      },
+      {
+        key: 'bloomFar',
+        label: 'bloom 10px gain',
+        min: 0,
+        max: 1,
+        step: 0.02,
+        get: () => this.bloomMix.far,
+        set: (v) => (this.bloomMix.far = v),
+      },
+      {
+        key: 'figSpread',
+        label: 'titan dither',
+        min: 0,
+        max: 40,
+        step: 1,
+        get: () => spread().x,
+        set: (v) => (spread().x = v),
+      },
+      {
+        key: 'bgSpread',
+        label: 'scenery dither',
+        min: 0,
+        max: 40,
+        step: 1,
+        get: () => spread().y,
+        set: (v) => (spread().y = v),
+      },
+    ]);
   }
 
   private async compileOwnPasses(): Promise<void> {
@@ -526,6 +617,8 @@ class PixelRenderer implements DebuggableRenderer {
       this.ditherPass,
       this.haloBlur,
       this.layerComposite,
+      this.finishPass,
+      this.blurPass,
       this.bloomDown,
       this.bloomUp,
       this.godPass,
@@ -534,14 +627,20 @@ class PixelRenderer implements DebuggableRenderer {
       this.govPass,
       this.finalPass,
     ];
-    await Promise.all([...passes.map((p) => p.compile(r)), this.compositor.compile(r)]);
+    await Promise.all([...passes.map((p) => p.compile(r)), this.compositor.compile(r), this.vfx.compile(r)]);
   }
 
   private buildTargets(): void {
     const ss = this.tier.supersample;
     this.sceneRT = makeRT(LOGICAL_W * ss, LOGICAL_H * ss, { type: this.hdrType, filter: 'linear' });
     this.frameRT = makeRT(LOGICAL_W, LOGICAL_H, { count: 2, filter: 'nearest' });
-    this.layerRT = makeRT(LOGICAL_W, LOGICAL_H, { count: 2, filter: 'nearest' });
+    // colour (alpha = coverage), emissive, id (unified path: titan flag, draw rank, wet)
+    this.layerRT = makeRT(LOGICAL_W, LOGICAL_H, { count: 3, filter: 'nearest' });
+    // the shared bloom: σ ≈ 3 px at half resolution, σ ≈ 10 px at quarter resolution (ping-pong pairs for the separable blur)
+    const hw = LOGICAL_W >> 1;
+    const hh = LOGICAL_H >> 1;
+    this.bloomNear = [0, 1].map(() => makeRT(hw, hh, { type: this.hdrType, filter: 'linear' }));
+    this.bloomFar = [0, 1].map(() => makeRT(hw >> 1, hh >> 1, { type: this.hdrType, filter: 'linear' }));
     this.haloA = makeRT(LOGICAL_W >> 1, LOGICAL_H >> 1, { filter: 'linear' });
     this.haloB = makeRT(LOGICAL_W >> 1, LOGICAL_H >> 1, { filter: 'linear' });
     // linear: only the sharp-bilinear final path filters it; every other read is texelFetch (exact)
@@ -562,6 +661,22 @@ class PixelRenderer implements DebuggableRenderer {
       w = Math.ceil(w / 2);
       h = Math.ceil(h / 2);
     }
+  }
+
+  private ph3d: Data3DTexture | null = null;
+  /** A 1³ LUT bound wherever a 3D sampler has nothing real yet (an unbound sampler3D would share unit 0 with a 2D one). */
+  private placeholder3D(): Data3DTexture {
+    if (!this.ph3d) {
+      const t = new Data3DTexture(new Uint8Array(4), 1, 1, 1);
+      t.format = RGBAFormat;
+      t.type = UnsignedByteType;
+      t.minFilter = NearestFilter;
+      t.magFilter = NearestFilter;
+      t.unpackAlignment = 1;
+      t.needsUpdate = true;
+      this.ph3d = t;
+    }
+    return this.ph3d;
   }
 
   private buildPasses(): void {
@@ -627,6 +742,31 @@ class PixelRenderer implements DebuggableRenderer {
       m.blendDstAlpha = OneMinusSrcAlphaFactor;
       m.transparent = true;
     }
+    {
+      const oc = hex(OUTLINE_COLOR);
+      this.finishPass = new FullscreenPass(TITAN_FINISH_FRAG, {
+        uRes: res,
+        uLayerCol: { value: this.layerRT.textures[0] },
+        uLayerEmis: { value: this.layerRT.textures[1] },
+        uLayerId: { value: this.layerRT.textures[2] },
+        uOutline: { value: new Vector3(pr(oc) / 255, pg(oc) / 255, pb(oc) / 255) },
+        // a back part's edge pixels against a part in front (uri: "every part outlined in its own darker colour", ×0.55)
+        uSeam: { value: new Vector3(0.55, 0.55, 0.6) },
+      });
+      const m = this.finishPass.material;
+      m.blending = CustomBlending;
+      m.blendEquation = AddEquation;
+      m.blendSrc = OneFactor;
+      m.blendDst = OneMinusSrcAlphaFactor;
+      m.blendSrcAlpha = OneFactor;
+      m.blendDstAlpha = OneMinusSrcAlphaFactor;
+      m.transparent = true;
+    }
+    this.blurPass = new FullscreenPass(BLUR_FRAG, {
+      uSrc: { value: null },
+      uStep: { value: new Vector2() },
+    });
+    this.vfx = new VfxPass(this.res, this.bayerTex);
     this.bloomDown = new FullscreenPass(BLOOM_DOWN_FRAG, {
       uSrc: { value: null },
       uTexel: { value: new Vector2() },
@@ -683,6 +823,25 @@ class PixelRenderer implements DebuggableRenderer {
       uGrain: { value: 0.03 },
       uFrameNo: { value: 0 },
       uGodTint: { value: 0.5 },
+      // the unified path (shared/UNIFICATION.md): bound to placeholders until the master palette is built
+      uBloomB: { value: this.bloomRTs[0]!.texture },
+      uBloomMix: { value: new Vector2(0, 0) },
+      uShockE: { value: this.shockE },
+      uLayerCol: { value: this.layerRT.textures[0] },
+      uLayerId: { value: this.layerRT.textures[2] },
+      uLayerEmisT: { value: this.layerRT.textures[1] },
+      uUnified: { value: 0 },
+      uMasterLut: { value: this.placeholder3D() },
+      uMasterSize: { value: 1 },
+      uMasterSrgb: { value: this.bayerTex },
+      uMasterLin: { value: this.bayerTex },
+      uStageLut: { value: this.placeholder3D() },
+      uStageSize: { value: 1 },
+      uStageSrgb: { value: this.bayerTex },
+      uStageLin: { value: this.bayerTex },
+      // the oracles' quantize(): titans at spread 26, backgrounds at 18
+      uSpread: { value: new Vector2(12, 18) },
+      uOutlineIdx: { value: 0 },
     });
     this.lumPass = new FullscreenPass(LUM_DOWN_FRAG, {
       uRes: res,
@@ -726,7 +885,21 @@ class PixelRenderer implements DebuggableRenderer {
   /** The palette-LUT + scenery + compile pipeline as one resumable generator (progress 0..1). */
   private *stageSteps(id: StageId, out: { stage: PreparedStage | null }): Generator<PrepareStep, void, void> {
     const info = STAGES[id];
-    const pal = preparePalette(info.palette, info.ramps);
+    const unified = this.unified;
+    if (unified && !this.master) {
+      // the master palette's LUT, once: the titans', effects' and outlines' colours (master.ts)
+      const mp = masterPalette();
+      const mpal = preparePalette(mp.colors, mp.rampLengths);
+      const mb = new LutBuilder(mpal, { size: LUT_SIZE });
+      while (!mb.done) {
+        mb.step();
+        yield 0.005;
+      }
+      this.master = this.makePalette(mpal, mb.result(), '#ffffff', mp.ceiling);
+      this.postPass.uniforms.uOutlineIdx!.value = mp.ramps['outline']?.[0] ?? 0;
+    }
+    // on the unified path the stage palette is pulled toward the master: near colours become the shared ones (master.ts)
+    const pal = preparePalette(unified ? unifyStagePalette(info.palette).colors : info.palette, info.ramps);
     const lutBuilder = new LutBuilder(pal, { size: LUT_SIZE });
     yield 0.01;
     while (!lutBuilder.done) {
@@ -745,7 +918,12 @@ class PixelRenderer implements DebuggableRenderer {
       0.15,
       0.88,
     );
-    out.stage = { id, scenery, palette: this.makePalette(pal, lutBuilder.result(), info.lighting.color) };
+    out.stage = {
+      id,
+      scenery,
+      palette: this.makePalette(pal, lutBuilder.result(), info.lighting.color),
+      unified,
+    };
     yield 0.98;
   }
 
@@ -753,6 +931,7 @@ class PixelRenderer implements DebuggableRenderer {
     pal: ReturnType<typeof preparePalette>,
     lut: DitherLut,
     lightColor: string,
+    ceiling?: Uint8Array,
   ): PaletteResources {
     const t3 = new Data3DTexture(lut.data, lut.size, lut.size, lut.size);
     t3.format = RGBAFormat;
@@ -765,7 +944,7 @@ class PixelRenderer implements DebuggableRenderer {
     t3.generateMipmaps = false;
     t3.unpackAlignment = 1;
     t3.needsUpdate = true;
-    const tex = paletteTextures(pal);
+    const tex = paletteTextures(pal, ceiling);
     const c = hex(lightColor);
     return {
       lut: t3,
@@ -794,6 +973,11 @@ class PixelRenderer implements DebuggableRenderer {
     u.uLutSize!.value = p.palette.size;
     u.uPalSrgb!.value = p.palette.srgb;
     u.uPalLin!.value = p.palette.lin;
+    const pu = this.postPass.uniforms;
+    pu.uStageLut!.value = p.palette.lut;
+    pu.uStageSize!.value = p.palette.size;
+    pu.uStageSrgb!.value = p.palette.srgb;
+    pu.uStageLin!.value = p.palette.lin;
     this.godColor.set(p.palette.godColor[0], p.palette.godColor[1], p.palette.godColor[2]);
     p.scenery.setQuality(this.tierNow);
     this.foreground?.setup(
@@ -1092,9 +1276,28 @@ class PixelRenderer implements DebuggableRenderer {
     const t1 = now();
 
     // ---- 2D layers first, into their own target: their coverage shapes the scenery grade beneath them ----
-    this.emisGain.value = 1.5;
+    // (unified path: emissives enter the shared bloom at their own colour, as in the oracles)
+    const uni = this.unified && this.master !== null;
+    this.emisGain.value = uni ? 1 : 1.5;
     const drawn = this.compositor.draw(r, this.layerRT, frame.layers, view, frame.alpha);
-    const hasLayers = drawn > 0;
+    // ---- the shared VFX (unified path): drawn into the layer target, so the final snap puts them on the master palette ----
+    let nVfx = 0;
+    this.shockE.fill(1);
+    let nShock = this.forces.nShock;
+    const impacts = (fx as FrameFxVfx).vfx;
+    if (uni && impacts && impacts.length > 0) {
+      const b = buildVfxInstances(impacts, view.x0, view.y0, this.vfx.data, {
+        data: this.postShock,
+        ell: this.shockE,
+        start: nShock,
+        max: MAX_SHOCKS,
+      });
+      nVfx = b.count;
+      nShock += b.shocks;
+      this.vfx.draw(r, this.layerRT, nVfx);
+    }
+    this.vfxDrawn = nVfx;
+    const hasLayers = drawn > 0 || nVfx > 0;
     const halo = look.spriteHalo ?? DEFAULT_SPRITE_HALO;
     if (hasLayers) this.blurCoverage(halo.radius);
 
@@ -1124,7 +1327,7 @@ class PixelRenderer implements DebuggableRenderer {
       r.setRenderTarget(this.frameRT);
       r.clear(true, false, false);
     }
-    if (hasLayers) this.layerComposite.render(r, this.frameRT);
+    if (hasLayers) (uni ? this.finishPass : this.layerComposite).render(r, this.frameRT);
     // ---- foreground: soft dust and small rocks drifting in front of the fighters (before bloom and post) ----
     if (this.foreground?.active && this.tierNow > 0) {
       const fu = this.fgShared;
@@ -1140,8 +1343,9 @@ class PixelRenderer implements DebuggableRenderer {
       this.foreground.render(r, this.frameRT);
     }
 
-    // ---- bloom pyramid ----
-    this.runBloom();
+    // ---- bloom: the shared two-pass bloom on the unified path, the classic pyramid otherwise ----
+    if (uni) this.runSharedBloom();
+    else this.runBloom();
 
     // ---- god rays (half res) ----
     if (scenery) scenery.lightScreenPos(this.lightPos);
@@ -1156,7 +1360,21 @@ class PixelRenderer implements DebuggableRenderer {
     // ---- post ----
     const pu = this.postPass.uniforms;
     pu.uRelight!.value = this.tierNow > 0 ? 1 : 0;
-    pu.uNumShock!.value = this.forces.nShock;
+    pu.uNumShock!.value = nShock;
+    pu.uUnified!.value = uni ? 1 : 0;
+    if (uni) {
+      pu.uBloom!.value = this.bloomNear[0]!.texture;
+      pu.uBloomB!.value = this.bloomFar[0]!.texture;
+      (pu.uBloomMix!.value as Vector2).set(this.bloomMix.near, this.bloomMix.far);
+      const m = this.master!;
+      pu.uMasterLut!.value = m.lut;
+      pu.uMasterSize!.value = m.size;
+      pu.uMasterSrgb!.value = m.srgb;
+      pu.uMasterLin!.value = m.lin;
+    } else {
+      pu.uBloom!.value = this.bloomRTs[0]!.texture;
+      (pu.uBloomMix!.value as Vector2).set(0, 0);
+    }
     pu.uNumRefr!.value = this.nRefr;
     pu.uBloomGain!.value = 0.6 + 0.4 * this.comfort;
     pu.uGodGain!.value = look.godRayGain * (0.85 + 0.25 * fx.intensity);
@@ -1164,7 +1382,10 @@ class PixelRenderer implements DebuggableRenderer {
     pu.uFrameNo!.value = frame.tick & 1023; // grain follows the sim tick: identical frames render identically
     pu.uHasLayers!.value = hasLayers ? 1 : 0;
     const damp = look.glowDamp ?? DEFAULT_GLOW_DAMP;
-    (pu.uGlowDamp!.value as Vector2).set(damp[0], damp[1]);
+    // unified path: no glow is added ON a figure's own pixels (the snap would turn a drifting scenery glow into flicker on
+    // the body); the shared bloom still spills around it
+    if (uni) (pu.uGlowDamp!.value as Vector2).set(1, 1);
+    else (pu.uGlowDamp!.value as Vector2).set(damp[0], damp[1]);
     this.postPass.render(r, this.postRT);
 
     // ---- luminance governor: measure the frame, hold back any full-frame brightening beyond the limit ----
@@ -1279,6 +1500,46 @@ class PixelRenderer implements DebuggableRenderer {
       up.uWeight!.value = 1.0;
       this.bloomUp.render(r, chain[i - 1]!);
     }
+  }
+
+  /**
+   * The shared bloom (UNIFICATION §5): the emissive attachment blurred twice, σ ≈ SHARED_BLOOM.nearPx at half resolution and
+   * σ ≈ SHARED_BLOOM.farPx at quarter resolution (separable 9-tap gaussians, σ = 2 taps); the post pass adds both.
+   */
+  private runSharedBloom(): void {
+    const r = this.three;
+    const u = this.blurPass.uniforms;
+    const blur = (src: WebGLRenderTarget['texture'], pair: WebGLRenderTarget[], sigmaPx: number): void => {
+      // uv steps in logical px: σ = 2 taps
+      const step = sigmaPx / 2;
+      u.uSrc!.value = src;
+      (u.uStep!.value as Vector2).set(step / LOGICAL_W, 0);
+      this.blurPass.render(r, pair[1]!);
+      u.uSrc!.value = pair[1]!.texture;
+      (u.uStep!.value as Vector2).set(0, step / LOGICAL_H);
+      this.blurPass.render(r, pair[0]!);
+    };
+    blur(this.frameRT.textures[1]!, this.bloomNear, SHARED_BLOOM.nearPx);
+    blur(
+      this.bloomNear[0]!.texture,
+      this.bloomFar,
+      Math.sqrt(SHARED_BLOOM.farPx ** 2 - SHARED_BLOOM.nearPx ** 2),
+    );
+  }
+
+  debugSetUnified(on: boolean): void {
+    if (on === this.unified) return;
+    this.unified = on;
+    const id = this.active?.id ?? this.wantedStage;
+    if (this.prepared) {
+      this.disposeStage(this.prepared);
+      this.prepared = null;
+    }
+    for (const j of this.jobs.values()) j.cancelled = true;
+    const old = this.active;
+    this.active = null;
+    if (old) this.disposeStage(old);
+    if (this.ready) this.setStage(id);
   }
 
   /** The god-ray light is far away (parallax ≈ 0.1): it follows the scenery dolly / kick like a far layer. */
@@ -1485,6 +1746,8 @@ class PixelRenderer implements DebuggableRenderer {
 
   dispose(): void {
     if (!this.ready) return;
+    this.untune?.();
+    this.untune = null;
     this.ready = false;
     this.disposed = true;
     for (const j of this.jobs.values()) j.cancelled = true;
@@ -1502,6 +1765,8 @@ class PixelRenderer implements DebuggableRenderer {
       this.ditherPass,
       this.haloBlur,
       this.layerComposite,
+      this.finishPass,
+      this.blurPass,
       this.bloomDown,
       this.bloomUp,
       this.godPass,
@@ -1525,8 +1790,17 @@ class PixelRenderer implements DebuggableRenderer {
       this.lumRT,
       ...this.govRT,
       ...this.bloomRTs,
+      ...this.bloomNear,
+      ...this.bloomFar,
     ])
       t?.dispose();
+    this.vfx.dispose();
+    if (this.master) {
+      this.master.lut.dispose();
+      this.master.srgb.dispose();
+      this.master.lin.dispose();
+      this.master = null;
+    }
     this.bayerTex.dispose();
     disposeSharedGeometry();
     this.three.dispose();

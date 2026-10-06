@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FrameFx, GravitySource, MatchApi, SimEvent } from '@/contracts';
+import type { FrameFxVfx } from '@/render/vfx';
 import { createMatch } from '@/sim';
 import { fakeDeps } from '@/sim/testing/fakes';
 import { FxState, IMPACT_SLOTS, ONSET_GAP, buildAudioScene } from './fx';
@@ -254,5 +255,40 @@ describe('FxState gravity wells', () => {
     src[0] = src[1] = null;
     fx.tick([], m);
     expect(fx.sample(0).wells).toHaveLength(0);
+  });
+});
+
+describe('FxState shared impact VFX (VFX_SPEC, keyed on hit.weight)', () => {
+  type Hit = Extract<SimEvent, { t: 'hit' }>;
+  const hit = (weight: Hit['weight'], attacker: 0 | 1 = 0): Hit => ({
+    ...(heavyHit(400, 200, 900) as Hit),
+    attacker,
+    target: attacker === 0 ? 1 : 0,
+    heavy: false,
+    weight,
+  });
+  const vfx = (fx: FxState): NonNullable<FrameFxVfx['vfx']> => (fx.sample(0) as FrameFxVfx).vfx ?? [];
+
+  it("one impact per blow at the sim's weight, with the struck titan's debris matter, aging in wall time", () => {
+    const fx = new FxState();
+    const m = mkMatch();
+    fx.tick([hit('heavy'), hit('catastrophic', 1)], m);
+    const v = vfx(fx);
+    expect(v.map((x) => x.weight)).toEqual([2, 3]);
+    expect(v[0]!.matter).toBe('rock'); // the asteroid
+    expect(v[1]!.matter).toBe('witness'); // the Last One / Witness took the second blow
+    expect(v[0]!.age).toBeCloseTo(1 / 60, 6);
+    for (let i = 0; i < 240; i++) fx.tick([], m);
+    expect(vfx(fx)).toHaveLength(0);
+  });
+
+  it('continuous light slices make at most one light burst per attacker per 0.1 s; events without a weight fall back', () => {
+    const fx = new FxState();
+    const m = mkMatch();
+    for (let i = 0; i < 12; i++) fx.tick([hit('light')], m);
+    expect(vfx(fx).length).toBe(2);
+    fx.reset();
+    fx.tick([{ ...hit(undefined), heavy: true }], m);
+    expect(vfx(fx)[0]!.weight).toBe(2);
   });
 });

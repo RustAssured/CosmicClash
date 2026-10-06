@@ -76,8 +76,8 @@ export function inferRamps(lab: Float32Array, count: number, rampLengths?: reado
   return rampOf;
 }
 
-/** Palette texture width; palettes are padded to this so the shader can use a constant-size 1D texture. */
-export const PALETTE_TEX_W = 64;
+/** Palette texture width; palettes are padded to this so the shader can use a constant-size 1D texture (the master palette: 128). */
+export const PALETTE_TEX_W = 128;
 
 export function preparePalette(hexes: readonly string[], rampLengths?: readonly number[]): PaletteData {
   const n = hexes.length;
@@ -339,8 +339,13 @@ export function ditherToIndex(
   return threshold < r ? b : a;
 }
 
-/** Palette as a PALETTE_TEX_W×1 RGBA8 buffer (sRGB) and a matching RGBA32F buffer of linear values for the shader. */
-export function paletteTextures(pal: PaletteData): { srgb8: Uint8Array; linear32: Float32Array } {
+/**
+ * Palette as a PALETTE_TEX_W×1 RGBA8 buffer (sRGB) and a matching RGBA32F buffer of linear values for the shader. With ceiling`n * (the master palette's highlight ceiling, master.ts) the sRGB alpha holds each entry's ceiling index; otherwise 255.
+ */
+export function paletteTextures(
+  pal: PaletteData,
+  ceiling?: Uint8Array,
+): { srgb8: Uint8Array; linear32: Float32Array } {
   const srgb8 = new Uint8Array(PALETTE_TEX_W * 4);
   const linear32 = new Float32Array(PALETTE_TEX_W * 4);
   for (let i = 0; i < PALETTE_TEX_W; i++) {
@@ -349,7 +354,7 @@ export function paletteTextures(pal: PaletteData): { srgb8: Uint8Array; linear32
       srgb8[i * 4 + k] = pal.srgb[s * 3 + k]!;
       linear32[i * 4 + k] = pal.linear[s * 3 + k]!;
     }
-    srgb8[i * 4 + 3] = 255;
+    srgb8[i * 4 + 3] = ceiling ? (ceiling[s] ?? s) : 255;
     linear32[i * 4 + 3] = 1;
   }
   return { srgb8, linear32 };

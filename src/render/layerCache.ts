@@ -1,4 +1,4 @@
-import type { RenderLayer } from '@/contracts';
+import type { RenderLayerLit } from './unified';
 
 /**
  * Pure bookkeeping for the layer texture cache: decides WHAT to upload for a layer (nothing, a dirty rect, the whole
@@ -18,6 +18,9 @@ export interface CachedLayerState {
   h: number;
   pixels: Uint32Array;
   emissive: Uint8Array | undefined;
+  /** Lit-part data (unified.ts): per-cell normal + form light, and the wet mask. */
+  light?: Uint8Array | undefined;
+  wet?: Uint8Array | undefined;
 }
 
 /** When the dirty rect covers at least this fraction of the layer a single full upload is cheaper. */
@@ -25,14 +28,16 @@ export const FULL_UPLOAD_FRACTION = 0.6;
 
 export function planUpload(
   cached: CachedLayerState | undefined,
-  layer: Pick<RenderLayer, 'version' | 'w' | 'h' | 'pixels' | 'emissive' | 'dirty'>,
+  layer: Pick<RenderLayerLit, 'version' | 'w' | 'h' | 'pixels' | 'emissive' | 'dirty' | 'light' | 'wet'>,
 ): UploadPlan {
   if (
     !cached ||
     cached.w !== layer.w ||
     cached.h !== layer.h ||
     cached.pixels !== layer.pixels ||
-    cached.emissive !== layer.emissive
+    cached.emissive !== layer.emissive ||
+    cached.light !== layer.light ||
+    cached.wet !== layer.wet
   ) {
     return { kind: 'create' };
   }

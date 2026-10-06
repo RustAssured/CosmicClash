@@ -23,6 +23,15 @@ import { FxState } from '@/app/fx';
 import { createMatch } from '@/sim';
 import { fakeDeps } from '@/sim/testing/fakes';
 import { makeRockBody } from './testSprites';
+import { masterPalette, unifyStagePalette } from '@/render/master';
+import type { FrameFxVfx } from '@/render/vfx';
+import { STAGES } from '@/stages';
+
+/** '#rrggbb' → the packed RGBA (alpha 255) captureLogical() returns. */
+const hexToPacked = (h: string): number => {
+  const v = parseInt(h.slice(1), 16);
+  return rgba((v >> 16) & 255, (v >> 8) & 255, v & 255, 255) >>> 0;
+};
 import { contractCell, makePlacement, placeLayer, sourceCell } from '@/render/layerMap';
 
 /**
@@ -346,6 +355,189 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
     );
     r.setStage('tussenruimte');
   }
+  /* ---------- 10h. the unified look (shared/UNIFICATION.md): palette snap, outline, highlight ceiling, VFX, lit parts ---------- */
+  if (r.unified) {
+    const mp = masterPalette();
+    const masterSet = new Set(mp.colors.map((h) => hexToPacked(h)));
+    const outline = hexToPacked(mp.colors[mp.ramps['outline']![0]!]!);
+    const st = 'mausoleum' as const;
+    r.setStage(st);
+    const stageSet = new Set(unifyStagePalette(STAGES[st].palette).colors.map((h) => hexToPacked(h)));
+    const body = makeRockBody('uni-rock', 99, 64, 'celadon');
+    const bx = view.x0 + 320;
+    const by = view.y0 + 180;
+    Object.assign(body.layer, { x: bx, y: by, prevX: bx, prevY: by, version: body.layer.version + 1 });
+    const fx = noFx() as FrameFxVfx;
+    fx.vfx = [
+      {
+        x: view.x0 + 160,
+        y: view.y0 + 120,
+        weight: 3,
+        age: 2 / 60,
+        dirX: 1,
+        dirY: 0,
+        seed: 7,
+        matter: 'rock',
+      },
+    ];
+    r.draw(frameOf([body.layer], { tick: 1700, stage: st, fx }));
+    const f = r.captureLogical();
+    let off = 0;
+    let figOff = 0;
+    let figs = 0;
+    const inBody = (x: number, y: number): boolean => {
+      const lx = x + view.x0 - bx + body.layer.anchorX;
+      const ly = y + view.y0 - by + body.layer.anchorY;
+      return (
+        lx >= 0 &&
+        ly >= 0 &&
+        lx < body.layer.w &&
+        ly < body.layer.h &&
+        body.layer.pixels[ly * body.layer.w + lx]! >>> 24 === 255
+      );
+    };
+    for (let y = 0; y < LOGICAL_H; y++)
+      for (let x = 0; x < LOGICAL_W; x++) {
+        const c = f[y * LOGICAL_W + x]! >>> 0;
+        if (!masterSet.has(c) && !stageSet.has(c)) off++;
+        if (inBody(x, y)) {
+          figs++;
+          if (!masterSet.has(c)) figOff++;
+        }
+      }
+    check(
+      'unified: every frame pixel is a palette colour (stage ∪ master), every titan pixel a master colour',
+      off === 0 && figOff === 0 && figs > 1000,
+      `${off} off-palette pixels, ${figOff} of ${figs} titan pixels off the master palette`,
+    );
+    // the outline: the first empty pixel left of the silhouette on each row is the outline colour
+    let rows = 0;
+    let outlined = 0;
+    const seen = new Set<string>();
+    for (let y = 0; y < LOGICAL_H; y++) {
+      let x0 = -1;
+      for (let x = 1; x < LOGICAL_W; x++)
+        if (inBody(x, y)) {
+          x0 = x;
+          break;
+        }
+      if (x0 < 2 || inBody(x0 - 1, y) || inBody(x0 - 1, y - 1) || inBody(x0 - 1, y + 1)) continue;
+      rows++;
+      const got = f[y * LOGICAL_W + x0 - 1]! >>> 0;
+      if (got === outline) outlined++;
+      else seen.add(got.toString(16));
+    }
+    check(
+      'unified: one dark outline pixel around a titan silhouette',
+      rows > 20 && outlined === rows,
+      `${outlined} of ${rows} rows outlined on the left edge${seen.size ? `; found ${[...seen].slice(0, 4).join(' ')} for ${outline.toString(16)}` : ''}`,
+    );
+    // the highlight ceiling: no non-glowing titan pixel takes a non-glowing ramp's top step
+    const capped = new Set<number>();
+    for (let i = 0; i < mp.colors.length; i++)
+      if (mp.ceiling[i] !== i) capped.add(hexToPacked(mp.colors[i]!));
+    let tops = 0;
+    for (let y = 0; y < LOGICAL_H; y++)
+      for (let x = 0; x < LOGICAL_W; x++) if (inBody(x, y) && capped.has(f[y * LOGICAL_W + x]! >>> 0)) tops++;
+    check(
+      'unified: stone / bone / metal never reach the top step (highlight ceiling)',
+      tops === 0,
+      `${tops} capped colours on the body`,
+    );
+
+    // the VFX weights: a local stepped star (never a disc), growing with the weight, no full-frame wash (D5)
+    const bg = blackBackdrop();
+    const meanLum = (px: Uint32Array): number => {
+      let s = 0;
+      for (const p of px) {
+        const lin = (v: number): number => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+        s += 0.2126 * lin(p & 255) + 0.7152 * lin((p >>> 8) & 255) + 0.0722 * lin((p >>> 16) & 255);
+      }
+      return s / px.length;
+    };
+    r.draw(frameOf([bg], { tick: 1710 }));
+    const dark = r.captureLogical();
+    const L0 = meanLum(dark);
+    const radii: number[] = [];
+    let spiky = true;
+    let wash = 0;
+    for (let w = 0; w < 4; w++) {
+      const fw = noFx() as FrameFxVfx;
+      fw.vfx = [
+        {
+          x: view.x0 + 320,
+          y: view.y0 + 180,
+          weight: w as 0 | 1 | 2 | 3,
+          age: 2 / 60,
+          dirX: 1,
+          dirY: 0,
+          seed: 3,
+          matter: 'rock',
+        },
+      ];
+      r.draw(frameOf([bg], { tick: 1711 + w, fx: fw }));
+      const g = r.captureLogical();
+      wash = Math.max(wash, meanLum(g) - L0);
+      // the star's extent per direction (16 rays from the centre: brightest pixels only)
+      const ext: number[] = [];
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        let last = 0;
+        for (let d = 0; d < 40; d++) {
+          const x = Math.round(320 + Math.cos(a) * d);
+          const y = Math.round(180 + Math.sin(a) * d);
+          const p = g[y * LOGICAL_W + x]! >>> 0;
+          if (((p & 255) + ((p >>> 8) & 255)) / 2 > 150) last = d;
+        }
+        ext.push(last);
+      }
+      radii.push(Math.max(...ext));
+      if (w >= 1 && Math.max(...ext) < 1.4 * Math.min(...ext.map((e) => Math.max(e, 1)))) spiky = false;
+    }
+    check(
+      'VFX: the four weights grow, the core flash is a star with angular spikes (not a disc), no full-frame wash (D5)',
+      radii[1]! > radii[0]! && radii[2]! > radii[1]! && radii[3]! > radii[2]! && spiky && wash < 0.05,
+      `flash reach ${radii.join(' / ')} px, frame luminance rise ${wash.toFixed(4)}`,
+    );
+
+    // lit parts: identical to the painted atlas at rest, relit by the one sky as the part turns
+    const aw = 24;
+    const lit = makeLayer('lit', 'world', 0, aw, aw) as RenderLayer & { light?: Uint8Array };
+    const plain = makeLayer('plain', 'world', 0, aw, aw);
+    lit.light = new Uint8Array(aw * aw * 4);
+    for (let i = 0; i < aw * aw; i++) {
+      lit.pixels[i] = plain.pixels[i] = rgba(120, 120, 130, 255);
+      // a face turned to screen-right, half form light
+      lit.light[i * 4] = 128 + 120;
+      lit.light[i * 4 + 1] = 128;
+      lit.light[i * 4 + 2] = 0;
+      lit.light[i * 4 + 3] = 128;
+    }
+    const meanAt = (l: RenderLayer, step: number): number => {
+      l.version++;
+      l.parts = [
+        { sx: 0, sy: 0, sw: aw, sh: aw, px: 12, py: 12, wx: view.x0 + 320, wy: view.y0 + 180, step, z: 0 },
+      ];
+      r.draw(frameOf([bg, l], { tick: 1720 + step }));
+      const c = r.debugReadFrame(0);
+      let s = 0;
+      for (let y = 174; y < 186; y++)
+        for (let x = 314; x < 326; x++) s += (c[y * LOGICAL_W + x]! >>> 8) & 255;
+      return s / 144;
+    };
+    const restLit = meanAt(lit, 0);
+    const restPlain = meanAt(plain, 0);
+    const half = ANGLE_STEPS / 2;
+    const turnLit = meanAt(lit, half);
+    const turnPlain = meanAt(plain, half);
+    check(
+      'lit parts: the painted look at rest, relit by the one sky when turned (wForm = 0.82·cos³θ)',
+      Math.abs(restLit - restPlain) < 0.5 && turnLit < turnPlain * 0.85,
+      `rest ${restLit.toFixed(1)} vs ${restPlain.toFixed(1)}; turned 180° ${turnLit.toFixed(1)} vs ${turnPlain.toFixed(1)}`,
+    );
+    r.setStage('tussenruimte');
+  }
+
   /* ---------- 10e. rotation spike: GPU clean-edge sampler = CPU twin at EVERY quantised angle (dense grid), and its cost ---------- */
   {
     const glc = document.createElement('canvas');
@@ -908,7 +1100,10 @@ async function main(): Promise<void> {
       const cx = 620 - view.x0;
       const cy = 280 - view.y0;
       // a halo appears around the emissive sprite (pixels 10–18 px away) but not around the cold one
-      const halo = meanAbsDiff(a, b, cx + 10, cy - 4, cx + 18, cy + 4);
+      // (unified path: the shared bloom, σ 3 and 10 px, snapped to the palette — measured 6–14 px out)
+      const halo = r.unified
+        ? meanAbsDiff(a, b, cx + 6, cy - 4, cx + 14, cy + 4)
+        : meanAbsDiff(a, b, cx + 10, cy - 4, cx + 18, cy + 4);
       check(
         'bloom: an emissive layer casts a glow into its surroundings',
         halo > 1.5,
@@ -980,7 +1175,14 @@ async function main(): Promise<void> {
       );
       r.draw(frameOf([bg, s], { fx, tick: 501 }));
       const c = r.captureLogical();
-      check('grain does animate from tick to tick', maxDiff(a, c).count > 100);
+      // the unified path snaps every pixel to the palette and has no grain (it would only sparkle through the dither)
+      if (r.unified)
+        check(
+          'unified path: no grain (a later tick with the same inputs renders the same)',
+          maxDiff(a, c).count === 0,
+          `differing pixels ${maxDiff(a, c).count}`,
+        );
+      else check('grain does animate from tick to tick', maxDiff(a, c).count > 100);
     }
 
     /* ---------- 9. shockwave refraction, flash, lensing, aberration act where they should ---------- */

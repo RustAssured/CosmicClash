@@ -22,6 +22,7 @@ import { makePlacement, placeLayer, type LayerPlacement } from './layerMap';
 import type { LayerTextures } from './layerTextures';
 import { LAYER_FRAG, LAYER_VERT, PART_FRAG } from './shaders';
 import { ROT_LUT, rotBoundsEx } from './rotsprite';
+import { TITAN_SKY, isTitanLayer } from './unified';
 
 /** Maximum number of 2D layers composited per frame (extra layers are dropped with one warning). */
 export const MAX_LAYERS = 48;
@@ -91,6 +92,12 @@ export class LayerCompositor {
         uDest: { value: [0, 0] },
         uAlpha: { value: 1 },
         uEmisGain: this.emisGain,
+        uId: { value: new Vector4() },
+        uWet: { value: null },
+        uHasWet: { value: 0 },
+        uLight: { value: null },
+        uHasLight: { value: 0 },
+        uSkyDir: { value: TITAN_SKY.dir },
       },
       depthTest: false,
       depthWrite: false,
@@ -126,6 +133,9 @@ export class LayerCompositor {
         uScreen: { value: 0 },
         uAlpha: { value: 1 },
         uEmisGain: this.emisGain,
+        uId: { value: new Vector4() },
+        uWet: { value: null },
+        uHasWet: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -234,6 +244,9 @@ export class LayerCompositor {
           u.uFacing!.value = layer.facing === -1 ? -1 : 1;
           u.uDest!.value = [qx, qy];
           u.uAlpha!.value = layer.alpha;
+          setId(u, layer, order, gpu);
+          u.uLight!.value = gpu.light;
+          u.uHasLight!.value = gpu.light ? 1 : 0;
           setLayerBlend(s.material, layer.blend);
         }
         continue;
@@ -265,6 +278,7 @@ export class LayerCompositor {
       u.uHasEmis!.value = gpu.emis ? 1 : 0;
       u.uScreen!.value = p.screen ? 1 : 0;
       u.uAlpha!.value = layer.alpha;
+      setId(u, layer, order, gpu);
       setLayerBlend(slot.material, layer.blend);
     }
     this.drawn = used + usedParts;
@@ -294,6 +308,22 @@ export class LayerCompositor {
     for (const s of this.slots) s.material.dispose();
     for (const s of this.partSlots) s.material.dispose();
   }
+}
+
+/**
+ * The unified path's id attachment: titan flag (isTitanLayer), the draw rank (depth seams: a higher rank is in front) and the wet
+ * mask. Additive layers write nothing there.
+ */
+function setId(
+  u: Record<string, { value: unknown }>,
+  layer: RenderLayer,
+  order: number,
+  gpu: { wet: unknown },
+): void {
+  const titan = layer.blend !== 'add' && isTitanLayer(layer);
+  (u.uId!.value as Vector4).set(titan ? 1 : 0, Math.min(255, order) / 255, 0, 0);
+  u.uWet!.value = gpu.wet;
+  u.uHasWet!.value = gpu.wet && titan ? 1 : 0;
 }
 
 function setLayerBlend(m: RawShaderMaterial, blend: 'normal' | 'add'): void {

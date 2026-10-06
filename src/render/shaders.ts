@@ -237,9 +237,13 @@ uniform vec2 uFL;            // facing (+1/-1), lean
 uniform int uScreen;         // 1 = screen-space layer drawn 1:1
 uniform float uAlpha;
 uniform float uEmisGain;
+uniform vec4 uId;            // unified path: titan flag, draw rank / 255, wet, 0 (all 0 for additive layers)
+uniform sampler2D uWet;      // R8 per cell (optional): materials allowed to reach the palette's top step
+uniform int uHasWet;
 
 layout(location = 0) out vec4 oColor;
 layout(location = 1) out vec4 oEmis;
+layout(location = 2) out vec4 oId;
 
 void main() {
   ivec2 P = ivec2(floor(gl_FragCoord.x), int(floor(uRes.y - gl_FragCoord.y)));
@@ -267,6 +271,8 @@ void main() {
   float a = c.a * uAlpha;
   oColor = vec4(c.rgb, a);
   oEmis = vec4(c.rgb * e * uEmisGain, a);
+  float wet = uHasWet == 1 ? texelFetch(uWet, cell, 0).r : uId.b;
+  oId = vec4(uId.r, uId.g, wet * uId.r, a);
 }
 `;
 
@@ -281,18 +287,48 @@ uniform int uHasEmis;
 uniform ivec2 uDest;         // destination pivot corner (logical px)
 uniform float uAlpha;
 uniform float uEmisGain;
+uniform vec4 uId;            // unified path: titan flag, draw rank / 255, wet, 0
+uniform sampler2D uWet;
+uniform int uHasWet;
+// Lit parts (unified.ts, proposal 167): per cell normal (r, g, b) and reference form light (a), lit by the one sky.
+uniform sampler2D uLight;
+uniform int uHasLight;
+uniform vec3 uSkyDir;        // TITAN_SKY.dir (from the surface toward the light; x right, y down, z toward the camera)
 ${ROTSPRITE_GLSL}
 layout(location = 0) out vec4 oColor;
 layout(location = 1) out vec4 oEmis;
+layout(location = 2) out vec4 oId;
+// URI_SPEC §2.3: at rest the reference's own form light dominates; the further a part rotates, the more live normal-based
+// light takes over (wForm = 0.82 · max(0, cos θ)³). The painted atlas IS the rest look, so the part is scaled by
+// lum(θ) / lum(0): exact at rest, relit as it turns (the palette snap steps it back onto its ramp).
+float partLum(vec4 L, vec2 cs, float facing) {
+  float lnx = (L.r * 255.0 - 128.0) / 120.0;
+  float lny = (L.g * 255.0 - 128.0) / 120.0;
+  float lnz = L.b * 255.0 / 250.0;
+  float snx = (lnx * cs.x - lny * cs.y) * facing;
+  float sny = lnx * cs.y + lny * cs.x;
+  float dk = max(0.0, snx * uSkyDir.x + sny * uSkyDir.y + lnz * uSkyDir.z);
+  float wForm = 0.82 * pow(max(0.0, cs.x), 3.0);
+  return wForm * L.a * 1.3 + (1.0 - wForm) * (0.06 + 0.58 * dk);
+}
 void main() {
   ivec2 P = ivec2(floor(gl_FragCoord.x), int(floor(uRes.y - gl_FragCoord.y)));
   ivec2 texel;
   vec4 c = rotSampleGL(P - uDest, texel);
   if (c.a <= 0.0) discard;
   float e = uHasEmis == 1 ? texelFetch(uEmis, texel, 0).r : 0.0;
+  if (uHasLight == 1 && e <= 0.0) {
+    vec4 L = texelFetch(uLight, texel, 0);
+    float fc = float(uFacing);
+    float rest = partLum(L, vec2(1.0, 0.0), fc);
+    float now = partLum(L, vec2(uRotCS) / 16384.0, fc);
+    c.rgb = clamp(c.rgb * (now / max(rest, 0.05)), 0.0, 1.0);
+  }
   float a = c.a * uAlpha;
   oColor = vec4(c.rgb, a);
   oEmis = vec4(c.rgb * e * uEmisGain, a);
+  float wet = uHasWet == 1 ? texelFetch(uWet, texel, 0).r : uId.b;
+  oId = vec4(uId.r, uId.g, wet * uId.r, a);
 }
 `;
 /* ------------------------------------------------------------------------------------------------ *
@@ -372,6 +408,153 @@ void main() {
 `;
 
 /* ------------------------------------------------------------------------------------------------ *
+ *  The unified titan path (shared/UNIFICATION.md, D31): edges, seams and the final palette snap.
+ * ------------------------------------------------------------------------------------------------ */
+
+/**
+ * What a frame pixel is, read from the layer target's id attachment (GL texel coords): 0 nothing of ours (scenery), 1 an
+ * effect / debris / non-titan layer pixel, 2 a titan body pixel, 3 the one-pixel dark outline around a titan (plus a second
+ * pixel on the shadow side, right and below, away from the one sky's upper-left key).
+ */
+const FIGURE_GLSL = /* glsl */ `
+uniform sampler2D uLayerCol;   // layer colour target (alpha = coverage)
+uniform sampler2D uLayerId;    // layer id target: r titan, g draw rank, b wet (a non-titan layer drawn on top clears r)
+bool titanAt(ivec2 q) {
+  if (q.x < 0 || q.y < 0 || q.x >= int(uRes.x) || q.y >= int(uRes.y)) return false;
+  return texelFetch(uLayerId, q, 0).r > 0.5;
+}
+bool coveredAt(ivec2 q) {
+  if (q.x < 0 || q.y < 0 || q.x >= int(uRes.x) || q.y >= int(uRes.y)) return false;
+  return texelFetch(uLayerCol, q, 0).a > 0.0;
+}
+int figureKind(ivec2 q) {
+  int k = 0;
+  if (coveredAt(q)) {
+    k = titanAt(q) ? 2 : 1;
+  } else if (titanAt(q + ivec2(1, 0)) || titanAt(q - ivec2(1, 0)) || titanAt(q + ivec2(0, 1)) || titanAt(q - ivec2(0, 1))) {
+    k = 3;
+  } else if ((titanAt(q - ivec2(2, 0)) && !coveredAt(q - ivec2(1, 0))) || (titanAt(q + ivec2(0, 2)) && !coveredAt(q + ivec2(0, 1)))) {
+    // shadow side: a second outline pixel to the right of and below a silhouette (texel y is up: "below" is −y)
+    k = 3;
+  }
+  return k;
+}
+`;
+
+/**
+ * Unified composite of the layer target over the dithered scenery (replaces LAYER_COMPOSITE_FRAG on the unified path):
+ *  - a titan pixel next to a titan pixel drawn IN FRONT of it (higher draw rank) is the back part's edge: darkened, a depth seam;
+ *  - an empty pixel next to a titan silhouette becomes the outline colour (one pixel; two on the shadow side).
+ * Premultiplied "over", like the plain composite.
+ */
+export const TITAN_FINISH_FRAG = /* glsl */ `${HEAD}${COMMON}${FIGURE_GLSL}
+uniform sampler2D uLayerEmis;
+uniform vec3 uOutline;       // sRGB
+uniform vec3 uSeam;          // multiplier on a back part's edge pixels
+layout(location = 0) out vec4 oColor;
+layout(location = 1) out vec4 oEmis;
+void main() {
+  ivec2 q = ivec2(gl_FragCoord.xy);
+  vec4 c = texelFetch(uLayerCol, q, 0);
+  if (c.a > 0.0) {
+    vec4 id = texelFetch(uLayerId, q, 0);
+    if (id.r > 0.5) {
+      float r = id.g + 0.5 / 255.0;
+      ivec2 n[4] = ivec2[4](ivec2(1, 0), ivec2(-1, 0), ivec2(0, 1), ivec2(0, -1));
+      for (int i = 0; i < 4; i++) {
+        ivec2 p = q + n[i];
+        if (!titanAt(p)) continue;
+        if (texelFetch(uLayerId, p, 0).g > r) {
+          c.rgb *= uSeam;
+          break;
+        }
+      }
+    }
+    oColor = c;
+    oEmis = texelFetch(uLayerEmis, q, 0);
+    return;
+  }
+  if (figureKind(q) == 3) {
+    oColor = vec4(uOutline, 1.0);
+    oEmis = vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+  discard;
+}
+`;
+
+/** Separable 9-tap gaussian of an RGB texture (σ = 2 taps: `uStep` = σ / 2 in uv). The shared bloom's two blurs. */
+export const BLUR_FRAG = /* glsl */ `${HEAD}
+uniform sampler2D uSrc;
+uniform vec2 uStep;
+in vec2 vUv;
+out vec4 o;
+void main() {
+  float w[5] = float[5](0.2270, 0.1946, 0.1216, 0.0541, 0.0162);
+  vec3 s = texture(uSrc, vUv).rgb * w[0];
+  for (int i = 1; i < 5; i++) {
+    s += (texture(uSrc, vUv + uStep * float(i)).rgb + texture(uSrc, vUv - uStep * float(i)).rgb) * w[i];
+  }
+  o = vec4(s, 1.0);
+}
+`;
+
+/**
+ * The final palette snap (unified path, end of POST_FRAG): every pixel is snapped with the ordered 4×4 Bayer matrix and the same
+ * pair LUT the scenery uses — titan, effect and outline pixels to the MASTER palette, scenery pixels to the stage palette (already
+ * pulled toward the master, master.ts). A non-glowing, non-wet titan pixel never takes a ramp's top step (highlight ceiling).
+ */
+const SNAP_GLSL = /* glsl */ `
+uniform int uUnified;
+uniform sampler3D uMasterLut;
+uniform float uMasterSize;
+uniform sampler2D uMasterSrgb;   // alpha = ceiling index / 255
+uniform sampler2D uMasterLin;
+uniform sampler3D uStageLut;
+uniform float uStageSize;
+uniform sampler2D uStageSrgb;
+uniform sampler2D uStageLin;
+uniform sampler2D uLayerEmisT;
+uniform int uOutlineIdx;        // the outline's master palette index (written exactly, never dithered)
+uniform vec2 uSpread;           // ordered-dither spread (0..255 sRGB units): figures, scenery (the oracles: 26, 18)
+vec3 srgbToLinS(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
+int snapIndex(sampler3D lut, float size, sampler2D lin, sampler2D srgb, vec3 s, float th, float spread) {
+  vec3 t = srgbToLinS(s);
+  vec4 e = texture(lut, (s * (size - 1.0) + 0.5) / size);
+  int ia = int(e.r * 255.0 + 0.5);
+  int ib = int(e.g * 255.0 + 0.5);
+  vec3 A = texelFetch(lin, ivec2(ia, 0), 0).rgb;
+  vec3 B = texelFetch(lin, ivec2(ib, 0), 0).rgb;
+  vec3 d = B - A;
+  float len2 = dot(d, d);
+  float r = len2 > 1e-9 ? clamp(dot(t - A, d) / len2, 0.0, 1.0) : 0.0;
+  // the oracles' ordered dither (uri/src/00_shared_helpers.js quantize): a Bayer offset of ±spread/2 (in 0..255 sRGB units)
+  // on the colour before the nearest-colour pick. Projected on the pair: only colours within that margin of the midpoint
+  // between two palette steps dither; painted colours already near a step stay solid.
+  vec3 sa = texelFetch(srgb, ivec2(ia, 0), 0).rgb;
+  float D = max(length((texelFetch(srgb, ivec2(ib, 0), 0).rgb - sa) * 255.0), 1.0);
+  float rr = r + (th - 0.5) * spread * 1.7 / D;
+  return (ia != ib && rr > 0.5) ? ib : ia;
+}
+vec3 snapPixel(vec3 s, ivec2 q, float th) {
+  int kind = figureKind(q);
+  vec3 res = vec3(0.0);
+  if (kind == 3) {
+    res = texelFetch(uMasterSrgb, ivec2(uOutlineIdx, 0), 0).rgb;
+  } else if (kind == 0) {
+    res = texelFetch(uStageSrgb, ivec2(snapIndex(uStageLut, uStageSize, uStageLin, uStageSrgb, s, th, uSpread.y), 0), 0).rgb;
+  } else {
+    int i = snapIndex(uMasterLut, uMasterSize, uMasterLin, uMasterSrgb, s, th, uSpread.x);
+    if (kind == 2) {
+      bool glow = luma(texelFetch(uLayerEmisT, q, 0).rgb) > 0.02 || texelFetch(uLayerId, q, 0).b > 0.5;
+      if (!glow) i = int(texelFetch(uMasterSrgb, ivec2(i, 0), 0).a * 255.0 + 0.5);
+    }
+    res = texelFetch(uMasterSrgb, ivec2(i, 0), 0).rgb;
+  }
+  return res;
+}
+`;
+/* ------------------------------------------------------------------------------------------------ *
  *  God rays: radial march toward the stage light through the frame, occluded by layer + dust alpha. Half-res.
  * ------------------------------------------------------------------------------------------------ */
 export const GODRAYS_FRAG = /* glsl */ `${HEAD}${COMMON}
@@ -423,9 +606,12 @@ void main() {
  *  Nothing here changes the whole frame's brightness (D5): there is no flash; light from impacts is LOCAL (impact lights).
  *  Everything keeps to the pixel grid: samples snap to whole source pixels and bloom/vignette are dithered.
  * ------------------------------------------------------------------------------------------------ */
-export const POST_FRAG = /* glsl */ `${HEAD}${COMMON}${LIGHTS_GLSL}
+export const POST_FRAG = /* glsl */ `${HEAD}${COMMON}${LIGHTS_GLSL}${FIGURE_GLSL}${SNAP_GLSL}
 uniform sampler2D uFrame;
 uniform sampler2D uBloom;
+uniform sampler2D uBloomB;     // unified path: the far (≈ 10 px) blur; uBloom is then the near (≈ 3 px) one
+uniform vec2 uBloomMix;        // unified path: near, far gains (SHARED_BLOOM); (0, 0) = the classic pyramid in uBloom
+uniform float uShockE[8];      // per shockwave: vertical scale of the ring (1 = round; < 1 = flattened toward the camera)
 uniform sampler2D uGod;
 uniform sampler2D uBayer;
 uniform sampler2D uCover;    // layer colour target (alpha = coverage of the 2D layers)
@@ -519,6 +705,7 @@ void main() {
     if (i >= uNumShock) break;
     vec4 s = uShock[i];
     vec2 d = p - s.xy;
+    d.y /= max(uShockE[i], 0.25);
     float r = length(d) + 1e-3;
     float t = 5.0 + 0.11 * s.z;
     float ring = exp(-pow((r - s.z) / t, 2.0));
@@ -551,7 +738,7 @@ void main() {
 
   float th = texelFetch(uBayer, ivec2(gl_FragCoord.xy) & 3, 0).r;
   vec2 uv = pxToUv(sp);
-  vec3 bloom = texture(uBloom, uv).rgb * uBloomGain;
+  vec3 bloom = (uBloomMix.x + uBloomMix.y > 0.0 ? texture(uBloom, uv).rgb * uBloomMix.x + texture(uBloomB, uv).rgb * uBloomMix.y : texture(uBloom, uv).rgb) * uBloomGain;
   bloom = vec3(ditherQ(bloom.r, uBloomLevels, th), ditherQ(bloom.g, uBloomLevels, th), ditherQ(bloom.b, uBloomLevels, th));
   vec4 g = texture(uGod, uv);
   vec3 rays = (uGodColor * g.r + g.gba * uGodTint) * uGodGain;
@@ -559,11 +746,19 @@ void main() {
   // Glow never washes out a sprite's own pixels (silhouettes stay crisp); it still blooms around them.
   float cov = uHasLayers == 1 ? texelFetch(uCover, pxToTexel(clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1)), 0).a : 0.0;
   if (uRelight == 1 && uNLt >= 2 && cov > 0.5) col = relight(col, floor(sp) + 0.5, th);
+  // unified path: the glow damping holds on titan bodies only (backdrop / effect layers take the bloom like scenery)
+  if (uUnified == 1) cov = titanAt(pxToTexel(clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1))) ? 1.0 : 0.0;
   col = col + bloom * (1.0 - uGlowDamp.x * cov) + rays * (1.0 - uGlowDamp.y * cov);
 
   float vig = 1.0 - uVignette * pow(smoothstep(0.55, 1.45, length(fromC * vec2(0.85, 1.0))), 1.6);
   col *= ditherQ(vig, 12.0, th);
 
+  if (uUnified == 1) {
+    // the final palette snap: no grain (it would only sparkle through the dither), every pixel lands on a palette colour
+    ivec2 sq = pxToTexel(clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1));
+    o = vec4(snapPixel(clamp(col, 0.0, 1.0), sq, th), 1.0);
+    return;
+  }
   float n = hash13(vec3(floor(gl_FragCoord.xy), uFrameNo)) - 0.5;
   col += n * uGrain * (0.35 + luma(col));
   o = vec4(clamp(col, 0.0, 1.0), 1.0);

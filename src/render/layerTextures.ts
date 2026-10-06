@@ -7,6 +7,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { RenderLayer } from '@/contracts';
+import type { RenderLayerLit } from './unified';
 import { planUpload, StaleRegistry, type CachedLayerState } from './layerCache';
 
 /**
@@ -28,11 +29,18 @@ interface Entry {
   state: CachedLayerState;
   bytes: Uint8Array;
   emisBytes: Uint8Array | null;
+  light: DataTexture | null;
+  lightBytes: Uint8Array | null;
+  wet: DataTexture | null;
+  wetBytes: Uint8Array | null;
 }
 
 export interface LayerGpu {
   tex: DataTexture;
   emis: DataTexture | null;
+  /** Lit parts (unified.ts): RGBA normal + form light per cell, and the R8 wet mask. */
+  light: DataTexture | null;
+  wet: DataTexture | null;
 }
 
 export class LayerTextures {
@@ -54,7 +62,7 @@ export class LayerTextures {
     this.frame++;
   }
 
-  acquire(layer: RenderLayer): LayerGpu {
+  acquire(layer: RenderLayer & Partial<RenderLayerLit>): LayerGpu {
     let e = this.entries.get(layer.id, this.frame);
     const plan = planUpload(e?.state, layer);
     if (plan.kind === 'create') {
@@ -68,6 +76,8 @@ export class LayerTextures {
       if (plan.kind === 'full') {
         e.tex.needsUpdate = true;
         if (e.emis) e.emis.needsUpdate = true;
+        if (e.light) e.light.needsUpdate = true;
+        if (e.wet) e.wet.needsUpdate = true;
         this.uploads.full++;
         this.uploads.texels += layer.w * layer.h;
       } else if (plan.kind === 'rect') {
@@ -103,7 +113,7 @@ export class LayerTextures {
     this.reset();
   }
 
-  private create(layer: RenderLayer): Entry {
+  private create(layer: RenderLayer & Partial<RenderLayerLit>): Entry {
     const bytes = new Uint8Array(layer.pixels.buffer, layer.pixels.byteOffset, layer.pixels.byteLength);
     const tex = new DataTexture(bytes, layer.w, layer.h, RGBAFormat, UnsignedByteType);
     configure(tex, 4);
@@ -114,17 +124,37 @@ export class LayerTextures {
       emis = new DataTexture(emisBytes, layer.w, layer.h, RedFormat, UnsignedByteType);
       configure(emis, 1);
     }
+    let light: DataTexture | null = null;
+    let lightBytes: Uint8Array | null = null;
+    if (layer.light) {
+      lightBytes = layer.light;
+      light = new DataTexture(lightBytes, layer.w, layer.h, RGBAFormat, UnsignedByteType);
+      configure(light, 4);
+    }
+    let wet: DataTexture | null = null;
+    let wetBytes: Uint8Array | null = null;
+    if (layer.wet) {
+      wetBytes = layer.wet;
+      wet = new DataTexture(wetBytes, layer.w, layer.h, RedFormat, UnsignedByteType);
+      configure(wet, 1);
+    }
     return {
       tex,
       emis,
       bytes,
       emisBytes,
+      light,
+      lightBytes,
+      wet,
+      wetBytes,
       state: {
         version: layer.version,
         w: layer.w,
         h: layer.h,
         pixels: layer.pixels,
         emissive: layer.emissive,
+        light: layer.light,
+        wet: layer.wet,
       },
     };
   }
@@ -132,9 +162,14 @@ export class LayerTextures {
   private destroy(e: Entry): void {
     e.tex.dispose();
     e.emis?.dispose();
+    e.light?.dispose();
+    e.wet?.dispose();
   }
 
   private uploadRect(e: Entry, layer: RenderLayer, x0: number, y0: number, x1: number, y1: number): void {
+    // lit / wet data change with the pixels (a torn chunk): small, uploaded whole
+    if (e.light) e.light.needsUpdate = true;
+    if (e.wet) e.wet.needsUpdate = true;
     const r = this.renderer;
     const gl = r.getContext() as WebGL2RenderingContext;
     const props = r.properties.get(e.tex) as { __webglTexture?: WebGLTexture } | undefined;
