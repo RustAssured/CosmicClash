@@ -292,12 +292,16 @@ export class LayerCompositor {
     this.liveUsed = false;
     for (let i = 0; i < n; i++) {
       const layer = this.sorted[i]!;
-      if (layer.parts && layer.parts.length > 0 && layer.space === 'world') {
+      // a rig (or 우리's live elements alone, once every part has broken away)
+      if (
+        layer.space === 'world' &&
+        ((layer.parts && layer.parts.length > 0) || (layer as RenderLayerLit).uriLive)
+      ) {
         // a rig: the layer is an atlas, each part drawn rotated (and mirrored by `facing`) about its pivot, in part-z order
         const gpu = this.textures.acquire(layer);
         const ps = this.partOrder;
         ps.length = 0;
-        for (const part of layer.parts) {
+        for (const part of layer.parts ?? []) {
           let j = ps.length;
           while (j > 0 && ps[j - 1]!.z > part.z) {
             ps[j] = ps[j - 1]!;

@@ -328,6 +328,75 @@ async function perf(
   return res;
 }
 
+/**
+ * 우리's damage visuals in a real match (uri vs the Witness on `stage`): after `ticks` of fighting, the loop is set to `hp`; with
+ * `breakAt` ≥ 0 the body breaks apart (the behaviour's own breakApart, plus the cue S2 emits for the shared VFX) and the match
+ * runs `breakAt` more ticks before the frame is drawn.
+ */
+function uriDamage(stage: StageId, ticks: number, hp: number, breakAt = -1): string {
+  renderer.debugSetUnified(true);
+  renderer.setStage(stage);
+  const m = newMatch(stage, true, 21, 'uri-witness');
+  const fx = new FxState();
+  const cam = createCamera();
+  cam.reset(m.fighters[0].view.x, m.fighters[0].view.y);
+  const beh = (m.fighters[0] as unknown as { behaviour: Record<string, unknown> }).behaviour as {
+    kin: { hp: number };
+    breakApart(): void;
+    coreAt: { hx: number; hy: number };
+  };
+  const run = (n: number): void => {
+    for (let i = 0; i < n; i++) {
+      m.step();
+      fx.tick(m.events, m);
+      cam.tick(
+        { a: cameraTargetOf(m.fighters[0].view), b: cameraTargetOf(m.fighters[1].view), arena: m.arena },
+        m.events,
+      );
+    }
+  };
+  run(ticks);
+  beh.kin.hp = hp;
+  run(2);
+  if (breakAt >= 0) {
+    beh.breakApart();
+    const ev = [...m.events];
+    fx.tick(
+      [
+        ...ev,
+        {
+          t: 'cue',
+          slot: 0,
+          titan: m.fighters[0].view.titan,
+          id: 'break-apart',
+          x: beh.coreAt.hx,
+          y: beh.coreAt.hy,
+          amount: 1,
+        },
+      ],
+      m,
+    );
+    run(breakAt);
+  }
+  const c = cam.sample(0);
+  const layers: RenderLayer[] = [];
+  for (const f of m.fighters) layers.push(...f.renderLayers(c.view, 0));
+  layers.push(...m.world.renderLayers(c.view, 0));
+  for (let k = 0; k < 2; k++)
+    renderer.draw({
+      tick: m.tick,
+      timeSec: m.tick / 60,
+      alpha: 0,
+      camera: c.state,
+      view: c.view,
+      stage,
+      layers,
+      ui: null,
+      fx: fx.sample(0),
+    });
+  return canvasPng();
+}
+
 function canvasPng(): string {
   const px = renderer.captureLogical();
   out.width = LOGICAL_W;
@@ -342,6 +411,7 @@ function canvasPng(): string {
   weightsAt,
   fight,
   perf,
+  uriDamage,
   canvasPng,
 };
 document.body.dataset.ready = '1';

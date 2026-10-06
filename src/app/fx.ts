@@ -86,7 +86,7 @@ interface ImpactLight {
 }
 
 /** Per-titan light: [r,g,b] 0..1, falloff radius px, base intensity. Bright bodies light the scenery and the other sprite. */
-const TITAN_LIGHT: Record<TitanId, { c: [number, number, number]; radius: number; base: number }> = {
+const TITAN_LIGHT: Partial<Record<TitanId, { c: [number, number, number]; radius: number; base: number }>> = {
   supernova: { c: [1, 0.72, 0.38], radius: 280, base: 0.95 },
   blackhole: { c: [1, 0.6, 0.32], radius: 210, base: 0.5 },
   lastone: { c: [0.62, 0.95, 0.88], radius: 120, base: 0.28 },
@@ -411,6 +411,10 @@ export class FxState {
         case 'ultimate':
           if (e.phase === 'start') this.heat += 2;
           break;
+        case 'cue':
+          // 우리's break-apart: the catastrophic recipe plus its snapping ring (S2 emits the cue)
+          if (e.id === 'break-apart') this.pushVfx(e.x, e.y, 3, 0, 1, 'uri', true, match);
+          break;
         case 'hazard':
           this.hazard(e, match);
           break;
@@ -525,16 +529,31 @@ export class FxState {
           : (titan as string) === 'uri'
             ? 'uri'
             : 'rock';
+    this.pushVfx(e.x, e.y, weight, e.dirX, e.dirY, matter, false, match, e.attacker);
+  }
+
+  private pushVfx(
+    x: number,
+    y: number,
+    weight: VfxWeight,
+    dirX: number,
+    dirY: number,
+    matter: VfxMatter,
+    snap: boolean,
+    match: MatchApi,
+    salt = 2,
+  ): void {
     if (this.impactsVfx.length >= MAX_VFX_IMPACTS) this.impactsVfx.shift();
     this.impactsVfx.push({
-      x: e.x,
-      y: e.y,
+      x,
+      y,
       weight,
       age: 0,
-      dirX: e.dirX,
-      dirY: e.dirY,
-      seed: (Math.imul(match.tick, 2654435761) ^ (e.attacker * 7919 + this.impactsVfx.length)) >>> 0,
+      dirX,
+      dirY,
+      seed: (Math.imul(match.tick, 2654435761) ^ (salt * 7919 + this.impactsVfx.length)) >>> 0,
       matter,
+      ...(snap ? { snap: true } : {}),
     });
   }
 

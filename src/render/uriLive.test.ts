@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { URI_LOOP_REST, coreSurface, h3, n3, uriLoopPixels, type UriLiveFx } from './uriLive';
+import { URI_LOOP_REST, coreSurface, h3, n3, uriLoopPixels, uriPlumePixels, type UriLiveFx } from './uriLive';
 
 const fx = (over: Partial<UriLiveFx> = {}): UriLiveFx => ({
   hotX: 346.7,
@@ -53,5 +53,28 @@ describe("우리's live elements (the oracle's cores, loop and orbit)", () => {
     // below 40 integrity the second row goes, and past 60 % damage the loop starts to break up
     const hurt = uriLoopPixels(fx({ hp: 20 }), 0, 0, back, front);
     expect(hurt.back + hurt.front).toBeLessThan((n.back + n.front) / 2);
+    // broken apart: no loop, no orbit
+    expect(uriLoopPixels(fx({ hp: 0, broken: true }), 0, 0, back, front)).toEqual({ back: 0, front: 0 });
+  });
+
+  it('draws no plume for a lost pylon or one with no thrust', () => {
+    const out = new Float32Array(4096 * 5);
+    const p = { x: 300, y: 300, a: Math.PI / 2, th: 0.5 };
+    const both = uriPlumePixels(fx({ pylons: [p, p] }), 0, 0, out);
+    expect(both).toBeGreaterThan(100);
+    expect(uriPlumePixels(fx({ pylons: [p, { ...p, th: 0 }] }), 0, 0, out)).toBe(both / 2);
+    expect(
+      uriPlumePixels(
+        fx({
+          pylons: [
+            { ...p, lost: true },
+            { ...p, th: 0 },
+          ],
+        }),
+        0,
+        0,
+        out,
+      ),
+    ).toBe(0);
   });
 });

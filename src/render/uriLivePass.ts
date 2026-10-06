@@ -273,7 +273,10 @@ export class UriLivePass {
         c.mat.uniforms.uSurfSize!.value = [s.w, s.h];
       }
       (c.mat.uniforms.uCore!.value as Vector4).set(x, y, R, k === 0 ? 1 : 0);
-      (c.mat.uniforms.uSpinDim!.value as Vector2).set(fx.spin, 1);
+      (c.mat.uniforms.uSpinDim!.value as Vector2).set(
+        fx.spin,
+        fx.broken ? 0.35 + 0.25 * Math.sin(fx.t * 6) : 1,
+      );
       c.mesh.visible = true;
       c.mesh.renderOrder = ++order;
     }

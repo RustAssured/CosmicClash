@@ -57,6 +57,12 @@ export interface VfxImpact {
   dirY: number;
   seed: number;
   matter: VfxMatter;
+  /**
+   * 우리's break-apart (the oracle's breakApart ring): besides the catastrophic recipe, a 3 px pale blue-white ring flattened to 0.55
+   * that grows 7 px a frame from 6 px while it fades (alpha 1.4 − 0.012 per frame: about 2 s). The oracle's flash disc is a
+   * placeholder (VFX_SPEC): the shared star flash stands in for it.
+   */
+  snap?: boolean;
 }
 export type FrameFxVfx = FrameFx & { vfx?: readonly VfxImpact[] };
 
@@ -172,6 +178,7 @@ const K_ROCK = 3;
 const K_SPARK = 4;
 const K_DUST = 5;
 const K_EDGE = 6;
+const K_SNAP = 7;
 
 /** Palette table indices (uniform uPal): flash ramp 0..5 (dark → white), dust 6..12, matter debris ramps 6 each from 13. */
 const PAL_FLASH = 0;
@@ -292,6 +299,15 @@ export function buildVfxInstances(
       put(K_DUST, px, py, r, [density, 1 + Math.floor(vfxHash(s, 1200 + i) * 3), (s + i) & 0xffff, 0], []);
     }
   }
+  // 우리's break-apart ring (on top of the debris it flings)
+  for (let ii = first; ii < impacts.length; ii++) {
+    const im = impacts[ii]!;
+    if (!im.snap || !(im.age >= 0)) continue;
+    const f = Math.floor(im.age * 60 + 1e-6);
+    const a = 1.4 - 0.012 * f;
+    if (a <= 0) continue;
+    put(K_SNAP, im.x - vx, im.y - vy, 6 + 7 * f, [Math.min(1, a), 0.55, 0, 0], []);
+  }
   // the anticipation and the core flash go last: they sit on top of the debris and sparks thrown from under them
   for (let ii = first; ii < impacts.length; ii++) {
     const im = impacts[ii]!;
@@ -353,7 +369,7 @@ precision highp int;
 precision highp sampler2D;
 uniform vec2 uRes;
 uniform sampler2D uBayer;
-uniform vec3 uPal[37];
+uniform vec3 uPal[38];
 uniform vec2 uLightDir;   // screen direction TOWARD the one sky's key (upper-left)
 flat in vec4 vA;
 flat in vec4 vB;
@@ -449,6 +465,14 @@ void main() {
     emit(uPal[6 + int(vB.y + 0.5)], false);
     return;
   }
+  if (kind == 7) {
+    // 우리's break-apart ring: 3 px, pale blue-white, flattened 0.55, fading through the dither
+    vec2 e = vec2(o.x, o.y / vB.y);
+    float r = length(e);
+    if (abs(r - s) > 1.5 || th >= vB.x) discard;
+    emit(uPal[37], true);
+    return;
+  }
   if (kind == 6) {
     // the shockwave's thin bright leading edge, flattened toward the camera, thinning out as it fades
     vec2 e = vec2(o.x, o.y / vB.y);
@@ -490,7 +514,7 @@ export class VfxPass {
     this.geo.setAttribute('aB', this.aB);
     this.geo.setAttribute('aC', this.aC);
     this.geo.instanceCount = 0;
-    const pal = new Float32Array(37 * 3);
+    const pal = new Float32Array(38 * 3);
     const set = (i: number, h: string): void => {
       const c = hex(h);
       pal[i * 3] = pr(c) / 255;
@@ -512,6 +536,8 @@ export class VfxPass {
       [...VFX_RAMPS.rock],
     ];
     tables.forEach((t, k) => t.forEach((h, i) => set(PAL_MATTER + k * 6 + i, h)));
+    // the break-apart ring's pale blue-white (the oracle's rgba(230, 240, 255)), snapped to the master palette by the final pass
+    set(37, '#e6f0ff');
     const l = TITAN_SKY.dir;
     const ll = Math.hypot(l[0], l[1]) || 1;
     this.mat = new RawShaderMaterial({

@@ -53,8 +53,10 @@ export interface UriLiveFx {
   /** Seconds (noise clock) and the cores' spin (rad: the oracle's CSPIN, +0.25 rad/s). */
   t: number;
   spin: number;
-  /** Loop integrity 0..100 (the oracle's hp). */
+  /** Loop integrity 0..100 (the oracle's hp): thins, flickers and roughens the loop as it falls. */
   hp: number;
+  /** Broken apart (the oracle's roken): no loop and no orbit; the two cores stay, dimmed and flickering (0.35 + 0.25·sin 6t). */
+  broken?: boolean;
   loop: UriLoopState;
   /** Draw the live elements right after the part with this z. */
   afterZ: number;
@@ -78,7 +80,10 @@ export interface UriPylon {
   x: number;
   y: number;
   a: number;
+  /** Thrust; 0 = no plume (a lost pylon). A live pylon's plume is drawn at max(0.15, th) as in the oracle. */
   th: number;
+  /** The pylon is gone (torn off): no plume. */
+  lost?: boolean;
 }
 
 /** The fists' spread at rest (uri/docs/TUNING.md, Fist spread). */
@@ -182,6 +187,7 @@ export function uriLoopPixels(
   back: Float32Array,
   front: Float32Array,
 ): { back: number; front: number } {
+  if (fx.broken) return { back: 0, front: 0 };
   const L = fx.loop;
   const dmg = 1 - fx.hp / 100;
   const TAU = Math.PI * 2;
@@ -268,6 +274,7 @@ export function uriPlumePixels(fx: UriLiveFx, vx: number, vy: number, out: Float
   const cap = Math.floor(out.length / 5);
   let n = 0;
   fx.pylons.forEach((p, side) => {
+    if (p.lost || !(p.th > 0)) return;
     const sc = side === 0 ? 'L'.charCodeAt(0) : 'R'.charCodeAt(0);
     const th = Math.max(0.15, p.th);
     const len = 16 + 30 * th;
