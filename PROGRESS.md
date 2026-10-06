@@ -18,10 +18,19 @@ Resume from here. The rules and phases are in `MASTER_PROMPT.md`; the packs are 
     regression fixture.
 - **Open for WJ:** the highlight ceiling for 우리 (oracle top step vs the unification rule; switch `URI_CEILING_EXEMPT`).
 
+- **Gate 2C committed** (9ce8637): 우리's damage and breaking, matching the oracle's behaviour.
+- **Gate 3A proposal written** (docs/integration/GATE_3A.md); it waits for WJ's 7 answers.
+
 ## In progress
-- **S5:** a quiet perf re-measure; checking 우리 in the real game; pylon plumes.
-- **S1:** the Tidal Draw AI at 180 px; fighter hooks (mirrors(), body-layer planes). Then Gate 2D.
-- **Next:** 2C, 우리's damage (S2 + S4), after S5's perf run.
+- **S1, Gate 2D:**
+  - the `healthPct` hook;
+  - input buffering and cancel windows;
+  - fist hitboxes;
+  - hitstop via `takeImpact`;
+  - the VFX weights;
+  - 우리's AI;
+  - the roster (proposal 173).
+- **S5:** 2C render leftovers (plume when a pylon is lost, the oracle's break ring, damage visuals in game).
 
 ## Earlier: Phase 2A (우리 render parity), plus the Gate 1 follow-ups
 - **S4:** the uri_rig.json loader into matter region bodies, the 4-sample majority sampler (contract + GLSL), the rest
