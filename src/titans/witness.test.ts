@@ -120,11 +120,13 @@ describe('The Witness painter v2 (rest pose, region bodies)', () => {
     }
   });
 
-  it('towers: about 2× the Planet tall, at most 1.5× as wide as tall, a big shrine, a large halo, the eye a third of it, within budget', () => {
+  it('towers: about 1.25× the Planet tall (an equal, D31-6), at most 1.5× as wide as tall, a big shrine, a large halo, the eye a third of it, within budget', () => {
     const height = W.y1 - W.y0;
     const ratio = height / planetDiameter();
-    expect(ratio).toBeGreaterThanOrEqual(1.8);
-    expect(ratio).toBeLessThanOrEqual(2.3);
+    // D31-6 (WJ, Gate 1): the Planet was enlarged to 220 px to read as the Witness's equal; the Witness (~272 px) is now about
+    // 1.24× it (it was 2.25× the 121 px Planet)
+    expect(ratio).toBeGreaterThanOrEqual(1.1);
+    expect(ratio).toBeLessThanOrEqual(1.4);
     const eye = W.regions.find((r) => r.kind === 'eye')!;
     let ex0 = Infinity;
     let ex1 = -Infinity;

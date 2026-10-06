@@ -129,7 +129,10 @@ describe.each(IMPLEMENTED_TITANS)('generator: %s', (id) => {
     expect(Buffer.compare(Buffer.from(cold.material), Buffer.from(map.material))).toBe(0);
   });
 
-  it('fits the body budget and is 90–180 px across', () => {
+  // D31-6: the Planet was enlarged to 220 px to read as an equal of the Witness and 우리; one body may now span up to 240 px
+  // (MAX_BODY_DIM was raised to 300 for it). The other single-body titans keep their 90–180 px.
+  const maxAcross = id === 'planet' ? 240 : 180;
+  it(`fits the body budget and is 90–${maxAcross} px across`, () => {
     let x0 = map.w,
       x1 = -1,
       y0 = map.h,
@@ -151,7 +154,7 @@ describe.each(IMPLEMENTED_TITANS)('generator: %s', (id) => {
     const w = x1 - x0 + 1;
     const h = y1 - y0 + 1;
     expect(Math.max(w, h)).toBeGreaterThanOrEqual(90);
-    expect(Math.max(w, h)).toBeLessThanOrEqual(180);
+    expect(Math.max(w, h)).toBeLessThanOrEqual(maxAcross);
     expect(Math.min(w, h)).toBeGreaterThanOrEqual(80);
     // never touches the map border (room for the renderer's edge lighting and for growth)
     expect(x0).toBeGreaterThan(1);

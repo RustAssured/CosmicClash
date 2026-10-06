@@ -3,6 +3,13 @@ import { BLOW_HITSTOP_TICKS, BLOW_SHAKE_PX, HITSTOP_MAX_TICKS, type SimEvent } f
 import { IMPACT, makeImpactResult, resolveImpact } from './impact';
 import { makeLab, probeHit } from './testing/feelLab';
 import type { FakeWorld } from './testing/fakeWorld';
+import { getTitanDef } from '@/titans';
+
+/**
+ * The Planet's size against the one these probes were placed for (D31-6: WJ enlarged it, `art.params.scale`): the blow offsets
+ * below are points on ITS body (centre, edge, glancing, low), so they scale with it.
+ */
+const PS = (getTitanDef('planet').art.params as { scale?: number }).scale ?? 1;
 
 const R = 60;
 const G = R / 1.55;
@@ -48,7 +55,7 @@ describe('impact model: a force at a point (unit)', () => {
 describe('impact model in the fighter', () => {
   it('centre, edge, glancing and low blows on the Planet look different: translation vs spin, sign and size', () => {
     const at = (ox: number, oy: number): ReturnType<typeof probeHit> =>
-      probeHit(makeLab({ gap: 200 }), ox, oy);
+      probeHit(makeLab({ gap: 200 * PS }), ox * PS, oy * PS);
     const centre = at(-40, 0);
     const edge = at(-35, -26);
     const glance = at(-25, -48);
@@ -90,8 +97,9 @@ describe('impact model in the fighter', () => {
 
   it('the camera rolls with the spin a blow puts in (ω-driven): an edge hit rolls it, a centre hit does not', () => {
     const rollOf = (oy: number): number => {
-      const lab = makeLab({ gap: 200 });
-      probeHit(lab, -35, oy);
+      const lab = makeLab({ gap: 200 * PS });
+      // a world PS× as wide has ~PS² the mass and ~PS³ the inertia: the probe is PS² as heavy, the same blow for its size
+      probeHit(lab, -35 * PS, oy * PS, 900 * PS * PS, 700 * PS * PS);
       const r = lab.m.events.find((e) => e.t === 'roll');
       return r && r.t === 'roll' ? r.radians : 0;
     };

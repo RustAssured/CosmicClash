@@ -22,7 +22,7 @@ const PATH = 'src/titans/planet.json';
  * halo). Speeds, root motion, energies and frame data do not (balance is Phase 4). Edit, then re-run this tool and prettier.
  * Above about 175 px the map exceeds MAX_BODY_DIM / MAX_BODY_CELLS (src/contracts/constants.ts: Lead's to raise).
  */
-export const PLANET_DIAMETER = 121;
+export const PLANET_DIAMETER = 220;
 const BASE_DIAMETER = 121;
 const K = PLANET_DIAMETER / BASE_DIAMETER;
 /** A length at this size (to 0.1 px; exactly the authored value at the base size). */
@@ -373,10 +373,11 @@ const comet: MoveDef = {
   tags: ['charge', 'projectile', 'comet'],
   extra: {
     comet: {
-      spawnDist: 330,
-      spawnRise: 150,
-      entrySpeed: 260,
-      // the comet rides the ring, which grows with the world; the energy reference speed with it (same spin, same blow)
+      // it is called in from beyond the ring and rides the ring, which both grow with the world; the energy reference speed
+      // grows with it too (same spin, same blow), and the entry speed (same timing)
+      spawnDist: px(330),
+      spawnRise: px(150),
+      entrySpeed: px(260),
       orbit: px(150),
       w0: 1.4,
       w1: 5.2,

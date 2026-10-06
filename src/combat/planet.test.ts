@@ -11,6 +11,10 @@ import { createMatterWorld, type MatterWorldEx } from '@/matter';
 import type { FighterImpl } from './fighter';
 import type { PlanetBehaviour } from './behaviours/planet';
 import { ManualSource, createScriptSource, makeMatch, skipIntro } from './testing/harness';
+import { getTitanDef } from '@/titans';
+
+/** The world's size against the one these tests were written at (D31-6, `art.params.scale`): lengths on it scale with it. */
+const PS = (getTitanDef('planet').art.params as { scale?: number }).scale ?? 1;
 
 function duel(a: TitanId, b: TitanId, gap = 170, seed = 7) {
   const m = makeMatch({ a, b, seed, createWorld: (s) => createMatterWorld(s) });
@@ -92,8 +96,9 @@ describe('Planet', () => {
       if (t % 10 === 0 && mo.mode !== 4) {
         const ev = thermal(mo.x, mo.y);
         ev.type = 'CRUSH';
-        ev.energy = 900;
-        ev.shape = { kind: 'point', x: mo.x, y: mo.y, r: 14 };
+        // a moon of a PS× world has PS² the matter: the same blow for its size
+        ev.energy = 900 * PS * PS;
+        ev.shape = { kind: 'point', x: mo.x, y: mo.y, r: 14 * PS };
         events.length = 0;
         fb.receive(ev, attacker, events);
         if (events.some((e) => e.t === 'cue' && e.id === 'moon-lost')) lost = true;
@@ -458,7 +463,8 @@ describe('Planet kit', () => {
       while (mo.windup > 0 && whip < 90) {
         step();
         whip++;
-        expect(Math.hypot(mo.x - fa.px, mo.y - fa.py)).toBeLessThan(140);
+        // on its orbit (long axis 120 px at the authored size, PS× now) while it whips round it
+        expect(Math.hypot(mo.x - fa.px, mo.y - fa.py)).toBeLessThan(140 * PS);
       }
       // then the flight: where it runs relative to the straight line to the foe, over its first 20 ticks
       const y0 = mo.y;
@@ -560,20 +566,23 @@ describe('Planet kit', () => {
       pixels: px,
       w: 12,
       h: 12,
-      x: fa.px - 200,
-      y: fa.py - 120,
+      // outside the ring (it grows with the world), well within reach
+      x: fa.px - 200 * PS,
+      y: fa.py - 120 * PS,
       vx: 80,
       vy: 0,
       spin: 0.2,
       mass: 12,
     }) as unknown as number;
     (m as unknown as { ctx: { comets: unknown[] } }).ctx.comets = [
-      { id, x: fa.px - 200, y: fa.py - 120, vx: 80, vy: 0, mass: 12, mode: 0, owner: -1 },
+      { id, x: fa.px - 200 * PS, y: fa.py - 120 * PS, vx: 80, vy: 0, mass: 12, mode: 0, owner: -1 },
     ];
     a.held = Btn.SIGNATURE;
     step(2);
     expect(pl.cometMode).toBe(1);
-    expect(Math.hypot(pl.cometPos.x - (fa.px - 200), pl.cometPos.y - (fa.py - 120))).toBeLessThan(10);
+    expect(Math.hypot(pl.cometPos.x - (fa.px - 200 * PS), pl.cometPos.y - (fa.py - 120 * PS))).toBeLessThan(
+      10,
+    );
   }, 60_000);
 
   it('Tidal Draw (R1) captures nearby debris into the ring; a moonless Moon Slam throws it, and ring chunks soak blows', () => {

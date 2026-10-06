@@ -73,7 +73,8 @@ describe('multi-body fighters (region bodies, proposal 160)', () => {
     lab.m.world.removeBody(arm.id);
     lab.step();
     expect(withArm).toBeGreaterThan(0.99);
-    expect(armShare).toBeGreaterThan(0.002);
+    // big enough to see at 3 decimals (the 220 px Planet of D31-6 has 3.3× the mass, so a test arm is a smaller share of it)
+    expect(armShare).toBeGreaterThan(0.001);
     // the arm's whole mass is gone from the fighter: massFrac drops by its share
     expect(f.view.bodyStats.massFrac).toBeCloseTo(withArm - armShare, 3);
     // a resource region (halo arc): probed and struck, but no part of the mass total

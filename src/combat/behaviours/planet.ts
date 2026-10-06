@@ -454,6 +454,8 @@ export class PlanetBehaviour extends Behaviour {
   private aimY = 0;
   private guardBlend = 0;
   private guardBlendV = 0;
+  private guardIn = 0;
+  private guardInV = 0;
   /* spin (see SPIN_*): surface ω / acceleration / phase, the atmosphere's lagging ω and phase, the commanded target */
   private omega = PROGRADE * SPIN_BASE;
   private alpha = 0;
@@ -807,26 +809,177 @@ export class PlanetBehaviour extends Behaviour {
   private nearAll = 0;
   private nearShell = 0;
   private censusNear(): void {
+    this.refreshCensus();
+  }
+
+  /* ---- the census by dirty rows (D31-6 perf: the 220 px world has 3.3× the cells) ---------------------------------------- *
+   * One pass keeps every per-cell count the behaviour needs — the near face's cells and shell (the Brace, the phases), the air
+   * and the seas (`monitor`), the exposure marks and the deep strata they show (the Exposed Mantle phase, the skin) — per ROW.
+   * A refresh compares the map against a snapshot four cells at a time (material, and the SURFACE bit the exposure reads) and
+   * recounts only the rows that changed; the exposure marks are redone only in the band those rows can reach (±3 cells). The
+   * results are exactly those of a full scan of the current map; a quiet world costs one word compare per 4 cells. */
+  private cenMat: Uint8Array | null = null;
+  private cenViewOf: Uint8Array | null = null;
+  private cenM32: Uint32Array | null = null;
+  private cenF32: Uint32Array | null = null;
+  private cenS32: Uint32Array | null = null;
+  private cenSS32: Uint32Array | null = null;
+  private cenSnapM = new Uint8Array(0);
+  private cenSnapS = new Uint8Array(0);
+  private cenDirty = new Uint8Array(0);
+  private rowAll = new Int32Array(0);
+  private rowShell = new Int32Array(0);
+  private rowAir = new Int32Array(0);
+  private rowSea = new Int32Array(0);
+  private rowDeep = new Int32Array(0);
+  private rowExpo = new Int32Array(0);
+  private airCells = 0;
+  private seaCells = 0;
+  private expoCells = 0;
+
+  private refreshCensus(): void {
     const map = this.f.body.map;
     const W = map.w;
+    const H = map.h;
+    const n = W * H;
+    const mat = map.material;
+    const fl = map.flags;
+    const dirty = this.cenDirty.length === H ? this.cenDirty : (this.cenDirty = new Uint8Array(H));
+    if (this.cenMat !== mat || this.cenSnapM.length !== n) {
+      // a new map (or the first census): every row is dirty
+      this.cenMat = mat;
+      this.cenViewOf = null;
+      this.cenSnapM = new Uint8Array(n);
+      this.cenSnapS = new Uint8Array(n);
+      this.rowAll = new Int32Array(H);
+      this.rowShell = new Int32Array(H);
+      this.rowAir = new Int32Array(H);
+      this.rowSea = new Int32Array(H);
+      this.rowDeep = new Int32Array(H);
+      this.rowExpo = new Int32Array(H);
+      if (this.expo.length !== n) this.expo = new Uint8Array(n);
+      this.expo.fill(0);
+      this.airCells = this.seaCells = this.expoCells = 0;
+      this.nearAll = this.nearShell = this.expoDeep = 0;
+      dirty.fill(1);
+    } else {
+      dirty.fill(0);
+      const snapM = this.cenSnapM;
+      const snapS = this.cenSnapS;
+      const surf = CellFlag.SURFACE;
+      const words = n >> 2;
+      // word views of the map and the snapshot (built once per map, so a refresh allocates nothing)
+      if (this.cenViewOf !== mat) {
+        this.cenViewOf = mat;
+        this.cenM32 = mat.byteOffset % 4 === 0 ? new Uint32Array(mat.buffer, mat.byteOffset, words) : null;
+        this.cenF32 = fl.byteOffset % 4 === 0 ? new Uint32Array(fl.buffer, fl.byteOffset, words) : null;
+        this.cenS32 = new Uint32Array(snapM.buffer, 0, words);
+        this.cenSS32 = new Uint32Array(snapS.buffer, 0, words);
+      }
+      const m32 = this.cenM32;
+      const s32 = this.cenS32!;
+      const aligned = m32 !== null;
+      const surfMask = surf * 0x01010101;
+      const f32 = this.cenF32;
+      const ss32 = this.cenSS32!;
+      let any = false;
+      for (let k = 0; k < words; k++) {
+        const changed = aligned
+          ? m32[k] !== s32[k] || f32 === null || (f32[k]! & surfMask) >>> 0 !== ss32[k]
+          : true;
+        if (!changed) continue;
+        // a word that differs (or an unaligned map, checked cell by cell below) marks its rows
+        const c0 = k << 2;
+        for (let c = c0; c < c0 + 4; c++)
+          if (mat[c] !== snapM[c] || (fl[c]! & surf) !== snapS[c]) {
+            dirty[(c / W) | 0] = 1;
+            any = true;
+          }
+      }
+      for (let c = words << 2; c < n; c++)
+        if (mat[c] !== snapM[c] || (fl[c]! & surf) !== snapS[c]) {
+          dirty[(c / W) | 0] = 1;
+          any = true;
+        }
+      if (!any) return;
+    }
+    const ids = this.rig.ids;
     const cx = map.coreX + 0.5;
     const cy = map.coreY + 0.5;
     const r2 = (this.rig.magmaR + 2) ** 2;
-    const mat = map.material;
-    let all = 0;
-    let shell = 0;
-    for (let y = 0; y < map.h; y++) {
+    const snapM = this.cenSnapM;
+    const snapS = this.cenSnapS;
+    const surf = CellFlag.SURFACE;
+    // 1. counts of the dirty rows; the snapshot catches up with them
+    let y0 = H;
+    let y1 = -1;
+    for (let y = 0; y < H; y++) {
+      if (dirty[y] === 0) continue;
+      if (y < y0) y0 = y;
+      y1 = y;
       const row = y * W;
       const dy = y + 0.5 - cy;
+      let all = 0;
+      let shell = 0;
+      let air = 0;
+      let sea = 0;
       for (let x = 0; x < W; x++) {
-        if (mat[row + x] === 0) continue;
+        const i = row + x;
+        const mm = mat[i]!;
+        snapM[i] = mm;
+        snapS[i] = fl[i]! & surf;
+        if (mm === 0) continue;
         all++;
         const dx = x + 0.5 - cx;
         if (dx * dx + dy * dy > r2) shell++;
+        if (mm === ids.atmosphere || mm === ids.cloud) air++;
+        else if (mm === ids.ocean) sea++;
       }
+      this.nearAll += all - this.rowAll[y]!;
+      this.nearShell += shell - this.rowShell[y]!;
+      this.airCells += air - this.rowAir[y]!;
+      this.seaCells += sea - this.rowSea[y]!;
+      this.rowAll[y] = all;
+      this.rowShell[y] = shell;
+      this.rowAir[y] = air;
+      this.rowSea[y] = sea;
     }
-    this.nearAll = all;
-    this.nearShell = shell;
+    if (y1 < 0) return;
+    // 2. exposure marks: a change in rows y0..y1 can only move marks in rows y0−3..y1+3, which come from surface cells in rows
+    // y0−6..y1+6 (each surface cell marks the interior cells within 3 of it). Clear that band, re-mark it from its sources.
+    const expo = this.expo;
+    const b0 = Math.max(0, y0 - 3);
+    const b1 = Math.min(H - 1, y1 + 3);
+    expo.fill(0, b0 * W, (b1 + 1) * W);
+    const s0 = Math.max(3, y0 - 6);
+    const s1 = Math.min(H - 4, y1 + 6);
+    for (let y = s0; y <= s1; y++)
+      for (let x = 3; x < W - 3; x++) {
+        const i = y * W + x;
+        if (mat[i] === 0 || (fl[i]! & surf) === 0) continue;
+        const ya = Math.max(b0, y - 3);
+        const yb = Math.min(b1, y + 3);
+        for (let yy = ya; yy <= yb; yy++)
+          for (let dx = -3; dx <= 3; dx++) {
+            const j = yy * W + x + dx;
+            if (mat[j] !== 0 && INTERIOR(ids, mat[j]!)) expo[j] = 1;
+          }
+      }
+    for (let y = b0; y <= b1; y++) {
+      let e = 0;
+      let deep = 0;
+      const row = y * W;
+      for (let x = 0; x < W; x++)
+        if (expo[row + x] === 1) {
+          e++;
+          if (DEEP(ids, mat[row + x]!)) deep++;
+        }
+      this.expoCells += e - this.rowExpo[y]!;
+      this.expoDeep += deep - this.rowDeep[y]!;
+      this.rowExpo[y] = e;
+      this.rowDeep[y] = deep;
+    }
+    this.expoAny = this.expoCells > 0;
   }
 
   /** Queue angular impulse (rad/s, world sense), scaled up by how light the wounded world has become; fed in over IMPULSE_TICKS. */
@@ -1145,9 +1298,13 @@ export class PlanetBehaviour extends Behaviour {
     back.v = Math.sin(ang) < 0;
     const gb = clamp01(this.guardBlend);
     if (gb > 0.01) {
-      // shield: stand in front of the planet on the foe's side, one above the other
-      const sx = f.facing * (this.rig.radius + 16 + slotIdx * 6);
-      const sy = (slotIdx - (this.moons.length - 1) / 2) * 40;
+      // shield: stand in front of the planet on the foe's side, one above the other. The side is where the foe IS, not the
+      // body's facing: the Brace half-turn swaps the mirror mid-guard, and a shield that followed it would jump across the world
+      // (a step of 2·radius, the 2.5 Hz content the scale spec forbids, and twice as big on the enlarged world)
+      const side = f.foe.view.x >= f.px ? 1 : -1;
+      const sc = this.sc;
+      const sx = side * (this.rig.radius + (16 + slotIdx * 6) * sc);
+      const sy = (slotIdx - (this.moons.length - 1) / 2) * 40 * sc;
       x += (sx - x) * gb;
       y += (sy - y) * gb;
       if (gb > 0.5) back.v = false;
@@ -1498,8 +1655,9 @@ export class PlanetBehaviour extends Behaviour {
       const curve = this.aimY < -0.3 ? -1 : this.aimY > 0.3 ? 1 : 0;
       this.launchMoon(moon, {
         windup: cfg.windup,
-        speed: cfg.speed * (1 + 0.35 * cf),
-        accel: cfg.accel,
+        // lengths per tick grow with the world (D31-6): the same flight in the same time over sc× the distance
+        speed: cfg.speed * (1 + 0.35 * cf) * this.sc,
+        accel: cfg.accel * this.sc,
         turn: cfg.turn,
         curve: curve * cfg.curve,
         energy: cfg.energy * m.power,
@@ -1605,8 +1763,8 @@ export class PlanetBehaviour extends Behaviour {
         if (moon)
           this.launchMoon(moon, {
             windup: 6,
-            speed: b.speed,
-            accel: 0.6,
+            speed: b.speed * this.sc,
+            accel: 0.6 * this.sc,
             turn: 0.09,
             curve: 0,
             energy: b.energy,
@@ -1679,7 +1837,7 @@ export class PlanetBehaviour extends Behaviour {
       const ty = f.foe.view.y - mo.y;
       const d = Math.hypot(tx, ty) || 1;
       // desired heading: at the foe, bent to one side while far (the arc), straight at the end
-      const bend = mo.curve * clamp01((d - 60) / 220);
+      const bend = mo.curve * clamp01((d - 60 * this.sc) / (220 * this.sc));
       const des = Math.atan2(ty, tx) + bend;
       let head = Math.atan2(mo.vy, mo.vx);
       let dh = des - head;
@@ -1726,7 +1884,8 @@ export class PlanetBehaviour extends Behaviour {
         s2.r = mo.radius * 0.7;
         e2.shape = asShape(s2);
         e2.type = 'KINETIC';
-        e2.energy = mo.energy * this.cfg.recoil;
+        // a bigger world's moon has sc² the matter: it pays the same share of itself per blow
+        e2.energy = mo.energy * this.cfg.recoil * this.sc * this.sc;
         e2.dirX = -Math.sign(mo.vx || 1);
         e2.dirY = 0;
         e2.flags = 0;
@@ -1747,7 +1906,7 @@ export class PlanetBehaviour extends Behaviour {
     }
     if (mo.mode === SLAM) {
       f.addThreat(asShape(this.moonShape(mo)), 'CRUSH', mo.energy, 0, 4, true);
-      if (mo.age > mo.life || Math.hypot(mo.x - f.px, mo.y - f.py) > 470) mo.mode = RETURN;
+      if (mo.age > mo.life || Math.hypot(mo.x - f.px, mo.y - f.py) > 470 * this.sc) mo.mode = RETURN;
     }
   }
 
@@ -1758,11 +1917,12 @@ export class PlanetBehaviour extends Behaviour {
     const dy = f.py - mo.y;
     const d = Math.hypot(dx, dy) || 1;
     mo.age++;
-    mo.vx += (dx / d) * 0.45;
-    mo.vy += (dy / d) * 0.45;
-    // quadratic drag (terminal ~6.7 px/tick), plus the impact's braking over the first ticks after a blow
+    const sc = this.sc;
+    mo.vx += (dx / d) * 0.45 * sc;
+    mo.vy += (dy / d) * 0.45 * sc;
+    // quadratic drag (terminal ~6.7·sc px/tick), plus the impact's braking over the first ticks after a blow
     const sp = Math.hypot(mo.vx, mo.vy);
-    const drag = (1 - 0.01 * sp) * (mo.slamHit && mo.age < 10 ? 0.86 : 1);
+    const drag = (1 - (0.01 / sc) * sp) * (mo.slamHit && mo.age < 10 ? 0.86 : 1);
     mo.vx *= drag;
     mo.vy *= drag;
     mo.x += mo.vx;
@@ -1797,7 +1957,7 @@ export class PlanetBehaviour extends Behaviour {
     const dy = f.py - mo.y;
     const d = Math.hypot(dx, dy) || 1;
     if (!mo.free) {
-      const g = 0.028 * (1 / Math.max(0.6, d / 160));
+      const g = 0.028 * this.sc * (1 / Math.max(0.6, d / (160 * this.sc)));
       mo.vx += (dx / d) * g * 4;
       mo.vy += (dy / d) * g * 4;
     }
@@ -1805,7 +1965,8 @@ export class PlanetBehaviour extends Behaviour {
     mo.y += mo.vy;
     if (d > LOST_RADIUS * this.sc || mo.age > (mo.free ? 400 : 260))
       this.loseMoon(mo, mo.vx * 60, mo.vy * 60, false);
-    else if (!mo.free && mo.age > 90 && d < 190 && Math.hypot(mo.vx, mo.vy) < 2.2) mo.mode = RETURN;
+    else if (!mo.free && mo.age > 90 && d < 190 * this.sc && Math.hypot(mo.vx, mo.vy) < 2.2 * this.sc)
+      mo.mode = RETURN;
   }
 
   private moonShape(mo: Moon): ReturnType<typeof makeFatShape> {
@@ -1832,7 +1993,8 @@ export class PlanetBehaviour extends Behaviour {
     if (c.mode === C_INBOUND || c.mode === C_ORBIT || c.mode === C_FLY) return;
     this.dropComet();
     let best = -1;
-    let bd = 400;
+    // reach for a free arena comet: ~400 px at the authored size, growing with the world (its ring and well grow with it)
+    let bd = 400 * this.sc;
     for (const ac of ctx.comets ?? []) {
       if (ac.mode !== 0) continue;
       const d = Math.hypot(ac.x - f.px, ac.y - f.py);
@@ -1981,7 +2143,7 @@ export class PlanetBehaviour extends Behaviour {
     const holding = f.mv.def?.id === 'planet.comet' && f.mv.phase === 'charge';
     if (c.mode === C_INBOUND) {
       const d = Math.hypot(c.x - f.px, c.y - f.py);
-      if (d < cfg.orbit * 1.3 || (c.age > 120 && d < 300)) {
+      if (d < cfg.orbit * 1.3 || (c.age > 120 && d < 300 * this.sc)) {
         if (this.wx.captureChunk?.(c.id, f.slot)) {
           c.mode = C_ORBIT;
           c.w = cfg.w0;
@@ -2069,7 +2231,12 @@ export class PlanetBehaviour extends Behaviour {
         : {
             x: f.px,
             y: f.py,
-            strength: PHASE_GRAVITY[this.phase]! + DRAW_PULL * this.drawT + (shepherd ? 140 : 0),
+            // the world's pull is ∝ strength / distance: at sc× the distances, sc² the strength bends paths the same way in the
+            // same time (a bigger world is not a weaker well)
+            strength:
+              (PHASE_GRAVITY[this.phase]! + DRAW_PULL * this.drawT + (shepherd ? 140 : 0)) *
+              this.sc *
+              this.sc,
             radius: reach,
           },
     );
@@ -2289,10 +2456,14 @@ export class PlanetBehaviour extends Behaviour {
     this.tickLast = tick;
     this.stepMoves(ctx);
     const m = f.mv;
-    // the moons' swing into the shield: a critically damped spring (ω = GUARD_OMEGA), so it starts and stops without a corner
+    // the moons' swing into the shield: two critically damped springs in cascade (ω = 2·GUARD_OMEGA, then GUARD_OMEGA). One
+    // spring starts without a corner but with a jump in acceleration, which on the enlarged world's ~300 px swing still put
+    // 0.5 px of motion above 2.5 Hz; the cascade makes the acceleration continuous too (D28 scale spec, D31-6)
+    const gi = 2 * GUARD_OMEGA;
+    this.guardInV += (gi * gi * ((f.guardUp ? 1 : 0) - this.guardIn) - 2 * gi * this.guardInV) * TICK_DT;
+    this.guardIn += this.guardInV * TICK_DT;
     const gw = GUARD_OMEGA;
-    this.guardBlendV +=
-      (gw * gw * ((f.guardUp ? 1 : 0) - this.guardBlend) - 2 * gw * this.guardBlendV) * TICK_DT;
+    this.guardBlendV += (gw * gw * (this.guardIn - this.guardBlend) - 2 * gw * this.guardBlendV) * TICK_DT;
     this.guardBlend += this.guardBlendV * TICK_DT;
     // Guard answers on its input tick, and turns the better face toward the foe (Rotational Brace)
     if (f.guardUp && !this.wasGuard && f.live) {
@@ -2317,23 +2488,12 @@ export class PlanetBehaviour extends Behaviour {
 
   private monitor(): void {
     const f = this.f;
-    const map = f.body.map;
-    const r = this.rig.ids;
-    let a = 0;
-    let o = 0;
-    const mat = map.material;
-    for (let i = 0; i < mat.length; i++) {
-      const mm = mat[i]!;
-      if (mm === r.atmosphere || mm === r.cloud) a++;
-      else if (mm === r.ocean) o++;
-    }
-    this.atmoFrac = clamp01(a / this.atmoCells0);
-    this.oceanFrac = clamp01(o / this.oceanCells0);
-    // the face toward the foe, for the Brace's strength
-    this.censusNear();
+    // one census by dirty rows: the air and the seas, the face toward the foe (the Brace's strength), the exposure
+    this.refreshCensus();
+    this.atmoFrac = clamp01(this.airCells / this.atmoCells0);
+    this.oceanFrac = clamp01(this.seaCells / this.oceanCells0);
     this.nearIntegrity = this.nearShell / this.nearPristineShell;
     // the damage phase only ever advances within a round
-    this.stampExposure();
     if (f.live && !f.ko) {
       const p = this.phaseNow();
       if (p > this.phase) this.enterPhase(p);
@@ -2422,48 +2582,18 @@ export class PlanetBehaviour extends Behaviour {
     this.drawFx(tick, this.f.mv);
   }
 
-  /** Mark interior cells that damage has brought within 3 cells of the surface; cached per map version. */
+  /** Interior cells that damage has brought within 3 cells of the surface (`expo`): refreshed by dirty rows per map version. */
   private stampExposure(): boolean {
-    const f = this.f;
-    const map = f.body.map;
-    if (map.version === this.expoVer) return this.expoAny;
-    this.expoVer = map.version;
-    this.expoAny = this.scanExposure();
+    const map = this.f.body.map;
+    if (map.version !== this.expoVer) {
+      this.expoVer = map.version;
+      this.refreshCensus();
+      this.expoAny = this.expoCells > 0;
+    }
     return this.expoAny;
   }
   private expoVer = -1;
   private expoAny = false;
-
-  private scanExposure(): boolean {
-    const f = this.f;
-    const map = f.body.map;
-    const W = map.w;
-    const H = map.h;
-    const expo = this.expo;
-    expo.fill(0);
-    const fl = map.flags;
-    const mat = map.material;
-    const ids = this.rig.ids;
-    let any = false;
-    for (let y = 3; y < H - 3; y++)
-      for (let x = 3; x < W - 3; x++) {
-        const i = y * W + x;
-        if (mat[i] === 0 || (fl[i]! & CellFlag.SURFACE) === 0) continue;
-        for (let dy = -3; dy <= 3; dy++)
-          for (let dx = -3; dx <= 3; dx++) {
-            const j = i + dy * W + dx;
-            if (mat[j] !== 0 && INTERIOR(ids, mat[j]!)) {
-              expo[j] = 1;
-              any = true;
-            }
-          }
-      }
-    // how much of the deep world (mantle, magma, core) now shows: the Exposed Mantle phase reads it
-    let deep = 0;
-    for (let i = 0; i < expo.length; i++) if (expo[i] === 1 && DEEP(ids, mat[i]!)) deep++;
-    this.expoDeep = deep;
-    return any;
-  }
 
   private drawSkin(tick: number): void {
     const f = this.f;
@@ -2524,8 +2654,11 @@ export class PlanetBehaviour extends Behaviour {
     const atmo = ids.atmosphere;
     const cloud = ids.cloud;
     let any = false;
+    // rows with no matter (the census keeps the counts per row) are skipped: the margin above and below the world, and what a
+    // broken world has lost
+    const rowAll = this.rowAll.length === H ? this.rowAll : null;
     for (let y = 0; y < H; y++)
-      for (let x = 0; x < W; x++) {
+      for (let x = rowAll !== null && rowAll[y] === 0 ? W : 0; x < W; x++) {
         const i = y * W + x;
         const mm = mat[i]!;
         if (mm === 0) continue;
@@ -2614,9 +2747,10 @@ export class PlanetBehaviour extends Behaviour {
     const gain = (this.phase >= 3 ? 1.25 : 1) * (1 - this.coreOut);
     const slow = tick >> 5;
     let any = false;
+    const rowAll = this.rowAll.length === H ? this.rowAll : null;
     if (gain > 0.01)
       for (let y = 0; y < H; y++)
-        for (let x = 0; x < W; x++) {
+        for (let x = rowAll !== null && rowAll[y] === 0 ? W : 0; x < W; x++) {
           const i = y * W + x;
           const mm = mat[i]!;
           if (mm === 0) continue;
@@ -3013,9 +3147,12 @@ export class PlanetBehaviour extends Behaviour {
   override trackPoints(out: number[]): number {
     const f = this.f;
     const R = this.rig.radius;
-    // the sky's markers ride on the body's continuous root (they are drawn around it), so what they show is their own motion
+    // the sky's markers are placed on the body's SIM position, so what they show is their own motion: the drawn root adds the
+    // body's hit shudder, which is the body's (the scale tool measures it on the root, in its hit window), not the sky's. At
+    // 220 px (D31-6) the Planet's own blows connect inside the tool's window and that shudder leaked into every marker.
     const root = this.rootTmp;
-    f.motionSample(root);
+    root.x = f.px;
+    root.y = f.py;
     for (let i = 0; i < 2; i++) {
       const mo = this.moons[i];
       if (mo && mo.mode !== GONE) out.push(mo.x, mo.y);
