@@ -11,7 +11,19 @@ Resume from here. The rules and phases are in `MASTER_PROMPT.md`; the packs are 
 
 - **Phase 1 delivered and Gate 1 approved** (D32). The Planet is 180 px.
 
-## In progress: Phase 2A (우리 render parity), plus the Gate 1 follow-ups
+- **Phase 2A + 2B committed** (a42c5ff).
+  - **2A:** 우리 at rest is pixel-identical to the oracle's rest frame (77,396 / 77,396 pixels), with a 100 % rest silhouette; the
+    oracle's shading, cores, loop, moon and rubble fists.
+  - **2B:** the kinetics port matches the oracle in 16 move × side runs (13 exact, 3 within one oracle frame), frozen as a
+    regression fixture.
+- **Open for WJ:** the highlight ceiling for 우리 (oracle top step vs the unification rule; switch `URI_CEILING_EXEMPT`).
+
+## In progress
+- **S5:** a quiet perf re-measure; checking 우리 in the real game; pylon plumes.
+- **S1:** the Tidal Draw AI at 180 px; fighter hooks (mirrors(), body-layer planes). Then Gate 2D.
+- **Next:** 2C, 우리's damage (S2 + S4), after S5's perf run.
+
+## Earlier: Phase 2A (우리 render parity), plus the Gate 1 follow-ups
 - **S4:** the uri_rig.json loader into matter region bodies, the 4-sample majority sampler (contract + GLSL), the rest
   silhouette overlap test.
 - **S2:** 우리's titan definition, behaviour and rig hierarchy; never mirrored. 2B (kinetics) follows.

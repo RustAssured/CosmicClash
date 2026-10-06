@@ -267,6 +267,9 @@ void main() {
   if (cell.x >= int(uSize.x) || cell.y >= int(uSize.y)) discard;
   vec4 c = texelFetch(uTex, cell, 0);
   if (c.a <= 0.0) discard;
+  // unified path, additive glow: faint residue (a few levels of a big overlay) would only become a dither checker after the
+  // palette snap over whatever lies beneath; below ~5 % it adds nothing
+  if (uId.a > 0.5 && max(c.r, max(c.g, c.b)) * c.a * uAlpha < 0.05) discard;
   float e = uId.a > 0.5 ? 1.0 : uHasEmis == 1 ? texelFetch(uEmis, cell, 0).r : 0.0;
   float a = c.a * uAlpha;
   oColor = vec4(c.rgb, a);
@@ -875,6 +878,9 @@ void main() {
   if (uRelight == 1 && uNLt >= 2 && cov > 0.5) col = relight(col, floor(sp) + 0.5, th);
   // unified path: the glow damping holds on titan bodies only (backdrop / effect layers take the bloom like scenery)
   if (uUnified == 1) cov = titanAt(pxToTexel(clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1))) ? 1.0 : 0.0;
+  // unified path, on a titan body: only the strong part of the glow lands (near an emissive); the faint wide tail would only
+  // tint the dark stone enough to dither it into a checker after the snap
+  if (uUnified == 1 && cov > 0.5) bloom = max(bloom - vec3(0.08), vec3(0.0)) * 1.4;
   col = col + bloom * (1.0 - uGlowDamp.x * cov) + rays * (1.0 - uGlowDamp.y * cov);
 
   float vig = 1.0 - uVignette * pow(smoothstep(0.55, 1.45, length(fromC * vec2(0.85, 1.0))), 1.6);

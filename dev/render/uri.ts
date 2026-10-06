@@ -137,6 +137,20 @@ function layersAt(pose: UriPose, shade: boolean, t: number): RenderLayer[] {
     afterZ: URI_ORDER.indexOf('chamber'),
     fistSpread: [spreadNow, spreadNow],
     fistZ: [URI_ORDER.indexOf('fistL'), URI_ORDER.indexOf('fistR')],
+    // the oracle's pylons at rest: thrust 0.5 (PYL init), straight down from each bone end
+    pylons: (['pyL', 'pyR'] as const).map((k) => {
+      const meta = uriPart(k);
+      const pl = places[k];
+      const lb = [meta.jb![0] - meta.pgX, meta.jb![1] - meta.pgY];
+      const c = Math.cos(pl.a);
+      const s = Math.sin(pl.a);
+      return {
+        x: OX + pl.x + lb[0]! * c - lb[1]! * s,
+        y: OY + pl.y + lb[0]! * s + lb[1]! * c,
+        a: Math.PI / 2 + pl.a,
+        th: 0.5,
+      };
+    }) as unknown as UriLiveFx['pylons'],
   };
   const L = atlas as RenderLayerLit;
   L.uriLive = live;

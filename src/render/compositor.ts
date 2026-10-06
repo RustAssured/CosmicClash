@@ -376,6 +376,11 @@ export class LayerCompositor {
           setLayerBlend(s.material, layer.blend);
         }
         if (!liveDone) stageLive();
+        if (live?.pylons) {
+          this.live ??= new UriLivePass(this.scene, this.res);
+          order = this.live.stagePlumes(live, view.x0, view.y0, order, order);
+          this.liveUsed = true;
+        }
         continue;
       }
       const p = this.place;

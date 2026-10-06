@@ -21,7 +21,7 @@ import {
 } from 'three';
 import { hex, pb, pg, pr } from '@/contracts';
 import { unitQuad } from './gl';
-import { URI_CORE_RAMPS, coreSurface, uriLoopPixels, type UriLiveFx } from './uriLive';
+import { URI_CORE_RAMPS, coreSurface, uriLoopPixels, uriPlumePixels, type UriLiveFx } from './uriLive';
 
 /**
  * GPU half of 우리's live elements (see uriLive.ts): the loop / orbit pixels (instanced 1 px quads, back and front) and the two
@@ -181,6 +181,7 @@ export class UriLivePass {
   private readonly pointMat: RawShaderMaterial;
   private readonly back: PointSet;
   private readonly front: PointSet;
+  private readonly plume: PointSet;
   private readonly cores: Core[];
   private readonly id = new Vector4();
 
@@ -198,6 +199,7 @@ export class UriLivePass {
     normalBlend(this.pointMat);
     this.back = new PointSet(this.pointMat);
     this.front = new PointSet(this.pointMat);
+    this.plume = new PointSet(this.pointMat);
     this.cores = [true, false].map((hot) => {
       const ramp = new Float32Array(8 * 3);
       (hot ? URI_CORE_RAMPS.hot : URI_CORE_RAMPS.cold).forEach((h, i) => {
@@ -230,11 +232,11 @@ export class UriLivePass {
       mesh.visible = false;
       return { mesh, mat, tex: null, R: -1 };
     });
-    scene.add(this.back.mesh, this.cores[1]!.mesh, this.cores[0]!.mesh, this.front.mesh);
+    scene.add(this.back.mesh, this.cores[1]!.mesh, this.cores[0]!.mesh, this.front.mesh, this.plume.mesh);
   }
 
   hide(): void {
-    this.back.mesh.visible = this.front.mesh.visible = false;
+    this.back.mesh.visible = this.front.mesh.visible = this.plume.mesh.visible = false;
     for (const c of this.cores) c.mesh.visible = false;
   }
 
@@ -280,8 +282,19 @@ export class UriLivePass {
     return order;
   }
 
+  /** The pylon plumes, on top of the whole body (after its last part). Returns the next free render order. */
+  stagePlumes(fx: UriLiveFx, vx: number, vy: number, order: number, rank: number): number {
+    const n = uriPlumePixels(fx, vx, vy, this.plume.data);
+    this.plume.upload(n);
+    this.id.set(0.75, Math.min(255, rank) / 255, 0, 0);
+    this.plume.mesh.visible = n > 0;
+    this.plume.mesh.renderOrder = ++order;
+    return order;
+  }
+
   dispose(): void {
     this.pointMat.dispose();
+    this.plume.geo.dispose();
     this.back.geo.dispose();
     this.front.geo.dispose();
     for (const c of this.cores) {

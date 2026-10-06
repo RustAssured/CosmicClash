@@ -81,13 +81,16 @@ try {
   if (only.split(',').includes('perf')) {
     const { ctx, page } = await open();
     await page.setViewportSize({ width: 1920, height: 1080 });
+    // --pairs=witness-planet,uri-witness,uri-planet  --paths=classic,unified
+    const pairs = arg('pairs', 'witness-planet').split(',');
+    const paths = arg('paths', 'classic,unified').split(',');
     for (const stage of ['mausoleum', 'shearfield'])
-      for (const uni of [false, true]) {
-        const r = await page.evaluate(`window.__UNIFY__.perf('${stage}', ${uni}, 150)`);
-        console.log(
-          `perf ${stage} ${uni ? 'unified' : 'classic'} @1920×1080 GPU ms p50/p90: ${JSON.stringify(r)}`,
-        );
-      }
+      for (const pair of pairs)
+        for (const path of paths) {
+          const uni = path === 'unified';
+          const r = await page.evaluate(`window.__UNIFY__.perf('${stage}', ${uni}, 240, '${pair}')`);
+          console.log(`perf ${stage} ${pair} ${path} @1920×1080 GPU ms p50/p90: ${JSON.stringify(r)}`);
+        }
     await ctx.close();
   }
 

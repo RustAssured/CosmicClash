@@ -65,7 +65,20 @@ export interface UriLiveFx {
    * layer's chunk plane (RenderLayer.chunk).
    */
   fistSpread?: readonly [number, number];
+  /**
+   * The pylons' thrust (the oracle's pylon plumes), written by the kinetic system: per pylon [left, right] the exhaust point in WORLD
+   * px (the pylon's bone end joints.b, carried by the part's transform), the plume direction (rad: π/2 + part angle + the
+   * pylon's vectoring angle) and the thrust (the oracle's PYL.th; drawn at max(0.15, th)). Absent = no plumes.
+   */
+  pylons?: readonly [UriPylon, UriPylon];
   fistZ?: readonly [number, number];
+}
+
+export interface UriPylon {
+  x: number;
+  y: number;
+  a: number;
+  th: number;
 }
 
 /** The fists' spread at rest (uri/docs/TUNING.md, Fist spread). */
@@ -243,4 +256,32 @@ export function uriLoopPixels(
   draw(loop, true);
   draw(orbit, true);
   return { back: nb, front: nf };
+}
+
+/**
+ * The pylon plumes (the oracle's frame(): "pylon thrust: each one independently, visibly solving momentum"): per pylon
+ * 60 + 80·min(2, th) pixels along the thrust direction, a noisy width shrinking toward the tip, white-blue near the nozzle,
+ * fading to deep blue. Same 5-float pixel format as uriLoopPixels; drawn on top of the whole body. Returns the pixel count.
+ */
+export function uriPlumePixels(fx: UriLiveFx, vx: number, vy: number, out: Float32Array): number {
+  if (!fx.pylons) return 0;
+  const cap = Math.floor(out.length / 5);
+  let n = 0;
+  fx.pylons.forEach((p, side) => {
+    const sc = side === 0 ? 'L'.charCodeAt(0) : 'R'.charCodeAt(0);
+    const th = Math.max(0.15, p.th);
+    const len = 16 + 30 * th;
+    const cnt = 60 + 80 * Math.min(2, th);
+    for (let k = 0; k < cnt; k++) {
+      const f = k / cnt;
+      const Ln = f * len * (1 + 0.07 * Math.sin(fx.t * 9 + k * 0.7));
+      const w = (1 - f) * (3 + 2 * th);
+      const X = p.x + Math.cos(p.a) * Ln + (h3(k, Math.floor(fx.t * 14), sc) - 0.5) * w * Math.sin(p.a);
+      const Y = p.y + Math.sin(p.a) * Ln;
+      const c = f < 0.25 ? [230, 250, 255] : f < 0.6 ? [120, 170, 240] : [40, 70, 150];
+      if (n >= cap) return;
+      out.set([Math.trunc(X - vx), Math.trunc(Y - vy), c[0]!, c[1]!, c[2]!], n++ * 5);
+    }
+  });
+  return n;
 }

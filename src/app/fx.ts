@@ -94,6 +94,12 @@ const TITAN_LIGHT: Record<TitanId, { c: [number, number, number]; radius: number
   planet: { c: [0.55, 0.72, 1], radius: 150, base: 0.16 },
   asteroid: { c: [0.75, 0.9, 1], radius: 70, base: 0.08 },
 };
+/**
+ * Titans outside TITAN_LIGHT (우리, and any newcomer before its own entry): 우리 carries its hot core's light (uri hot ramp
+ * #f49a48) at the Witness's reach and strength, a titan of the same scale.
+ */
+const lightOf = (id: TitanId): { c: [number, number, number]; radius: number; base: number } =>
+  TITAN_LIGHT[id] ?? { c: [0xf4 / 255, 0x9a / 255, 0x48 / 255], radius: 120, base: 0.28 };
 /** Colour of the light a blow of each damage type strikes from the wound. */
 const TYPE_LIGHT: Record<DamageType, [number, number, number]> = {
   FRACTURE: [0.78, 0.95, 1],
@@ -398,7 +404,7 @@ export class FxState {
         case 'ko': {
           const victim = match.fighters[e.slot].view.titan;
           // capped core (Gate B: a 1.6 / 200 px KO light blew a ~150 px area out): bright, local, the wound stays legible
-          this.impact(e.x, e.y, TITAN_LIGHT[victim].c, 1.2, 130, 0.45, 1, true);
+          this.impact(e.x, e.y, lightOf(victim).c, 1.2, 130, 0.45, 1, true);
           this.heat += 3;
           break;
         }
@@ -511,7 +517,14 @@ export class FxState {
       this.lastLight[e.attacker] = this.wall;
     }
     const titan = match.fighters[e.target].view.titan;
-    const matter: VfxMatter = titan === 'lastone' ? 'witness' : titan === 'planet' ? 'planet' : 'rock';
+    const matter: VfxMatter =
+      titan === 'lastone'
+        ? 'witness'
+        : titan === 'planet'
+          ? 'planet'
+          : (titan as string) === 'uri'
+            ? 'uri'
+            : 'rock';
     if (this.impactsVfx.length >= MAX_VFX_IMPACTS) this.impactsVfx.shift();
     this.impactsVfx.push({
       x: e.x,
@@ -585,7 +598,7 @@ export class FxState {
     lights.length = 0;
     for (let i = 0; i < 2; i++) {
       const src = this.lightSrc[i]!;
-      const t = TITAN_LIGHT[src.titan];
+      const t = lightOf(src.titan);
       const lf = this.lightPool[i]!;
       lf.x = src.x;
       lf.y = src.y;

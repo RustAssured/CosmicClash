@@ -1360,7 +1360,9 @@ class PixelRenderer implements DebuggableRenderer {
 
     // ---- post ----
     const pu = this.postPass.uniforms;
-    pu.uRelight!.value = this.tierNow > 0 ? 1 : 0;
+    // the unified path lights titans by the one sky only (UNIFICATION §1): no relighting of a body by the other bodies' lights
+    // (stepped and then snapped, it read as a checker over the stone)
+    pu.uRelight!.value = this.tierNow > 0 && !uni ? 1 : 0;
     pu.uNumShock!.value = nShock;
     pu.uUnified!.value = uni ? 1 : 0;
     if (uni) {

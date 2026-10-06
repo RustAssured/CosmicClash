@@ -9,6 +9,8 @@ import {
   type RenderFrame,
   type RenderLayer,
   type StageId,
+  type TitanDef,
+  type TitanId,
 } from '@/contracts';
 import { createAI } from '@/ai';
 import { FxState } from '@/app/fx';
@@ -20,7 +22,9 @@ import { TITAN_SKY } from '@/render/unified';
 import { VFX_WEIGHT_NAMES, type FrameFxVfx, type VfxImpact, type VfxWeight } from '@/render/vfx';
 import { createAiSource, createMatch } from '@/sim';
 import { STAGES } from '@/stages';
-import { getTitanDef, witnessDef } from '@/titans';
+import { URI_ID, getTitanDef, uriDef, witnessDef } from '@/titans';
+import { loadUriAsset } from '@/titans/uri/asset';
+import uriBinUrl from '@/titans/uri/uri_rig.bin?url';
 
 /**
  * Gate 1 captures of the unified look (shared/UNIFICATION.md, VFX_SPEC.md), driven by tools/render/unify-capture.ts through
@@ -30,6 +34,7 @@ import { getTitanDef, witnessDef } from '@/titans';
  *  - `fight(stage, unified, ticks)`: the Witness vs the Planet in a real AI match, `ticks` after the intro, drawn before / after.
  */
 
+await loadUriAsset(uriBinUrl);
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const out = document.getElementById('out') as HTMLCanvasElement;
 const renderer = createRenderer();
@@ -155,7 +160,13 @@ function weightsAt(frame: number): void {
 
 /* ------------------------------------------ the two titans ------------------------------------------ */
 
-function newMatch(stage: StageId, sky: boolean, seed: number): MatchApi {
+/** Who fights: the Witness vs the Planet (default), or 우리 vs one of them. */
+export type Pair = 'witness-planet' | 'uri-witness' | 'uri-planet';
+const defOf = (id: TitanId): TitanDef => (id === URI_ID ? uriDef() : getTitanDef(id));
+
+function newMatch(stage: StageId, sky: boolean, seed: number, pair: Pair = 'witness-planet'): MatchApi {
+  const a: TitanId = pair === 'witness-planet' ? 'lastone' : URI_ID;
+  const b: TitanId = pair === 'uri-witness' ? 'lastone' : 'planet';
   const cfg: MatchConfig = {
     seed,
     stage,
@@ -163,30 +174,46 @@ function newMatch(stage: StageId, sky: boolean, seed: number): MatchApi {
     footwork: 'orbit',
     witness: true,
     slots: [
-      { titan: 'lastone', controller: 'ai', aiLevel: 4 },
-      { titan: 'planet', controller: 'ai', aiLevel: 4 },
+      { titan: a, controller: 'ai', aiLevel: 4 },
+      { titan: b, controller: 'ai', aiLevel: 4 },
     ],
   };
   const st = STAGES[stage];
   const m = createMatch(cfg, {
     createWorld: createMatterWorld,
     createFighter,
-    getTitanDef,
+    getTitanDef: defOf,
     arena: st.arena,
     lighting: sky ? TITAN_SKY : st.lighting,
   });
   m.setSources(
-    createAiSource(m, 0, createAI(4, witnessDef(getTitanDef('lastone')), seed * 7, { footwork: 'orbit' })),
-    createAiSource(m, 1, createAI(4, getTitanDef('planet'), seed * 7 + 1, { footwork: 'orbit' })),
+    createAiSource(
+      m,
+      0,
+      createAI(4, a === 'lastone' ? witnessDef(getTitanDef(a)) : defOf(a), seed * 7, { footwork: 'orbit' }),
+    ),
+    createAiSource(
+      m,
+      1,
+      createAI(4, b === 'lastone' ? witnessDef(getTitanDef(b)) : defOf(b), seed * 7 + 1, {
+        footwork: 'orbit',
+      }),
+    ),
   );
   return m;
 }
 
 /** A real match, `ticks` sim ticks in, drawn on `stage` through the unified path or the classic one. Returns a PNG data URL. */
-function fight(stage: StageId, unified: boolean, ticks: number, seed = 21): string {
+function fight(
+  stage: StageId,
+  unified: boolean,
+  ticks: number,
+  seed = 21,
+  pair: Pair = 'witness-planet',
+): string {
   renderer.debugSetUnified(unified);
   renderer.setStage(stage);
-  const m = newMatch(stage, unified, seed);
+  const m = newMatch(stage, unified, seed, pair);
   const fx = new FxState();
   const cam = createCamera();
   cam.reset(m.fighters[0].view.x, m.fighters[0].view.y);
@@ -227,13 +254,14 @@ async function perf(
   stage: StageId,
   unified: boolean,
   frames = 150,
+  pair: Pair = 'witness-planet',
 ): Promise<Record<string, [number, number]>> {
   renderer.debugSetUnified(unified);
   renderer.setStage(stage);
   canvas.width = 1920;
   canvas.height = 1080;
   renderer.resize(1920, 1080, 1);
-  const m = newMatch(stage, unified, 21);
+  const m = newMatch(stage, unified, 21, pair);
   const fx = new FxState();
   const cam = createCamera();
   cam.reset(m.fighters[0].view.x, m.fighters[0].view.y);
@@ -288,7 +316,7 @@ async function perf(
       });
       await new Promise((r) => requestAnimationFrame(r));
       const g = renderer.stats.gpuMs;
-      if (i > 20 && g !== null) ms.push(g);
+      if (i > 60 && g !== null) ms.push(g);
     }
     ms.sort((a, b) => a - b);
     const q = (p: number): number => +(ms[Math.floor(p * (ms.length - 1))] ?? -1).toFixed(2);
