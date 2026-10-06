@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   Btn,
-  HITSTOP_MAX_TICKS,
+  HITSTOP_CATASTROPHIC_MAX_TICKS,
   KO_TIME_SCALE,
   ROUNDS_TO_WIN,
   ROUND_INTRO_TICKS,
@@ -136,7 +136,8 @@ describe('hit-stop', () => {
       }
     };
     m.step(); // emits hitstop
-    expect(m.hitstopTicks).toBe(HITSTOP_MAX_TICKS);
+    // D31-5: the clamp is the catastrophic weight's ceiling (250 ms); light to heavy stay under 135 ms by their weight
+    expect(m.hitstopTicks).toBe(HITSTOP_CATASTROPHIC_MAX_TICKS);
     const worldTicks = (m.world as unknown as { ticks: number }).ticks;
     const f0Ticks = f0.ticks;
     // press STRIKE for one tick while frozen
@@ -163,7 +164,7 @@ describe('hit-stop', () => {
     f0.script = (f) => {
       if (f.lastInput.pressed & Btn.STRIKE) delivered = true;
     };
-    run(m, HITSTOP_MAX_TICKS + 2);
+    run(m, HITSTOP_CATASTROPHIC_MAX_TICKS + 2);
     expect(delivered).toBe(true);
   });
 

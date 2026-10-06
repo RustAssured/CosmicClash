@@ -1,5 +1,5 @@
 import {
-  HITSTOP_MAX_TICKS,
+  HITSTOP_CATASTROPHIC_MAX_TICKS,
   HITSTOP_MIN_TICKS,
   KO_MASS_FRAC,
   KO_TIME_SCALE,
@@ -270,7 +270,8 @@ export class Match implements MatchApi {
     for (let i = 0; i < this.events.length; i++) {
       const e = this.events[i]!;
       if (e.t === 'hitstop') {
-        const t = clamp(Math.round(e.ticks), HITSTOP_MIN_TICKS, HITSTOP_MAX_TICKS);
+        // D31-5: only a catastrophic blow's beat may pass the 135 ms cap (the fighter picks the beat by weight)
+        const t = clamp(Math.round(e.ticks), HITSTOP_MIN_TICKS, HITSTOP_CATASTROPHIC_MAX_TICKS);
         if (t > this.hitstopTicks) this.hitstopTicks = t;
         this.fighters[0].freeze(t);
         this.fighters[1].freeze(t);

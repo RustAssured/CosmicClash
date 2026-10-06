@@ -32,7 +32,9 @@ import { createAudioEngine, type AudioEngineExt } from '@/audio';
 import { createAI } from '@/ai';
 import { createFighter } from '@/combat';
 import { cameraTargetOf, createCamera, createLoop, type Loop } from '@/engine';
-import { createInputManager } from '@/input';
+import { createInputManager, emptyDebugInput } from '@/input';
+import { registerMatchKnobs, releaseMatchKnobs, type KnobAI, type KnobFighter } from '@/debug/matchKnobs';
+import { DebugOverlay } from '@/ui/debugOverlay';
 import { createMatterWorld, warmUp } from '@/matter';
 import { createRenderer, type DebuggableRenderer } from '@/render';
 import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
@@ -59,6 +61,8 @@ interface Session {
   /** Training dummy mode. */
   dummy: 'idle' | 'guard' | 'ai';
   aiLevel: Difficulty;
+  /** The AI controllers per slot (the debug overlay tunes them). */
+  ais: (KnobAI | null)[];
 }
 
 const MENU_STAGE: StageId = 'nursery';
@@ -168,6 +172,9 @@ export class App {
   private meterState: 'none' | 'pending' | 'on' = 'none';
   private readonly teleLayer = makeLayer('telemetry', 'screen', 104, LOGICAL_W, LOGICAL_H);
   private readonly teleCv = new PixelCanvas(LOGICAL_W, LOGICAL_H, this.teleLayer.pixels);
+  /** The debug tuning / diagnostics overlay (keyboard ` or pad R3), and its input frame. */
+  readonly debug = new DebugOverlay();
+  private readonly debugIn = emptyDebugInput();
 
   constructor() {
     const cam = this.camera.sample(0);
@@ -434,6 +441,7 @@ export class App {
       attract: !!opts.attract,
       dummy: 'idle',
       aiLevel: 3,
+      ais: [null, null],
     };
     this.session = session;
     // a human slot with no device (harness boot skips the Assign screen) falls back to the keyboard layouts
@@ -475,15 +483,25 @@ export class App {
         s.taps[slot] = t;
         srcs[slot] = t;
       } else if (c === 'ai') {
-        srcs[slot] = createAiSource(
-          s.match,
-          slot,
-          createAI(level, defs[slot], s.config.seed * 7 + slot, { footwork: s.config.footwork ?? 'classic' }),
-        );
+        const ai = createAI(level, defs[slot], s.config.seed * 7 + slot, {
+          footwork: s.config.footwork ?? 'classic',
+        });
+        s.ais[slot] = ai as unknown as KnobAI;
+        srcs[slot] = createAiSource(s.match, slot, ai);
       }
     }
     s.srcs = srcs;
     s.match.setSources(srcs[0], srcs[1]);
+    this.registerKnobs(s);
+  }
+
+  /** The debug overlay's knobs and diagnostics for this match (they only read until a player moves a slider). */
+  private registerKnobs(s: Session): void {
+    registerMatchKnobs(
+      s.match.fighters as unknown as KnobFighter[],
+      [s.config.slots[0].titan, s.config.slots[1].titan],
+      s.ais,
+    );
   }
 
   /** Replace one slot's input source (harness scripts, training dummy). */
@@ -495,6 +513,7 @@ export class App {
   }
 
   endMatch(): void {
+    if (this.session) releaseMatchKnobs();
     this.session = null;
     this.paused = false;
     this.frameEvents.length = 0;
@@ -505,19 +524,14 @@ export class App {
     const s = this.session;
     if (!s) return;
     s.dummy = mode;
-    const src =
-      mode === 'guard'
-        ? createGuardDummy()
-        : mode === 'ai'
-          ? createAiSource(
-              s.match,
-              1,
-              createAI(3, getTitanDef(s.config.slots[1].titan), 5, {
-                footwork: s.config.footwork ?? 'classic',
-              }),
-            )
-          : null;
+    const ai =
+      mode === 'ai'
+        ? createAI(3, getTitanDef(s.config.slots[1].titan), 5, { footwork: s.config.footwork ?? 'classic' })
+        : null;
+    const src = mode === 'guard' ? createGuardDummy() : ai ? createAiSource(s.match, 1, ai) : null;
+    s.ais[1] = ai as unknown as KnobAI | null;
     this.replaceSource(1, src);
+    this.registerKnobs(s);
   }
 
   /* ------------------------------------------------------------------------------------------------ *
@@ -610,6 +624,7 @@ export class App {
       if (this.meterState === 'none' && this.audio.ready) void this.attachMeters();
     }
     this.input.poll(now);
+    this.debug.handle(this.input.debugPoll(this.debugIn, now));
     this.ui.update(dtSec);
     this.handleUiActions();
     const s = this.session;
@@ -696,6 +711,10 @@ export class App {
     if (this.telemetry && this.teleOverlay && s) {
       this.drawTelemetry();
       this.layers.push(this.teleLayer);
+    }
+    if (s && !this.aftermath) {
+      const dl = this.debug.draw(f.view);
+      if (dl) this.layers.push(dl);
     }
     if (this.aftermath) {
       // the hint goes in the UI slot (composited after the zoom/orbit of the frame), or the HUD does when it is on

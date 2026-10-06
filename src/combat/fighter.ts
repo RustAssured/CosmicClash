@@ -1,11 +1,11 @@
 import {
   type DamageParams,
   type DamageResult,
+  BLOW_HITSTOP_TICKS,
+  BLOW_SHAKE_PX,
   Btn,
   DamageFlag,
   EMPTY_DAMAGE_RESULT,
-  HITSTOP_MAX_TICKS,
-  HITSTOP_MIN_TICKS,
   INPUT_BUFFER_TICKS,
   KO_CORE_INTEGRITY,
   KO_MASS_FRAC,
@@ -21,6 +21,7 @@ import {
   makeLayer,
   type AimDir,
   type ArenaInfo,
+  type BlowWeight,
   type BodyStats,
   type DamageEvent,
   type DamageShape,
@@ -82,6 +83,7 @@ import {
   type TemplatePlacement,
 } from './shapes';
 import { computeStats, topSpeed } from './stats';
+import { blowWeight, lighter } from './weight';
 import { TUNING as T } from './tuning';
 
 /** Damage-type absorption profile of a titan's Guard shell (the guard move's `extra.shell`). */
@@ -142,6 +144,9 @@ export const CORE_STEP_MAX = 24;
 const REGION_PROBE_MARGIN = 3;
 /** deepestBite: a later tick of the window is a deeper bite only if it reaches this much closer to the foe's core (px). */
 const DEEPER_PX = 4;
+/** A blow mostly taken by Guard or by parts lands one weight lighter (hit-stop, shake, VFX). */
+const landedWeight = (w: BlowWeight, blocked: number): BlowWeight => (blocked > 0.5 ? lighter(w) : w);
+
 /** Slack (px) kept between a body's live bounds and the arena edge. */
 const BODY_EDGE = 10;
 /**
@@ -2503,6 +2508,8 @@ export class FighterImpl implements Fighter {
     info.continuous = (dmg.flags & DamageFlag.CONTINUOUS) !== 0;
     info.stunMul = info.continuous ? 0.25 : 1;
     info.moveId = moveId;
+    // the weight it is thrown with (VFX_SPEC item 6): the defender lightens it if guarded, the KO makes it catastrophic
+    e.weight = blowWeight(moveId, this.mv.def, slot, e.energy, info.continuous);
 
     const res = foe.receive(e, this, this.events);
     if (!res.connected) return false;
@@ -2521,6 +2528,11 @@ export class FighterImpl implements Fighter {
       this.meter = Math.min(1, this.meter + e.energy * T.meterDealt * (1 - res.blocked * 0.7));
 
     const rate = !info.continuous || this.tickNo - this.lastEventTick >= T.continuousEventEvery;
+    // the weight as it landed (the defender lightened a guarded blow); the blow that KOs is catastrophic
+    const koBlow = fv.ko && !this.foeKoAnnounced;
+    const weight: BlowWeight = koBlow
+      ? 'catastrophic'
+      : ((foe as unknown as { lastLandedWeight?: BlowWeight }).lastLandedWeight ?? e.weight ?? 'medium');
     if (rate) {
       this.lastEventTick = this.tickNo;
       ev.push({
@@ -2539,13 +2551,12 @@ export class FighterImpl implements Fighter {
         blocked: res.blocked,
         heavy: info.heavy,
         onDamaged: (foe as unknown as { lastOnDamaged?: number }).lastOnDamaged ?? 0,
+        weight,
       });
       if (res.hitstop > 0 && !info.continuous) ev.push({ t: 'hitstop', ticks: res.hitstop });
       const massK = Math.pow((this.stats.mass + fv.stats.mass) / 10, 0.55);
-      const amp =
-        clamp(0.09 * Math.pow(e.energy * (info.continuous ? 6 : 1), 0.62), 0.6, 14) *
-        massK *
-        (1 - res.blocked * 0.6);
+      // VFX_SPEC item 6: the shake of the blow's weight (a beam's rolling slices shake at half a light blow)
+      const amp = info.continuous ? BLOW_SHAKE_PX.light * 0.5 : BLOW_SHAKE_PX[weight];
       ev.push({ t: 'shake', dirX: e.dirX, dirY: e.dirY, amp: graze ? amp * 0.4 : amp });
       if (info.heavy && !graze)
         ev.push({ t: 'zoom', amount: clamp((e.energy / 40000) * massK, 0.008, 0.06) });
@@ -2580,11 +2591,13 @@ export class FighterImpl implements Fighter {
         });
     }
     // finishing blow: slow motion, flash, a huge shake
-    if (fv.ko && !this.foeKoAnnounced) {
+    if (koBlow) {
       this.foeKoAnnounced = true;
       ev.push({ t: 'timescale', scale: T.koTimescale, ticks: T.koTimescaleTicks });
       ev.push({ t: 'flash', amount: 0.7, x: res.x, y: res.y });
-      ev.push({ t: 'shake', dirX: e.dirX, dirY: e.dirY, amp: 16 });
+      // catastrophic (D31-5): the one beat allowed past the 135 ms cap
+      ev.push({ t: 'hitstop', ticks: BLOW_HITSTOP_TICKS.catastrophic });
+      ev.push({ t: 'shake', dirX: e.dirX, dirY: e.dirY, amp: BLOW_SHAKE_PX.catastrophic });
       ev.push({ t: 'shockwave', x: res.x, y: res.y, strength: 1, radius: 240, hue: 0.1 });
       ev.push({ t: 'zoom', amount: 0.05 });
     }
@@ -2804,16 +2817,13 @@ export class FighterImpl implements Fighter {
     e.energy *= 1 - clamp01(ir.absorbed);
     const partsAbsorb = clamp01(ir.absorbed);
 
-    // hit-stop is decided before the world sees the blow, so matter can time the wound's shear in wall time (DamageEvent.hitstop)
+    // hit-stop is decided before the world sees the blow, so matter can time the wound's shear in wall time (DamageEvent.hitstop):
+    // the beat of the blow's weight, one step lighter when Guard or the parts took most of it
     const mass = Math.max(1, this.stats.mass);
-    const hitstop = info.continuous
-      ? 0
-      : this.hitstopFor(
-          info.hitstopBase,
-          rawEnergy,
-          attacker.view.stats.mass + mass,
-          clamp01(blocked + (1 - blocked) * partsAbsorb),
-        );
+    const landed = landedWeight(evIn.weight ?? 'medium', clamp01(blocked + (1 - blocked) * partsAbsorb));
+    e.weight = landed;
+    this.lastLandedWeight = landed;
+    const hitstop = info.continuous ? 0 : BLOW_HITSTOP_TICKS[landed];
     e.hitstop = hitstop;
 
     // 3. the matter world
@@ -2907,15 +2917,8 @@ export class FighterImpl implements Fighter {
     return res;
   }
 
-  /** Hit-stop ticks for a blow (a short beat; momentum and torque carry the weight, D27). */
-  private hitstopFor(base: number, energy: number, massSum: number, blocked: number): number {
-    const k =
-      (base / T.hitstopBaseRef) *
-      (energy / T.hitstopEnergyRef) *
-      Math.sqrt(massSum / 10) *
-      (1 - blocked * 0.4);
-    return Math.round(HITSTOP_MIN_TICKS + (HITSTOP_MAX_TICKS - HITSTOP_MIN_TICKS) * clamp01(k));
-  }
+  /** Weight of the last blow that reached this body, as it landed (the attacker reads it for the hit event). */
+  lastLandedWeight: BlowWeight = 'medium';
 
   /** Spin (rad/s) the last blow put into this body: the attacker reads it for the ω-driven camera roll. */
   lastDeltaW = 0;

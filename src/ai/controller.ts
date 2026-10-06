@@ -238,9 +238,10 @@ export class UtilityAI implements AIController {
   private orbit: boolean;
   /**
    * Orbit pacing (D28: rounds of 45–90 s, ~8–10 contacts a minute): ticks the AI waits between its own attacks, and the
-   * tick its next neutral attack may start. Not a level parameter: it is the rhythm of colossal fights.
+   * tick its next neutral attack may start. Not a level parameter: it is the rhythm of colossal fights. Public so the debug
+   * overlay can tune it live (src/debug/matchKnobs.ts); nothing else writes it.
    */
-  private readonly engageGap = ENGAGE_GAP_TICKS;
+  engageGap = ENGAGE_GAP_TICKS;
   private nextAttackTick = 0;
   /** The foe re-expressed in the attack frame (orbit): straight ahead along +x at its true distance. */
   private readonly aimSnap = new Snapshot();
@@ -1487,6 +1488,11 @@ export class UtilityAI implements AIController {
   }
   get blunders(): number {
     return this.blunderCount;
+  }
+
+  /** Diagnostic access: ticks until the AI's next neutral attack may start (0 = it may attack now). */
+  get restTicks(): number {
+    return Math.max(0, this.nextAttackTick - this.nowTick);
   }
 
   /** Diagnostic access: the name of the plan being executed ('' when idle). */

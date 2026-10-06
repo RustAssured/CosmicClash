@@ -292,6 +292,18 @@ export interface CalibrationState {
 
 export type HidStatus = 'unsupported' | 'idle' | 'requesting' | 'connected' | 'denied' | 'error';
 
+/** One frame of debug-overlay controls (see `InputManager.debugPoll`). Counts are presses (key repeat included). */
+export interface DebugInputFrame {
+  toggle: boolean;
+  /** Selection moves (− = up). */
+  select: number;
+  /** Adjust steps (already ×10 for the coarse keys / a full stick). */
+  adjust: number;
+  reset: boolean;
+}
+
+export const emptyDebugInput = (): DebugInputFrame => ({ toggle: false, select: 0, adjust: 0, reset: false });
+
 /** The full input service (see README). One instance per page. */
 export interface InputManager {
   attach(target?: Window): void;
@@ -304,6 +316,12 @@ export interface InputManager {
   source(slot: 0 | 1): InputSource;
   /** Menu navigation frame, valid until the next poll. 'any' merges every device. */
   nav(which?: 0 | 1 | 'any'): Readonly<NavFrame>;
+  /**
+   * The debug overlay's controls since the last call (any device; never part of a player's InputFrame): keyboard ` toggles,
+   * [ ] select, - = adjust, ; ' adjust ×10, \ resets; a pad's R3 toggles and its right stick selects (↑↓) and adjusts (←→,
+   * ×10 when pushed fully). Fills `out` and returns it.
+   */
+  debugPoll(out: DebugInputFrame, nowMs?: number): DebugInputFrame;
 
   devices(): readonly DeviceInfo[];
   /** Device ids currently assigned to P1/P2. */

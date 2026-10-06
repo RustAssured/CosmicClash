@@ -22,6 +22,7 @@ import {
   type Action,
   type CalibrationState,
   type CaptureState,
+  type DebugInputFrame,
   type DeviceInfo,
   type GlyphFamily,
   type HidStatus,
@@ -69,6 +70,18 @@ interface NavScope {
   frame: NavFrame;
 }
 const newScope = (): NavScope => ({ repeater: new NavRepeater(), prevButtons: 0, frame: emptyNav() });
+
+/** Debug overlay keys (`KeyboardEvent.code`): ` toggle · [ ] select · - = adjust · ; ' adjust ×10 · \ reset. */
+const DEBUG_KEYS = new Set([
+  'Backquote',
+  'BracketLeft',
+  'BracketRight',
+  'Minus',
+  'Equal',
+  'Semicolon',
+  'Quote',
+  'Backslash',
+]);
 
 export function createInputManager(opts: InputManagerOptions = {}): InputManager {
   return new Manager(opts);
@@ -254,8 +267,55 @@ class Manager implements InputManager {
     }
     // Capture / activation want keys that are not part of any layout too.
     if (down && !e.repeat) this.looseKeys.push(code);
+    // the debug overlay's keys (none is in a player layout); adjusting repeats while held, toggling does not
+    if (down && DEBUG_KEYS.has(code) && (!e.repeat || code !== 'Backquote')) this.debugKeys.push(code);
   }
   private looseKeys: string[] = [];
+  private readonly debugKeys: string[] = [];
+  private readonly debugR3 = new Map<string, boolean>();
+  private debugStickAt = 0;
+
+  debugPoll(out: DebugInputFrame, nowMs?: number): DebugInputFrame {
+    const now = nowMs ?? this.clock();
+    out.toggle = false;
+    out.select = 0;
+    out.adjust = 0;
+    out.reset = false;
+    for (const code of this.debugKeys) {
+      if (code === 'Backquote') out.toggle = true;
+      else if (code === 'BracketLeft') out.select--;
+      else if (code === 'BracketRight') out.select++;
+      else if (code === 'Minus') out.adjust--;
+      else if (code === 'Equal') out.adjust++;
+      else if (code === 'Semicolon') out.adjust -= 10;
+      else if (code === 'Quote') out.adjust += 10;
+      else if (code === 'Backslash') out.reset = true;
+    }
+    this.debugKeys.length = 0;
+    // pads: R3 (no player action uses it) toggles; the right stick (unused in fights) selects and adjusts with a repeat
+    let sx = 0;
+    let sy = 0;
+    for (const d of this.allDevices()) {
+      if (!(d instanceof PadDevice)) continue;
+      const r3 = (d.state.buttons[Pad.R3] ?? 0) > 0.5;
+      if (r3 && !this.debugR3.get(d.info.id)) out.toggle = true;
+      this.debugR3.set(d.info.id, r3);
+      if (Math.hypot(d.rightX, d.rightY) > Math.hypot(sx, sy)) {
+        sx = d.rightX;
+        sy = d.rightY;
+      }
+    }
+    const ax = Math.abs(sx);
+    const ay = Math.abs(sy);
+    if (Math.max(ax, ay) < 0.5) this.debugStickAt = 0;
+    else if (now >= this.debugStickAt) {
+      // first move at once, then every 140 ms while held (the first repeat after 350 ms)
+      this.debugStickAt = now + (this.debugStickAt === 0 ? 350 : 140);
+      if (ay >= ax) out.select += Math.sign(sy);
+      else out.adjust += Math.sign(sx) * (ax > 0.92 ? 10 : 1);
+    }
+    return out;
+  }
 
   /* ---------------------------------------------------------------------------------------------- *
    *  devices

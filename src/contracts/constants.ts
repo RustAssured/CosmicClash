@@ -25,9 +25,9 @@ export const INPUT_BUFFER_TICKS = 9;
 export const CANCEL_WINDOW_FRACTION = 0.4;
 
 /** Titan matter maps never exceed this many cells per side (bodies are 90–180 px across). */
-export const MAX_BODY_DIM = 224;
+export const MAX_BODY_DIM = 300;
 /** Titan max cell budget (bodies up to ~25k cells). */
-export const MAX_BODY_CELLS = 30_000;
+export const MAX_BODY_CELLS = 70_000;
 
 /** Default arena (a stage may override through StageInfo.arena). World origin = top-left of arena. */
 export const ARENA_W = 1600;
@@ -44,10 +44,34 @@ export const ROUND_OUTRO_TICKS = 3 * TICK_HZ;
 
 /**
  * Hit-stop clamp in ticks: 60–135 ms (4–8 ticks). D27 rebudget: hit-stop is a beat, not the carrier of weight (that is the
- * blow's momentum and torque), so the heavy cap dropped from 220 ms (13 ticks) to 8 ticks.
+ * blow's momentum and torque), so the heavy cap dropped from 220 ms (13 ticks) to 8 ticks. D31-5 / VFX_SPEC item 6: the beat
+ * now comes from the blow's weight (`BLOW_HITSTOP_TICKS`); 135 ms stays the cap for light to heavy, and only a catastrophic
+ * blow may go past it, up to HITSTOP_CATASTROPHIC_MAX_TICKS. A light blow's 40 ms is the floor.
  */
-export const HITSTOP_MIN_TICKS = msToTicks(60);
+export const HITSTOP_MIN_TICKS = msToTicks(40);
 export const HITSTOP_MAX_TICKS = msToTicks(135);
+export const HITSTOP_CATASTROPHIC_MAX_TICKS = msToTicks(250);
+
+/**
+ * Blow weight (shared/VFX_SPEC.md): one scale for hit-stop, camera shake and the shared impact VFX (S5), so every titan's
+ * blows read on the same ladder. Proposal 171.
+ */
+export type BlowWeight = 'light' | 'medium' | 'heavy' | 'catastrophic';
+export const BLOW_WEIGHTS: readonly BlowWeight[] = ['light', 'medium', 'heavy', 'catastrophic'];
+/** VFX_SPEC item 6: 0.04 / 0.08 / 0.11 / 0.20–0.25 s → 2 / 5 / 7 / 14 ticks. */
+export const BLOW_HITSTOP_TICKS: Readonly<Record<BlowWeight, number>> = {
+  light: msToTicks(40),
+  medium: msToTicks(80),
+  heavy: msToTicks(110),
+  catastrophic: msToTicks(230),
+};
+/** VFX_SPEC item 6: camera shake amplitude (px) by weight (low frequency and damped: the camera's own rule). */
+export const BLOW_SHAKE_PX: Readonly<Record<BlowWeight, number>> = {
+  light: 3,
+  medium: 6,
+  heavy: 10,
+  catastrophic: 14,
+};
 /** Time dilation on KO blows (spec: 0.3x). */
 export const KO_TIME_SCALE = 0.3;
 

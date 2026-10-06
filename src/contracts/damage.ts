@@ -1,3 +1,5 @@
+import type { BlowWeight } from './constants';
+
 /**
  * Damage model contract. Destruction IS the health system: a DamageEvent is applied to a matter map and the
  * target's MATERIALS decide the outcome. All geometry is in WORLD coordinates (logical px); the matter world
@@ -98,6 +100,8 @@ export interface DamageEvent {
    * the wound's shear beat 80–300 ms after impact in WALL time (SLICE_PLAN §6, D1). Absent = 0.
    */
   hitstop?: number;
+  /** The blow's VFX weight (shared/VFX_SPEC.md; proposal 171). Absent = not classified (debris, hazards). */
+  weight?: BlowWeight;
 }
 
 /** What the caller (combat) learns immediately from an applied event. */

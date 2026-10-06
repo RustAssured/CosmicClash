@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HITSTOP_MAX_TICKS, type SimEvent } from '@/contracts';
+import { BLOW_HITSTOP_TICKS, BLOW_SHAKE_PX, HITSTOP_MAX_TICKS, type SimEvent } from '@/contracts';
 import { IMPACT, makeImpactResult, resolveImpact } from './impact';
 import { makeLab, probeHit } from './testing/feelLab';
 import type { FakeWorld } from './testing/fakeWorld';
@@ -70,16 +70,21 @@ describe('impact model in the fighter', () => {
     expect(heavy.dvx).toBeGreaterThan(100);
   });
 
-  it('a heavy blow reaches the 8-tick hit-stop cap, tells the world through DamageEvent.hitstop, and announces its class', () => {
+  it("a heavy blow holds the heavy weight's beat (VFX_SPEC: 0.11 s), tells the world through DamageEvent.hitstop, and announces its class", () => {
     const lab = makeLab({ gap: 200 });
     probeHit(lab, -40, 0, 1400, 760);
     // the blow was struck outside a step: its events are still on the match's bus
     const ev: readonly SimEvent[] = lab.m.events;
     const stop = ev.find((e) => e.t === 'hitstop');
-    expect(stop && stop.t === 'hitstop' ? stop.ticks : 0).toBe(HITSTOP_MAX_TICKS);
-    expect(HITSTOP_MAX_TICKS).toBe(8);
+    expect(stop && stop.t === 'hitstop' ? stop.ticks : 0).toBe(BLOW_HITSTOP_TICKS.heavy);
+    expect(BLOW_HITSTOP_TICKS.heavy).toBe(7);
+    expect(BLOW_HITSTOP_TICKS.heavy).toBeLessThanOrEqual(HITSTOP_MAX_TICKS);
     const log = (lab.m.world as FakeWorld).damageLog;
-    expect(log[log.length - 1]!.ev.hitstop).toBe(HITSTOP_MAX_TICKS);
+    expect(log[log.length - 1]!.ev.hitstop).toBe(BLOW_HITSTOP_TICKS.heavy);
+    expect(log[log.length - 1]!.ev.weight).toBe('heavy');
+    const hit = ev.find((e) => e.t === 'hit');
+    expect(hit && hit.t === 'hit' ? hit.weight : null).toBe('heavy');
+    expect(ev.some((e) => e.t === 'shake' && e.amp === BLOW_SHAKE_PX.heavy)).toBe(true);
     expect(ev.some((e) => e.t === 'cue' && e.id === 'hit-centre')).toBe(true);
   });
 

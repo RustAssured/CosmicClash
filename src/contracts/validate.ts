@@ -49,7 +49,7 @@ export function validateTitanDef(def: TitanDef): string[] {
     validateMove(def, mv, e);
   }
   if (def.resource.max <= 0 || def.resource.start > def.resource.max) e('bad resource range');
-  if (def.art.w > 224 || def.art.h > 224) e('map too large');
+  if (def.art.w > 300 || def.art.h > 300) e('map too large');
   return errs;
 }
 

@@ -1,4 +1,5 @@
 import type { AIContext, Difficulty } from './ai';
+import type { BlowWeight } from './constants';
 import type { DamageEvent, DamageShape, DamageType, OverlapResult } from './damage';
 import type { InputFrame, InputSource } from './input';
 import type { BodyStats, MatterBody, MatterWorld } from './matter';
@@ -63,6 +64,8 @@ export type SimEvent =
       heavy: boolean;
       /** Landed on already-damaged matter (punish feedback). */
       onDamaged: number;
+      /** VFX weight of the blow as it landed (guarded one step lighter, a KO blow catastrophic). Proposal 171. */
+      weight?: BlowWeight;
     }
   | { t: 'guard'; slot: 0 | 1; x: number; y: number; type: DamageType; broke: boolean }
   /** Expanding ring: renderer refraction + stage dust ripple. strength 0..1, radius = final radius px. */
