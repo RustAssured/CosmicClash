@@ -221,7 +221,12 @@ const extra = opt('flags', '')
   .join('');
 // --stage=mausoleum swaps the scenario's arena (the slice's arenas; scenarios default to the nursery)
 const stage = opt('stage', '');
-const params = stage ? sc.params.replace(/stage=[a-z]+/, `stage=${stage}`) : sc.params;
+let params = stage ? sc.params.replace(/stage=[a-z]+/, `stage=${stage}`) : sc.params;
+// --a=uri --b=lastone swap the scenario's titans (new titans join the slice)
+const ta = opt('a', '');
+const tb = opt('b', '');
+if (ta) params = params.replace(/(^|&)a=[a-z]+/, `$1a=${ta}`);
+if (tb) params = params.replace(/(^|&)b=[a-z]+/, `$1b=${tb}`);
 const url = `${base}/?${params}&freeze=1&aftermath=0&tele=${tele}&q=${quality}${lum ? '' : '&lum=0'}${extra}`;
 console.log(`${name}: ${url}`);
 const browser = await launchRealtime();
