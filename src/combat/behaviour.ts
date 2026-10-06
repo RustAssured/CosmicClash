@@ -87,6 +87,20 @@ export abstract class Behaviour {
   /** Append overlay layers for this frame. */
   renderLayers(_view: ViewRect, _alpha: number, _out: RenderLayer[]): void {}
   debugShapes(_out: DebugShape[]): void {}
+  /**
+   * Is this titan's sprite mirrored to face its opponent? Default true. False (우리, URI_SPEC §5: arm roles come from the
+   * opponent's side, the body is never flipped): the fighter writes facing +1 and no row-shear lean on the primary body, and
+   * answers an accept tick with its root instead of a lean. `FighterImpl.facing` still says which side the opponent is on.
+   */
+  mirrors(): boolean {
+    return true;
+  }
+  /**
+   * Called once after `attach` with the fighter's own body layer (the primary body's sprite): a multi-body titan can put the
+   * part pass's planes on it (`light` / `shade` / `chunk`, src/render/unified's RenderLayerLit), as on its region layers.
+   * Re-pack them here or later in place (and bump nothing: the layer's version follows the body's map).
+   */
+  decorateBodyLayer(_layer: RenderLayer): void {}
   /** Extra cosmetic lean (px, facing-relative) added to the fighter's velocity/pose lean (asteroid tumble, idle sway). */
   leanBias(): number {
     return 0;

@@ -52,6 +52,9 @@ const URGE_CUT = 0.8;
 const URGE_WEIGHT = 0.8;
 /** Tidal Draw: after about this many ticks of drawing since its last blow the ring is taken to be full. */
 const DRAW_FULL_TICKS = 300;
+/** Tidal Draw is safe from this gap (px) between the two silhouettes, fully so DRAW_GAP_RAMP px further. */
+const DRAW_GAP_MIN = 90;
+const DRAW_GAP_RAMP = 160;
 
 interface Cand {
   score: number;
@@ -1080,7 +1083,13 @@ export class UtilityAI implements AIController {
     if (this.persona.draw > 0 && vuln <= 0 && !foeWindup) {
       const wreck = clamp((2 - S.bodyStats.massFrac - F.massFrac) / 0.3, 0, 1);
       const moonsOut = S.resourceMax > 0 ? 1 - S.resource / S.resourceMax : 0;
-      const safe = clamp((dist - range) / 150, 0, 1);
+      // "out of reach" is the FOE's reach, read from the bodies (a world's own long reach — Moon Slam, the comet — is no
+      // reason to stand further off, and every size follows from the bounds): the gap between the two silhouettes, with the
+      // foe not in the middle of a blow
+      const rS = 0.25 * (S.boundsX1 - S.boundsX0 + (S.boundsY1 - S.boundsY0));
+      const rF = 0.25 * (F.bx1 - F.bx0 + (F.by1 - F.by0));
+      const foeBusy = F.moveId !== null && F.phase !== 'recovery';
+      const safe = foeBusy ? 0 : clamp((dist - rS - rF - DRAW_GAP_MIN) / DRAW_GAP_RAMP, 0, 1);
       const full = clamp(this.drawHeld / DRAW_FULL_TICKS, 0, 1);
       if (wreck > 0.15 && safe > 0 && full < 1) {
         const dr = this.add(

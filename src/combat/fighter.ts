@@ -39,6 +39,8 @@ import {
   type MatterBody,
   type MatterWorld,
   type MoveDef,
+  type RenderPart,
+  type RotMode,
   type MoveSlot,
   type OverlapResult,
   type ParticleSpawn,
@@ -388,6 +390,10 @@ export class FighterImpl implements Fighter {
   private threatCount = 0;
   private readonly layerOut: RenderLayer[] = [];
   private readonly bodyLayer: RenderLayer;
+  /** The primary body's rotation sampler (from `art.params.sampler`; undefined = the default vote). */
+  private readonly bodySampler: RotMode | undefined;
+  /** The body layer's single part, once the primary body has rotated (`transform.rot`): it is then drawn rotated. */
+  private bodyPart: RenderPart | null = null;
   private readonly sparkRamp: number[];
   /** Reusable particle request (behaviours mutate it and hand it to `world.spawnParticles`). */
   readonly particleSpawn: ParticleSpawn;
@@ -423,6 +429,8 @@ export class FighterImpl implements Fighter {
     const guard = this.slotMoves.guard;
     if (guard?.extra?.['shell']) this.shell = guard.extra['shell'] as ShellProfile;
 
+    const sp = (opts.def.art?.params as Record<string, unknown> | undefined)?.['sampler'];
+    this.bodySampler = sp === 'majority4' || sp === 'vote9' ? sp : undefined;
     if (opts.existingBody) {
       this.body = opts.existingBody;
       this.rig = rigOfMap(opts.existingBody.map) ?? buildRigFor(opts.def, opts.seed);
@@ -444,6 +452,8 @@ export class FighterImpl implements Fighter {
           facing: opts.facing,
           lean: 0,
         },
+        // a rotating primary (우리's pelvis) is hit-tested with its titan's sampler (`art.params.sampler`, proposal 174)
+        ...(this.bodySampler ? { sampler: this.bodySampler } : {}),
       });
       rememberRig(g.map, g.rig);
     }
@@ -499,6 +509,11 @@ export class FighterImpl implements Fighter {
     this.view = this.makeView();
     this.behaviour = createBehaviour(this);
     this.behaviour.attach();
+    if (!this.behaviour.mirrors()) {
+      t.facing = 1;
+      t.lean = 0;
+    }
+    this.behaviour.decorateBodyLayer(this.bodyLayer);
     this.refreshStats();
     this.syncView();
   }
@@ -660,7 +675,7 @@ export class FighterImpl implements Fighter {
       this.feelTrack.respondVia(ch, this.tickNo, this.slot, this.events);
       return;
     }
-    if (this.feel.shear > 0.25) {
+    if (this.feel.shear > 0.25 && this.behaviour.mirrors()) {
       const step = this.acceptDir * (Math.abs(t.lean + this.acceptDir * this.facing) > T.leanMax ? -1 : 1);
       this.leanF += step / this.feel.shear;
       t.lean = this.composeLean();
@@ -2240,8 +2255,10 @@ export class FighterImpl implements Fighter {
     // whole pixels: what you see is what is hit (space.ts maps integer transforms 1:1 onto cells)
     t.x = Math.round(this.px + this.offX);
     t.y = Math.round(this.py + this.offY);
-    t.facing = this.facing;
-    t.lean = this.composeLean();
+    // a titan that is never mirrored (우리) keeps facing +1 and no shear; `this.facing` still names the opponent's side
+    const mirrors = this.behaviour.mirrors();
+    t.facing = mirrors ? this.facing : 1;
+    t.lean = mirrors ? this.composeLean() : 0;
   }
 
   /**
@@ -3278,6 +3295,25 @@ export class FighterImpl implements Fighter {
     }
     L.pixels = map.pixels;
     L.emissive = map.emissive;
+    // a primary body that rotates (우리's pelvis: its behaviour writes `transform.rot`) is drawn as one rotated part, with the
+    // sampler it is hit-tested with, so what is drawn is what is hit; every other titan keeps the plain facing/lean placement
+    const rot = t.rot ?? 0;
+    if (rot !== 0 || this.bodyPart) {
+      let p = this.bodyPart;
+      if (!p) {
+        p = { sx: 0, sy: 0, sw: map.w, sh: map.h, px: 0, py: 0, wx: 0, wy: 0, step: 0, z: 0 };
+        if (this.bodySampler) p.sampler = this.bodySampler;
+        this.bodyPart = p;
+        L.parts = [p];
+      }
+      p.sw = map.w;
+      p.sh = map.h;
+      p.px = t.anchorX;
+      p.py = t.anchorY;
+      p.wx = t.x + jx;
+      p.wy = t.y + jy;
+      p.step = rot;
+    }
     out.push(L);
     this.behaviour.renderLayers(view, alpha, out);
     return out;
@@ -3366,7 +3402,7 @@ export class FighterImpl implements Fighter {
     const t = this.body.transform;
     t.x = Math.round(x);
     t.y = Math.round(y);
-    t.facing = facing;
+    t.facing = this.behaviour.mirrors() ? facing : 1;
     t.lean = 0;
     this.prevTx = t.x;
     this.prevTy = t.y;
