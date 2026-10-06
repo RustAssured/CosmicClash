@@ -1279,6 +1279,7 @@ class PixelRenderer implements DebuggableRenderer {
     // (unified path: emissives enter the shared bloom at their own colour, as in the oracles)
     const uni = this.unified && this.master !== null;
     this.emisGain.value = uni ? 1 : 1.5;
+    this.compositor.unified = uni;
     const drawn = this.compositor.draw(r, this.layerRT, frame.layers, view, frame.alpha);
     // ---- the shared VFX (unified path): drawn into the layer target, so the final snap puts them on the master palette ----
     let nVfx = 0;
@@ -1382,9 +1383,9 @@ class PixelRenderer implements DebuggableRenderer {
     pu.uFrameNo!.value = frame.tick & 1023; // grain follows the sim tick: identical frames render identically
     pu.uHasLayers!.value = hasLayers ? 1 : 0;
     const damp = look.glowDamp ?? DEFAULT_GLOW_DAMP;
-    // unified path: no glow is added ON a figure's own pixels (the snap would turn a drifting scenery glow into flicker on
-    // the body); the shared bloom still spills around it
-    if (uni) (pu.uGlowDamp!.value as Vector2).set(1, 1);
+    // unified path: the shared bloom lands on the bodies too, as in the oracles' compose (the emissives' own glow is part of
+    // their look: 우리's cores, the loop); god rays never do
+    if (uni) (pu.uGlowDamp!.value as Vector2).set(0, 1);
     else (pu.uGlowDamp!.value as Vector2).set(damp[0], damp[1]);
     this.postPass.render(r, this.postRT);
 

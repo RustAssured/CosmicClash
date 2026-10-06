@@ -19,10 +19,18 @@ import { paintNexus, type NexusRig } from './art/nexus';
 import { paintPlanet, type PlanetRig } from './art/planet';
 import { paintSupernova, type SupernovaRig } from './art/supernova';
 import { resolveMaterials } from './materialTable';
+import { isUriDef, paintUriTitan, type UriTitanRig } from './uri/def';
 
 /** Per-titan geometric rig produced alongside the pixels (anchor points the fighter needs: tendril roots, eye, core…). */
 export type TitanRig =
-  LastOneRig | WitnessTitanRig | AsteroidRig | NexusRig | BlackHoleRig | SupernovaRig | PlanetRig;
+  | LastOneRig
+  | WitnessTitanRig
+  | UriTitanRig
+  | AsteroidRig
+  | NexusRig
+  | BlackHoleRig
+  | SupernovaRig
+  | PlanetRig;
 
 export interface PaintedTitan {
   map: MatterMap;
@@ -46,6 +54,7 @@ const PAINTERS: Partial<Record<TitanId, Painter>> = {
  */
 export function paintTitanMap(def: TitanDef, seed: number, lighting: StageLighting): PaintedTitan {
   if (isWitnessDef(def)) return paintWitnessTitan(def, seed, lighting);
+  if (isUriDef(def)) return paintUriTitan(def, seed, lighting);
   const painter = PAINTERS[def.id];
   if (!painter) throw new Error(`no art painter for titan '${def.id}'`);
   return painter(def, seed, lighting);

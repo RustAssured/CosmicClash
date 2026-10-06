@@ -1,5 +1,5 @@
 import type { WorldPoint } from './body';
-import { outwardNormal, type DamageCtx } from './dmg';
+import { T_FRACTURE, outwardNormal, type DamageCtx } from './dmg';
 
 export interface Impact {
   /** Entry point on the outline, body-local float cell coordinates. */
@@ -60,12 +60,17 @@ function computeImpact(ctx: DamageCtx, out: Impact): boolean {
   const { core, body } = ctx;
   const w = body.w;
   const mat = body.map.material;
+  const fl = body.matFluid;
   const q = core.q;
   const n0 = ctx.n;
   const idx0 = core.covIdx;
   const dist = core.covD;
   const ox = q.originX();
   const oy = q.originY();
+  // D33: a cutting blow (FRACTURE) passes through gas and ocean and bites the first SOLID matter it covers (when it covers any)
+  let solid = false;
+  if (ctx.type === T_FRACTURE && body.hasFluid)
+    for (let k = 0; k < n0 && !solid; k++) if (fl[mat[idx0[k]!]!] === 0) solid = true;
   let dmin = Infinity;
   for (let k = 0; k < n0; k++) {
     const i = idx0[k]!;
@@ -73,6 +78,7 @@ function computeImpact(ctx: DamageCtx, out: Impact): boolean {
     body.cellWorld(x, (i - x) / w, pt);
     const d = (pt.x - ox) * (pt.x - ox) + (pt.y - oy) * (pt.y - oy);
     dist[k] = d;
+    if (solid && fl[mat[i]!] === 1) continue;
     if (d < dmin) dmin = d;
   }
   if (dmin === Infinity) return false;
@@ -85,7 +91,7 @@ function computeImpact(ctx: DamageCtx, out: Impact): boolean {
     const x = i % w;
     const y = (i - x) / w;
     const d = dist[k]!;
-    if (d > lim) continue;
+    if (d > lim || (solid && fl[mat[i]!] === 1)) continue;
     sx += x + 0.5;
     sy += y + 0.5;
     sw += 1;
@@ -108,6 +114,7 @@ function computeImpact(ctx: DamageCtx, out: Impact): boolean {
       const ix = Math.floor(nx2);
       const iy = Math.floor(ny2);
       if (ix < 0 || iy < 0 || ix >= w || iy >= body.h || mat[iy * w + ix] === 0) break;
+      if (solid && fl[mat[iy * w + ix]!] === 1) break;
       lx = nx2;
       ly = ny2;
     }
@@ -116,7 +123,7 @@ function computeImpact(ctx: DamageCtx, out: Impact): boolean {
       fy = ly;
     }
   }
-  const has = outwardNormal(body, Math.floor(fx), Math.floor(fy), 4, nrm);
+  const has = outwardNormal(body, Math.floor(fx), Math.floor(fy), 4, nrm, solid);
   out.fx = fx;
   out.fy = fy;
   out.hasNormal = has;

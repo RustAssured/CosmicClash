@@ -1,7 +1,11 @@
 import {
   AddEquation,
   CustomBlending,
+  DataTexture,
   DoubleSide,
+  FloatType,
+  NearestFilter,
+  RGBAFormat,
   Mesh,
   OneFactor,
   OneMinusSrcAlphaFactor,
@@ -22,7 +26,26 @@ import { makePlacement, placeLayer, type LayerPlacement } from './layerMap';
 import type { LayerTextures } from './layerTextures';
 import { LAYER_FRAG, LAYER_VERT, PART_FRAG } from './shaders';
 import { ROT_LUT, rotBoundsEx } from './rotsprite';
-import { TITAN_SKY, isTitanLayer } from './unified';
+import { TITAN_SKY, URI_CEILING_EXEMPT, isTitanLayer, type RenderLayerLit } from './unified';
+import { sourceRamp } from './master';
+import { UriLivePass } from './uriLivePass';
+import { URI_FIST_SPREAD_REST } from './uriLive';
+
+/** 우리's ramps for the part pass's shade mode, as linear-in-sRGB 0..1 triples (vec3 arrays). */
+const URI_SHADE_RAMPS = (() => {
+  const tab = (name: string): Float32Array => {
+    const c = sourceRamp(name);
+    const a = new Float32Array(c.length * 3);
+    c.forEach((h, i) => {
+      const v = parseInt(h.slice(1), 16);
+      a[i * 3] = ((v >> 16) & 255) / 255;
+      a[i * 3 + 1] = ((v >> 8) & 255) / 255;
+      a[i * 3 + 2] = (v & 255) / 255;
+    });
+    return a;
+  };
+  return { s1: tab('uri.s1'), s2: tab('uri.s2'), civ: tab('uri.civ'), field: tab('uri.field') };
+})();
 
 /** Maximum number of 2D layers composited per frame (extra layers are dropped with one warning). */
 export const MAX_LAYERS = 48;
@@ -62,6 +85,69 @@ export class LayerCompositor {
   drawnParts = 0;
   /** Layers drawn last frame (for stats/tests). */
   drawn = 0;
+  /** The unified look is drawing (set by the renderer each frame). */
+  unified = false;
+  /** 우리's fist chunk tables (centroids, bounds), per layer and part, rebuilt when the layer's version changes. */
+  private readonly fistTabs = new Map<
+    string,
+    { version: number; tex: DataTexture; n: number; maxOff: number }
+  >();
+
+  private fistTable(
+    layer: RenderLayerLit,
+    part: RenderPart,
+  ): { tex: DataTexture; n: number; maxOff: number } {
+    const key = `${layer.id}:${part.z}`;
+    let e = this.fistTabs.get(key);
+    if (e && e.version === layer.version) return e;
+    const ch = layer.chunk!;
+    const sums = new Map<number, number[]>();
+    for (let y = 0; y < part.sh; y++)
+      for (let x = 0; x < part.sw; x++) {
+        const o = (part.sy + y) * layer.w + part.sx + x;
+        if (layer.pixels[o]! >>> 24 === 0) continue;
+        const id = ch[o]!;
+        let s = sums.get(id);
+        if (!s) sums.set(id, (s = [0, 0, 0, x, y, x + 1, y + 1]));
+        s[0]! += x;
+        s[1]! += y;
+        s[2]!++;
+        s[3] = Math.min(s[3]!, x);
+        s[4] = Math.min(s[4]!, y);
+        s[5] = Math.max(s[5]!, x + 1);
+        s[6] = Math.max(s[6]!, y + 1);
+      }
+    // the oracle draws chunks in id order (later ones on top)
+    const ids = [...sums.keys()].sort((a, b) => a - b).slice(0, 160);
+    const data = new Float32Array(320 * 4);
+    let maxOff = 0;
+    ids.forEach((id, c) => {
+      const s = sums.get(id)!;
+      const cx = s[0]! / s[2]!;
+      const cy = s[1]! / s[2]!;
+      data.set([cx, cy, id, 0, s[3]!, s[4]!, s[5]!, s[6]!], c * 8);
+      maxOff = Math.max(maxOff, Math.hypot(cx - part.px, cy - part.py));
+    });
+    if (!e) {
+      const tex = new DataTexture(data, 320, 1, RGBAFormat, FloatType);
+      tex.minFilter = NearestFilter;
+      tex.magFilter = NearestFilter;
+      tex.generateMipmaps = false;
+      e = { version: layer.version, tex, n: ids.length, maxOff };
+      this.fistTabs.set(key, e);
+    } else {
+      (e.tex.image.data as Float32Array).set(data);
+      e.version = layer.version;
+      e.n = ids.length;
+      e.maxOff = maxOff;
+    }
+    e.tex.needsUpdate = true;
+    return e;
+  }
+
+  /** 우리's live pass (created on first use) and whether it drew this frame. */
+  private live: UriLivePass | null = null;
+  liveUsed = false;
   private readonly res = new Vector2(LOGICAL_W, LOGICAL_H);
 
   constructor(
@@ -89,6 +175,7 @@ export class LayerCompositor {
         uPivot: { value: [0, 0] },
         uRotCS: { value: [0, 0] },
         uFacing: { value: 1 },
+        uRotMode: { value: 0 },
         uDest: { value: [0, 0] },
         uAlpha: { value: 1 },
         uEmisGain: this.emisGain,
@@ -98,6 +185,18 @@ export class LayerCompositor {
         uLight: { value: null },
         uHasLight: { value: 0 },
         uSkyDir: { value: TITAN_SKY.dir },
+        uShade: { value: null },
+        uHasShade: { value: 0 },
+        uS1: { value: URI_SHADE_RAMPS.s1 },
+        uS2: { value: URI_SHADE_RAMPS.s2 },
+        uCiv: { value: URI_SHADE_RAMPS.civ },
+        uField: { value: URI_SHADE_RAMPS.field },
+        uBind: { value: 0 },
+        uFist: { value: 0 },
+        uChunkId: { value: null },
+        uChunkTab: { value: null },
+        uNChunk: { value: 0 },
+        uSpreadK: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -189,6 +288,8 @@ export class LayerCompositor {
     let order = 0;
     for (let i = 0; i < MAX_LAYERS; i++) this.slots[i]!.mesh.visible = false;
     for (let i = 0; i < MAX_PARTS; i++) this.partSlots[i]!.mesh.visible = false;
+    this.live?.hide();
+    this.liveUsed = false;
     for (let i = 0; i < n; i++) {
       const layer = this.sorted[i]!;
       if (layer.parts && layer.parts.length > 0 && layer.space === 'world') {
@@ -204,7 +305,17 @@ export class LayerCompositor {
           }
           ps[j] = part;
         }
+        // 우리's live elements (cores, loop, orbit) go right after its chamber part: before the first part in front of it
+        const live = (layer as RenderLayerLit).uriLive;
+        let liveDone = !live;
+        const stageLive = (): void => {
+          liveDone = true;
+          this.live ??= new UriLivePass(this.scene, this.res);
+          order = this.live.stage(live!, view.x0, view.y0, order, order);
+          this.liveUsed = true;
+        };
         for (const part of ps) {
+          if (!liveDone && part.z > live!.afterZ) stageLive();
           if (usedParts >= MAX_PARTS) {
             if (!this.warnedParts) {
               console.warn(`renderer: more than ${MAX_PARTS} rig parts in a frame; extra parts dropped`);
@@ -223,10 +334,15 @@ export class LayerCompositor {
             step: part.step,
             facing: layer.facing,
           });
-          const x0 = Math.max(0, qx + b.x0);
-          const y0 = Math.max(0, qy + b.y0);
-          const x1 = Math.min(LOGICAL_W, qx + b.x1);
-          const y1 = Math.min(LOGICAL_H, qy + b.y1);
+          // 우리's fists: drawn chunk by chunk, spread out from the pivot (uriLive.ts fistSpread)
+          const fist = live && gpu.chunk && live.fistZ ? live.fistZ.indexOf(part.z) : -1;
+          const spread = fist >= 0 ? (live!.fistSpread?.[fist] ?? URI_FIST_SPREAD_REST) : 1;
+          const tab = fist >= 0 ? this.fistTable(layer as RenderLayerLit, part) : null;
+          const m = tab ? Math.ceil(tab.maxOff * Math.abs(spread - 1) * 1.9) + 2 : 0;
+          const x0 = Math.max(0, qx + b.x0 - m);
+          const y0 = Math.max(0, qy + b.y0 - m);
+          const x1 = Math.min(LOGICAL_W, qx + b.x1 + m);
+          const y1 = Math.min(LOGICAL_H, qy + b.y1 + m);
           if (x1 <= x0 || y1 <= y0) continue;
           const s = this.partSlots[usedParts++]!;
           s.mesh.visible = true;
@@ -242,13 +358,24 @@ export class LayerCompositor {
           const st = ((part.step % ROT_LUT.cos.length) + ROT_LUT.cos.length) % ROT_LUT.cos.length;
           u.uRotCS!.value = [ROT_LUT.cos[st]!, ROT_LUT.sin[st]!];
           u.uFacing!.value = layer.facing === -1 ? -1 : 1;
+          u.uRotMode!.value = part.sampler === 'majority4' ? 1 : 0; // proposal 174
           u.uDest!.value = [qx, qy];
           u.uAlpha!.value = layer.alpha;
-          setId(u, layer, order, gpu);
+          setId(u, layer, order, gpu, this.unified);
           u.uLight!.value = gpu.light;
           u.uHasLight!.value = gpu.light ? 1 : 0;
+          u.uShade!.value = gpu.shade;
+          u.uHasShade!.value = gpu.shade && gpu.light ? 1 : 0;
+          // 우리's fist pieces: compression light (proposal 172 §2; the oracle's drawFist bind = min(1, (0.9 − spread)·6))
+          u.uBind!.value = spread < 0.9 ? Math.min(1, (0.9 - spread) * 6) : 0;
+          u.uFist!.value = tab ? 1 : 0;
+          u.uChunkId!.value = tab ? gpu.chunk : null;
+          u.uChunkTab!.value = tab ? tab.tex : null;
+          u.uNChunk!.value = tab ? tab.n : 0;
+          u.uSpreadK!.value = spread - 1;
           setLayerBlend(s.material, layer.blend);
         }
+        if (!liveDone) stageLive();
         continue;
       }
       const p = this.place;
@@ -278,17 +405,17 @@ export class LayerCompositor {
       u.uHasEmis!.value = gpu.emis ? 1 : 0;
       u.uScreen!.value = p.screen ? 1 : 0;
       u.uAlpha!.value = layer.alpha;
-      setId(u, layer, order, gpu);
+      setId(u, layer, order, gpu, this.unified);
       setLayerBlend(slot.material, layer.blend);
     }
-    this.drawn = used + usedParts;
+    this.drawn = used + usedParts + (this.liveUsed ? 1 : 0);
     this.drawnParts = usedParts;
     // The target is a dedicated layer target: it starts each frame transparent, so what it holds afterwards is exactly
     // the premultiplied "over" chain of this frame's layers (colour + alpha, and emissive + alpha).
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, false, false);
-    if (used + usedParts > 0) renderer.render(this.scene, this.camera);
+    if (used + usedParts > 0 || this.liveUsed) renderer.render(this.scene, this.camera);
     return used + usedParts;
   }
 
@@ -307,6 +434,9 @@ export class LayerCompositor {
   dispose(): void {
     for (const s of this.slots) s.material.dispose();
     for (const s of this.partSlots) s.material.dispose();
+    this.live?.dispose();
+    for (const e of this.fistTabs.values()) e.tex.dispose();
+    this.fistTabs.clear();
   }
 }
 
@@ -319,9 +449,16 @@ function setId(
   layer: RenderLayer,
   order: number,
   gpu: { wet: unknown },
+  unified: boolean,
 ): void {
   const titan = layer.blend !== 'add' && isTitanLayer(layer);
-  (u.uId!.value as Vector4).set(titan ? 1 : 0, Math.min(255, order) / 255, 0, 0);
+  // 우리-style layers (with the shade plane) also cast shadows on their own parts behind (0.75 marks them)
+  const shadeCls = titan && (layer as RenderLayerLit).shade ? 0.75 : 1;
+  // unified path: an additive glow layer (a halo, an atmosphere) IS light: all of it feeds the shared bloom
+  const glow = unified && layer.blend === 'add' ? 1 : 0;
+  // 우리 under the ceiling switch counts as 'wet' (may take the top step)
+  const exempt = shadeCls < 1 && URI_CEILING_EXEMPT ? 1 : 0;
+  (u.uId!.value as Vector4).set(titan ? shadeCls : 0, Math.min(255, order) / 255, exempt, glow);
   u.uWet!.value = gpu.wet;
   u.uHasWet!.value = gpu.wet && titan ? 1 : 0;
 }

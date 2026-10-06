@@ -101,16 +101,23 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
   const wgt = core.covW;
   const mats = body.materials;
   const mat = body.map.material;
+  // D33: the blow passes through gas and ocean and bites the first solid matter: its resistance and brittleness (what sizes
+  // the slabs) are the covered SOLID cells' when it covers any; the fluid it crosses vents as spray (ventCrossedFluid).
+  const fl = body.matFluid;
+  let solidW = 0;
+  if (body.hasFluid) for (let k = 0; k < n; k++) if (fl[mat[idx[k]!]!] === 0) solidW += wgt[k]!;
+  const solidOnly = body.hasFluid && solidW > 0;
   let rs = 0;
   let bs = 0;
   for (let k = 0; k < n; k++) {
     const i = idx[k]!;
+    if (solidOnly && fl[mat[i]!] === 1) continue;
     const wt = wgt[k]!;
     rs += resistOf(body, i, T_FRACTURE) * wt;
     bs += mats[mat[i]!]!.brittleness * wt;
   }
-  const rEff = rs / ctx.sumW;
-  const brit = bs / ctx.sumW;
+  const rEff = rs / (solidOnly ? solidW : ctx.sumW);
+  const brit = bs / (solidOnly ? solidW : ctx.sumW);
   // Raw energy pays for work (every cost below already divides by the cell's own resistance); the resistance-scaled energy
   // only SIZES the slab a blow tries to free (brittle matter shears off bigger pieces per energy than tough matter).
   const Eraw = ctx.energy;
@@ -125,6 +132,7 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
   if (E >= 0.4) {
     // The wound: its cuts become hairlines now and sever by its shear tick; the slabs they free carry its momentum.
     if (findImpact(ctx, imp)) {
+      if (solidOnly) ventCrossedFluid(ctx, imp);
       ctx.wound = openWound(
         core,
         body,
@@ -190,6 +198,50 @@ export function applyFracture(ctx: DamageCtx, res: DamageResult): void {
   }
   recordBlow(ctx, isLine ? 0.08 : 0.16);
   finishDamage(ctx, res, coverageOf(ctx), 1);
+}
+
+const ventPt: WorldPoint = { x: 0, y: 0 };
+/**
+ * D33: the gas and ocean a cutting blow crosses on its way to the solid contact vent as spray: every covered fluid cell nearer
+ * the shape's origin than the contact point is destroyed as particles moving along the blow (mass carried, D1 excepts fluids).
+ */
+function ventCrossedFluid(ctx: DamageCtx, contact: Impact): void {
+  const { core, body } = ctx;
+  const q = core.q;
+  const ox = q.originX();
+  const oy = q.originY();
+  localToWorldF(body, contact.fx, contact.fy, ventPt);
+  const reach = (ventPt.x - ox) * (ventPt.x - ox) + (ventPt.y - oy) * (ventPt.y - oy);
+  const idx = core.covIdx;
+  const dist = core.covD; // filled by findImpact for every covered cell
+  const mat = body.map.material;
+  const fl = body.matFluid;
+  const vx = ctx.dirX * 90;
+  const vy = ctx.dirY * 90;
+  const n = ctx.n;
+  const wgt = core.covW;
+  // the vented gas and spray go behind the titans (proposal 168's rule): they must not cloud the wound the blow is opening
+  const P = core.particles;
+  const tag0 = P.spawnTag;
+  P.spawnTag = tag0 | PF_BACK;
+  let m = 0;
+  for (let k = 0; k < n; k++) {
+    const i = idx[k]!;
+    if (mat[i] !== 0 && fl[mat[i]!] === 1 && dist[k]! < reach) {
+      destroyCell(ctx, i, vx, vy, MODE_MECH);
+      continue;
+    }
+    // the covered list keeps only live cells (the cuts, seams and seeds below read it)
+    idx[m] = i;
+    wgt[m] = wgt[k]!;
+    m++;
+  }
+  if (m !== n) {
+    ctx.n = m;
+    core.covGen++;
+  }
+  endSpray(core);
+  P.spawnTag = tag0;
 }
 
 /**

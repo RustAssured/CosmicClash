@@ -9,7 +9,19 @@ Resume from here. The rules and phases are in `MASTER_PROMPT.md`; the packs are 
 
 - **Gate 0 approved** (D31 in docs/DECISIONS.md).
 
-- **Phase 1 delivered** (docs/integration/GATE_1.md). It waits for WJ's review. S3 is making the 220 px Planet correct.
+- **Phase 1 delivered and Gate 1 approved** (D32). The Planet is 180 px.
+
+## In progress: Phase 2A (우리 render parity), plus the Gate 1 follow-ups
+- **S4:** the uri_rig.json loader into matter region bodies, the 4-sample majority sampler (contract + GLSL), the rest
+  silhouette overlap test.
+- **S2:** 우리's titan definition, behaviour and rig hierarchy; never mirrored. 2B (kinetics) follows.
+- **S5:**
+  - the Planet's atmosphere glow back;
+  - the one sky live in play;
+  - a quiet perf re-measure;
+  - then 우리's shading, cores, loop and moon.
+- **S3:** the Brace test at 180 px.
+- **Gate 2A:** rest silhouette 100 %; a side-by-side with the oracle at rest; no smear at 30° / 90° / 150°.
 
 ## Phase 1 assignments (historical)
 - **S5:** master palette with Bayer palette snap, one global light for titans, shared bloom and outline, the lit part pass

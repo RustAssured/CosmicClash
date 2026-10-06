@@ -36,7 +36,7 @@ import { createInputManager, emptyDebugInput } from '@/input';
 import { registerMatchKnobs, releaseMatchKnobs, type KnobAI, type KnobFighter } from '@/debug/matchKnobs';
 import { DebugOverlay } from '@/ui/debugOverlay';
 import { createMatterWorld, warmUp } from '@/matter';
-import { createRenderer, type DebuggableRenderer } from '@/render';
+import { TITAN_SKY, createRenderer, type DebuggableRenderer } from '@/render';
 import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
 import { STAGES, isStageImplemented } from '@/stages';
 import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, renderPortrait, witnessDef } from '@/titans';
@@ -235,7 +235,7 @@ export class App {
         return d ? titanInfoFromDef(d) : FIXTURE_TITANS.find((t) => t.id === id)!;
       }),
       portrait: (id) => {
-        if (TITAN_DEFS[id]) return renderPortrait(id, 1, STAGES[this.menuStage].lighting, this.witness);
+        if (TITAN_DEFS[id]) return renderPortrait(id, 1, TITAN_SKY, this.witness);
         return fixturePortraitProvider(id);
       },
       stages: (opts.full ? STAGE_IDS : this.stageRoster).map((id) => STAGES[id]),
@@ -261,7 +261,7 @@ export class App {
     warmUp();
     for (const id of this.roster) {
       await sleep0();
-      renderPortrait(id, 1, STAGES[this.menuStage].lighting, this.witness);
+      renderPortrait(id, 1, TITAN_SKY, this.witness);
     }
     this.ready = true;
   }
@@ -431,7 +431,8 @@ export class App {
       createFighter,
       getTitanDef,
       arena: stage.arena,
-      lighting: stage.lighting,
+      // one sky for every titan (D31 / proposal 172 §1): stages keep their own light for their scenery only
+      lighting: TITAN_SKY,
     });
     const session: Session = {
       match,

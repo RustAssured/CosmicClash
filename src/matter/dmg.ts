@@ -296,9 +296,18 @@ export const DF = DamageFlag;
  * Outward surface normal (unit, body-local) at cell (x, y): the mean direction toward void within radius `r`. Returns
  * false (and leaves `out` = (0,-1)) if the cell is not near any void.
  */
-export function outwardNormal(body: Body, x: number, y: number, r: number, out: WorldPoint): boolean {
+export function outwardNormal(
+  body: Body,
+  x: number,
+  y: number,
+  r: number,
+  out: WorldPoint,
+  /** D1/D33: fluid cells (gas, ocean) count as open space — the solid surface under an atmosphere. */
+  fluidOpen = false,
+): boolean {
   const { w, h } = body;
   const mat = body.map.material;
+  const fl = body.matFluid;
   let nx = 0;
   let ny = 0;
   for (let dy = -r; dy <= r; dy++) {
@@ -306,7 +315,13 @@ export function outwardNormal(body: Body, x: number, y: number, r: number, out: 
     for (let dx = -r; dx <= r; dx++) {
       if (dx === 0 && dy === 0) continue;
       const xx = x + dx;
-      const isVoid = xx < 0 || yy < 0 || xx >= w || yy >= h || mat[yy * w + xx] === 0;
+      const isVoid =
+        xx < 0 ||
+        yy < 0 ||
+        xx >= w ||
+        yy >= h ||
+        mat[yy * w + xx] === 0 ||
+        (fluidOpen && fl[mat[yy * w + xx]!] === 1);
       if (!isVoid) continue;
       const d2 = dx * dx + dy * dy;
       if (d2 > r * r) continue;

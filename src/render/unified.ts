@@ -1,4 +1,5 @@
 import type { RenderLayer, StageLighting } from '@/contracts';
+import type { UriLiveFx } from './uriLive';
 
 /**
  * The unified titan look (shared/UNIFICATION.md, D31-4): the one sky every titan is lit by, and the per-layer extras the
@@ -35,17 +36,33 @@ export const TITAN_SKY: StageLighting = Object.freeze({
 export interface LitLayerFields {
   light?: Uint8Array;
   wet?: Uint8Array;
+  /**
+   * 우리's shading plane (src/matter/uri/rig.ts uriShadePlane): per cell RGBA8 = (surf 1 warm / 2 cool, tone, edge distance, material
+   * code). With it (and light), the part pass shades exactly as the oracle's shadeAt; the atlas colour then only gives coverage.
+   */
+  shade?: Uint8Array;
+  /** 우리's chunk id per atlas cell (uri_rig.json chunk, uint16): the fists are drawn chunk by chunk. */
+  chunk?: Uint16Array;
+  /** 우리's live elements (cores, loop, orbit), drawn after the chamber part (uriLive.ts). */
+  uriLive?: UriLiveFx;
 }
 export type RenderLayerLit = RenderLayer & LitLayerFields;
 
 /**
- * Which layers are TITAN bodies (outlined, seamed, highlight-capped): world layers drawn normally in the body band z ∈ [0, 10).
+ * Which layers are TITAN bodies (outlined, seamed, highlight-capped): world layers drawn normally in the body band z ∈ [−1, 10)
+ * (the Witness's and 우리's rig atlases sit just behind their primary body, at z −0.5).
  * The contract reserves z ≥ 10 for effects (10 front debris / particles, 20 per-titan FX); additive glows never count.
  */
 export function isTitanLayer(l: Pick<RenderLayer, 'space' | 'blend' | 'z'>): boolean {
-  return l.space === 'world' && l.blend !== 'add' && l.z >= 0 && l.z < 10;
+  return l.space === 'world' && l.blend !== 'add' && l.z >= -1 && l.z < 10;
 }
 
 /** The shared bloom (UNIFICATION §5): two additive blurred passes of the emissives, σ ≈ 3 px and ≈ 10 px (CSS blur radii in the
  * oracles' compose: `blur(3px)` at 0.38 and `blur(10px)` at 0.28, uri-LOCKED-kinetic-pass.html / three-titans-scene.html). */
 export const SHARED_BLOOM = { nearPx: 3, nearGain: 0.38, farPx: 10, farGain: 0.28 } as const;
+
+/**
+ * 우리 and the highlight ceiling (UNIFICATION §3 vs the oracle, which uses the stone's top step): WJ decides at Gate 2A.
+ * true = 우리's stone may reach its ramp top as in the oracle; false = the shared ceiling applies. One switch.
+ */
+export const URI_CEILING_EXEMPT = false;

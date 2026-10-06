@@ -2,6 +2,7 @@ import {
   DataTexture,
   NearestFilter,
   RedFormat,
+  RGFormat,
   RGBAFormat,
   UnsignedByteType,
   type WebGLRenderer,
@@ -33,6 +34,8 @@ interface Entry {
   lightBytes: Uint8Array | null;
   wet: DataTexture | null;
   wetBytes: Uint8Array | null;
+  shade: DataTexture | null;
+  chunk: DataTexture | null;
 }
 
 export interface LayerGpu {
@@ -41,6 +44,10 @@ export interface LayerGpu {
   /** Lit parts (unified.ts): RGBA normal + form light per cell, and the R8 wet mask. */
   light: DataTexture | null;
   wet: DataTexture | null;
+  /** 우리's shading plane (unified.ts): RGBA (surf, tone, edge, material code) per cell. */
+  shade: DataTexture | null;
+  /** 우리's chunk ids: RG8 = (id & 255, id >> 8) per cell. */
+  chunk: DataTexture | null;
 }
 
 export class LayerTextures {
@@ -78,6 +85,8 @@ export class LayerTextures {
         if (e.emis) e.emis.needsUpdate = true;
         if (e.light) e.light.needsUpdate = true;
         if (e.wet) e.wet.needsUpdate = true;
+        if (e.shade) e.shade.needsUpdate = true;
+        if (e.chunk) e.chunk.needsUpdate = true;
         this.uploads.full++;
         this.uploads.texels += layer.w * layer.h;
       } else if (plan.kind === 'rect') {
@@ -138,6 +147,17 @@ export class LayerTextures {
       wet = new DataTexture(wetBytes, layer.w, layer.h, RedFormat, UnsignedByteType);
       configure(wet, 1);
     }
+    let shade: DataTexture | null = null;
+    if (layer.shade) {
+      shade = new DataTexture(layer.shade, layer.w, layer.h, RGBAFormat, UnsignedByteType);
+      configure(shade, 4);
+    }
+    let chunk: DataTexture | null = null;
+    if (layer.chunk) {
+      const b = new Uint8Array(layer.chunk.buffer, layer.chunk.byteOffset, layer.chunk.byteLength);
+      chunk = new DataTexture(b, layer.w, layer.h, RGFormat, UnsignedByteType);
+      configure(chunk, 2);
+    }
     return {
       tex,
       emis,
@@ -147,6 +167,8 @@ export class LayerTextures {
       lightBytes,
       wet,
       wetBytes,
+      shade,
+      chunk,
       state: {
         version: layer.version,
         w: layer.w,
@@ -155,6 +177,8 @@ export class LayerTextures {
         emissive: layer.emissive,
         light: layer.light,
         wet: layer.wet,
+        shade: layer.shade,
+        chunk: layer.chunk,
       },
     };
   }
@@ -164,12 +188,16 @@ export class LayerTextures {
     e.emis?.dispose();
     e.light?.dispose();
     e.wet?.dispose();
+    e.shade?.dispose();
+    e.chunk?.dispose();
   }
 
   private uploadRect(e: Entry, layer: RenderLayer, x0: number, y0: number, x1: number, y1: number): void {
     // lit / wet data change with the pixels (a torn chunk): small, uploaded whole
     if (e.light) e.light.needsUpdate = true;
     if (e.wet) e.wet.needsUpdate = true;
+    if (e.shade) e.shade.needsUpdate = true;
+    if (e.chunk) e.chunk.needsUpdate = true;
     const r = this.renderer;
     const gl = r.getContext() as WebGL2RenderingContext;
     const props = r.properties.get(e.tex) as { __webglTexture?: WebGLTexture } | undefined;
@@ -204,7 +232,7 @@ export class LayerTextures {
   }
 }
 
-function configure(t: DataTexture, align: 1 | 4): void {
+function configure(t: DataTexture, align: 1 | 2 | 4): void {
   t.minFilter = NearestFilter;
   t.magFilter = NearestFilter;
   t.generateMipmaps = false;

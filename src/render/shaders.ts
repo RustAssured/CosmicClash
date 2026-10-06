@@ -267,7 +267,7 @@ void main() {
   if (cell.x >= int(uSize.x) || cell.y >= int(uSize.y)) discard;
   vec4 c = texelFetch(uTex, cell, 0);
   if (c.a <= 0.0) discard;
-  float e = uHasEmis == 1 ? texelFetch(uEmis, cell, 0).r : 0.0;
+  float e = uId.a > 0.5 ? 1.0 : uHasEmis == 1 ? texelFetch(uEmis, cell, 0).r : 0.0;
   float a = c.a * uAlpha;
   oColor = vec4(c.rgb, a);
   oEmis = vec4(c.rgb * e * uEmisGain, a);
@@ -311,13 +311,123 @@ float partLum(vec4 L, vec2 cs, float facing) {
   float wForm = 0.82 * pow(max(0.0, cs.x), 3.0);
   return wForm * L.a * 1.3 + (1.0 - wForm) * (0.06 + 0.58 * dk);
 }
+// 우리's own shading (URI_SPEC §2.3; the oracle's shadeAt + drawPart outline, uri/src/10_parts_render.js), for layers that
+// carry the shade plane (surf, tone, edge, material code) beside the light plane (nx, ny, nz, form): ramp steps of the warm
+// umber s1 / cool lavender s2 stone picked with the screen-locked Bayer offset, the emissive inlays by their screen patterns.
+uniform sampler2D uShade;
+uniform int uHasShade;
+uniform vec3 uS1[11];
+uniform vec3 uS2[11];
+uniform vec3 uCiv[3];
+uniform vec3 uField[3];
+uniform float uBind;   // fist compression light (the oracle's drawFist: spread < 0.9 → bind 0..1), 0 = none
+const float UBY[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+vec3 uriRamp(int surf, float l, ivec2 P) {
+  float b = (UBY[(P.y & 3) * 4 + (P.x & 3)] + 0.5) / 16.0 - 0.5;
+  int k = clamp(int(floor(l * 11.0 * 1.02 + b * 0.6)), 0, 10);
+  return surf == 2 ? uS2[k] : uS1[k];
+}
+// returns the colour; e = 1 for the emissive inlays
+vec3 uriShade(ivec2 texel, ivec2 P, vec2 cs, out float e) {
+  vec4 S = texelFetch(uShade, texel, 0);
+  int mat = int(S.a * 255.0 + 0.5);
+  int x = P.x;
+  int y = P.y;
+  e = 1.0;
+  vec3 c = vec3(0.0);
+  if (mat == 3) c = uCiv[(x * 7 + y * 3) % 3];
+  else if (mat == 2) c = uField[(x + y) % 3 == 0 ? 2 : 1];
+  else if (mat == 9) c = (x % 2 == 1 ? vec3(255.0, 190.0, 120.0) : vec3(180.0, 220.0, 255.0)) / 255.0;
+  else if (mat == 7) c = ((x + y) % 4 == 0 || abs(x - y) % 4 == 0 ? vec3(255.0, 214.0, 150.0) : vec3(44.0, 20.0, 10.0)) / 255.0;
+  else if (mat == 8) c = vec3(255.0, 170.0, 90.0) / 255.0;
+  else {
+    e = 0.0;
+    vec4 L = texelFetch(uLight, texel, 0);
+    float lnx = (L.r * 255.0 - 128.0) / 120.0;
+    float lny = (L.g * 255.0 - 128.0) / 120.0;
+    float lnz = L.b * 255.0 / 250.0;
+    float snx = lnx * cs.x - lny * cs.y;
+    float sny = lnx * cs.y + lny * cs.x;
+    float dk = max(0.0, snx * uSkyDir.x + sny * uSkyDir.y + lnz * uSkyDir.z);
+    float wForm = pow(max(0.0, cs.x), 3.0) * 0.82;
+    float lum = wForm * L.a * 1.3 + (1.0 - wForm) * (0.06 + 0.58 * dk) + (S.g - 0.5) * 0.22;
+    if (mat == 10) lum *= 0.3;
+    c = uriRamp(int(S.r * 255.0 + 0.5), lum, P);
+    float rim = pow(1.0 - lnz, 2.0) * max(0.0, snx * 0.9 - sny * 0.1);
+    if (rim > 0.5 && mat == 1 && wForm > 0.4) c = floor(c * 255.0 * 0.6 + vec3(110.0, 118.0, 160.0) * 0.4 + 0.001) / 255.0;
+    // every part outlined in its own darker colour (drawPart: edge distance <= 1)
+    bool edgeCell = S.b * 255.0 <= 1.01;
+    if (edgeCell) c = floor(c * 255.0 * vec3(0.55, 0.55, 0.6) + 0.001) / 255.0;
+    // a tightly compressed fist lights the field between its pieces (drawFist)
+    if (uBind > 0.0) {
+      if (((x + y) & 3) == 0 || (uBind > 0.6 && ((x * 3 + y) & 7) == 0))
+        c = min(vec3(1.0), c + vec3(40.0 * uBind + 10.0, 60.0 * uBind + 10.0, 90.0 * uBind + 20.0) / 255.0);
+      if (edgeCell && uBind > 0.4) c = vec3(150.0, 210.0, 255.0) / 255.0;
+    }
+  }
+  return c;
+}
+// 우리's fists as rubble (the oracle's drawFist): every chunk drawn on its own, pushed out from the pivot by
+// (centroid − pivot)·(spread − 1)·1.9; a 4-sample majority per chunk (≥ 2 of 4 cells of THAT chunk); later chunks win.
+uniform int uFist;
+uniform sampler2D uChunkId;    // RG8 per atlas cell: id & 255, id >> 8
+uniform sampler2D uChunkTab;   // RGBA32F, 2 texels per chunk: (centroid x, y local, id, 0), (bbox x0, y0, x1, y1 local, exclusive)
+uniform int uNChunk;
+uniform float uSpreadK;        // spread − 1
+int chunkAt(ivec2 t) {
+  vec2 v = texelFetch(uChunkId, t, 0).rg * 255.0 + 0.5;
+  return int(v.x) + 256 * int(v.y);
+}
+bool fistSample(ivec2 P, vec2 cs, out ivec2 texel) {
+  bool found = false;
+  texel = ivec2(0);
+  vec2 piv = vec2(uPivot);
+  for (int c = 0; c < 160; c++) {
+    if (c >= uNChunk) break;
+    vec4 A = texelFetch(uChunkTab, ivec2(2 * c, 0), 0);
+    vec4 B = texelFetch(uChunkTab, ivec2(2 * c + 1, 0), 0);
+    vec2 off = (A.xy - piv) * uSpreadK * 1.9;
+    vec2 d0 = vec2(P - uDest) + 0.5;
+    vec2 l0 = vec2(d0.x * cs.x + d0.y * cs.y, -d0.x * cs.y + d0.y * cs.x) + piv - off;
+    if (l0.x < B.x - 1.5 || l0.y < B.y - 1.5 || l0.x > B.z + 1.5 || l0.y > B.w + 1.5) continue;
+    int id = int(A.z + 0.5);
+    int cnt = 0;
+    ivec2 bt = ivec2(0);
+    for (int s = 0; s < 4; s++) {
+      vec2 d = vec2(P - uDest) + vec2((s & 1) == 1 ? 0.75 : 0.25, (s & 2) == 2 ? 0.75 : 0.25);
+      vec2 l = vec2(d.x * cs.x + d.y * cs.y, -d.x * cs.y + d.y * cs.x) + piv - off;
+      ivec2 cell = ivec2(floor(l));
+      if (cell.x < 0 || cell.y < 0 || cell.x >= uPartSize.x || cell.y >= uPartSize.y) continue;
+      ivec2 t = uPartOrigin + cell;
+      if (texelFetch(uPart, t, 0).a <= 0.0 || chunkAt(t) != id) continue;
+      cnt++;
+      bt = t;
+    }
+    if (cnt >= 2) {
+      found = true;
+      texel = bt;
+    }
+  }
+  return found;
+}
 void main() {
   ivec2 P = ivec2(floor(gl_FragCoord.x), int(floor(uRes.y - gl_FragCoord.y)));
   ivec2 texel;
-  vec4 c = rotSampleGL(P - uDest, texel);
+  vec4 c;
+  if (uFist == 1) {
+    if (!fistSample(P, vec2(uRotCS) / 16384.0, texel)) discard;
+    c = texelFetch(uPart, texel, 0);
+  } else {
+    c = rotSampleModeGL(P - uDest, texel); // the part's sampler mode (proposal 174)
+  }
   if (c.a <= 0.0) discard;
-  float e = uHasEmis == 1 ? texelFetch(uEmis, texel, 0).r : 0.0;
-  if (uHasLight == 1 && e <= 0.0) {
+  float e = uId.a > 0.5 ? 1.0 : uHasEmis == 1 ? texelFetch(uEmis, texel, 0).r : 0.0;
+  if (uHasShade == 1) {
+    float ue;
+    // the oracle draws 우리 unmirrored (spec §5): facing is always +1 for it
+    c.rgb = uriShade(texel, P, vec2(uRotCS) / 16384.0, ue);
+    e = ue;
+  } else if (uHasLight == 1 && e <= 0.0) {
     vec4 L = texelFetch(uLight, texel, 0);
     float fc = float(uFacing);
     float rest = partLum(L, vec2(1.0, 0.0), fc);
@@ -436,6 +546,9 @@ int figureKind(ivec2 q) {
   } else if ((titanAt(q - ivec2(2, 0)) && !coveredAt(q - ivec2(1, 0))) || (titanAt(q + ivec2(0, 2)) && !coveredAt(q + ivec2(0, 1)))) {
     // shadow side: a second outline pixel to the right of and below a silhouette (texel y is up: "below" is −y)
     k = 3;
+  } else if (dot(texelFetch(uLayerCol, q, 0).rgb, vec3(1.0)) > 0.012) {
+    // an additive glow layer's pixel (it adds colour, never coverage): an effect pixel
+    k = 1;
   }
   return k;
 }
@@ -458,7 +571,17 @@ void main() {
   vec4 c = texelFetch(uLayerCol, q, 0);
   if (c.a > 0.0) {
     vec4 id = texelFetch(uLayerId, q, 0);
-    if (id.r > 0.5) {
+    // cast shadows (URI_SPEC §2.3, 우리-style layers, id.r 0.75): a part drawn ≥ 2 places in front, 3 px left and 4 px up,
+    // shades this non-glowing pixel ×0.68 (×0.72 blue)
+    if (id.r > 0.6 && id.r < 0.9 && dot(texelFetch(uLayerEmis, q, 0).rgb, vec3(1.0)) <= 0.0) {
+      ivec2 sq = q + ivec2(-3, 4);
+      if (sq.x >= 0 && sq.y < int(uRes.y)) {
+        vec4 sid = texelFetch(uLayerId, sq, 0);
+        if (sid.r > 0.6 && sid.r < 0.9 && sid.g > id.g + 1.5 / 255.0) c.rgb = floor(c.rgb * 255.0 * vec3(0.68, 0.68, 0.72) + 0.001) / 255.0;
+      }
+    }
+    // depth seams (UNIFICATION §4); 우리-style layers carry their own: every part outlined in its own darker colour
+    if (id.r > 0.9) {
       float r = id.g + 0.5 / 255.0;
       ivec2 n[4] = ivec2[4](ivec2(1, 0), ivec2(-1, 0), ivec2(0, 1), ivec2(0, -1));
       for (int i = 0; i < 4; i++) {
@@ -479,7 +602,11 @@ void main() {
     oEmis = vec4(0.0, 0.0, 0.0, 1.0);
     return;
   }
-  discard;
+  // additive glow (premultiplied colour with no coverage): added over the scenery, as in the plain composite
+  vec4 e = texelFetch(uLayerEmis, q, 0);
+  if (dot(c.rgb, vec3(1.0)) + dot(e.rgb, vec3(1.0)) <= 0.0) discard;
+  oColor = c;
+  oEmis = e;
 }
 `;
 

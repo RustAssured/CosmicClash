@@ -21,6 +21,8 @@ export interface CachedLayerState {
   /** Lit-part data (unified.ts): per-cell normal + form light, and the wet mask. */
   light?: Uint8Array | undefined;
   wet?: Uint8Array | undefined;
+  shade?: Uint8Array | undefined;
+  chunk?: Uint16Array | undefined;
 }
 
 /** When the dirty rect covers at least this fraction of the layer a single full upload is cheaper. */
@@ -28,7 +30,10 @@ export const FULL_UPLOAD_FRACTION = 0.6;
 
 export function planUpload(
   cached: CachedLayerState | undefined,
-  layer: Pick<RenderLayerLit, 'version' | 'w' | 'h' | 'pixels' | 'emissive' | 'dirty' | 'light' | 'wet'>,
+  layer: Pick<
+    RenderLayerLit,
+    'version' | 'w' | 'h' | 'pixels' | 'emissive' | 'dirty' | 'light' | 'wet' | 'shade' | 'chunk'
+  >,
 ): UploadPlan {
   if (
     !cached ||
@@ -37,7 +42,9 @@ export function planUpload(
     cached.pixels !== layer.pixels ||
     cached.emissive !== layer.emissive ||
     cached.light !== layer.light ||
-    cached.wet !== layer.wet
+    cached.wet !== layer.wet ||
+    cached.shade !== layer.shade ||
+    cached.chunk !== layer.chunk
   ) {
     return { kind: 'create' };
   }

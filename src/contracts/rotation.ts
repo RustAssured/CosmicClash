@@ -220,6 +220,72 @@ export function rotSampleAt(part: RotPartEx, dx: number, dy: number): number {
   return best >>> 0;
 }
 
+/* ---- proposal 174 (S4, Phase 2A): the 4-SAMPLE MAJORITY mode, 우리's rotation (uri/docs/URI_SPEC.md §3) ---- */
+
+/**
+ * Which rotation sampler a rig part uses. 'vote9' (default) = the 3 × 3 alpha-first vote above (the Witness); 'majority4' = 우리's
+ * rule: each destination pixel samples the part at 4 sub-positions ((k + 0.5) / 2 of the pixel, k = 0, 1) and is drawn iff at
+ * least 2 of them land on opaque texels; the colour is the sample at (¾, ¾) when it is opaque, else the first opaque sample in
+ * scan order ((¼, ¼), (¾, ¼), (¼, ¾)) — the oracle's `drawPart` (uri/src/10_parts_render.js). Step 0 copies 1:1.
+ */
+export type RotMode = 'vote9' | 'majority4';
+/** Sub-samples per axis of the 'majority4' mode and its offset denominator (destination offsets in 1/4 px). */
+export const ROT4_SUB = 2;
+export const ROT4_DEN = 2 * ROT4_SUB;
+
+/**
+ * The 'majority4' sampler: the colour drawn at destination pixel (dx, dy) relative to the destination pivot (0 = transparent),
+ * optional mirroring; the winning texel is left in `rotWinner`. Same LUT, pivot convention and exact floor division as
+ * `rotSampleAt`; integer arithmetic only (its GLSL twin is `rotSample4GL` in src/render/rotsprite.ts).
+ */
+export function rotSampleMaj4(part: RotPartEx, dx: number, dy: number): number {
+  const c = ROT_LUT.cos[part.step]!;
+  const s = ROT_LUT.sin[part.step]!;
+  const div = ROT4_DEN * ROT_ONE;
+  const { pixels, w, h, px, py } = part;
+  const mirror = part.facing === -1;
+  let cnt = 0;
+  let best = 0;
+  let bx = 0;
+  let by = 0;
+  for (let k = 0; k < 4; k++) {
+    const X = ROT4_DEN * dx + 2 * (k & 1) + 1;
+    const Y = ROT4_DEN * dy + 2 * (k >> 1) + 1;
+    let x = floorDiv(c * X + s * Y, div) + px;
+    const y = floorDiv(-s * X + c * Y, div) + py;
+    if (mirror) x = 2 * px - 1 - x;
+    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+    const col = pixels[y * w + x]!;
+    if (col >>> 24 === 0) continue;
+    cnt++;
+    // the (¾, ¾) sample wins when opaque; otherwise the first opaque one
+    if (k === 3 || cnt === 1) {
+      best = col;
+      bx = x;
+      by = y;
+    }
+  }
+  if (cnt < 2) return 0;
+  rotWinner.x = bx;
+  rotWinner.y = by;
+  return best >>> 0;
+}
+
+/** CPU raster of a whole part in either mode (the pivot sits at (ox, oy) of the buffer). */
+export function rotRasterMode(
+  part: RotPartEx,
+  mode: RotMode,
+): { pixels: Uint32Array; w: number; h: number; ox: number; oy: number } {
+  if (mode === 'vote9') return rotRasterAt(part);
+  const b = rotBoundsEx(part);
+  const w = b.x1 - b.x0;
+  const h = b.y1 - b.y0;
+  const out = new Uint32Array(w * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) out[y * w + x] = rotSampleMaj4(part, x + b.x0, y + b.y0);
+  return { pixels: out, w, h, ox: -b.x0, oy: -b.y0 };
+}
+
 /** Bounds of a (possibly mirrored) part: mirroring about the pivot corner equals a pivot at w − px. */
 export function rotBoundsEx(part: RotPartEx): { x0: number; y0: number; x1: number; y1: number } {
   return rotBounds(part.facing === -1 ? { ...part, px: part.w - part.px } : part);

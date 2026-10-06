@@ -1,3 +1,4 @@
+import type { RotMode } from './rotation';
 import type { SimEvent } from './sim';
 
 /* ------------------------------------------------------------------------------------------------ *
@@ -207,6 +208,8 @@ export interface RenderPart {
   step: number;
   /** Draw order inside the layer (low first). */
   z: number;
+  /** Rotation sampler (proposal 174): 'vote9' (default, the 3 × 3 alpha-first vote) or 'majority4' (우리). */
+  sampler?: RotMode;
 }
 
 /** Convenience constructor for a hidden/empty layer object (callers keep and mutate it — no per-frame allocation). */

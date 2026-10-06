@@ -1,5 +1,6 @@
 import type { DamageEvent, DamageResult, DamageShape, DamageType, OverlapResult } from './damage';
 import type { ArenaInfo, RenderLayer, StageLighting, ViewRect } from './render';
+import type { RotMode } from './rotation';
 import type { SimEvent } from './sim';
 import type { TitanAttributes } from './titan';
 
@@ -275,6 +276,11 @@ export interface BodySpec {
    * shed matter merely for having no "core". Map-local cell indices.
    */
   anchorCells?: Int32Array;
+  /**
+   * Rotation sampler of a rig region (proposal 174): 'vote9' (default) or 'majority4' (우리). Hit-tests use the same mode as the
+   * renderer's `RenderPart.sampler`, so what is drawn is what is hit.
+   */
+  sampler?: RotMode;
 }
 
 export interface MatterBody {

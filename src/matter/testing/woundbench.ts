@@ -62,9 +62,15 @@ export interface BenchDeps {
 }
 
 export interface BlowResult {
-  /** Body mass lost over the window. */
+  /** Body mass lost over the window (fluids and gas included), and the SOLID part of it (what D1 is about). */
   loss: number;
-  /** Largest one-tick body-mass loss / loss. */
+  solidLoss: number;
+  /** Fluid vented on the impact frame (D33: the gas / ocean a cutting blow crosses), kept out of the one-tick share. */
+  ventLoss: number;
+  /**
+   * Largest one-tick body-mass loss / loss, both without the impact-frame vent (whole mass otherwise: the shedding budget is
+   * defined on the wound's mass, fluids included).
+   */
   maxTickShare: number;
   /** Rigid-chunk share of the removed solid matter (fluids and gas excepted). */
   chunkShare: number;
@@ -231,8 +237,13 @@ export function measureBlow(spec: BlowSpec, deps: BenchDeps): BlowResult {
   let wound = -1;
   for (let w = 0; w < b.wounds.tick.length; w++) if (b.wounds.tick[w] === core.tick) wound = w;
 
+  // The one-tick share is measured on the whole body mass, fluids included: matter's shedding budget (wound.ts SHED_PER_TICK)
+  // is defined on the wound's whole held mass, whose fluids leave with their slabs. (Solid-only would flag a single slab
+  // heavier than the budget, which goes alone by design.) The solid loss is reported beside it.
+  const solid0 = m0 - fluid0;
   let last = m0;
   let maxTick = 0;
+  let vent = 0;
   let shearMs = -1;
   let crackCells = 0;
   let pSum = 0;
@@ -255,7 +266,10 @@ export function measureBlow(spec: BlowSpec, deps: BenchDeps): BlowResult {
     world.tick();
     const wallMs = t === 0 ? 0 : (spec.hitstop + t) * MS_PER_TICK;
     const mass = world.stats(id).mass;
-    maxTick = Math.max(maxTick, last - mass);
+    // D33: the gas / ocean a cutting blow crosses vents as spray on the impact frame — never the wound's slabs, and D1 excepts
+    // fluids — so it is taken out of the one-tick share (numerator and denominator); fluid shed later with slabs still counts.
+    if (t === 0) vent = Math.max(0, fluid0 - fluidMass());
+    maxTick = Math.max(maxTick, last - mass - (t === 0 ? vent : 0));
     last = mass;
     if (t === 0) {
       const map = b.map;
@@ -317,6 +331,7 @@ export function measureBlow(spec: BlowSpec, deps: BenchDeps): BlowResult {
   }
   const led1 = world.ledger();
   const loss = m0 - world.stats(id).mass;
+  const solidLoss = solid0 - (world.stats(id).mass - fluidMass());
   const chunks = led1.chunkMass - led0.chunkMass;
   const parts =
     led1.particleMass +
@@ -326,7 +341,9 @@ export function measureBlow(spec: BlowSpec, deps: BenchDeps): BlowResult {
     Math.max(0, fluid0 - fluidMass());
   return {
     loss,
-    maxTickShare: loss > 0 ? maxTick / loss : 0,
+    solidLoss,
+    ventLoss: vent,
+    maxTickShare: loss - vent > 0 ? maxTick / (loss - vent) : 0,
     chunkShare: chunks / Math.max(1e-6, chunks + Math.max(0, parts)),
     shearMs,
     crackCells,

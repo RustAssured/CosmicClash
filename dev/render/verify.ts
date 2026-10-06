@@ -17,7 +17,7 @@ import { WebGLRenderer } from 'three';
 import { createRenderer, type DebuggableRenderer } from '@/render';
 import { makeRT } from '@/render/gl';
 import { GpuTimer } from '@/render/gpuTimer';
-import { ANGLE_STEPS, rotRasterAt, type RotPart, type RotPartEx } from '@/render/rotsprite';
+import { ANGLE_STEPS, rotRasterAt, rotRasterMode, type RotPart, type RotPartEx } from '@/render/rotsprite';
 import { RotSpritePass } from '@/render/rotspritePass';
 import { FxState } from '@/app/fx';
 import { createMatch } from '@/sim';
@@ -591,6 +591,38 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
       mismatches === 0,
       `${mismatches} mismatching of ${pixels} pixels (worst angle ${worst})`,
     );
+    // 10f. proposal 174: the 'majority4' mode (우리) — GPU = CPU twin at every angle, mirrored on odd steps
+    {
+      let bad4 = 0;
+      let worst4 = 0;
+      for (let step = 0; step < ANGLE_STEPS; step++) {
+        const part: RotPartEx = { ...part0, step, facing: step % 2 ? -1 : 1 };
+        three.setRenderTarget(rt);
+        three.setClearColor(0x000000, 0);
+        three.clear(true, false, false);
+        pass.draw(three, rt, [{ part, tex, qx: 128, qy: 128, mode: 'majority4' }]);
+        three.readRenderTargetPixels(rt, 0, 0, 256, 256, bytes);
+        const got = new Uint32Array(bytes.buffer);
+        const cpu = rotRasterMode(part, 'majority4');
+        let bad = 0;
+        for (let y = 0; y < 256; y++)
+          for (let x = 0; x < 256; x++) {
+            const g = got[(255 - y) * 256 + x]! >>> 0;
+            const lx = x - 128 + cpu.ox;
+            const ly = y - 128 + cpu.oy;
+            const want =
+              lx >= 0 && ly >= 0 && lx < cpu.w && ly < cpu.h ? cpu.pixels[ly * cpu.w + lx]! >>> 0 : 0;
+            if ((g >>> 24 === 0 ? 0 : g) !== want) bad++;
+          }
+        bad4 += bad;
+        worst4 = Math.max(worst4, bad);
+      }
+      check(
+        `rotation: GPU majority4 sampler = CPU twin (proposal 174), pixel for pixel, at all ${ANGLE_STEPS} angles`,
+        bad4 === 0,
+        `${bad4} mismatching pixels (worst angle ${worst4})`,
+      );
+    }
     // cost: 24 parts (64×96, the size of a Witness arm segment) at random angles into a 640×360 target
     const big = new RotSpritePass(LOGICAL_W, LOGICAL_H);
     const pw = 64;

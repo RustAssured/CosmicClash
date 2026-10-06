@@ -16,7 +16,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { unitQuad } from './gl';
-import { ROTSPRITE_GLSL, ROT_LUT, rotBoundsEx, type RotPartEx } from './rotsprite';
+import { ROTSPRITE_GLSL, ROT_LUT, rotBoundsEx, type RotMode, type RotPartEx } from './rotsprite';
 
 /**
  * Rotation spike, GPU side: draws `RotPartEx`s (sub-rect sprite + pivot + quantised angle) with the clean-edge sampler of
@@ -43,7 +43,7 @@ out vec4 o;
 void main() {
   ivec2 P = ivec2(floor(gl_FragCoord.x), int(floor(uRes.y - gl_FragCoord.y)));
   ivec2 texel;
-  vec4 c = rotSampleGL(P - uDest, texel);
+  vec4 c = rotSampleModeGL(P - uDest, texel);
   if (c.a == 0.0) discard;
   o = c;
 }
@@ -82,6 +82,7 @@ export class RotSpritePass {
           uFacing: { value: 1 },
           uPivot: { value: [0, 0] },
           uRotCS: { value: [0, 0] },
+          uRotMode: { value: 0 },
         },
         depthTest: false,
         depthWrite: false,
@@ -119,7 +120,7 @@ export class RotSpritePass {
   draw(
     renderer: WebGLRenderer,
     target: WebGLRenderTarget,
-    parts: readonly { part: RotPartEx; tex: DataTexture; qx: number; qy: number }[],
+    parts: readonly { part: RotPartEx; tex: DataTexture; qx: number; qy: number; mode?: RotMode }[],
   ): void {
     for (let i = 0; i < this.slots.length; i++) this.slots[i]!.mesh.visible = false;
     parts.forEach((p, i) => {
@@ -133,6 +134,7 @@ export class RotSpritePass {
       u.uPivot!.value = [p.part.px, p.part.py];
       u.uRotCS!.value = [ROT_LUT.cos[p.part.step]!, ROT_LUT.sin[p.part.step]!];
       u.uFacing!.value = p.part.facing === -1 ? -1 : 1;
+      u.uRotMode!.value = p.mode === 'majority4' ? 1 : 0;
       s.mesh.visible = true;
       s.mesh.renderOrder = i;
     });

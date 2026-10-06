@@ -4,6 +4,7 @@ import {
   ROT_DEN,
   ROT_LUT,
   ROT_ONE,
+  ROT4_DEN,
   rotSampleAt,
   rotWinner,
   type RotPartEx,
@@ -50,6 +51,10 @@ const ONE = ROT_ONE;
 export const rotStep = (k: number): number => ((k % STEPS) + STEPS) % STEPS;
 
 const floorDiv = (a: number): number => Math.trunc((a + BIAS_PX * DIV) / DIV) - BIAS_PX;
+/** The 'majority4' mode's offsets are in 1/4 px (proposal 174). */
+const DEN4 = ROT4_DEN;
+const DIV4 = ROT4_DEN * ROT_ONE;
+const floorDiv4 = (a: number): number => Math.trunc((a + BIAS_PX * DIV4) / DIV4) - BIAS_PX;
 
 /** The minimal body view the rotated hit-tests need (Body satisfies it). */
 export interface RotBody {
@@ -400,6 +405,42 @@ const texCol = new Uint32Array(4);
 const texCell = new Int32Array(4);
 const texVotes = new Int32Array(4);
 
+/**
+ * Proposal 173 ('majority4', 우리): the cell drawn at destination pixel (dx, dy) of the LOADED body (`loadBody`), or -1 — exactly
+ * the contract's `rotSampleMaj4` + its winning texel (opaque = the displayed pixel's alpha), then the winner must still be live.
+ */
+function drawn4Core(step: number, dx: number, dy: number): number {
+  const c = ROT_COS[step]!;
+  const s = ROT_SIN[step]!;
+  const w = qW;
+  const h = qH;
+  const px = qPx;
+  let cnt = 0;
+  let best = -1;
+  for (let k = 0; k < 4; k++) {
+    const X = DEN4 * dx + 2 * (k & 1) + 1;
+    const Y = DEN4 * dy + 2 * (k >> 1) + 1;
+    const u = floorDiv4(c * X + s * Y);
+    const v = floorDiv4(-s * X + c * Y);
+    const i = qMirror ? qAx - 1 - u : qAx + u;
+    const j = qAy + v;
+    if (i < 0 || j < 0 || i >= w || j >= h) continue;
+    const cell = j * w + i;
+    if (px[cell]! >>> 24 === 0) continue;
+    cnt++;
+    if (k === 3 || cnt === 1) best = cell;
+  }
+  if (cnt < 2) return -1;
+  return qMat[best] === 0 ? -1 : best;
+}
+
+/** `drawnCellAt` for the 'majority4' mode (box-checked; same contract as the 3 × 3 one). */
+export function drawnCell4At(b: RotBody, step: number, box: RotBox, dx: number, dy: number): number {
+  if (dx < box.x0 || dy < box.y0 || dx >= box.x0 + box.w || dy >= box.y0 + box.h) return -1;
+  loadBody(b);
+  return drawn4Core(step, dx, dy);
+}
+
 /* The body a query runs against, loaded once per query (not per pixel). */
 let qW = 0;
 let qH = 0;
@@ -619,6 +660,8 @@ export function rotCellAtCached(
   memo: RotHitCache,
   wx: number,
   wy: number,
+  /** proposal 174: the body samples in the 'majority4' mode */
+  mode4 = false,
 ): number {
   const dx = Math.floor(wx) - pivotX(b);
   const dy = Math.floor(wy) - pivotY(b);
@@ -626,7 +669,7 @@ export function rotCellAtCached(
   const o = (dy - box.y0) * memo.stride + (dx - box.x0);
   const m = memo.get(o);
   if (m !== -2) return m;
-  const c = drawnCellAt(b, step, box, dx, dy);
+  const c = mode4 ? drawnCell4At(b, step, box, dx, dy) : drawnCellAt(b, step, box, dx, dy);
   memo.put(o, c);
   return c;
 }
@@ -642,6 +685,8 @@ export function rotCollectDirect(
   stamp: Uint32Array,
   gen: number,
   memo: RotHitCache | null = null,
+  /** proposal 174: the body samples in the 'majority4' mode */
+  mode4 = false,
 ): number {
   const PX = pivotX(b);
   const PY = pivotY(b);
@@ -762,10 +807,10 @@ export function rotCollectDirect(
         const o = v * stride + u;
         cell = memo.get(o);
         if (cell === -2) {
-          cell = drawnCore(step, tu, tv, tA, tB);
+          cell = mode4 ? drawn4Core(step, box.x0 + u, box.y0 + v) : drawnCore(step, tu, tv, tA, tB);
           memo.put(o, cell);
         }
-      } else cell = drawnCore(step, tu, tv, tA, tB);
+      } else cell = mode4 ? drawn4Core(step, box.x0 + u, box.y0 + v) : drawnCore(step, tu, tv, tA, tB);
       if (cell < 0 || integ[cell] === 0 || stamp[cell] === gen) continue;
       if (!isPoint) {
         wt = q.weight(PX + box.x0 + u + 0.5, wy);

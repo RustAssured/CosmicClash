@@ -10,7 +10,7 @@
  * `rotSampleAt` below is that algorithm on the CPU, written to be copied into `contracts/rotation.ts` as is; it also reports
  * the texel that won, which the renderer uses for the emissive.
  */
-import { ROT_BIAS_PX, ROT_DEN, ROT_ONE } from '@/contracts/rotation';
+import { ROT4_DEN, ROT_BIAS_PX, ROT_DEN, ROT_ONE } from '@/contracts/rotation';
 
 export {
   ANGLE_STEPS,
@@ -27,6 +27,10 @@ export {
   rotBoundsEx,
   rotRasterAt,
   rotWinner,
+  rotSampleMaj4,
+  rotRasterMode,
+  ROT4_DEN,
+  type RotMode,
 } from '@/contracts/rotation';
 
 /**
@@ -67,6 +71,39 @@ const ROT_SAMPLE_BODY = ((): string => {
   return lines.join('\n');
 })();
 /**
+ * GLSL twin of the contract's `rotSampleMaj4` (proposal 174, 우리's 4-sample majority), unrolled like the 3 × 3 body: four
+ * named samples at (k + 0.5) / 2 of the pixel, drawn iff ≥ 2 are opaque, the (¾, ¾) sample's colour when opaque, else the first
+ * opaque one in scan order. Same integer arithmetic (ROT4_DEN = 4) and pivot / mirroring convention.
+ */
+const ROT_SAMPLE4_BODY = ((): string => {
+  const lines: string[] = [
+    'vec4 rotSample4GL(ivec2 d, out ivec2 texel) {',
+    '  ivec2 s;',
+    '  int X;',
+    '  int Y;',
+    '  int cnt = 0;',
+    '  vec4 best = vec4(0.0);',
+    '  texel = ivec2(0);',
+  ];
+  for (let k = 0; k < 4; k++) {
+    lines.push(
+      `  X = ROT4_DEN * d.x + ${2 * (k & 1) + 1};`,
+      `  Y = ROT4_DEN * d.y + ${2 * (k >> 1) + 1};`,
+      '  s = ivec2(rot4FloorDiv(uRotCS.x * X + uRotCS.y * Y), rot4FloorDiv(-uRotCS.y * X + uRotCS.x * Y)) + uPivot;',
+      '  if (uFacing < 0) s.x = 2 * uPivot.x - 1 - s.x;',
+      `  vec4 q${k} = vec4(0.0);`,
+      `  if (s.x >= 0 && s.y >= 0 && s.x < uPartSize.x && s.y < uPartSize.y) q${k} = texelFetch(uPart, s + uPartOrigin, 0);`,
+      `  if (q${k}.a > 0.0) {`,
+      '    cnt += 1;',
+      `    if (${k === 3 ? 'true' : 'cnt == 1'}) { best = q${k}; texel = s + uPartOrigin; }`,
+      '  }',
+    );
+  }
+  lines.push('  if (cnt < 2) return vec4(0.0);', '  return best;', '}');
+  return lines.join('\n');
+})();
+
+/**
  * GLSL ES 3.00 twin of `rotSampleAt` (integer arithmetic only). It declares an RGBA8 atlas `uPart` (row 0 = top), the part's
  * sub-rectangle `uPartOrigin` / `uPartSize`, the pivot `uPivot` (inside the sub-rect), `uRotCS` (Q14 cos, sin) and `uFacing`.
  * `rotSampleGL(d, out ivec2 texel)` returns the colour for destination pixel `d` relative to the destination pivot (alpha 0 =
@@ -84,4 +121,19 @@ const int ROT_DIV = ${ROT_DEN * ROT_ONE};
 const int ROT_BIAS = ${ROT_BIAS_PX * ROT_DEN * ROT_ONE};
 int rotFloorDiv(int a) { return (a + ROT_BIAS) / ROT_DIV - ${ROT_BIAS_PX}; }
 ${ROT_SAMPLE_BODY}
+// proposal 174: the 4-sample majority mode (uRotMode 1); uRotMode 0 (the default when unset) is the 3 × 3 vote
+uniform int uRotMode;
+const int ROT4_DEN = ${ROT4_DEN};
+const int ROT4_DIV = ${ROT4_DEN * ROT_ONE};
+const int ROT4_BIAS = ${ROT_BIAS_PX * ROT4_DEN * ROT_ONE};
+int rot4FloorDiv(int a) { return (a + ROT4_BIAS) / ROT4_DIV - ${ROT_BIAS_PX}; }
+${ROT_SAMPLE4_BODY}
+vec4 rotSampleModeGL(ivec2 d, out ivec2 texel) {
+  // one exit, texel always written (D3D's X4000 "potentially uninitialized" otherwise)
+  vec4 c;
+  texel = ivec2(0);
+  if (uRotMode == 1) c = rotSample4GL(d, texel);
+  else c = rotSampleGL(d, texel);
+  return c;
+}
 `;

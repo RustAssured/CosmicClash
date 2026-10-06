@@ -26,3 +26,5 @@ export { generateMoonBody } from './art/planet';
 export { renderPortrait, type Portrait } from './portrait';
 export { blend } from './art/color';
 export { hash01 } from './art/noise';
+export { uriDef, isUriDef, URI_ID, URI_PRIMARY, type UriTitanRig } from './uri/def';
+export { URI_MATERIALS, uriPartMatter, cloneUriMap, type UriPartMatter } from './uri/maps';

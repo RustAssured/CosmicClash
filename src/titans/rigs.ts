@@ -6,10 +6,12 @@ import { buildNexusRig } from './art/nexus';
 import { buildPlanetRig } from './art/planet';
 import { buildSupernovaRig } from './art/supernova';
 import type { TitanRig } from './generate';
+import { isUriDef, paintUriTitan } from './uri/def';
 
 /** Recompute a titan's rig from its recipe alone (no pixels). Used when a body is reused (`existingBody`). */
 export function buildRigFor(def: TitanDef, seed: number): TitanRig {
   if (isWitnessDef(def)) return paintWitnessTitan(def, seed, DEFAULT_LIGHTING).rig;
+  if (isUriDef(def)) return paintUriTitan(def, seed, DEFAULT_LIGHTING).rig;
   switch (def.id) {
     case 'lastone':
       return buildLastOneRig(def, seed);

@@ -105,6 +105,13 @@ export class Body implements MatterBody {
   takesDebrisImpacts: boolean;
   /** Rig regions: the connectivity anchor cells (joint patch) used instead of the core disc (BodySpec.anchorCells). */
   readonly anchorCells: Int32Array | null;
+  /** Rotated queries use the 'majority4' sampler (BodySpec.sampler, proposal 174: 우리) instead of the 3 × 3 vote. */
+  readonly mode4: boolean;
+  /**
+   * Optional per-cell group id (map-local, same indexing as the map), e.g. 우리's pre-split chunk ids (uri_rig.json `chunk`):
+   * carried with the body for chunk tearing (Phase 2C). Not simulation state the world reads; set via `setCellGroups`.
+   */
+  cellGroups: Uint16Array | null = null;
 
   /** Mass per cell at density 128, by material id. */
   readonly matDensity: Float32Array;
@@ -308,6 +315,7 @@ export class Body implements MatterBody {
     this.n = this.w * this.h;
     this.takesDebrisImpacts = spec.takesDebrisImpacts ?? spec.kind === 'titan';
     this.anchorCells = spec.anchorCells ? spec.anchorCells.slice() : null;
+    this.mode4 = spec.sampler === 'majority4';
 
     this.matDensity = new Float32Array(256);
     for (let i = 0; i < spec.materials.length; i++) this.matDensity[i] = spec.materials[i]!.density;
@@ -459,7 +467,7 @@ export class Body implements MatterBody {
     const k = this.rotStep();
     if (k !== 0) {
       const box = this.rotBox.of(this, k);
-      return rotCellAtCached(this, k, box, this.memoFor(k, box), wx, wy);
+      return rotCellAtCached(this, k, box, this.memoFor(k, box), wx, wy, this.mode4);
     }
     const ly = wy - t.y + t.anchorY;
     const j = Math.floor(ly);
@@ -598,7 +606,18 @@ export class Body implements MatterBody {
     }
     const k = this.rotStep();
     const box = this.rotBox.of(this, k);
-    let n = rotCollectDirect(this, k, box, q, idx, wgt, this.rotStamp, this.rotGen, this.memoFor(k, box));
+    let n = rotCollectDirect(
+      this,
+      k,
+      box,
+      q,
+      idx,
+      wgt,
+      this.rotStamp,
+      this.rotGen,
+      this.memoFor(k, box),
+      this.mode4,
+    );
     if (looseOnly) {
       const flags = this.map.flags;
       const mat = this.map.material;

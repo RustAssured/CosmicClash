@@ -164,6 +164,13 @@ export interface MatterWorldEx extends MatterWorld {
    */
   setFissureGlow(bodyId: number, colour: number | null | undefined): void;
   /**
+   * Attach a per-cell group id field to a body (map-local, w×h, e.g. 우리's chunk ids from uri_rig.json), kept with the body for
+   * chunk tearing (Phase 2C). Copied. False if the body is gone or the size does not match.
+   */
+  setCellGroups(bodyId: number, groups: Uint16Array): boolean;
+  /** The body's per-cell group ids (null if none were set). Read-only view. */
+  cellGroups(bodyId: number): Uint16Array | null;
+  /**
    * Aftermath export: the debris/particle layers supersampled k× ((k·LOGICAL_W)×(k·LOGICAL_H), k 1..8, fresh buffers). Reads the
    * frozen world from any view; never steps or mutates the simulation.
    */
@@ -516,6 +523,17 @@ class MatterWorldImpl implements MatterWorldEx {
     b.setFissureGlow(colour);
     b.visAll = true;
     b.visDirty = true;
+  }
+
+  setCellGroups(bodyId: number, groups: Uint16Array): boolean {
+    const b = this.core.bodyById[bodyId];
+    if (!b || groups.length !== b.n) return false;
+    b.cellGroups = groups.slice();
+    return true;
+  }
+
+  cellGroups(bodyId: number): Uint16Array | null {
+    return this.core.bodyById[bodyId]?.cellGroups ?? null;
   }
 
   defineShell(bodyId: number, shell: number | Uint8Array, far?: FarFace): boolean {

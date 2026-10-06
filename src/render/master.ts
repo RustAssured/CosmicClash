@@ -330,6 +330,13 @@ export function buildMasterPalette(sources: readonly MasterRampSource[], max = M
   };
 }
 
+/** A source ramp's own colours, before any merge (the oracle's exact ramp: 우리's stone and core ramps, the Mouth's flesh). */
+export function sourceRamp(name: string): readonly string[] {
+  const s = [...URI_RAMPS, ...MOUTH_RAMPS, ...EFFECT_RAMPS].find((r) => r.name === name);
+  if (!s) throw new Error(`master: no source ramp '${name}'`);
+  return s.colors;
+}
+
 /** Every ramp the master palette is built from, in priority order. */
 export function masterSources(): MasterRampSource[] {
   return [...URI_RAMPS, ...MOUTH_RAMPS, ...EFFECT_RAMPS, ...titanRamps()];

@@ -111,3 +111,8 @@ S1 measured that two thirds of all lost matter came from drifting debris, not fr
   - about 0.66× the Witness (about 272 px) and about 0.6× 우리 (about 300 px);
   - it fits the original body limits.
 - **Phase 2 (우리) starts.**
+
+**D33 — FRACTURE bites solids (Lead, 2026-10-06).** On the 180 px Planet, FRACTURE blows took their contact and slab sizing from
+the outer atmosphere and ocean. They shed only fluid (1 solid mass in 1.5 s), which failed D1. FRACTURE now sizes its slabs from
+the first solid cells; the fluid it crosses vents as spray. Hashes change by design. The approved sampler for 우리 is proposal
+174 (4-sample majority).

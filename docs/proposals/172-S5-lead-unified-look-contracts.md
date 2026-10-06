@@ -36,6 +36,24 @@ interface RenderLayer {
 - `layerCache` / `LayerTextures` upload them with the layer, and recreate the texture when the arrays change.
 - GPU check: "lit parts" passes. At rest the result is identical to the unlit part (120.0 vs 120.0). Turned 180° it is relit, 83.0 vs 120.0.
 
+### 2b. 우리's exact shading, fists and live elements (addendum, Phase 2A)
+
+```ts
+interface RenderLayer {
+  // …
+  /** Per atlas cell (surf 1 warm / 2 cool, tone, edge distance, material code): with `light`, the part pass shades as the oracle's shadeAt. */
+  shade?: Uint8Array;   // w × h × 4  (S4's uriShadePlane)
+  /** Per atlas cell chunk id (uri_rig.json `chunk`): the fists are drawn chunk by chunk (the oracle's drawFist). */
+  chunk?: Uint16Array;  // w × h
+  /** 우리's cores, loop, orbit and fist spread for this frame (src/render/uriLive.ts UriLiveFx), set by the 우리 behaviour. */
+  uriLive?: UriLiveFx;
+}
+```
+
+- A layer with `shade` (and `light`) is a 우리-style layer: exact oracle ramp shading, its own part outlines, cast shadows
+  from parts ≥ 2 places in front (3 px right, 4 down, ×0.68 / ×0.72), no generic depth seams.
+- `uriLive.fistZ` + `fistSpread` (TUNING rest 1.14) draw the two fist parts as rubble, with the compression light below 0.9.
+- The live loop / cores / orbit are drawn right after the part with `z === uriLive.afterZ` (the chamber).
 ## 3. `FrameFx.vfx`: the shared impact VFX
 
 ```ts
