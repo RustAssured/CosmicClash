@@ -99,6 +99,6 @@ S1 measured that two thirds of all lost matter came from drifting debris, not fr
 - **(3) Health:** 우리's loop integrity is its health. The Mouth needs **something other than a health bar** (WJ: health bars 'kinda suck'); propose a readout at Gate 3A. Best of three rounds as now.
 - **(4)** Master palette and one sky approved; show a before/after at Gate 1.
 - **(5)** The hitstop cap is raised for the heavy and catastrophic VFX weights only.
-- **(6)** The Planet is enlarged so it reads as an equal of 우리 and the Witness.
+- **(6)** The Planet is enlarged so it reads as an equal of 우리 and the Witness. WJ picked **220 px** (docs/gallery/integration/planet-sizes.png).
 - **(7)** 우리 and the Mouth join the roster after their final gates.
 - **Later (WJ):** new, vaster backdrops after the integration.

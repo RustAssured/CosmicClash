@@ -9,7 +9,9 @@ Resume from here. The rules and phases are in `MASTER_PROMPT.md`; the packs are 
 
 - **Gate 0 approved** (D31 in docs/DECISIONS.md).
 
-## In progress: Phase 1, shared foundations
+- **Phase 1 delivered** (docs/integration/GATE_1.md). It waits for WJ's review. S3 is making the 220 px Planet correct.
+
+## Phase 1 assignments (historical)
 - **S5:** master palette with Bayer palette snap, one global light for titans, shared bloom and outline, the lit part pass
   foundation, the shared VFX module (four weights).
 - **S1:** the debug overlay framework (toggle, sliders, diagnostics registry), and the hitstop/shake table by weight with
