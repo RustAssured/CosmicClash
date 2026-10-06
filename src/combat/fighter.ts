@@ -826,6 +826,13 @@ export class FighterImpl implements Fighter {
     this.view.bodyStats = bs;
     computeStats(this.def, bs.massFrac, this.stats);
     this.behaviour?.adjustStats(this.stats, bs.massFrac);
+    // a titan whose health is not its matter (우리: the loop, D31-3; proposal 176): the HUD and the KO read it directly
+    const own = this.behaviour?.healthPct() ?? null;
+    if (own !== null) {
+      this.view.integrityPct = clamp(own, 0, 100);
+      if (this.live && !this.ko && own <= 0) this.enterKo();
+      return;
+    }
     const coreMargin = (bs.coreIntegrity - KO_CORE_INTEGRITY) / (1 - KO_CORE_INTEGRITY);
     const massMargin = (bs.massFrac - KO_MASS_FRAC) / (1 - KO_MASS_FRAC);
     this.view.integrityPct = clamp(Math.min(coreMargin, massMargin) * 100, 0, 100);
@@ -2845,6 +2852,8 @@ export class FighterImpl implements Fighter {
 
     // 3. the matter world
     let dr: Readonly<DamageResult> = EMPTY_DAMAGE_RESULT;
+    // the move the incoming blow belongs to, for a behaviour that counts blows rather than volumes (우리's loop)
+    this.incomingMoveId = info.moveId;
     if (e.energy >= 0.5) dr = this.applyWorldDamage(e);
     const cells = dr.cellsRemoved + ir.extraCells;
     res.cellsRemoved = cells;
@@ -2934,6 +2943,8 @@ export class FighterImpl implements Fighter {
     return res;
   }
 
+  /** The attacker's move id of the blow being received (set before the world damage is applied; '' outside a blow). */
+  incomingMoveId = '';
   /** Weight of the last blow that reached this body, as it landed (the attacker reads it for the hit event). */
   lastLandedWeight: BlowWeight = 'medium';
 

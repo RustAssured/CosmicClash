@@ -2,6 +2,8 @@ import { DEFAULT_LIGHTING, type StageLighting, type TitanId } from '@/contracts'
 import { getTitanDef } from './defs';
 import { paintTitanMap } from './generate';
 import { paintWitness } from './art/lastone';
+import { uriPartMatter } from './uri/maps';
+import { URI_ORDER, uriPart } from './uri/rig';
 
 /** A cropped, pristine sprite of a titan for menus (select screen, results). */
 export interface Portrait {
@@ -31,6 +33,11 @@ export function renderPortrait(
     cache.set(key, p);
     return p;
   }
+  if (id === 'uri') {
+    const p = uriPortrait();
+    cache.set(key, p);
+    return p;
+  }
   const { map } = paintTitanMap(getTitanDef(id), seed, lighting);
   let x0 = map.w;
   let y0 = map.h;
@@ -55,6 +62,39 @@ export function renderPortrait(
   const p = { pixels, w, h };
   cache.set(key, p);
   return p;
+}
+
+/**
+ * The whole of 우리 at rest: its 13 parts at their places in the asset's reference space, in the asset's draw order (the
+ * same parts the game draws; no repainting). The cores, loop and moon field are drawn live in the game, not here.
+ */
+function uriPortrait(): Portrait {
+  const parts = uriPartMatter();
+  const at = new Map(parts.map((p) => [p.key, p]));
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const k of URI_ORDER) {
+    const P = uriPart(k);
+    x0 = Math.min(x0, P.x0);
+    y0 = Math.min(y0, P.y0);
+    x1 = Math.max(x1, P.x0 + P.w);
+    y1 = Math.max(y1, P.y0 + P.h);
+  }
+  const w = x1 - x0;
+  const h = y1 - y0;
+  const pixels = new Uint32Array(w * h);
+  for (const k of URI_ORDER) {
+    const P = uriPart(k);
+    const m = at.get(k)!.map;
+    for (let y = 0; y < m.h; y++)
+      for (let x = 0; x < m.w; x++) {
+        const i = y * m.w + x;
+        if (m.material[i] !== 0) pixels[(P.y0 + y - y0) * w + (P.x0 + x - x0)] = m.baseColor[i]!;
+      }
+  }
+  return { pixels, w, h };
 }
 
 /** The whole Witness at rest (every region composited back to front), not only its eye cradle (the primary body's map). */

@@ -101,6 +101,13 @@ export abstract class Behaviour {
    * Re-pack them here or later in place (and bump nothing: the layer's version follows the body's map).
    */
   decorateBodyLayer(_layer: RenderLayer): void {}
+  /**
+   * A titan whose health is not its matter (우리: the loop's integrity, 0..100; proposal 176). Non-null: the fighter shows it as
+   * `view.integrityPct` and goes KO when it reaches 0, instead of the mass / core thresholds. Default null (matter integrity).
+   */
+  healthPct(): number | null {
+    return null;
+  }
   /** Extra cosmetic lean (px, facing-relative) added to the fighter's velocity/pose lean (asteroid tumble, idle sway). */
   leanBias(): number {
     return 0;

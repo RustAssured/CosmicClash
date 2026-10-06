@@ -2,7 +2,6 @@ import {
   type MoveDef,
   type MoveSlot,
   type MoveVariant,
-  type ResourceId,
   type StageLighting,
   type TitanDef,
   type TitanId,
@@ -13,19 +12,22 @@ import type { UriPartKey } from './rig';
 /**
  * 우리 (URI) as a titan definition (Phase 2A; uri/docs/URI_SPEC.md, uri/docs/TUNING.md, D31).
  *
- * - **Id:** 'uri' (proposal 173 adds it to `TitanId` / `TITAN_IDS`; until then it is cast in this one place).
- * - **Not in the roster yet:** D31 (7), it joins after its final gate. Built here like the Witness's def, not from a JSON file.
+ * - **Id:** 'uri' (proposal 173: in `TitanId` / `TITAN_IDS`, resource 'loop').
+ * - **On the roster** since Gate 2D (D31-7; `IMPLEMENTED_TITANS`, `SLICE.titans`). Built here like the Witness's def, not
+ *   from a JSON file; `TITAN_DEFS.uri` builds it on first use (the browser loads the asset at boot).
  * - **Moves (D31 (2)):** Strike = lead straight punch, Crush = rear cross-body smash, Signature = uppercut, Ultimate = double
  *   slam. Surge and Guard stay unbound. The fighter's frame data is the locked phase timing (TUNING.md) up to the end of
  *   `follow`: startup = load (+ rise + apex for the slam), active = the striking phase, recovery = follow. The taper is the
- *   kinetic system's (2B): a new move may grow out of it (spec §6.3). Cancel windows and buffering are 2D (S1).
+ *   kinetic system's (2B): a new move may grow out of it (spec §6.3). 2D: the fighter's input buffer, and a move pressed
+ *   while the last blow is still committed waits for that blow to land (UriBehaviour `pending`). Surge and Guard are
+ *   declared unbound (`unboundSlots`).
  * - **Hits come from the parts:** the fists strike with their own matter (2B/2D), so the JSON hitbox lists are empty, as for
  *   the Witness's halo and sweep.
  * - **Health is the loop** (spec §7): resource 'loop' (proposal 173), 100, shown as a bar; wired in 2C.
  * - **Attributes:** provisional until the Phase 4 balance pass.
  */
 
-export const URI_ID = 'uri' as TitanId;
+export const URI_ID: TitanId = 'uri';
 
 const T = (s: number): number => Math.round(s * 60);
 
@@ -48,6 +50,7 @@ function move(
   hitstopS: number,
   kinetic: string,
   tags: string[],
+  blow: UriBlow,
 ): MoveDef {
   return {
     id,
@@ -66,19 +69,114 @@ function move(
     resourceCost: 0,
     meterCost: slot === 'ultimate' ? 1 : 0,
     tags,
-    // which authored move of the kinetic system this slot plays (TUNING.md: punch, cross, upper, slam)
-    extra: { uri: kinetic },
+    extra: {
+      // which authored move of the kinetic system this slot plays (TUNING.md: punch, cross, upper, slam)
+      uri: kinetic,
+      // the fists strike with their own matter when the kinetic system's arms arrive (2D): no JSON hitboxes
+      bodyHits: true,
+      // the frame data is the locked oracle's phases, not the classic feel targets (the cross and the slam are shorter)
+      lockedTiming: 'uri/docs/TUNING.md Phases (the locked oracle; URI_SPEC §6.4)',
+      blow,
+    },
   };
 }
 
+/**
+ * What a landed fist does to the foe's matter (2D). PROVISIONAL, for the Phase 4 balance pass: the oracle has no opponent, so
+ * these are anchored on the game's existing KINETIC blows of the same weight (Tidal Rush 500, Meteor Strike 1147) and are a
+ * debug-overlay knob ('URI POWER x'). Knockback is facing-relative (x toward the foe, y down).
+ */
+export interface UriBlow {
+  energy: number;
+  knockback: readonly [number, number];
+  guardPressure: number;
+  params: Readonly<Record<string, number>>;
+  provisional: true;
+}
+const BLOWS: Readonly<Record<string, UriBlow>> = {
+  punch: {
+    energy: 500,
+    knockback: [620, -40],
+    guardPressure: 1,
+    params: { crater: 10, penetration: 10, scatter: 1.1 },
+    provisional: true,
+  },
+  cross: {
+    energy: 650,
+    knockback: [700, -60],
+    guardPressure: 1,
+    params: { crater: 14, penetration: 12, scatter: 1.2 },
+    provisional: true,
+  },
+  upper: {
+    energy: 550,
+    knockback: [240, -620],
+    guardPressure: 0.8,
+    params: { crater: 10, penetration: 10, scatter: 1.1 },
+    provisional: true,
+  },
+  slam: {
+    energy: 1100,
+    knockback: [180, 520],
+    guardPressure: 1,
+    params: { crater: 20, penetration: 18, scatter: 1.3 },
+    provisional: true,
+  },
+};
+
 const MOVES: readonly MoveDef[] = [
-  move('uri.punch', 'strike', 'Straight Punch', '스트레이트', 0.3, 0.2, 0.18, 0.12, 'punch', ['lead']),
-  move('uri.cross', 'crush', 'Cross-Body Smash', '크로스 스매시', 0.38, 0.26, 0.22, 0.14, 'cross', ['rear']),
-  move('uri.upper', 'signature', 'Uppercut', '어퍼컷', 0.3, 0.22, 0.22, 0.12, 'upper', ['lead']),
-  move('uri.slam', 'ultimate', 'Double Slam', '더블 슬램', 0.2 + 0.5 + 0.26, 0.2, 0.28, 0.24, 'slam', [
+  move(
+    'uri.punch',
+    'strike',
+    'Straight Punch',
+    '스트레이트',
+    0.3,
+    0.2,
+    0.18,
+    0.12,
+    'punch',
+    ['lead'],
+    BLOWS.punch!,
+  ),
+  move(
+    'uri.cross',
+    'crush',
+    'Cross-Body Smash',
+    '크로스 스매시',
+    0.38,
+    0.26,
+    0.22,
+    0.14,
+    'cross',
+    ['rear'],
+    BLOWS.cross!,
+  ),
+  move(
+    'uri.upper',
+    'signature',
+    'Uppercut',
+    '어퍼컷',
+    0.3,
+    0.22,
+    0.22,
+    0.12,
+    'upper',
+    ['lead'],
+    BLOWS.upper!,
+  ),
+  move(
+    'uri.slam',
     'ultimate',
-    'armor',
-  ]),
+    'Double Slam',
+    '더블 슬램',
+    0.2 + 0.5 + 0.26,
+    0.2,
+    0.28,
+    0.24,
+    'slam',
+    ['ultimate', 'armor'],
+    BLOWS.slam!,
+  ),
 ];
 
 let DEF: TitanDef | null = null;
@@ -96,7 +194,7 @@ export function uriDef(): TitanDef {
     epithet: 'The Refusal',
     attributes: { mass: 9, cohesion: 7, heat: 6, gravity: 5, reach: 7, tempo: 3 },
     resource: {
-      id: 'loop' as ResourceId,
+      id: 'loop',
       name: 'Loop',
       nameKo: '고리',
       max: 100,
@@ -128,6 +226,8 @@ export function uriDef(): TitanDef {
       style: 'A fortress-boxer: heavy commitment, long tapers.',
     },
     ui: { accent: '#ffb060', accent2: '#6a92f8', tagline: 'It refuses to fall apart.' },
+    // D31-2: the pack defines no movement verb and no defence for 우리; none is invented
+    unboundSlots: ['surge', 'guard'],
   };
   return DEF;
 }

@@ -3,6 +3,7 @@ import type { AudioEvent, AudioScene, SimEvent, StageId, TitanId } from '@/contr
 import { STAGE_IDS, TITAN_IDS } from '@/contracts';
 import { MODES, STAGE_MUSIC } from './dsp/scales';
 import { DUCK_DB, DUCK_SEC, createAudioEngine } from './engine';
+import { VOICES } from './voices';
 import {
   FakeBiquad,
   FakeContext,
@@ -647,7 +648,8 @@ describe('event handling', () => {
     const { eng, ctx } = await ready(6);
     eng.updateAt(scene({ phase: 'menu', fighters: null }), 1 / 60, 0.2);
     const baseline = ctx.leakedSources().length;
-    for (const t of TITAN_IDS) {
+    // (a titan without its own voice yet, 우리 until S5's material voices, starts no continuous source of its own)
+    for (const t of TITAN_IDS.filter((id) => VOICES[id])) {
       eng.updateAt(scene({}, t, t), 1 / 60, 0.2);
       expect(ctx.leakedSources().length, `${t} started nothing?`).toBeGreaterThan(baseline);
       eng.updateAt(scene({ phase: 'menu', fighters: null }), 1 / 60, 0.2);

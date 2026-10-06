@@ -25,6 +25,11 @@ export const MOVE_WEIGHTS: Readonly<Record<string, BlowWeight>> = {
   'planet.crustbreaker': 'heavy',
   'planet.corepulse': 'heavy',
   'planet.cataclysm': 'heavy',
+  // 우리 (VFX_SPEC "Titan hooks": punch / cross / uppercut heavy, double slam catastrophic; its break-apart is the KO blow)
+  'uri.punch': 'heavy',
+  'uri.cross': 'heavy',
+  'uri.upper': 'heavy',
+  'uri.slam': 'catastrophic',
 };
 
 const isWeight = (w: unknown): w is BlowWeight => BLOW_WEIGHTS.includes(w as BlowWeight);

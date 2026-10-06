@@ -145,9 +145,24 @@ const KIT_REACH: Record<string, AiReach> = {
   },
 };
 
+/**
+ * 우리's four blows (2D), from the anchor of its pelvis in WORLD orientation (it is never mirrored; x toward the foe, y down):
+ * where the striking fist arrives (src/combat/uri/kinetics.ts goals; measured: a punch lands with the foe's anchor ≈ 270 px
+ * away), when (the striking phase, ticks from its start; the kinetic system lands it on arrival) and the provisional blow
+ * energy (src/titans/uri/def.ts BLOWS). The punch and the cross reach level targets, the uppercut high ones, the slam low ones.
+ */
+const URI_REACH: Record<string, AiReach> = {
+  punch: { x0: 120, y0: -170, x1: 300, y1: -10, from: 0, to: 14, energy: 500 },
+  cross: { x0: 40, y0: -150, x1: 230, y1: 0, from: 0, to: 16, energy: 650 },
+  upper: { x0: 60, y0: -330, x1: 260, y1: -90, from: 0, to: 14, energy: 550 },
+  slam: { x0: -90, y0: -10, x1: 120, y1: 110, from: 0, to: 12, energy: 1100 },
+};
+
 function standInReach(m: MoveDef, aim: AimDir): AiReach | null {
   const own = m.extra?.['aiReach'] as AiReach | Partial<Record<AimDir, AiReach>> | undefined;
   if (own) return 'x0' in own ? (own as AiReach) : ((own as Partial<Record<AimDir, AiReach>>)[aim] ?? null);
+  const uri = m.extra?.['uri'] as string | undefined;
+  if (uri) return URI_REACH[uri] ?? null;
   const kit = m.extra?.['witness'] as string | undefined;
   return kit ? (KIT_REACH[kit] ?? null) : null;
 }

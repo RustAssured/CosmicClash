@@ -46,7 +46,9 @@ describe('titan definitions', () => {
       blackhole: { mass: 8, cohesion: 9, heat: 10, gravity: 10, reach: 5, tempo: 2 },
       supernova: { mass: 7, cohesion: 3, heat: 10, gravity: 6, reach: 6, tempo: 5 },
       planet: { mass: 8, cohesion: 7, heat: 6, gravity: 7, reach: 6, tempo: 3 },
-    }[id as 'lastone' | 'asteroid' | 'nexus' | 'blackhole' | 'supernova' | 'planet'];
+      // 우리 has no design-bible row: its pack's (src/titans/uri/def.ts; provisional until the Phase 4 balance pass)
+      uri: { mass: 9, cohesion: 7, heat: 6, gravity: 5, reach: 7, tempo: 3 },
+    }[id];
     expect(a).toEqual(want);
   });
 
@@ -71,6 +73,8 @@ describe('titan definitions', () => {
         const fu = m.extra?.['followUp'] as { move: string } | undefined;
         if (fu) expect(ids.has(fu.move)).toBe(true);
       }
+      // a titan with no Guard (우리, D31-2) declares it unbound instead
+      if (def.unboundSlots?.includes('guard')) continue;
       const guard = def.moves.find((m) => m.slot === 'guard')!;
       const shell = guard.extra?.['shell'] as { absorb: Record<string, number> };
       expect(Object.keys(shell.absorb).length).toBeGreaterThanOrEqual(5);
@@ -107,7 +111,28 @@ describe('titan definitions', () => {
   });
 });
 
-describe.each(IMPLEMENTED_TITANS)('generator: %s', (id) => {
+/**
+ * The procedural painters (seeded, lit for the stage, one connected body). 우리 is not painted: its matter is loaded as is
+ * from its locked asset (src/titans/uri; its own tests: asset.test.ts, rig.test.ts) and lit on the GPU by the one sky, so the
+ * seed and the stage light do not change it, and its pelvis is one of 13 part bodies. It has its own block below.
+ */
+const PAINTED = IMPLEMENTED_TITANS.filter((id) => id !== 'uri');
+
+describe('generator: uri (loaded as is)', () => {
+  const def = getTitanDef('uri');
+  it('gives the same bytes whatever the seed or the light (the asset is never repainted), and a menu portrait', () => {
+    const a = paintTitanMap(def, 1234, DEFAULT_LIGHTING).map;
+    const b = paintTitanMap(def, 4321, COLD).map;
+    expect(Buffer.compare(Buffer.from(a.material), Buffer.from(b.material))).toBe(0);
+    expect(Buffer.compare(Buffer.from(a.baseColor.buffer), Buffer.from(b.baseColor.buffer))).toBe(0);
+    expect(a.w).toBeLessThanOrEqual(MAX_BODY_DIM);
+    const p = renderPortrait('uri', 5);
+    expect(p.w).toBeGreaterThan(60);
+    expect(renderPortrait('uri', 5)).toBe(p);
+  });
+});
+
+describe.each(PAINTED)('generator: %s', (id) => {
   const def = getTitanDef(id);
   const { map, rig } = paintTitanMap(def, 1234, DEFAULT_LIGHTING);
   const table = buildMaterialTable(def.materials);

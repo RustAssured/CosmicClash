@@ -41,6 +41,8 @@ const STALE_FROM = 480;
 const STALE_RAMP = 600;
 const STALE_CUT = 0.6;
 const LATE_TICKS = 25 * 60;
+/** 우리: its kinetic system measures the target from URI_CM0 = reference (200, 158), 67 px above the pelvis anchor (≈ 225). */
+const URI_CM_ABOVE = 67;
 /**
  * Orbit, a round that has gone long presses on: from URGE_FROM ticks into the round the engagement gap shrinks, down to
  * (1 − URGE_CUT) of itself URGE_RAMP ticks later (rounds should end inside 90 s, by KO, not on the clock).
@@ -164,6 +166,28 @@ export class UtilityAI implements AIController {
   private readonly surgeDist: number;
   private readonly guardAbsorb: Partial<Record<DamageType, number>>;
   private readonly followUp: { from: number; to: number; move: string } | null;
+  /**
+   * 우리 (2D): never mirrored and its arms are chosen by the opponent's ELEVATION (the kinetic system's best-move rule), so the
+   * foe is judged where it really is (no orbit attack frame), and only the move the rule names is offered.
+   */
+  private readonly uri: boolean;
+  /** 우리: whether the next level blow is the cross (the punch and the cross alternate, as in the kinetic system). */
+  private uriCrossNext = false;
+  /** 우리: the move the best-move rule names this think. */
+  private uriWant = 'punch';
+
+  /**
+   * 우리's best move for the target (URI_SPEC §6.4; `UriKinetics.pickMove`), from the AI's own (delayed, noisy) view: the
+   * elevation of the foe seen from 우리's centre-of-mass point (the kinetic system's URI_CM0, 67 px above the pelvis anchor):
+   * above 40° the uppercut, below −38° the double slam (with a full meter; else the level blows), else punch and cross in turn.
+   */
+  private uriBestMove(S: FighterView, dx: number, dy: number): string {
+    const el = (Math.atan2(-(dy + URI_CM_ABOVE), Math.abs(dx)) * 180) / Math.PI;
+    if (el > 40) return 'upper';
+    if (el < -38 && S.meter >= 1 - 1e-6) return 'slam';
+    return this.uriCrossNext ? 'cross' : 'punch';
+  }
+  private readonly hasGuard: boolean;
   private rng: Rng;
   private readonly ring = new ObservationRing();
   private readonly ngram = new NGram();
@@ -271,7 +295,9 @@ export class UtilityAI implements AIController {
     this.moveKey = Int16Array.from(this.infos, (mi) => def.moves.indexOf(mi.def));
     def.moves.forEach((m, i) => this.moveIndex.set(m.id, i));
     this.surgeDist = surgeDistance(def);
+    this.uri = (def.art.params as { uri?: unknown } | undefined)?.uri === true;
     const guard = def.moves.find((m) => m.slot === 'guard');
+    this.hasGuard = guard !== undefined;
     this.guardAbsorb = ((
       guard?.extra?.['shell'] as { absorb?: Partial<Record<DamageType, number>> } | undefined
     )?.absorb ?? {}) as Partial<Record<DamageType, number>>;
@@ -406,7 +432,7 @@ export class UtilityAI implements AIController {
     }
     this.realDx = Fw.x - S.x;
     this.realDy = Fw.y - S.y;
-    const F = this.orbit ? this.toAimFrame(S, Fw) : Fw;
+    const F = this.orbit && !this.uri ? this.toAimFrame(S, Fw) : Fw;
     if (S.state === 'ko' || S.state === 'victory' || S.state === 'intro' || ctx.roundTick <= 0) {
       this.plan.cancel();
       this.pendIdx = -1;
@@ -846,7 +872,9 @@ export class UtilityAI implements AIController {
     const pers = this.persona;
     const dx = F.x - S.x + this.noiseX;
     const dy = F.y - S.y + this.noiseY;
-    const dist = Math.abs(dx);
+    // (우리 judges the foe in the real plane, not the orbit attack frame: its distance is the true one)
+    const dist = this.uri ? Math.hypot(dx, dy) : Math.abs(dx);
+    if (this.uri) this.uriWant = this.uriBestMove(S, dx, dy);
     // who is winning decides whether to gamble: playing safe only makes sense when ahead
     const ahead = S.integrityPct > F.integrityPct + 8;
     const behind = S.integrityPct < F.integrityPct - 8;
@@ -884,9 +912,12 @@ export class UtilityAI implements AIController {
       const absorb = this.guardAbsorb[TYPES[th.type]!] ?? 0.35;
       const gsc =
         th.danger * absorb * (0.5 + 0.5 * S.guardHealth) * 0.85 * this.P.defends * (th.detached ? 0.6 : 1);
-      const g = this.add('guard', 'defend', 'guard', gsc, `guard vs ${TYPES[th.type]} (absorb ${absorb})`);
-      g.delay = Math.max(0, until - 5) + this.jitter();
-      g.ticks = Math.min(60, Math.round(until + th.live + 6));
+      // a titan with no Guard (우리: D31-2 leaves it unbound) cannot raise one
+      if (this.hasGuard) {
+        const g = this.add('guard', 'defend', 'guard', gsc, `guard vs ${TYPES[th.type]} (absorb ${absorb})`);
+        g.delay = Math.max(0, until - 5) + this.jitter();
+        g.ticks = Math.min(60, Math.round(until + th.live + 6));
+      }
       const rs = this.add(
         'back off',
         'defend',
@@ -930,7 +961,7 @@ export class UtilityAI implements AIController {
 
     /* ---- ultimate ---- */
     const ult = this.bySlot.ultimate?.[1];
-    if (ult && !resting && S.meter >= 1 - 1e-6 && dist < 400) {
+    if (ult && !resting && S.meter >= 1 - 1e-6 && dist < 400 && (!this.uri || this.uriWant === 'slam')) {
       for (const mi of this.bySlot.ultimate!) {
         this.evalMove(mi, S, F, age, this.ev);
         if (this.ev.p > 0.35 || vuln > mi.startup * 0.6) {
@@ -1109,7 +1140,13 @@ export class UtilityAI implements AIController {
       }
     }
     // a pre-emptive guard only when an attack is genuinely expected AND the foe is close enough to deliver it
-    if (dist < 240 && predAttack > 0.5 && vuln <= 0 && (F.moveId !== null || F.state === 'move')) {
+    if (
+      this.hasGuard &&
+      dist < 240 &&
+      predAttack > 0.5 &&
+      vuln <= 0 &&
+      (F.moveId !== null || F.state === 'move')
+    ) {
       const g2 = this.add(
         'guard up',
         'defend',
@@ -1201,6 +1238,8 @@ export class UtilityAI implements AIController {
     for (const slot of wantSlots) {
       for (const mi of this.bySlot[slot] ?? []) {
         if (mi.def.extra?.['followUpOnly']) continue;
+        // 우리: only the blow its best-move rule names for where the foe is
+        if (this.uri && mi.def.extra?.['uri'] !== this.uriWant) continue;
         if (mi.resourceCost > S.resource + 1e-6) continue;
         const cr = (mi.def.extra?.['chargeReach'] as [number, number] | undefined) ?? [1, 1];
         // charged beams: judge them at full-charge reach, then hold only as long as the distance requires
@@ -1398,6 +1437,11 @@ export class UtilityAI implements AIController {
             (1 - URGE_CUT * clamp((ctx.roundTick - URGE_FROM) / URGE_RAMP, 0, 1)) *
             (ctx.roundTicksLeft < LATE_TICKS ? 0.5 : 1);
           this.nextAttackTick = ctx.tick + Math.round(gap * (0.75 + 0.5 * this.rng.next()));
+        }
+        if (this.uri) {
+          const u = mi.def.extra?.['uri'];
+          if (u === 'punch') this.uriCrossNext = true;
+          else if (u === 'cross') this.uriCrossNext = false;
         }
         this.pendIdx = mi.idx;
         this.pendMass = F.massFrac;

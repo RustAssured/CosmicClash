@@ -10,6 +10,7 @@ import {
   type MatterWorld,
   type OverlapResult,
   type MatterMap,
+  type MoveSlot,
   type RenderLayer,
   type RenderPart,
   type ViewRect,
@@ -34,6 +35,8 @@ import type { UriLiveFx, UriPylon } from '@/render/uriLive';
 import { URI_MAT } from '@/titans/uri/maps';
 import { Behaviour } from '../behaviour';
 import { addDamageResult, type DamageSum } from '../damageSum';
+import { makeFatShape, type FatShape } from '../shapes';
+import type { UriBlow } from '@/titans/uri/def';
 import type { ActiveMove } from '../move';
 import { UriKinetics, type UriKineticView, type UriMoveName, type UriTune } from '../uri/kinetics';
 import type { FighterImpl } from '../fighter';
@@ -122,8 +125,8 @@ const CHAIN: Partial<Record<UriPartKey, readonly UriPartKey[]>> = {
   pyL: ['pyL'],
   pyR: ['pyR'],
 };
-/** Domes and chamber stay whatever they lose (spec §7); the pelvis is the fighter's own body. */
-const KEEPS: readonly UriPartKey[] = ['chamber', 'domeL', 'domeR', URI_PRIMARY];
+/** Domes and chamber stay whatever they lose (spec §7). (The pelvis follows the 50 % rule: `routeDamage`.) */
+const KEEPS: readonly UriPartKey[] = ['chamber', 'domeL', 'domeR'];
 const MAT_HABITAT = URI_MATERIALS.findIndex((m) => m.key === 'habitat') + 1;
 const MAT_CRACK = URI_MATERIALS.findIndex((m) => m.key === 'crack') + 1;
 /** Who takes a blow first: the front atlas top part down, then the pelvis (the fighter's own layer), then the pylons behind. */
@@ -171,6 +174,16 @@ const SHATTER_POWER = 1.2;
  * 우리's opponents in the slice have none either.
  */
 const CONTINUOUS_HIT_TICKS = 60;
+/** Intent buffer (2D): a move waits this long at most for the committed blow before it to land (0.75 s). */
+const PENDING_MAX = 45;
+const PENDING_ID: Record<UriMoveName, number> = { punch: 1, cross: 2, slam: 3, upper: 4 };
+/** The fighter's move for each kinetic move (D31-2). */
+const MOVE_OF: Record<UriMoveName, { id: string; slot: MoveSlot }> = {
+  punch: { id: 'uri.punch', slot: 'strike' },
+  cross: { id: 'uri.cross', slot: 'crush' },
+  upper: { id: 'uri.upper', slot: 'signature' },
+  slam: { id: 'uri.slam', slot: 'ultimate' },
+};
 
 const DIAG = {
   cm: rgba(255, 238, 170),
@@ -246,6 +259,31 @@ export class UriBehaviour extends Behaviour {
   private rs = 0;
   /** CONTINUOUS contact ticks toward the next counted hit. */
   private contTicks = 0;
+  /**
+   * Ticks of CONTINUOUS contact that count as one hit on the loop. PROVISIONAL (the oracle has no continuous blows): a
+   * debug-overlay knob marked "to tune", not a final number.
+   */
+  contHitTicks = CONTINUOUS_HIT_TICKS;
+  /** Multiplier on the fists' provisional blow energies (`UriBlow`, def.ts): a debug-overlay knob for the balance pass. */
+  powerMul = 1;
+  /** The blow (foe move instance) that last cost the loop, and the power it cost it at. */
+  private blowInst: string | null = null;
+  private blowPower = 0;
+  private blowAt = -1e9;
+  /**
+   * Hits of one move within this many ticks count as one blow on the loop. PROVISIONAL (no oracle number: the oracle's hits
+   * are single; the game's moves have many volumes): a debug-overlay knob marked "to tune".
+   */
+  blowTicks = 45;
+  /** The pelvis went in pieces (50 % rule). */
+  private pelvisLost = false;
+  /**
+   * Intent (2D): a move pressed while the kinetic system is still committed to the last one (before its impact) waits here and
+   * begins as soon as that blow has landed: it then grows out of the follow-through / taper (spec §6.3, §10). Kept at most
+   * PENDING_MAX ticks.
+   */
+  private pending: UriMoveName | null = null;
+  private pendingAt = 0;
   /** The loop has snapped (break-apart), the parts still to release, their piece budgets, and the cores' frozen world spots. */
   private broken = false;
   private releaseQueue: UriPartKey[] = [];
@@ -458,6 +496,11 @@ export class UriBehaviour extends Behaviour {
   private resetDamage(): void {
     this.kin.hp = 100;
     this.broken = false;
+    this.pelvisLost = false;
+    this.pending = null;
+    this.blowInst = null;
+    this.blowPower = 0;
+    this.blowAt = -1e9;
     this.releaseQueue = [];
     this.budgets.clear();
     this.contTicks = 0;
@@ -471,13 +514,11 @@ export class UriBehaviour extends Behaviour {
     this.showHealth();
   }
 
-  /**
-   * The loop is 우리's health (D31-3). Until the fighter asks the behaviour for it (proposal 176, S1) the HUD bar is written here,
-   * after the fighter's own matter-based value.
-   */
-  healthPct(): number | null {
-    return this.kin.hp;
+  /** The loop is 우리's health (D31-3, proposal 176): the fighter's HUD integrity and its KO read it directly. */
+  override healthPct(): number | null {
+    return this.kin ? this.kin.hp : 100;
   }
+  /** The view between a blow and the fighter's next refresh (the fighter writes the same value on its own refresh). */
   private showHealth(): void {
     this.f.view.integrityPct = this.kin.hp;
   }
@@ -497,11 +538,84 @@ export class UriBehaviour extends Behaviour {
     this.integ.set(URI_PRIMARY, p.initialCells > 0 ? p.cells / p.initialCells : 0);
   }
 
-  /** A move begins: the kinetic system plays the authored move this slot maps to (D31). */
+  /**
+   * A move begins (2D intent): the kinetic system plays the authored move this slot maps to (D31-2), growing out of whatever
+   * the body is doing (the links never reset). While the last blow is still committed (before its impact) the new one waits
+   * (`pending`) and begins the moment that blow lands. Arm roles come from the opponent's side when it begins (`begin`).
+   */
   override onMoveStart(m: ActiveMove): void {
     const name = m.def?.extra?.['uri'] as UriMoveName | undefined;
-    if (name && !m.feint && !this.broken) this.kin.begin(name);
+    if (!name || m.feint || this.broken) return;
+    if (this.canGrow()) {
+      this.kin.begin(name);
+      this.pending = null;
+    } else {
+      this.pending = name;
+      this.pendingAt = this.f.tickNo;
+    }
   }
+
+  /** A new move may begin now: at rest, or once the current blow has landed (follow-through, taper). */
+  private canGrow(): boolean {
+    const ph = this.kview.phase;
+    return !this.kin.busy || ph === 'follow' || ph === 'taper';
+  }
+
+  /**
+   * The blow lands (2D): when the kinetic system's striking arms ARRIVE (its impact), each acting fist strikes the foe with
+   * its own matter (a disc over the fist's live bounds), with the move's provisional blow. Connected: the game's hit-stop
+   * (the kinetic system's own hold, ×its hitstop knob) freezes the whole match, and the kinetic system's private hold is
+   * dropped so the body is not held twice; missed: the body keeps its own hold and the oracle's shake.
+   */
+  override resolveVolumes(_ctx: FighterTickCtx): void {
+    const imp = this.kin.takeImpact();
+    if (!imp || this.broken) return;
+    const f = this.f;
+    const mv = MOVE_OF[imp.move];
+    const def = f.moveById(mv.id);
+    const blow = def?.extra?.['blow'] as UriBlow | undefined;
+    if (!blow) return;
+    const fists: UriPartKey[] =
+      imp.move === 'slam'
+        ? ['fistL', 'fistR']
+        : [`fist${imp.move === 'cross' ? imp.rear : imp.lead}` as UriPartKey];
+    let hit = false;
+    for (const k of fists) {
+      const r = this.byKey.get(k)!;
+      if (r.lost || !f.world.liveBounds(r.body.id, this.fistBox)) continue;
+      const b = this.fistBox;
+      const s = this.fistShape;
+      s.kind = 'point';
+      s.x = (b.x0 + b.x1) * 0.5;
+      s.y = (b.y0 + b.y1) * 0.5;
+      s.r = Math.max(4, 0.5 * Math.min(b.x1 - b.x0, b.y1 - b.y0));
+      const ok = f.strike(
+        s,
+        {
+          type: 'KINETIC',
+          energy: (blow.energy * this.powerMul) / fists.length,
+          duration: 1,
+          flags: 0,
+          params: blow.params,
+        },
+        blow.knockback[0],
+        blow.knockback[1],
+        blow.guardPressure,
+        Math.round(imp.hitstop * 60),
+        mv.slot,
+        mv.id,
+      );
+      hit = hit || ok;
+    }
+    if (hit) {
+      // the match's freeze is the hold now (the kinetic system does not step while the match is frozen)
+      f.events.push({ t: 'hitstop', ticks: Math.round(imp.hitstop * 60) });
+      this.kin.hitstop = 0;
+    } else f.events.push({ t: 'shake', dirX: 0, dirY: imp.move === 'slam' ? 1 : 0.3, amp: imp.shake });
+  }
+
+  private readonly fistBox = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  private readonly fistShape: FatShape = makeFatShape();
 
   /**
    * Called right after the primary's transform (and again after a contact moved the root): once per tick the kinetic system
@@ -511,6 +625,13 @@ export class UriBehaviour extends Behaviour {
     const f = this.f;
     if (f.tickNo !== this.kinTick) {
       this.kinTick = f.tickNo;
+      // a buffered move begins the moment the blow before it has landed (or is dropped when it waited too long)
+      if (this.pending) {
+        if (this.canGrow()) {
+          this.kin.begin(this.pending);
+          this.pending = null;
+        } else if (f.tickNo - this.pendingAt > PENDING_MAX) this.pending = null;
+      }
       // the opponent, in the rig's reference space (the reference → world offset of the last placement)
       const fv = f.foe?.view;
       if (fv) this.kin.target = [fv.x - this.ox, fv.y - this.oy];
@@ -656,7 +777,12 @@ export class UriBehaviour extends Behaviour {
   override hash(h: number): number {
     let x = this.kin.hash(h);
     x = Math.imul(x ^ this.rs, 0x01000193);
-    x = Math.imul(x ^ (this.contTicks | (this.broken ? 1 << 16 : 0)), 0x01000193);
+    x = Math.imul(
+      x ^ (this.contTicks | (this.broken ? 1 << 16 : 0) | (this.pelvisLost ? 1 << 17 : 0)),
+      0x01000193,
+    );
+    x = Math.imul(x ^ (this.pending ? PENDING_ID[this.pending] : 0) ^ (this.pendingAt << 4), 0x01000193);
+    x = Math.imul(x ^ this.blowAt ^ Math.round(this.blowPower * 10), 0x01000193);
     x = Math.imul(x ^ this.releaseQueue.length, 0x01000193);
     for (const r of this.regions) x = Math.imul(x ^ (r.lost ? 1 : 2), 0x01000193);
     return x >>> 0;
@@ -681,7 +807,7 @@ export class UriBehaviour extends Behaviour {
     let key: UriPartKey | null = null;
     let id = -1;
     for (const k of FRONT_TO_BACK) {
-      if (k !== URI_PRIMARY && this.byKey.get(k)!.lost) continue;
+      if (k === URI_PRIMARY ? this.pelvisLost : this.byKey.get(k)!.lost) continue;
       const bid = k === URI_PRIMARY ? f.body.id : this.byKey.get(k)!.body.id;
       w.overlap(bid, ev.shape, ov);
       if (ov.cells > 0) {
@@ -695,7 +821,7 @@ export class UriBehaviour extends Behaviour {
     // a CONTINUOUS blow counts as one hit per second of contact
     let counts = true;
     if ((ev.flags & DamageFlag.CONTINUOUS) !== 0) {
-      counts = ++this.contTicks >= CONTINUOUS_HIT_TICKS;
+      counts = ++this.contTicks >= this.contHitTicks;
       if (counts) this.contTicks = 0;
     }
     const s0 = w.stats(id);
@@ -727,12 +853,30 @@ export class UriBehaviour extends Behaviour {
       revealedInterior: false,
     });
     if (!counts) return true;
-    this.kin.hp = Math.max(0, this.kin.hp - 3 * power);
+    // the loop pays once per BLOW (the oracle's "one hit"), not once per hit volume: a sweep's blades, a halo's shards or a
+    // volley of delayed fractures each tear their chunk, but the hits of one move within `blowTicks` of the first cost the
+    // loop as one blow (at the heaviest volume's power). A hit without a move (debris, a hazard) is a blow of its own.
+    const mid = (f as unknown as { incomingMoveId?: string }).incomingMoveId ?? '';
+    const same = mid !== '' && mid === this.blowInst && f.tickNo - this.blowAt <= this.blowTicks;
+    if (!same) {
+      this.blowInst = mid === '' ? null : mid;
+      this.blowAt = f.tickNo;
+      this.blowPower = power;
+      this.kin.hp = Math.max(0, this.kin.hp - 3 * power);
+    } else if (power > this.blowPower) {
+      this.kin.hp = Math.max(0, this.kin.hp - 3 * (power - this.blowPower));
+      this.blowPower = power;
+    }
     if (key !== URI_PRIMARY) {
       const r = this.byKey.get(key)!;
       if (CHAIN[key] && r.neck && (w.liveFraction?.(id, r.neck) ?? 1) < NECK_FAIL) this.severChain(key);
       else if (!KEEPS.includes(key) && s1.initialCells > 0 && s1.cells / s1.initialCells < HALF_RULE)
         this.shatter(r, hx, hy, SHATTER_POWER);
+    } else if (!this.pelvisLost && s1.initialCells > 0 && s1.cells / s1.initialCells < HALF_RULE) {
+      // the oracle's 50 % rule holds for the pelvis too (proposal 176: the loop, not the matter, is the KO now): it goes in
+      // pieces; the fighter keeps its (empty) primary as the frame it moves, and the rig keeps placing the rest
+      this.pelvisLost = true;
+      w.releaseGroups?.(f.body.id, hx, hy, SHATTER_POWER);
     }
     this.refreshIntegrity();
     if (this.kin.hp <= 0) this.breakApart();
@@ -815,6 +959,8 @@ export class UriBehaviour extends Behaviour {
     const x = this.coreAt.hx;
     const y = this.coreAt.hy;
     f.events.push({ t: 'flash', amount: 1, x, y });
+    // S5's snap ring (src/app/fx.ts) keys on this cue at the hot core
+    f.events.push({ t: 'cue', slot: f.slot, titan: f.def.id, id: 'break-apart', x, y, amount: 1 });
     f.events.push({ t: 'shockwave', x, y, strength: 1, radius: 240, hue: 0.1 });
     f.events.push({ t: 'shake', dirX: 0, dirY: 1, amp: BREAK.shake });
     f.events.push({ t: 'timescale', scale: BREAK.timeScale, ticks: BREAK.timeScaleTicks });
@@ -896,10 +1042,12 @@ export class UriBehaviour extends Behaviour {
     // the live elements (S5's uriLive pass): cores where the kinetic system jolts them, the loop's deformation, the fists' spread
     const live = this.live;
     const kv = this.kview;
-    live.hotX = this.ox + this.hot.x;
-    live.hotY = this.oy + this.hot.y;
-    live.coldX = this.ox + this.cold.x;
-    live.coldY = this.oy + this.cold.y;
+    // once the loop has snapped the cores stay where they were (the frozen spots), not on the torso that flew apart
+    live.broken = this.broken;
+    live.hotX = this.broken ? this.coreAt.hx : this.ox + this.hot.x;
+    live.hotY = this.broken ? this.coreAt.hy : this.oy + this.hot.y;
+    live.coldX = this.broken ? this.coreAt.cx : this.ox + this.cold.x;
+    live.coldY = this.broken ? this.coreAt.cy : this.oy + this.cold.y;
     live.t = this.kin.t;
     live.spin = 0.25 * this.kin.t;
     live.hp = this.kin.hp;
@@ -965,6 +1113,34 @@ export class UriBehaviour extends Behaviour {
       knob('thrust', 'PYLON COMP', 0, 2.5),
       knob('loop', 'LOOP DEFORM', 0, 3),
       knob('hitstop', 'HITSTOP', 0, 3),
+      // 2D gameplay values that no oracle fixes: provisional, for the balance pass
+      {
+        key: 'power',
+        label: 'BLOW POWER X (TUNE)',
+        min: 0.2,
+        max: 3,
+        step: 0.05,
+        get: () => this.powerMul,
+        set: (v) => (this.powerMul = v),
+      },
+      {
+        key: 'blowTicks',
+        label: 'ONE-BLOW TICKS (TUNE)',
+        min: 0,
+        max: 120,
+        step: 3,
+        get: () => this.blowTicks,
+        set: (v) => (this.blowTicks = v),
+      },
+      {
+        key: 'contHit',
+        label: 'BEAM TICKS/HIT (TUNE)',
+        min: 6,
+        max: 180,
+        step: 6,
+        get: () => this.contHitTicks,
+        set: (v) => (this.contHitTicks = v),
+      },
     ]);
     const un = registerDiagnostics(owner, (d) => this.drawDiagnostics(d));
     this.untune = (): void => {

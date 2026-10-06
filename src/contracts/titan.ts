@@ -1,7 +1,8 @@
 import type { DamageParams, DamageType } from './damage';
 import type { MaterialSpec } from './matter';
 
-export const TITAN_IDS = ['lastone', 'nexus', 'blackhole', 'supernova', 'planet', 'asteroid'] as const;
+/** Proposal 173: 'uri' (우리, D31) joined after its Gate 2D. */
+export const TITAN_IDS = ['lastone', 'nexus', 'blackhole', 'supernova', 'planet', 'asteroid', 'uri'] as const;
 export type TitanId = (typeof TITAN_IDS)[number];
 
 /** Shared attributes, integers 1–10 (data-driven, /src/titans/*.json). Effective values update live from remaining mass. */
@@ -20,7 +21,8 @@ export interface TitanAttributes {
   tempo: number;
 }
 
-export type ResourceId = 'tendrils' | 'nodes' | 'accreted' | 'fuel' | 'moons' | 'fragments';
+/** 'loop': 우리's loop integrity, which is also its health (proposal 173, D31-3). */
+export type ResourceId = 'tendrils' | 'nodes' | 'accreted' | 'fuel' | 'moons' | 'fragments' | 'loop';
 
 export interface ResourceDef {
   id: ResourceId;
@@ -167,6 +169,11 @@ export interface TitanDef {
   ai: AiPersonality;
   /** UI accent colours (hex). */
   ui: { accent: string; accent2: string; tagline: string };
+  /**
+   * Move slots this titan deliberately has no move for (우리: Surge and Guard, D31-2: its pack defines none, and none is
+   * invented). The validator accepts exactly these as missing; the fighter ignores their buttons.
+   */
+  unboundSlots?: readonly MoveSlot[];
 }
 
 /** Attributes as modified live by the body's remaining mass (see FighterView.stats). */

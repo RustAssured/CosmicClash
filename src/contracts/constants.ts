@@ -95,7 +95,7 @@ export const SIM_BUDGET_MS_PER_TICK = 5;
  * Everything else keeps compiling and testing; `?full=1` shows it all again. Its two arenas joined in Phase 2.
  */
 export const SLICE = {
-  titans: ['lastone', 'planet'] as const,
+  titans: ['lastone', 'planet', 'uri'] as const,
   stages: ['mausoleum', 'shearfield'] as const,
 } as const;
 

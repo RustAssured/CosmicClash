@@ -40,7 +40,10 @@ export function validateTitanDef(def: TitanDef): string[] {
   }
   if (def.materials.length > 60) e('too many materials (material ids must fit a Uint8 with headroom)');
   for (const slot of MOVE_SLOTS) {
-    if (!def.moves.some((mv) => mv.slot === slot)) e(`missing move slot ${slot}`);
+    const has = def.moves.some((mv) => mv.slot === slot);
+    const unbound = def.unboundSlots?.includes(slot) ?? false;
+    if (!has && !unbound) e(`missing move slot ${slot}`);
+    if (has && unbound) e(`slot ${slot} is declared unbound but has a move`);
   }
   const ids = new Set<string>();
   for (const mv of def.moves) {
@@ -72,17 +75,27 @@ function validateMove(def: TitanDef, mv: MoveDef, e: (m: string) => void): void 
     const f = { ...mv.frame, ...(v.frame ?? {}) };
     validateFrame(f, e, `${mv.id}/${aim}`);
     const total = totalTicks(f);
-    if (mv.slot === 'strike' && !inRange(total, FEEL_TARGETS.strike.total))
+    // frame data taken from a locked reference (우리: the oracle's phases, TUNING.md) is not held to the feel targets: the move
+    // says where its timing comes from (`extra.lockedTiming`, a non-empty reason); only the shape of the data is checked
+    const lockedTiming = mv.extra?.['lockedTiming'];
+    const locked = typeof lockedTiming === 'string' && lockedTiming.length > 0;
+    if (!locked && mv.slot === 'strike' && !inRange(total, FEEL_TARGETS.strike.total))
       e(`${mv.id}/${aim}: strike total ${total} ticks outside ${FEEL_TARGETS.strike.total.join('–')}`);
-    if (mv.slot === 'crush') {
+    if (!locked && mv.slot === 'crush') {
       if (!inRange(total, FEEL_TARGETS.crush.total))
         e(`${mv.id}/${aim}: crush total ${total} outside ${FEEL_TARGETS.crush.total.join('–')}`);
       if (!inRange(f.startup, FEEL_TARGETS.crush.startup))
         e(`${mv.id}/${aim}: crush startup ${f.startup} outside ${FEEL_TARGETS.crush.startup.join('–')}`);
     }
-    if (mv.slot === 'ultimate' && !inRange(total, FEEL_TARGETS.ultimate.total))
+    if (!locked && mv.slot === 'ultimate' && !inRange(total, FEEL_TARGETS.ultimate.total))
       e(`${mv.id}/${aim}: ultimate total ${total} outside ${FEEL_TARGETS.ultimate.total.join('–')}`);
-    if (mv.slot !== 'surge' && mv.slot !== 'guard' && v.hitboxes.length === 0)
+    // a move whose blows come from the body's own matter (the Witness's kit, 우리's fists) says so: `extra.bodyHits`
+    if (
+      mv.slot !== 'surge' &&
+      mv.slot !== 'guard' &&
+      v.hitboxes.length === 0 &&
+      mv.extra?.['bodyHits'] !== true
+    )
       e(`${mv.id}/${aim}: no hitboxes`);
     for (const hb of v.hitboxes) {
       if (hb.to <= hb.from) e(`${mv.id}/${aim}/${hb.id}: empty window`);
