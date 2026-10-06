@@ -412,6 +412,8 @@ const RAMP_W = Array.from(
  */
 export class PlanetBehaviour extends Behaviour {
   private rig!: PlanetRig;
+  /** D31-6: the world's size against the authored one (`art.params.scale`, 1 = 121 px); the behaviour's own reaches scale with it. */
+  private sc = 1;
   private moons: Moon[] = [];
   private readonly comet = new Comet();
   private skin!: BodyOverlay;
@@ -566,8 +568,16 @@ export class PlanetBehaviour extends Behaviour {
     const map = f.body.map;
     this.skin = new BodyOverlay('planet-skin', 0.2, map.w, map.h, 'normal', true);
     this.glow = new BodyOverlay('planet-glow', 0.3, map.w, map.h, 'add', true);
-    this.halo = new GlowSprite('planet-halo', -0.5, 118, [40, 90, 150], 0.5, 6);
-    this.haloCore = new GlowSprite('planet-halo-core', -0.4, 96, [190, 64, 20], 0.35, 6);
+    this.sc = (f.def.art.params as { scale?: number }).scale ?? 1;
+    this.halo = new GlowSprite('planet-halo', -0.5, Math.round(118 * this.sc), [40, 90, 150], 0.5, 6);
+    this.haloCore = new GlowSprite(
+      'planet-halo-core',
+      -0.4,
+      Math.round(96 * this.sc),
+      [190, 64, 20],
+      0.35,
+      6,
+    );
     this.fx = new Overlay('planet-fx', 20, 800, 560, 'add', true);
     this.expo = new Uint8Array(map.w * map.h);
     // the skin painter's per-cell constants, built here (match creation) rather than on the first painted frame
@@ -1793,7 +1803,8 @@ export class PlanetBehaviour extends Behaviour {
     }
     mo.x += mo.vx;
     mo.y += mo.vy;
-    if (d > LOST_RADIUS || mo.age > (mo.free ? 400 : 260)) this.loseMoon(mo, mo.vx * 60, mo.vy * 60, false);
+    if (d > LOST_RADIUS * this.sc || mo.age > (mo.free ? 400 : 260))
+      this.loseMoon(mo, mo.vx * 60, mo.vy * 60, false);
     else if (!mo.free && mo.age > 90 && d < 190 && Math.hypot(mo.vx, mo.vy) < 2.2) mo.mode = RETURN;
   }
 
@@ -2050,7 +2061,7 @@ export class PlanetBehaviour extends Behaviour {
     const R = this.rig.radius;
     const shepherd =
       this.comet.mode === C_INBOUND || (f.mv.def?.id === 'planet.comet' && f.mv.phase === 'charge');
-    const reach = 250 + DRAW_REACH * this.drawT + (shepherd ? 170 : 0);
+    const reach = (250 + DRAW_REACH * this.drawT + (shepherd ? 170 : 0)) * this.sc;
     f.world.setGravitySource(
       f.slot,
       f.ko

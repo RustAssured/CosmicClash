@@ -14,6 +14,46 @@ import { AIM_ANGLE, AIM_SIGN, aims, frame, hb, key } from './kit';
 
 const PATH = 'src/titans/planet.json';
 
+/**
+ * D31-6: THE PLANET'S SIZE, the one value to change. Its on-screen diameter across the atmosphere, px (121 = the size the slice was
+ * authored and balanced at; 180 / 220 / 260 were evaluated for Gate 1, docs/gallery/integration/planet-sizes.png). Everything
+ * with a length scales with it: the map, the layers (atmosphere, crust, mantle, magma, core), the moons and their orbits, every
+ * move's hitbox shape and the comet's orbit; the behaviour reads `art.params.scale` for its own reaches (gravity well, ring,
+ * halo). Speeds, root motion, energies and frame data do not (balance is Phase 4). Edit, then re-run this tool and prettier.
+ * Above about 175 px the map exceeds MAX_BODY_DIM / MAX_BODY_CELLS (src/contracts/constants.ts: Lead's to raise).
+ */
+export const PLANET_DIAMETER = 121;
+const BASE_DIAMETER = 121;
+const K = PLANET_DIAMETER / BASE_DIAMETER;
+/** A length at this size (to 0.1 px; exactly the authored value at the base size). */
+const px = (v: number): number => (K === 1 ? v : Math.round(v * K * 10) / 10);
+/** Map half-size: the authored 104 at the base size, else the body (radius + atmosphere) plus a 12-cell margin. */
+const HALF = K === 1 ? 104 : Math.ceil((54 + 8) * K + 12);
+
+/**
+ * Scale a hitbox shape template's lengths by k (offsets, radii, widths, ranges; angles and falloffs stay), rounded to `step` px.
+ * Scaled shapes keep 0.01 px; the authored ones have at most 0.1 px, so scaling back down to the base size is exact.
+ */
+function scaleShape<T extends object>(s: T, k: number, step = 0.01): T {
+  if (k === 1) return s;
+  const o = { ...s } as Record<string, unknown>;
+  for (const key of ['ox', 'oy', 'ox0', 'oy0', 'ox1', 'oy1', 'r', 'r0', 'r1', 'range', 'width'])
+    if (typeof o[key] === 'number') o[key] = Math.round(((o[key] as number) * k) / step) * step;
+  for (const key of Object.keys(o)) if (typeof o[key] === 'number') o[key] = +(o[key] as number).toFixed(2);
+  return o as T;
+}
+/** A move with every hitbox shape (and sweep target) scaled by k. */
+function scaleMove(m: MoveDef, k: number, step = 0.01): MoveDef {
+  if (k === 1) return m;
+  const out = JSON.parse(JSON.stringify(m)) as MoveDef;
+  for (const v of Object.values(out.variants))
+    for (const hbx of v.hitboxes) {
+      hbx.shape = scaleShape(hbx.shape, k, step);
+      if (hbx.sweepTo) hbx.sweepTo = scaleShape(hbx.sweepTo, k, step);
+    }
+  return out;
+}
+
 const vis = (ramp: string[], emissive: number, crack: string, char = '#1a1012', debris?: string) => ({
   ramp,
   emissive,
@@ -336,11 +376,12 @@ const comet: MoveDef = {
       spawnDist: 330,
       spawnRise: 150,
       entrySpeed: 260,
-      orbit: 150,
+      // the comet rides the ring, which grows with the world; the energy reference speed with it (same spin, same blow)
+      orbit: px(150),
       w0: 1.4,
       w1: 5.2,
       spinUp: 2.2,
-      vRef: 620,
+      vRef: px(620),
       energy: 400,
       life: 110,
       mass: 13.5,
@@ -515,9 +556,17 @@ const guard: MoveDef = {
 
 /** Blocks owned by other tools/specialists, read back from the file on disk. */
 const onDisk = existsSync(PATH)
-  ? (JSON.parse(readFileSync(PATH, 'utf8')) as { moves?: MoveDef[]; balance?: unknown })
+  ? (JSON.parse(readFileSync(PATH, 'utf8')) as {
+      moves?: MoveDef[];
+      balance?: unknown;
+      art?: { params?: { scale?: number } };
+    })
   : {};
-const impact = onDisk.moves?.find((m) => m.id === 'planet.impact') ?? impactFallback;
+// the carried-over Tidal Rush is stored at the size on disk: bring it to this size (idempotent across re-runs)
+const diskK = onDisk.art?.params?.scale ?? 1;
+const impactDisk = onDisk.moves?.find((m) => m.id === 'planet.impact');
+const impactBase = impactDisk ? scaleMove(impactDisk, 1 / diskK, 0.1) : impactFallback;
+const impact = scaleMove(impactBase, K);
 
 export const planet: TitanDef = {
   id: 'planet',
@@ -537,29 +586,30 @@ export const planet: TitanDef = {
   },
   materials: MATERIALS,
   art: {
-    w: 208,
-    h: 208,
-    coreX: 104,
-    coreY: 104,
-    coreRadius: 13,
+    w: HALF * 2,
+    h: HALF * 2,
+    coreX: HALF,
+    coreY: HALF,
+    coreRadius: Math.round(13 * K),
     params: {
-      radius: 54,
-      atmo: 8,
-      surface: 5.5,
-      crust: 11,
-      magmaR: 27,
-      coreR: 13,
+      ...(K !== 1 ? { scale: Math.round(K * 1e4) / 1e4 } : {}),
+      radius: px(54),
+      atmo: px(8),
+      surface: px(5.5),
+      crust: px(11),
+      magmaR: px(27),
+      coreR: px(13),
       tilt: -0.4,
       sea: 0.06,
       moons: [
         {
-          r: 15,
-          a: 120,
-          b: 32,
+          r: px(15),
+          a: px(120),
+          b: px(32),
           tilt: -0.12,
           period: 430,
           phase: 0.6,
-          crater: 8,
+          crater: px(8),
           lumpy: 0.2,
           materials: moonMats(
             ['#1c1a24', '#38343f', '#5a5560', '#84808a', '#b0aab0', '#dcd6d4', '#f4f0ec'],
@@ -568,13 +618,13 @@ export const planet: TitanDef = {
           ),
         },
         {
-          r: 11,
-          a: 100,
-          b: 26,
+          r: px(11),
+          a: px(100),
+          b: px(26),
           tilt: 0.22,
           period: 300,
           phase: 3.7,
-          crater: 5,
+          crater: px(5),
           lumpy: 0.7,
           materials: moonMats(
             ['#2a1410', '#54281c', '#84402a', '#b0603a', '#d4844c', '#eeac72', '#fbd6a4'],
@@ -627,7 +677,17 @@ export const planet: TitanDef = {
       },
     },
   },
-  moves: [slam, impact, shift, comet, cataclysm, guard, crustbreaker, magmavent, corepulse],
+  moves: [
+    scaleMove(slam, K),
+    impact,
+    shift,
+    scaleMove(comet, K),
+    scaleMove(cataclysm, K),
+    guard,
+    scaleMove(crustbreaker, K),
+    scaleMove(magmavent, K),
+    scaleMove(corepulse, K),
+  ],
   ai: {
     style:
       'Fortress: sits back behind its moons, punishes with Impact and Moon Slam, and uses its weight to hold the space.',
