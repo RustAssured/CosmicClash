@@ -344,6 +344,36 @@ export function paintPlanet(
       }
     }
   keepLargestComponent(real.mat, W, H);
+  // Specks of land in the thin surface layer that touch the rest of the world only through the sea are islands to the matter
+  // world (a fluid never anchors a solid): they were shed at the first full connectivity pass, 0.4–0.5 % of the world at the first
+  // Rotational Brace. Flood from the core through solid matter; a solid cell it does not reach becomes sea (face and matter).
+  {
+    const fluid = (m: number): boolean => m === I.ocean || m === I.atmosphere || m === I.cloud;
+    const seen = new Uint8Array(W * H);
+    const stack: number[] = [CY(def) * W + CX(def)];
+    seen[stack[0]!] = 1;
+    while (stack.length > 0) {
+      const c = stack.pop()!;
+      const x = c % W;
+      const y = (c - x) / W;
+      const nb = [x > 0 ? c - 1 : -1, x < W - 1 ? c + 1 : -1, y > 0 ? c - W : -1, y < H - 1 ? c + W : -1];
+      for (const j of nb) {
+        if (j < 0 || seen[j] === 1) continue;
+        const mj = real.mat[j]!;
+        if (mj === 0 || fluid(mj)) continue;
+        seen[j] = 1;
+        stack.push(j);
+      }
+    }
+    for (let i = 0; i < W * H; i++) {
+      const mi = real.mat[i]!;
+      if (mi !== 0 && !fluid(mi) && seen[i] === 0) {
+        real.mat[i] = I.ocean;
+        face.mat[i] = I.ocean;
+        shallow[i] = 1;
+      }
+    }
+  }
   for (let i = 0; i < W * H; i++) if (real.mat[i] === 0) face.mat[i] = 0;
   face.invalidate();
   real.invalidate();
