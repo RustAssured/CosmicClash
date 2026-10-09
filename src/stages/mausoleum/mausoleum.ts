@@ -26,20 +26,21 @@ import { type InstancedBufferGeometry } from 'three';
  */
 
 const LOOK: SceneryLook = {
-  exposure: 1.0,
+  // D34: lifted (it read muddy next to the original's stages); the fight band still compresses, more gently
+  exposure: 1.3,
   contrast: 1.1,
   bloomThreshold: 0.95,
-  bloomGain: 0.4,
+  bloomGain: 0.55,
   // low: the sun is large and its occluders (ring, monoliths) would cut flat shadow wedges across the sky
   godRayGain: 0.12,
   godRayGas: 0.06,
   godRayHalo: 90,
   godRayDecay: 0.972,
-  vignette: 0.65,
-  foreground: { color: [0.11, 0.06, 0.1], alpha: 1, density: 0.6, shards: 0.35 },
+  vignette: 0.5,
+  foreground: { color: [0.16, 0.08, 0.14], alpha: 1, density: 0.6, shards: 0.35 },
   spriteHalo: { strength: 0.32, radius: 10, desat: 0.4, rim: 0.55, rimReach: 1, lift: 0.16 },
   // the fight band stays dark: highlights there are compressed hard (both titans read on it)
-  fightBand: { top: -150, bottom: 120, feather: 90, ceiling: 0.32, keep: 0.25 },
+  fightBand: { top: -150, bottom: 120, feather: 90, ceiling: 0.5, keep: 0.45 },
 };
 
 const SUN_PARALLAX = 0.04;
@@ -291,11 +292,11 @@ export class MausoleumScenery extends SceneryBase {
       warp: 1.2,
       octaves: 4,
       thresh: [0.3, 0.92],
-      colA: scale(VOID[2]!, 0.7),
-      colB: scale(NEB[2]!, 0.55),
-      colC: scale(CRIM[3]!, 0.6),
-      colD: scale(ROSE[2]!, 0.5),
-      gain: 1,
+      colA: scale(VOID[2]!, 0.9),
+      colB: scale(NEB[2]!, 0.9),
+      colC: scale(CRIM[3]!, 1.0),
+      colD: scale(ROSE[2]!, 0.85),
+      gain: 1.5,
       lightDir: [0.7, -0.7],
       litK: 0.6,
       flowSpeed: 0.006,
@@ -380,11 +381,11 @@ export class MausoleumScenery extends SceneryBase {
       warp: 1.6,
       octaves: 4,
       thresh: [0.48, 0.9],
-      colA: scale(CRIM[1]!, 0.4),
-      colB: scale(NEB[3]!, 0.5),
-      colC: scale(ROSE[2]!, 0.6),
-      colD: scale(GOLD[1]!, 0.3),
-      gain: 1,
+      colA: scale(CRIM[1]!, 0.6),
+      colB: scale(NEB[3]!, 0.75),
+      colC: scale(ROSE[2]!, 0.9),
+      colD: scale(GOLD[1]!, 0.5),
+      gain: 1.3,
       lightDir: [0.7, -0.7],
       litK: 0.8,
       flowSpeed: 0.012,

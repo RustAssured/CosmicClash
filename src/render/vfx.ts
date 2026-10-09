@@ -64,7 +64,16 @@ export interface VfxImpact {
    */
   snap?: boolean;
 }
-export type FrameFxVfx = FrameFx & { vfx?: readonly VfxImpact[] };
+/** The screen-wide flash (D34): colour 0..1, amount 0..1 now, centre (world). Applied scaled by the comfort setting. */
+export interface WashFx {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+  x: number;
+  y: number;
+}
+export type FrameFxVfx = FrameFx & { vfx?: readonly VfxImpact[]; wash?: WashFx };
 
 /**
  * Per weight: frames at 60 fps and sizes in logical px. VFX_SPEC fixes the timing ranges (anticipation 1–2 frames, flash 3–5,

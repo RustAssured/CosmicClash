@@ -1,6 +1,7 @@
 import { clamp, clamp01 } from '../dsp/math';
 import { bubbles, scrape } from './kit';
 import {
+  BELL,
   IRON,
   TINK,
   envelope,
@@ -8,13 +9,12 @@ import {
   makeOut,
   noiseHit,
   partials,
-  riser,
   tone,
-  whistlePass,
   type Out,
   type PartialSet,
 } from './synth';
 import type { VoiceCtx } from './types';
+import { lowBell, roar, swell, whoosh } from './epic';
 
 /**
  * The slice's MATERIAL voices (Phase 2): what the Witness and the Planet are made of, as sound. Built on the synth primitives
@@ -57,50 +57,57 @@ export function wrongSet(spread: number): PartialSet {
   };
 }
 
-/** Ceramic fracture: two-four hard clicks, a tink set, and a short shower of high shards; louder and lower when hollowed. */
+/**
+ * Ceramic fracture at the scale of a cathedral: two-four dark cracks, a fired-clay plate ringing LOW (a tink set on 180–300 Hz),
+ * and a shower of shards low-passed under 2.4 kHz; louder and lower when hollowed. (It was a 4–7 kHz click and a 6.5 kHz shard
+ * shower: china, not a colossus.)
+ */
 export function ceramicFracture(c: VoiceCtx, o: Out, t: number, mag: number, res: Resonance): void {
   const m = clamp01(mag);
   for (let i = 0; i < 2 + Math.round(m * 2); i++)
-    noiseHit(c, o, t + i * (0.004 + c.rand() * 0.02), {
-      dur: 0.01,
-      gain: 0.12 + 0.12 * m,
-      filter: { type: 'highpass', f0: 4200 + c.rand() * 2500, q: 0.7 },
-      attack: 0.0004,
+    noiseHit(c, o, t + i * (0.006 + c.rand() * 0.025), {
+      dur: 0.03,
+      gain: 0.45 + 0.4 * m,
+      filter: { type: 'bandpass', f0: (1200 + c.rand() * 700) * res.pitch, q: 1.1 },
+      filter2: { type: 'lowpass', f0: 2800 },
+      attack: 0.0006,
     });
-  partials(c, o, t + 0.003, (1600 + 900 * c.rand()) * res.pitch, TINK, {
-    decay: 0.12 * res.decay,
-    gain: 0.05 + 0.05 * m,
+  partials(c, o, t + 0.003, (180 + 120 * c.rand()) * res.pitch, TINK, {
+    decay: 0.35 * res.decay,
+    gain: 0.08 + 0.08 * m,
+    maxHz: 1500,
   });
   gravel(c, o, t + 0.01, {
-    dur: 0.25 + 0.35 * m,
+    dur: 0.3 + 0.4 * m,
     grains: 10 + Math.round(m * 18),
-    f: 6500 * res.pitch,
-    spread: 1.4,
-    gain: 0.07 + 0.08 * m,
-    q: 2.6,
+    f: 1300 * res.pitch,
+    spread: 1.6,
+    gain: 0.32 + 0.3 * m,
+    q: 1.6,
+    lowpass: 2800,
   });
 }
 
-/** Stone shear: a slab dragging over a slab — grinding gravel and a band of noise sliding down. */
+/** Stone shear: a slab the size of a mountain dragging over another — low grinding gravel and a band of noise sliding down. */
 export function stoneShear(c: VoiceCtx, o: Out, t: number, mag: number, res: Resonance): void {
   const m = clamp01(mag);
-  const dur = 0.35 + 0.45 * m;
+  const dur = 0.45 + 0.55 * m;
   gravel(c, o, t, {
     dur,
     grains: 16 + Math.round(m * 22),
-    f: 900 * res.pitch,
+    f: 520 * res.pitch,
     spread: 2.2,
-    gain: 0.08 + 0.1 * m,
+    gain: 0.2 + 0.2 * m,
     q: 1.2,
-    lowpass: 2600,
+    lowpass: 1600,
   });
   scrape(c, o, t, {
     dur,
-    f0: 1400 * res.pitch,
-    f1: 320 * res.pitch,
-    q: 1.6,
-    gain: 0.05 + 0.07 * m,
-    rate: 11,
+    f0: 800 * res.pitch,
+    f1: 180 * res.pitch,
+    q: 1.4,
+    gain: 0.16 + 0.16 * m,
+    rate: 8,
     depth: 0.6,
     attack: 0.04,
   });
@@ -140,20 +147,27 @@ export function filamentSnap(c: VoiceCtx, o: Out, t: number, hz: number, mag: nu
   const m = clamp01(mag);
   const ac = c.ac;
   const src = ac.createBufferSource();
-  src.buffer = ksBuffer(c, clamp(hz * res.pitch, 120, 2400));
+  // a cable the size of a ridge: the pluck is LOW (40–400 Hz), its bright excitation rounded off by a low-pass
+  src.buffer = ksBuffer(c, clamp(hz * res.pitch, 40, 400));
   src.playbackRate.setValueAtTime(1.06, t);
-  src.playbackRate.exponentialRampToValueAtTime(0.94, t + 0.25);
+  src.playbackRate.exponentialRampToValueAtTime(0.88, t + 0.35);
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 1400;
+  lp.Q.value = 0.6;
   const g = ac.createGain();
-  envelope(g, t, 0.16 + 0.12 * m, 0.001, 0.7 * res.decay);
-  src.connect(g);
+  envelope(g, t, 0.22 + 0.14 * m, 0.001, Math.min(0.88, 0.8 * res.decay));
+  src.connect(lp);
+  lp.connect(g);
   g.connect(o.input);
   src.start(t);
-  src.stop(t + Math.min(0.9, 0.7 * res.decay) + 0.05);
+  src.stop(t + Math.min(0.9, 0.8 * res.decay) + 0.05);
   noiseHit(c, o, t, {
-    dur: 0.008,
-    gain: 0.25 + 0.15 * m,
-    filter: { type: 'highpass', f0: 5000 },
-    attack: 0.0003,
+    dur: 0.03,
+    gain: 0.22 + 0.12 * m,
+    filter: { type: 'bandpass', f0: 1100, q: 1 },
+    filter2: { type: 'lowpass', f0: 2200 },
+    attack: 0.0005,
   });
 }
 
@@ -204,7 +218,7 @@ export function wrongHarmonics(
     decay: 1.1 * res.decay,
     gain,
     shimmer: 0.25 + 0.3 * res.spread,
-    maxHz: 9000,
+    maxHz: 1500,
   });
 }
 
@@ -212,19 +226,20 @@ export function wrongHarmonics(
 export function tectonicCrack(c: VoiceCtx, o: Out, t: number, mag: number, res: Resonance): void {
   const m = clamp01(mag);
   noiseHit(c, o, t, {
-    dur: 0.04,
-    gain: 0.18 + 0.1 * m,
-    filter: { type: 'highpass', f0: 1400 },
-    attack: 0.0005,
+    dur: 0.05,
+    gain: 0.2 + 0.1 * m,
+    filter: { type: 'bandpass', f0: 800, q: 0.9 },
+    filter2: { type: 'lowpass', f0: 1800 },
+    attack: 0.0006,
   });
   gravel(c, o, t + 0.005, {
     dur: 0.4 + 0.4 * m,
     grains: 14 + Math.round(20 * m),
-    f: 380 * res.pitch,
+    f: 420 * res.pitch,
     spread: 2.2,
-    gain: 0.12 + 0.08 * m,
+    gain: 0.2 + 0.12 * m,
     q: 1,
-    lowpass: 900,
+    lowpass: 1300,
   });
   const ac = c.ac;
   const osc = ac.createOscillator();
@@ -259,76 +274,88 @@ export function subPressure(c: VoiceCtx, t: number, pan: number, dur: number, ga
   });
 }
 
-/** Atmospheric tear: air ripped away — a band of noise sweeping up with a flutter that speeds up, and a thin hiss after. */
+/**
+ * Atmospheric tear: a world's air ripped away into space — a roar of wind that rises and is gone, with a heaving flutter, and a
+ * low exhale after it. (It was a 0.5→3.6 kHz sweep and a 4 kHz hiss.)
+ */
 export function atmosphericTear(c: VoiceCtx, o: Out, t: number, mag: number): void {
   const m = clamp01(mag);
-  const dur = 0.6 + 0.6 * m;
+  const dur = 0.7 + 0.7 * m;
   scrape(c, o, t, {
     dur,
-    f0: 500,
-    f1: 3600,
-    q: 1.1,
-    gain: 0.08 + 0.08 * m,
-    rate: 14 + 10 * m,
-    depth: 0.7,
-    attack: 0.05,
+    f0: 180,
+    f1: 900,
+    q: 0.9,
+    gain: 0.1 + 0.1 * m,
+    rate: 6 + 5 * m,
+    depth: 0.6,
+    attack: 0.08,
   });
   noiseHit(c, o, t + dur * 0.6, {
-    dur: 0.9,
-    gain: 0.04 + 0.03 * m,
-    filter: { type: 'highpass', f0: 4000, q: 0.6 },
-    attack: 0.1,
+    dur: 1.2,
+    gain: 0.08 + 0.05 * m,
+    kind: 'brown',
+    filter: { type: 'lowpass', f0: 600, f1: 120, q: 0.7 },
+    attack: 0.12,
   });
 }
 
-/** Magma vent: a deep roiling rumble, bubbling, and a hiss of steam that comes in bursts. */
+/** Magma vent: a deep roiling rumble, slow heavy blurps of molten rock, and a low exhale of gas in bursts. */
 export function magmaVent(c: VoiceCtx, o: Out, t: number, dur: number, mag: number): void {
   const m = clamp01(mag);
   noiseHit(c, o, t, {
     dur,
-    gain: 0.1 + 0.08 * m,
+    gain: 0.12 + 0.08 * m,
     kind: 'brown',
-    filter: { type: 'lowpass', f0: 420, f1: 180, q: 1 },
+    filter: { type: 'lowpass', f0: 360, f1: 140, q: 1 },
     attack: 0.15,
   });
-  bubbles(c, o, t + 0.05, { dur: dur * 0.9, count: 10 + Math.round(16 * m), f: 140, gain: 0.05 + 0.04 * m });
+  bubbles(c, o, t + 0.05, { dur: dur * 0.9, count: 6 + Math.round(10 * m), f: 60, gain: 0.07 + 0.04 * m });
   scrape(c, o, t + 0.1, {
     dur: dur * 0.8,
-    f0: 3200,
-    f1: 2200,
+    f0: 520,
+    f1: 260,
     q: 0.8,
-    gain: 0.03 + 0.03 * m,
-    rate: 5,
+    gain: 0.06 + 0.04 * m,
+    rate: 3,
     depth: 0.9,
     attack: 0.08,
+    kind: 'brown',
   });
 }
 
-/** Arena comet warning: a thin icy riser over the warning time with two high glints, from the side it will come in. */
+/**
+ * Arena comet warning: something enormous is coming, from the side it will come in — a low pressure swell over the warning time
+ * and a far, dark bell tolling twice. (It was a thin 1.8→5.2 kHz riser with two 3 kHz glints.)
+ */
 export function cometWarn(c: VoiceCtx, t: number, pan: number, dur: number): void {
-  const o = makeOut(c, clamp(pan, -1, 1) * 0.8, 0.35);
-  riser(c, o, t, dur, 0.045, 1800, 5200);
-  partials(c, o, t, 2900, TINK, { decay: 0.35, gain: 0.035 });
-  partials(c, o, t + dur * 0.55, 3400, TINK, { decay: 0.3, gain: 0.045 });
+  const o = makeOut(c, clamp(pan, -1, 1) * 0.8, 0.5);
+  swell(c, o, t, { dur, gain: 0.12, f0: 80, f1: 600, sub: 0.05, subHz: 38 });
+  lowBell(c, o, t, 98, BELL, { decay: 1.2, gain: 0.05 });
+  lowBell(c, o, t + dur * 0.55, 98, BELL, { decay: 1, gain: 0.065 });
 }
 
-/** Arena comet entry: a long airy pass across the field in its direction of travel over a low rumble of its mass. */
+/** Arena comet entry: a long roaring pass across the field in its direction of travel over the rumble of its mass. */
 export function cometEnter(c: VoiceCtx, t: number, pan: number, dirX: number, speed: number): void {
   const k = clamp01((speed - 150) / 120);
   const p = clamp(pan, -1, 1);
-  whistlePass(c, t, {
-    f: 820 + 260 * k,
+  whoosh(c, t, {
     dur: 1.3,
-    gain: 0.06 + 0.03 * k,
+    gain: 0.12 + 0.06 * k,
     panFrom: p,
     panTo: clamp(p + Math.sign(dirX || 1) * 0.9, -1, 1),
-    wet: 0.35,
+    wet: 0.45,
+    f0: 700 + 300 * k,
+    f1: 120,
+    body: 1.1,
   });
-  noiseHit(c, makeOut(c, p * 0.5, 0.2), t, {
-    dur: 1.1,
-    gain: 0.08,
-    kind: 'brown',
-    filter: { type: 'lowpass', f0: 220, f1: 120, q: 0.9 },
-    attack: 0.2,
+  roar(c, makeOut(c, p * 0.5, 0.3), t, {
+    f: 46,
+    f1: 34,
+    dur: 1.4,
+    gain: 0.07,
+    attack: 0.5,
+    lp0: 400,
+    lp1: 160,
   });
 }

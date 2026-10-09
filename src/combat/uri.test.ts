@@ -11,7 +11,8 @@ import { tuning } from '@/debug/tuning';
 import { createMatterWorld } from '@/matter';
 import { createMatch, createScriptSource, type Match } from '@/sim';
 import { getTitanDef, URI_ID, uriDef } from '@/titans';
-import { URI_ORDER, uriPart } from '@/titans/uri/rig';
+import { URI_ORDER, URI_SCALE, uriPart } from '@/titans/uri/rig';
+import { uriGridOf } from '@/titans/uri/scale';
 import { createFighter } from './index';
 import type { FighterImpl } from './fighter';
 import type { UriBehaviour } from './behaviours/uri';
@@ -65,7 +66,8 @@ describe('우리 in the game (Phase 2A/2B)', () => {
     expect(u.regions).toHaveLength(12);
     const c = corners(u, beh);
     for (const k of URI_ORDER) {
-      const meta = uriPart(k);
+      // (D34: the parts are the asset resampled to URI_SCALE, each grid at URI_SCALE × its reference place)
+      const meta = uriGridOf(uriPart(k), URI_SCALE);
       const [x, y, rot, facing] = c.get(k)!;
       // at rest the grid's corner lands on the reference layout (within the half pixel of the idle bob), unrotated
       // (the pylons breathe by ±0.02 rad: at most one rotation step)
@@ -77,10 +79,10 @@ describe('우리 in the game (Phase 2A/2B)', () => {
       else expect(rot, k).toBe(0);
       expect(facing).toBe(1);
     }
-    // the whole body is about 300 px tall and 400 wide at native scale (spec §3)
+    // the whole body is about 300 px tall and 400 wide at native scale (spec §3), drawn at URI_SCALE (D34: about 200 × 267)
     const b = u.liveBounds();
-    expect(b.y1 - b.y0).toBeGreaterThan(280);
-    expect(b.x1 - b.x0).toBeGreaterThan(380);
+    expect(b.y1 - b.y0).toBeGreaterThan(300 * URI_SCALE - 12);
+    expect(b.x1 - b.x0).toBeGreaterThan(400 * URI_SCALE - 12);
   });
 
   it('is never mirrored: with the opponent on its left everything is drawn and hit exactly as with it on the right', () => {
@@ -147,7 +149,7 @@ describe('우리 in the game (Phase 2A/2B)', () => {
         shade?: Uint8Array;
       })[];
       const front = layers.find((L) => L.id.startsWith('uri-front'))!;
-      expect(front.uriLive?.hotR).toBeGreaterThan(30);
+      expect(front.uriLive?.hotR).toBe(Math.round(36 * URI_SCALE));
       expect(front.light?.length).toBe(front.w * front.h * 4);
       expect(front.shade?.length).toBe(front.w * front.h * 4);
     }

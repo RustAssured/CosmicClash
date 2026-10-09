@@ -23,7 +23,7 @@ const W = 640;
 const H = 360;
 const OX = URI_REF.screenX - URI_REF.originX;
 const OY = URI_REF.screenY - URI_REF.originY;
-const parts = new Map(uriPartMatter().map((p) => [p.key, p]));
+const parts = new Map(uriPartMatter(1).map((p) => [p.key, p]));
 
 function render(
   pl: ReturnType<typeof emptyPlaces>,

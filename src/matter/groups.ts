@@ -116,7 +116,7 @@ function tearCells(
   sx /= n;
   sy /= n;
   const a = Math.atan2(sy - iy, sx - ix) + (rng.next() - 0.5) * 0.6;
-  const sp = (TEAR.speedLo + rng.next() * TEAR.speedSpan) * power * 60;
+  const sp = (TEAR.speedLo + rng.next() * TEAR.speedSpan) * power * 60 * body.groupScale; // oracle px/frame at the body scale
   const spin = (rng.next() - 0.5) * TEAR.spinK * power;
   const ch = extractChunk(core, body, cells, n, body.vx + Math.cos(a) * sp, body.vy + Math.sin(a) * sp, spin);
   endSpray(core);
@@ -245,7 +245,7 @@ export function hitTear(core: WorldCore, body: Body, wx: number, wy: number, pow
   const y0 = (c0 - x0) / w;
   let torn = tearGroup(core, body, g0, wx, wy, 1 + power * TEAR.strikeK) !== null ? 1 : 0;
   if (power > 1) {
-    const R = TEAR.radiusK * power;
+    const R = TEAR.radiusK * power * body.groupScale; // cells shrink with the body
     const cap = power * TEAR.maxK;
     const rng = body.rng;
     const done: number[] = [g0];

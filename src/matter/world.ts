@@ -176,6 +176,11 @@ export interface MatterWorldEx extends MatterWorld {
    * it leaves only through tears, releases, `bodyToChunk` and wound slabs. False if the body is gone.
    */
   setFieldHeld(bodyId: number, on: boolean): boolean;
+  /**
+   * The body's scale against the px its tear numbers are authored in (우리: URI_SCALE): `hitTear` / `tearGroup` /
+   * `releaseGroups` scale piece speeds and the neighbour radius by it (spin is angular: unchanged). False if the body is gone.
+   */
+  setGroupScale(bodyId: number, scale: number): boolean;
   /* ---- chunk groups: 우리's damage (Gate 2C; matter/groups.ts) ---- */
   /** Group id of the live cell drawn at world (wx, wy) of a grouped body, or -1. */
   groupAt(bodyId: number, wx: number, wy: number): number;
@@ -583,6 +588,13 @@ class MatterWorldImpl implements MatterWorldEx {
     const b = this.core.bodyById[bodyId];
     if (!b) return false;
     b.fieldHeld = on;
+    return true;
+  }
+
+  setGroupScale(bodyId: number, scale: number): boolean {
+    const b = this.core.bodyById[bodyId];
+    if (!b || !(scale > 0)) return false;
+    b.groupScale = scale;
     return true;
   }
 

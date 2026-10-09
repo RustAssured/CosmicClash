@@ -75,7 +75,7 @@ import {
 import { LumaReadback, type LumaSample } from './lumaReadback';
 import { computeViewport, type ViewportLayout } from './viewport';
 import { OUTLINE_COLOR, masterPalette, unifyStagePalette } from './master';
-import { SHARED_BLOOM } from './unified';
+import { SHARED_BLOOM, SPECTACLE_GOVERNOR, UNIFIED_LOOK, spectacleOf } from './unified';
 import { registerTuning } from '@/debug/tuning';
 import { VfxPass, buildVfxInstances, type FrameFxVfx } from './vfx';
 
@@ -841,6 +841,8 @@ class PixelRenderer implements DebuggableRenderer {
       uStageLin: { value: this.bayerTex },
       // the oracles' quantize(): titans at spread 26, backgrounds at 18
       uSpread: { value: new Vector2(12, 18) },
+      uWash: { value: new Vector4(1, 1, 1, 0) },
+      uWashAt: { value: new Vector2() },
       uOutlineIdx: { value: 0 },
     });
     this.lumPass = new FullscreenPass(LUM_DOWN_FRAG, {
@@ -886,7 +888,7 @@ class PixelRenderer implements DebuggableRenderer {
   private *stageSteps(id: StageId, out: { stage: PreparedStage | null }): Generator<PrepareStep, void, void> {
     const info = STAGES[id];
     const unified = this.unified;
-    if (unified && !this.master) {
+    if (unified && UNIFIED_LOOK.snapFinal && !this.master) {
       // the master palette's LUT, once: the titans', effects' and outlines' colours (master.ts)
       const mp = masterPalette();
       const mpal = preparePalette(mp.colors, mp.rampLengths);
@@ -899,7 +901,10 @@ class PixelRenderer implements DebuggableRenderer {
       this.postPass.uniforms.uOutlineIdx!.value = mp.ramps['outline']?.[0] ?? 0;
     }
     // on the unified path the stage palette is pulled toward the master: near colours become the shared ones (master.ts)
-    const pal = preparePalette(unified ? unifyStagePalette(info.palette).colors : info.palette, info.ramps);
+    const pal = preparePalette(
+      unified && UNIFIED_LOOK.stagePull ? unifyStagePalette(info.palette).colors : info.palette,
+      info.ramps,
+    );
     const lutBuilder = new LutBuilder(pal, { size: LUT_SIZE });
     yield 0.01;
     while (!lutBuilder.done) {
@@ -1277,8 +1282,12 @@ class PixelRenderer implements DebuggableRenderer {
 
     // ---- 2D layers first, into their own target: their coverage shapes the scenery grade beneath them ----
     // (unified path: emissives enter the shared bloom at their own colour, as in the oracles)
-    const uni = this.unified && this.master !== null;
-    this.emisGain.value = uni ? 1 : 1.5;
+    // uni: the unified layer path (outline, seams, 우리's shading, shared VFX); snap / sb: the parts D34 made switches (UNIFIED_LOOK)
+    const L = UNIFIED_LOOK;
+    const uni = this.unified && (this.master !== null || !L.snapFinal);
+    const snap = uni && L.snapFinal;
+    const sb = uni && L.sharedBloom;
+    this.emisGain.value = sb ? 1 : 1.5;
     this.compositor.unified = uni;
     const drawn = this.compositor.draw(r, this.layerRT, frame.layers, view, frame.alpha);
     // ---- the shared VFX (unified path): drawn into the layer target, so the final snap puts them on the master palette ----
@@ -1345,7 +1354,7 @@ class PixelRenderer implements DebuggableRenderer {
     }
 
     // ---- bloom: the shared two-pass bloom on the unified path, the classic pyramid otherwise ----
-    if (uni) this.runSharedBloom();
+    if (sb) this.runSharedBloom();
     else this.runBloom();
 
     // ---- god rays (half res) ----
@@ -1362,24 +1371,33 @@ class PixelRenderer implements DebuggableRenderer {
     const pu = this.postPass.uniforms;
     // the unified path lights titans by the one sky only (UNIFICATION §1): no relighting of a body by the other bodies' lights
     // (stepped and then snapped, it read as a checker over the stone)
-    pu.uRelight!.value = this.tierNow > 0 && !uni ? 1 : 0;
+    pu.uRelight!.value = this.tierNow > 0 && (!uni || L.relight) ? 1 : 0;
     pu.uNumShock!.value = nShock;
-    pu.uUnified!.value = uni ? 1 : 0;
-    if (uni) {
+    pu.uUnified!.value = snap ? 1 : 0;
+    if (sb) {
       pu.uBloom!.value = this.bloomNear[0]!.texture;
       pu.uBloomB!.value = this.bloomFar[0]!.texture;
       (pu.uBloomMix!.value as Vector2).set(this.bloomMix.near, this.bloomMix.far);
+    } else {
+      pu.uBloom!.value = this.bloomRTs[0]!.texture;
+      (pu.uBloomMix!.value as Vector2).set(0, 0);
+    }
+    if (snap) {
       const m = this.master!;
       pu.uMasterLut!.value = m.lut;
       pu.uMasterSize!.value = m.size;
       pu.uMasterSrgb!.value = m.srgb;
       pu.uMasterLin!.value = m.lin;
-    } else {
-      pu.uBloom!.value = this.bloomRTs[0]!.texture;
-      (pu.uBloomMix!.value as Vector2).set(0, 0);
     }
+    // D34: the screen-wide flash (heavy / catastrophic blows, KOs, the sim's flashes), scaled by the comfort setting
+    const wash = (fx as FrameFxVfx).wash;
+    const sp = spectacleOf(this.comfort);
+    const wa = wash && wash.a > 0.004 ? wash.a * sp : 0;
+    (pu.uWash!.value as Vector4).set(wash?.r ?? 1, wash?.g ?? 1, wash?.b ?? 1, wa);
+    (pu.uWashAt!.value as Vector2).set((wash?.x ?? 0) - view.x0, (wash?.y ?? 0) - view.y0);
     pu.uNumRefr!.value = this.nRefr;
-    pu.uBloomGain!.value = 0.6 + 0.4 * this.comfort;
+    // D34: the original's stronger glow at full spectacle; comfort brings it back to the D5 level
+    pu.uBloomGain!.value = (0.6 + 0.4 * this.comfort) * (1 + 0.45 * spectacleOf(this.comfort));
     pu.uGodGain!.value = look.godRayGain * (0.85 + 0.25 * fx.intensity);
     pu.uVignette!.value = look.vignette;
     pu.uFrameNo!.value = frame.tick & 1023; // grain follows the sim tick: identical frames render identically
@@ -1387,7 +1405,7 @@ class PixelRenderer implements DebuggableRenderer {
     const damp = look.glowDamp ?? DEFAULT_GLOW_DAMP;
     // unified path: the shared bloom lands on the bodies too, as in the oracles' compose (the emissives' own glow is part of
     // their look: 우리's cores, the loop); god rays never do
-    if (uni) (pu.uGlowDamp!.value as Vector2).set(0, 1);
+    if (sb) (pu.uGlowDamp!.value as Vector2).set(0, 1);
     else (pu.uGlowDamp!.value as Vector2).set(damp[0], damp[1]);
     this.postPass.render(r, this.postRT);
 
@@ -1573,7 +1591,9 @@ class PixelRenderer implements DebuggableRenderer {
     g.uReset!.value = this.govReset ? 1 : 0;
     g.uOn!.value = this.govOn ? 1 : 0;
     // the comfort setting tightens the cap too (half of it at 0 %)
-    g.uLimit!.value = GOVERNOR_LIMIT * (0.5 + 0.5 * this.comfort);
+    // D34: the strict D5 limit in comfort mode, relaxed toward the original's washes at full spectacle
+    const spg = spectacleOf(this.comfort);
+    g.uLimit!.value = GOVERNOR_LIMIT * (0.5 + 0.5 * this.comfort) * (1 - spg) + SPECTACLE_GOVERNOR * spg;
     this.govPass.render(r, next);
     this.govIdx = 1 - this.govIdx;
     this.govReset = false;

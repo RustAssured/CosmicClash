@@ -183,6 +183,45 @@ export function bandLevelDb(
   return 10 * Math.log10(Math.max(1e-18, meanSquare));
 }
 
+/**
+ * Long-term spectrum split into bands (Welch: Hann-windowed blocks of `block` samples, half overlap, power summed over the whole
+ * span): the share (0..1) of the power of `x[from..to)` between each pair of consecutive `edges` (Hz). Silent input → zeros.
+ * The spectral balance of a whole fight ("how much of it is above 2 kHz") in one call.
+ */
+export function bandEnergies(
+  x: ArrayLike<number>,
+  sampleRate: number,
+  edges: readonly number[],
+  from = 0,
+  to = x.length,
+  block = 8192,
+): number[] {
+  const out = new Array<number>(Math.max(0, edges.length - 1)).fill(0);
+  const win = new Float64Array(block);
+  for (let i = 0; i < block; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (block - 1));
+  const re = new Float64Array(block);
+  const im = new Float64Array(block);
+  let all = 0;
+  for (let s = from; s + block <= to; s += block >> 1) {
+    for (let i = 0; i < block; i++) {
+      re[i] = x[s + i]! * win[i]!;
+      im[i] = 0;
+    }
+    fft(re, im);
+    for (let k = 1; k < block / 2; k++) {
+      const pw = re[k]! * re[k]! + im[k]! * im[k]!;
+      const f = (k * sampleRate) / block;
+      all += pw;
+      for (let b = 0; b < out.length; b++)
+        if (f >= edges[b]! && f < edges[b + 1]!) {
+          out[b] += pw;
+          break;
+        }
+    }
+  }
+  return all > 0 ? out.map((v) => v / all) : out;
+}
+
 /** Number of local maxima above `thr` in a series, at least `minGap` samples apart: a beat counter over an envelope. */
 export function countPeaks(env: ArrayLike<number>, thr: number, minGap: number): number {
   let n = 0;

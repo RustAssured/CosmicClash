@@ -115,11 +115,11 @@ describe('우리 rig (URI_SPEC §4)', () => {
     expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(1e-9);
   });
 
-  it('the rest pose covers the reference silhouette (uri_silhouette_rest.png)', () => {
+  it('the rest pose covers the reference silhouette (uri_silhouette_rest.png) at reference scale', () => {
     const png = PNG.sync.read(readFileSync('uri/data/uri_silhouette_rest.png'));
     expect([png.width, png.height]).toEqual([URI_REF.w, URI_REF.h]);
     const body = new Uint8Array(png.width * png.height);
-    for (const pm of uriPartMatter()) {
+    for (const pm of uriPartMatter(1)) {
       const meta = uriPart(pm.key);
       const m = pm.map;
       for (let iy = 0; iy < m.h; iy++)

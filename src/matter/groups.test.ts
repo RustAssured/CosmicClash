@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { URI_ORDER } from '@/titans/uri/rig';
+import { URI_ORDER, URI_SCALE } from '@/titans/uri/rig';
 import { uriRestBodies } from '../../tools/matter/uri2a';
 import { createMatterWorld, type MatterWorldEx } from './index';
 
@@ -41,6 +41,88 @@ const groupMass = (world: MatterWorldEx, id: number, g: number): number => {
   for (let c = 0; c < b.n; c++) if (b.map.material[c] !== 0 && b.cellGroups![c] === g) m += b.cellMass(c);
   return m;
 };
+
+describe('우리 at its game size (D34, URI_SCALE): tearing, field hold, necks and release scale with the body', () => {
+  const S = URI_SCALE;
+  const at = (seed: number, scale: number): { world: MatterWorldEx; id: (k: string) => number } => {
+    const world = createMatterWorld(seed);
+    const ids = uriRestBodies(world, 120, 16, 0, scale);
+    return { world, id: (k: string) => ids[URI_ORDER.indexOf(k as (typeof URI_ORDER)[number])]! };
+  };
+
+  it('torn pieces fly at the body scale: same draws, speed × scale', () => {
+    const speed = (scale: number): number => {
+      const { world, id } = at(21, scale);
+      const dome = id('domeR');
+      const [x, y] = pointOf(world, dome);
+      expect(world.hitTear(dome, x, y, 1)).toBe(1);
+      const pool = world.core.chunks;
+      const ch = pool.list
+        .slice(0, pool.hi)
+        .filter((c) => c.alive)
+        .pop()!;
+      return Math.hypot(ch.vx, ch.vy);
+    };
+    const full = speed(1);
+    const game = speed(S);
+    expect(full).toBeGreaterThan(30);
+    // the speed draws come first from the body RNG, so the ratio is the scale (± the piece's own direction jitter: none here)
+    expect(game / full).toBeCloseTo(S, 1);
+  });
+
+  it('a heavy blow tears a similar share of the part at both sizes (neighbour radius scaled)', () => {
+    const share = (scale: number): number => {
+      const { world, id } = at(9, scale);
+      const ch = id('chamber');
+      const c0 = world.stats(ch).cells;
+      const [x, y] = pointOf(world, ch);
+      world.hitTear(ch, x, y, 3);
+      return 1 - world.stats(ch).cells / c0;
+    };
+    const a = share(1);
+    const b = share(S);
+    expect(b).toBeGreaterThan(a * 0.5);
+    expect(b).toBeLessThan(a * 2.5);
+  });
+
+  it('field hold, neck live fraction and release work at the game size', () => {
+    const { world, id } = at(12, S);
+    const dome = id('domeL');
+    const b = world.core.bodyById[dome]!;
+    expect(b.fieldHeld).toBe(true);
+    expect(b.groupScale).toBeCloseTo(S, 9);
+    // holes never shed: tear a third of the groups, run, nothing else leaves
+    const groups = Array.from(new Set(Array.from(b.cellGroups!).filter((_, c) => b.map.material[c] !== 0)));
+    for (let k = 0; k < groups.length; k += 3) world.tearGroup(dome, groups[k]!, 0, 0, 0.5);
+    const cells = world.stats(dome).cells;
+    for (let t = 0; t < 60; t++) world.tick();
+    expect(world.stats(dome).cells).toBe(cells);
+    // neck live fraction of a joint patch near the pivot
+    const ua = id('uaR');
+    const u = world.core.bodyById[ua]!;
+    const patch: number[] = [];
+    for (let c = 0; c < u.n; c++) {
+      const x = c % u.w;
+      const y = (c - x) / u.w;
+      if (u.map.material[c] !== 0 && Math.hypot(x - u.transform.anchorX, y - u.transform.anchorY) < 13 * S)
+        patch.push(c);
+    }
+    expect(patch.length).toBeGreaterThan(50);
+    expect(world.liveFraction(ua, patch)).toBe(1);
+    world.tearGroup(ua, u.cellGroups![patch[0]!]!, 0, 0, 1);
+    expect(world.liveFraction(ua, patch)).toBeLessThan(1);
+    // release: every live group leaves, nothing dusted, ledger exact
+    const fist = id('fistL');
+    const n = new Set(
+      Array.from(world.cellGroups(fist)!).filter((_, c) => world.core.bodyById[fist]!.map.material[c] !== 0),
+    ).size;
+    const before = world.ledger().dissipated;
+    expect(world.releaseGroups(fist, 300, 300, 0.55)).toBe(n);
+    expect(world.stats(fist).cells).toBe(0);
+    expect(world.ledger().dissipated).toBeCloseTo(before, 6);
+    expect(Math.abs(world.ledger().error)).toBeLessThan(1e-3);
+  });
+});
 
 describe('우리 chunk tearing (Gate 2C)', () => {
   it('a blow tears out exactly the struck chunk as one tumbling piece with its own colours and mass; the hole glows', () => {

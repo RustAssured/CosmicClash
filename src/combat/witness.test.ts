@@ -9,7 +9,7 @@ import {
 } from '@/contracts';
 import { createMatterWorld } from '@/matter';
 import { createMatch, createScriptSource, type Match } from '@/sim';
-import { getTitanDef, witnessDef } from '@/titans';
+import { getTitanDef, WITNESS_SCALE, witnessDef } from '@/titans';
 import { createFighter } from './index';
 import type { FighterImpl } from './fighter';
 import type { WitnessBehaviour } from './behaviours/witness';
@@ -82,7 +82,7 @@ describe('the Witness in game (witness=1)', () => {
     // a point blow on the lower carapace, below the eye (in front of channels / lattice / abyss)
     const ev: DamageEvent = {
       type: 'KINETIC',
-      shape: { kind: 'point', x: t.x, y: t.y + 40, r: 4 },
+      shape: { kind: 'point', x: t.x, y: t.y + 40 * WITNESS_SCALE, r: 4 },
       energy: 160,
       dirX: 0,
       dirY: -1,

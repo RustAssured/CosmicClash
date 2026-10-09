@@ -91,12 +91,13 @@ export const REGION_GRID = 8;
 export const SIM_BUDGET_MS_PER_TICK = 5;
 
 /**
- * The vertical slice ("The Witness and the World", D26/D27): menus, attract mode and random pairings use only these.
- * Everything else keeps compiling and testing; `?full=1` shows it all again. Its two arenas joined in Phase 2.
+ * The roster and arenas the menus, attract mode and random pairings use (`?full=1` shows every implemented one). D34: all six
+ * original titans are back (the Witness replaces the Last One, witness=1 by default), with 우리.
  */
 export const SLICE = {
-  titans: ['lastone', 'planet', 'uri'] as const,
-  stages: ['mausoleum', 'shearfield'] as const,
+  titans: ['lastone', 'asteroid', 'nexus', 'blackhole', 'supernova', 'planet', 'uri'] as const,
+  // D34: every original stage is back, beside the slice's two arenas
+  stages: ['nursery', 'rim', 'redgiant', 'quasar', 'tussenruimte', 'mausoleum', 'shearfield'] as const,
 } as const;
 
 /** KO thresholds (spec: KO when core-anchor integrity or total mass falls below thresholds). */

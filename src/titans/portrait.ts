@@ -69,7 +69,7 @@ export function renderPortrait(
  * same parts the game draws; no repainting). The cores, loop and moon field are drawn live in the game, not here.
  */
 function uriPortrait(): Portrait {
-  const parts = uriPartMatter();
+  const parts = uriPartMatter(1);
   const at = new Map(parts.map((p) => [p.key, p]));
   let x0 = Infinity;
   let y0 = Infinity;

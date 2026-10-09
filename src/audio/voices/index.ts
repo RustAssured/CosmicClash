@@ -6,6 +6,7 @@ import { createNexusVoice } from './nexus';
 import { createPlanetVoice } from './planet';
 import { createSupernovaVoice } from './supernova';
 import type { TitanVoice } from './types';
+import { createUriVoice } from './uri';
 
 /** One voice file per titan (see `types.ts`). */
 export const VOICES: Readonly<Partial<Record<TitanId, () => TitanVoice>>> = {
@@ -15,6 +16,7 @@ export const VOICES: Readonly<Partial<Record<TitanId, () => TitanVoice>>> = {
   supernova: createSupernovaVoice,
   planet: createPlanetVoice,
   asteroid: createAsteroidVoice,
+  uri: createUriVoice,
 };
 
 /**

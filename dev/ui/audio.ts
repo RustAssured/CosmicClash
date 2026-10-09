@@ -14,6 +14,7 @@ import { runRoundVerification, type RoundReport } from './audio-round';
 import { runFightVerification, type FightReport } from './audio-fight';
 import { runStageVerification, type StageReport } from './audio-stages';
 import { runBodyCharacter, runTitanVerification, type TitanReport } from './audio-titans';
+import { runAudit, type AuditReport } from './audio-audit';
 
 /**
  * Audition page for the procedural audio engine: every sound the game can make, on a button, with the score's controls and
@@ -29,6 +30,7 @@ declare global {
     __body?: Awaited<ReturnType<typeof runBodyCharacter>>;
     __round?: RoundReport;
     __fight?: FightReport;
+    __audit?: AuditReport;
     __audio?: ReturnType<typeof createAudioEngine>;
     /** Largest level seen by the meter since the page loaded, before and after the limiter. */
     __meter?: { maxPre: number; maxPost: number };
@@ -434,7 +436,7 @@ const runBtn = $<HTMLButtonElement>('verify');
 const reportEl = $<HTMLPreElement>('report');
 const stateEl = $('verifyState');
 async function verify(
-  mode: 'full' | 'quick' | 'titans' | 'stages' | 'body' | 'round' | 'fight' = 'full',
+  mode: 'full' | 'quick' | 'titans' | 'stages' | 'body' | 'round' | 'fight' | 'audit' = 'full',
 ): Promise<void> {
   stateEl.textContent = 'rendering…';
   runBtn.disabled = true;
@@ -444,12 +446,19 @@ async function verify(
     else if (mode === 'round') out = window.__round = await runRoundVerification();
     else if (mode === 'fight') {
       const q = new URLSearchParams(location.search);
-      out = window.__fight = await runFightVerification(
-        +(q.get('seconds') ?? 60),
-        +(q.get('seed') ?? 21),
-        +(q.get('level') ?? 4),
-        q.get('orbit') === '0' ? 'classic' : 'orbit',
-      );
+      const ids = (q.get('titans') ?? 'lastone,planet').split(',') as [TitanId, TitanId];
+      out = window.__fight = await runFightVerification({
+        seconds: +(q.get('seconds') ?? 60),
+        seed: +(q.get('seed') ?? 21),
+        level: +(q.get('level') ?? 4),
+        footwork: q.get('orbit') === '0' ? 'classic' : 'orbit',
+        titans: [ids[0] ?? 'lastone', ids[1] ?? 'planet'],
+        stage: (q.get('stage') ?? 'nursery') as StageId,
+        wav: q.get('wav') === '1',
+      });
+    } else if (mode === 'audit') {
+      const only = new URLSearchParams(location.search).get('only');
+      out = window.__audit = await runAudit(only ? only.split(',') : undefined);
     } else if (mode === 'titans') out = window.__titans = await runTitanVerification();
     else if (mode === 'stages') out = window.__stages = await runStageVerification();
     else {
@@ -476,7 +485,8 @@ if (q.has('verify'))
       mode === 'stages' ||
       mode === 'body' ||
       mode === 'round' ||
-      mode === 'fight'
+      mode === 'fight' ||
+      mode === 'audit'
       ? mode
       : 'full',
   );

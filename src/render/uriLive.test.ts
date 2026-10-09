@@ -13,6 +13,7 @@ const fx = (over: Partial<UriLiveFx> = {}): UriLiveFx => ({
   hp: 100,
   loop: URI_LOOP_REST,
   afterZ: 7,
+  scale: 1,
   ...over,
 });
 

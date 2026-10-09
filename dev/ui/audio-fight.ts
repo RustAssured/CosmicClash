@@ -5,7 +5,13 @@ import {
   type MatchApi,
   type MatchConfig,
   type SimEvent,
+  type StageId,
+  type TitanId,
 } from '@/contracts';
+import { bandEnergies } from '@/audio/dsp/analysis';
+import { laptopLufs } from './audio-laptop';
+import { loadUriAsset } from '@/titans/uri/asset';
+import uriBinUrl from '@/titans/uri/uri_rig.bin?url';
 import { createAI } from '@/ai';
 import { createAudioEngine } from '@/audio/engine';
 import { createFighter } from '@/combat';
@@ -17,7 +23,7 @@ import { KFilter } from '@/telemetry/loudness';
 import { measureRender, type RoundReport } from './audio-round';
 
 /**
- * D6 calibration against REAL fight density: a real Match (AI vs AI, the Witness vs the Planet, real fighters, real matter
+ * D6 calibration against REAL fight density: a real Match (AI vs AI, any two titans; by default the Witness vs the Planet, real fighters, real matter
  * world) is stepped inside an OfflineAudioContext render, and its SimEvent stream drives the real engine exactly the way the
  * app does — `handleAt` with every tick's events at that tick's time, `updateAt` with `buildAudioScene` and FxState's intensity.
  * KO slow motion stretches the ticks in audio time, as in play. When a match ends inside the window, the next one starts
@@ -37,21 +43,49 @@ export interface FightReport extends RoundReport {
    * before, with counts>" (keys as limiterBy), valued by its share (%) of the output's K-weighted energy.
    */
   loudBy: Record<string, number>;
+  titans: [TitanId, TitanId];
+  stage: StageId;
+  /**
+   * Long-term spectral balance of the speaker output (Welch, whole render): the share of its power below 80 Hz, 80–250 Hz (the
+   * laptop "weight" band), 250 Hz–2 kHz, 2–6 kHz and above 6 kHz.
+   */
+  bands: { sub: number; low: number; mid: number; high: number; air: number };
+  /** Integrated loudness as a laptop speaker plays it (`laptopLufs`, D27). */
+  laptopIntegrated: number;
+  /** The speaker output as a 16-bit stereo WAV, base64 (only when asked for: `wav`). */
+  wav?: string;
+}
+
+export interface FightOptions {
+  seconds?: number;
+  seed?: number;
+  level?: number;
+  footwork?: 'classic' | 'orbit';
+  titans?: [TitanId, TitanId];
+  stage?: StageId;
+  /** Return the output as a WAV (base64) for listening. */
+  wav?: boolean;
 }
 
 const SR = 48000;
 const TICK = 1 / 60;
 const HEAVY_ENERGY = 400;
 
-function newMatch(seed: number, level: number, footwork: 'classic' | 'orbit'): MatchApi {
+function newMatch(
+  seed: number,
+  level: number,
+  footwork: 'classic' | 'orbit',
+  titans: [TitanId, TitanId],
+  stage: StageId,
+): MatchApi {
   const cfg: MatchConfig = {
     seed,
-    stage: 'nursery',
+    stage,
     mode: 'aivai',
     footwork,
     slots: [
-      { titan: 'lastone', controller: 'ai', aiLevel: level as 4 },
-      { titan: 'planet', controller: 'ai', aiLevel: level as 4 },
+      { titan: titans[0], controller: 'ai', aiLevel: level as 4 },
+      { titan: titans[1], controller: 'ai', aiLevel: level as 4 },
     ],
   };
   const m = createMatch(cfg, {
@@ -62,18 +96,20 @@ function newMatch(seed: number, level: number, footwork: 'classic' | 'orbit'): M
     lighting: DEFAULT_LIGHTING,
   });
   m.setSources(
-    createAiSource(m, 0, createAI(cfg.slots[0].aiLevel!, getTitanDef('lastone'), seed * 7 + 1, { footwork })),
-    createAiSource(m, 1, createAI(cfg.slots[1].aiLevel!, getTitanDef('planet'), seed * 7 + 2, { footwork })),
+    createAiSource(m, 0, createAI(cfg.slots[0].aiLevel!, getTitanDef(titans[0]), seed * 7 + 1, { footwork })),
+    createAiSource(m, 1, createAI(cfg.slots[1].aiLevel!, getTitanDef(titans[1]), seed * 7 + 2, { footwork })),
   );
   return m;
 }
 
-export async function runFightVerification(
-  seconds = 60,
-  seed = 21,
-  level = 4,
-  footwork: 'classic' | 'orbit' = 'orbit',
-): Promise<FightReport> {
+export async function runFightVerification(o: FightOptions = {}): Promise<FightReport> {
+  const seconds = o.seconds ?? 60;
+  const seed = o.seed ?? 21;
+  const level = o.level ?? 4;
+  const footwork = o.footwork ?? 'orbit';
+  const titans: [TitanId, TitanId] = o.titans ?? ['lastone', 'planet'];
+  const stage: StageId = o.stage ?? 'nursery';
+  if (titans.includes('uri')) await loadUriAsset(uriBinUrl);
   const ctx = new OfflineAudioContext(4, Math.ceil(SR * seconds), SR);
   ctx.destination.channelCountMode = 'explicit';
   ctx.destination.channelInterpretation = 'discrete';
@@ -87,7 +123,7 @@ export async function runFightVerification(
   split.connect(merge, 1, 3);
   merge.connect(ctx.destination);
 
-  let m = newMatch(seed, level, footwork);
+  let m = newMatch(seed, level, footwork, titans, stage);
   let matches = 1;
   const fx = new FxState();
   let tickAt = 0; // audio time of the next tick
@@ -108,7 +144,7 @@ export async function runFightVerification(
     // run every tick due before the next step, each at its own audio time
     while (tickAt <= now + TICK) {
       if (m.phase === 'matchend') {
-        m = newMatch(seed + matches, level, footwork);
+        m = newMatch(seed + matches, level, footwork, titans, stage);
         matches++;
         fx.reset();
       }
@@ -148,7 +184,67 @@ export async function runFightVerification(
   await new Promise((res) => setTimeout(res, 50));
   const r = measureRender(buf, seconds, heavy, gr, eng.limiterReductionDb());
   const loudBy = attribute(buf, log);
-  return { ...r, seed, level, footwork, matches, hits, heavyHits: heavy.length, limiterBy, loudBy };
+  return {
+    ...r,
+    seed,
+    level,
+    footwork,
+    matches,
+    hits,
+    heavyHits: heavy.length,
+    limiterBy,
+    loudBy,
+    titans,
+    stage,
+    bands: spectralBalance(buf),
+    laptopIntegrated: laptopLufs(buf.getChannelData(0), buf.getChannelData(1), buf.sampleRate),
+    wav: o.wav ? wavBase64(buf) : undefined,
+  };
+}
+
+/** `FightReport.bands` of channels 1–2 (the speakers). */
+function spectralBalance(buf: AudioBuffer): FightReport['bands'] {
+  const l = buf.getChannelData(0);
+  const r = buf.getChannelData(1);
+  const mono = new Float32Array(l.length);
+  for (let i = 0; i < mono.length; i++) mono[i] = 0.5 * (l[i]! + r[i]!);
+  const [sub, low, mid, high, air] = bandEnergies(mono, buf.sampleRate, [20, 80, 250, 2000, 6000, 24000]);
+  const f = (v: number | undefined): number => +(v ?? 0).toFixed(4);
+  return { sub: f(sub), low: f(low), mid: f(mid), high: f(high), air: f(air) };
+}
+
+/** Channels 1–2 as a 16-bit PCM stereo WAV, base64 (for a listening file next to the numbers). */
+function wavBase64(buf: AudioBuffer): string {
+  const l = buf.getChannelData(0);
+  const r = buf.getChannelData(1);
+  const n = l.length;
+  const bytes = new Uint8Array(44 + n * 4);
+  const dv = new DataView(bytes.buffer);
+  const str = (o: number, s: string): void => {
+    for (let i = 0; i < s.length; i++) bytes[o + i] = s.charCodeAt(i);
+  };
+  str(0, 'RIFF');
+  dv.setUint32(4, 36 + n * 4, true);
+  str(8, 'WAVE');
+  str(12, 'fmt ');
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);
+  dv.setUint16(22, 2, true);
+  dv.setUint32(24, buf.sampleRate, true);
+  dv.setUint32(28, buf.sampleRate * 4, true);
+  dv.setUint16(32, 4, true);
+  dv.setUint16(34, 16, true);
+  str(36, 'data');
+  dv.setUint32(40, n * 4, true);
+  const s16 = (v: number): number => Math.max(-32768, Math.min(32767, Math.round(v * 32767)));
+  for (let i = 0; i < n; i++) {
+    dv.setInt16(44 + i * 4, s16(l[i]!), true);
+    dv.setInt16(46 + i * 4, s16(r[i]!), true);
+  }
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    bin += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + 0x8000)));
+  return btoa(bin);
 }
 
 /**

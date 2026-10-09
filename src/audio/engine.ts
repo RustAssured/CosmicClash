@@ -27,13 +27,13 @@ import {
   playGuard,
   playImpact,
   playKo,
-  playKoSub,
   playMatter,
   playShockwave,
   playTypeLayer,
   playUltimate,
 } from './voices/sfx';
-import { GLASS, makeOut, noiseHit, partials, riser, thump, tone, whistlePass } from './voices/synth';
+import { BELL, makeOut, noiseHit, tone } from './voices/synth';
+import { boom, lowBell, swell, whoosh } from './voices/epic';
 import type { TitanVoice, VoiceCtx } from './voices/types';
 import { createTitanVoice } from './voices/index';
 import { UI_TRIM, playUi } from './voices/ui';
@@ -50,7 +50,7 @@ const LOOKAHEAD = 0.006;
  * 15-25 dB under the fighters' own idle bed, i.e. inaudible in a match. Trimming per class keeps the voices readable as
  * code and puts the mix decisions in one table.
  */
-const MOVE_TRIM: Readonly<Record<string, number>> = {
+export const MOVE_TRIM: Readonly<Record<string, number>> = {
   strike: 3,
   crush: 1.8,
   signature: 2,
@@ -58,9 +58,12 @@ const MOVE_TRIM: Readonly<Record<string, number>> = {
   ultimate: 1.4,
   guard: 2,
 };
-const SURGE_TRIM = 3;
-/** The Last One's and the Asteroid's cues are small pings authored quietly; the four newer voices author their cues at full level. */
-const CUE_TRIM: Readonly<Partial<Record<TitanId, number>>> = { lastone: 3, asteroid: 3 };
+export const SURGE_TRIM = 3;
+/**
+ * Per-titan cue trims. D34: the Witness's and the Asteroid's cues were small pings authored quietly (trim 3); they are booms and
+ * cable snaps now, authored at full level like everyone else's, so no titan needs one.
+ */
+export const CUE_TRIM: Readonly<Partial<Record<TitanId, number>>> = {};
 
 /** Concurrent one-shot cap (events, not nodes). Above it, low-priority sounds are dropped. */
 const POLYPHONY = 28;
@@ -75,10 +78,15 @@ export const OUTPUT_HIGHPASS_HZ = 50;
  * and the live 3-minute fights read −16.4 / −15.2 LUFS, so the mix came down 3.5 dB (Lead). That alone moved the level 1.5 dB:
  * a repeated Planet cue (ring-capture, ~12 bells a second) made the loudest seconds of the fight and sat on the limiter.
  * With CUE_REPEAT and balance-free impact energy: offline orbit fight −20.4 LUFS, LRA 17.5, limiter idle 98.8 %.
+ * D34 (the cataclysm pass): impacts carry far more weight than before (saturated drops, crunch, cavern tails), so the mix came
+ * down to keep −20 LUFS integrated (measured over seven titan pairs, `tools/ui/audio-verify.ts --pairs`).
  */
-export const CALIBRATION_DB = 0.8;
-/** Menu / UI sounds sit this far under the calibrated impacts (they were authored against the old, quieter master). */
-const UI_LEVEL_DB = -9;
+export const CALIBRATION_DB = -1.6;
+/**
+ * Menu / UI sounds sit this far under the calibrated impacts (they were authored against the old, quieter master). D34: −9 → −6,
+ * so the menu keeps its level when the calibration came down 3 dB under the heavier impacts.
+ */
+const UI_LEVEL_DB = -6;
 /** Reverb returns: the impacts' space and the bed's. */
 const IMPACT_REVERB = 0.75;
 const BED_REVERB = 0.3;
@@ -95,12 +103,98 @@ export const BED_LEVEL_DB = -3.5;
  */
 export const DUCK_DB: readonly [number, number] = [4, 6.5];
 export const DUCK_SEC: readonly [number, number] = [0.35, 0.55];
+/**
+ * The KO hush (D34: "a hush, then a catastrophic boom and a long cosmic decay"): the whole bed (titan beds, score, its reverb)
+ * falls this far (dB) and stays down this long (s), so the KO's boom lands into near-silence and its decay is heard alone.
+ */
+export const KO_HUSH_DB = 14;
+export const KO_HUSH_SEC = 1.6;
+/**
+ * Laptop weight (D27, D34): a psychoacoustic bass stage on the whole mix. The band under WEIGHT.split Hz (4th order) goes through
+ * a RECTIFYING saturator (`weightCurve`: even, so it passes no fundamental at all, only the 2nd, 4th… harmonics, in proportion to
+ * the sub's own level); the harmonics between WEIGHT.lo and WEIGHT.hi are added back at WEIGHT.level. A 40 Hz drop a laptop
+ * cannot play arrives with 80/160/240 Hz partials it can, and the ear hears the missing fundamental. Headphones keep the real sub.
+ */
+export const WEIGHT = { split: 100, drive: 3, lo: 120, hi: 800, level: 0.7 } as const;
+
+/**
+ * The laptop voicing of the whole mix (D27, D34), after the weight stage: a low shelf takes a little of the sub a laptop cannot
+ * play anyway (headphones keep most of it), and a broad bump around 450 Hz lifts the band a small speaker DOES play — the
+ * growl of every drop, the crunch, the rumble's upper edge. Measured with the laptop-speaker meter (dev/ui/audio-laptop.ts).
+ */
+export const LAPTOP_EQ = { shelfHz: 110, shelfDb: -5, bodyHz: 500, bodyDb: 7, bodyQ: 0.7 } as const;
+
+/**
+ * Wire `from` → `to` through the laptop voicing (LAPTOP_EQ), and add the weight stage (WEIGHT) of `weightFrom` (default `from`)
+ * in parallel. The engine weights the IMPACT bus only: the rectifier's harmonics of a single drop are octaves of it, but on a
+ * chord (the score's drone and pad, a titan's choir) it would add sum and difference tones out of the stage's key. Exported so
+ * the verification tools measure sounds through exactly what the engine does to them.
+ */
+export function laptopVoicing(
+  ac: BaseAudioContext,
+  from: AudioNode,
+  to: AudioNode,
+  weightFrom: AudioNode = from,
+): void {
+  const shelf = ac.createBiquadFilter();
+  shelf.type = 'lowshelf';
+  shelf.frequency.value = LAPTOP_EQ.shelfHz;
+  shelf.gain.value = LAPTOP_EQ.shelfDb;
+  const body = ac.createBiquadFilter();
+  body.type = 'peaking';
+  body.frequency.value = LAPTOP_EQ.bodyHz;
+  body.Q.value = LAPTOP_EQ.bodyQ;
+  body.gain.value = LAPTOP_EQ.bodyDb;
+  from.connect(shelf);
+  shelf.connect(body);
+  body.connect(to);
+  // the weight: the sub band (4th order), rectified, its harmonics (4th order above WEIGHT.lo: a 2nd harmonic under ~120 Hz is
+  // as lost on a laptop as the fundamental) added back
+  const split = ac.createBiquadFilter();
+  const split2 = ac.createBiquadFilter();
+  split.type = split2.type = 'lowpass';
+  split.frequency.value = split2.frequency.value = WEIGHT.split;
+  split.Q.value = 0.5412;
+  split2.Q.value = 1.3066;
+  const shape = ac.createWaveShaper();
+  shape.curve = weightCurve(WEIGHT.drive) as Float32Array<ArrayBuffer>;
+  const lo = ac.createBiquadFilter();
+  const lo2 = ac.createBiquadFilter();
+  lo.type = lo2.type = 'highpass';
+  lo.frequency.value = lo2.frequency.value = WEIGHT.lo;
+  lo.Q.value = 0.5412;
+  lo2.Q.value = 1.3066;
+  const hi = ac.createBiquadFilter();
+  hi.type = 'lowpass';
+  hi.frequency.value = WEIGHT.hi;
+  hi.Q.value = Math.SQRT1_2;
+  const level = ac.createGain();
+  level.gain.value = WEIGHT.level;
+  weightFrom.connect(split);
+  split.connect(split2);
+  split2.connect(shape);
+  shape.connect(lo);
+  lo.connect(lo2);
+  lo2.connect(hi);
+  hi.connect(level);
+  level.connect(to);
+}
+
+/** The weight stage's transfer curve: |tanh(drive·x)| / tanh(drive), an even function (harmonics only, never the input itself). */
+export function weightCurve(drive: number, n = 2049): Float32Array {
+  const out = new Float32Array(n);
+  const norm = Math.tanh(drive);
+  for (let i = 0; i < n; i++) out[i] = Math.abs(Math.tanh(drive * ((i / (n - 1)) * 2 - 1))) / norm;
+  return out;
+}
 /** Smallest blow that ducks the bed (the same line telemetry draws for a heavy hit). */
 export const DUCK_MIN_ENERGY = 400;
 /** The sim's heavy line (combat/fighter.ts: a blow of energy ≥ 700 is heavy whatever its slot). */
 const HEAVY_BLOW = 700;
 /** Shortest gap (s) between two sounds of the same cue from the same fighter (the sim may repeat a cue every tick). */
 const CUE_REPEAT = 0.3;
+/** Shortest gap (s) between two matter sounds of the same kind from the same fighter. */
+export const MATTER_REPEAT = 0.15;
 
 /**
  * The automatic makeup gain (dB) a DynamicsCompressorNode applies (WebAudio spec: (1 / gain at 0 dBFS)^0.6). Approximates the
@@ -177,7 +271,8 @@ function cachedImpulseResponse(sr: number, seed: number): ReturnType<typeof gene
   const key = `${sr}:${seed}`;
   let ir = irCache.get(key);
   if (!ir) {
-    ir = generateImpulseResponse(sr, { decay: 3.4, seed });
+    // a cavern, not a hall (D34): longer, and dark from its first reflections (brightStart 0.55 → 0.3)
+    ir = generateImpulseResponse(sr, { decay: 4.2, seed, brightStart: 0.3, brightEnd: 0.025 });
     if (irCache.size > 4) irCache.clear();
     irCache.set(key, ir);
   }
@@ -342,7 +437,8 @@ class Engine implements AudioEngineExt {
     const postAn = ac.createAnalyser();
     postAn.fftSize = 2048;
     mix.connect(preAn);
-    mix.connect(hp1);
+    // (the laptop voicing and weight, LAPTOP_EQ and WEIGHT, sit between `mix` and the output high-pass: wired below, once the
+    // impact bus exists)
     hp1.connect(hp2);
     // unsafeBypassLimiter (tests only) measures the mix as it ENTERS the limiter (calibrated), with no limiter and no clip
     hp2.connect(calib);
@@ -388,7 +484,8 @@ class Engine implements AudioEngineExt {
     }
 
     // reverbs: one long dark IR shared by two convolvers — the impacts' space (not ducked: tails are the weight) and the bed's
-    // own (ducked with it). Both sends are high-passed so sub-bass never muddies a tail.
+    // own (ducked with it). Both sends are high-passed so the deep sub never muddies a tail (but the 90–250 Hz weight does reach
+    // the cavern), and low-passed so no tail ever hisses.
     const ir = cachedImpulseResponse(sr, this.seed);
     const buf = ac.createBuffer(2, ir[0].length, sr);
     buf.copyToChannel(ir[0] as Float32Array<ArrayBuffer>, 0);
@@ -397,14 +494,19 @@ class Engine implements AudioEngineExt {
       const send = ac.createGain();
       const hp = ac.createBiquadFilter();
       hp.type = 'highpass';
-      hp.frequency.value = 140;
+      hp.frequency.value = 90;
+      const lp = ac.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 3200;
+      lp.Q.value = 0.5;
       const conv = ac.createConvolver();
       conv.normalize = false;
       conv.buffer = buf;
       const out = ac.createGain();
       out.gain.value = ret;
       send.connect(hp);
-      hp.connect(conv);
+      hp.connect(lp);
+      lp.connect(conv);
       conv.connect(out);
       out.connect(into);
       return send;
@@ -414,6 +516,7 @@ class Engine implements AudioEngineExt {
     const sfx = ac.createGain();
     sfx.gain.value = volumeCurve(this.vol.sfx);
     sfx.connect(mix);
+    laptopVoicing(ac, mix, hp1, sfx);
     const sfxWet = reverb(IMPACT_REVERB, mix);
     // ui
     const ui = ac.createGain();
@@ -622,13 +725,12 @@ class Engine implements AudioEngineExt {
         const tc = this.trimmed(SURGE_TRIM);
         if (v.onSurge) v.onSurge(tc, t, ev);
         else
-          whistlePass(tc, t, {
-            f: 700,
-            dur: 0.3,
-            gain: 0.06,
+          whoosh(tc, t, {
+            dur: 0.35,
+            gain: 0.08,
             panFrom: c.panOf(ev.x) - 0.3,
             panTo: c.panOf(ev.x) + 0.3,
-            wet: 0.2,
+            wet: 0.25,
           });
         return;
       }
@@ -642,11 +744,14 @@ class Engine implements AudioEngineExt {
         const mag = magnitude(energy, hv.heavy);
         const pan = c.panOf(ev.x);
         playImpact(c, t, hv, mag, pan);
-        playTypeLayer(c, t, ev.type, mag, pan, 1 - 0.7 * clamp01(ev.blocked));
+        // D34 contrast: the material layers of a light blow sit lower (up to −7 dB), so a dense exchange of jabs never reads as
+        // loud as one catastrophe (the loudness range of a fight survives a faster pace)
+        const lc = this.trimmed(0.45 + 0.55 * Math.pow(mag, 1.5));
+        playTypeLayer(lc, t, ev.type, mag, pan, 1 - 0.7 * clamp01(ev.blocked));
         const atk = this.voiceFor(atkTitan);
-        atk.onHitDealt?.(c, t, hv, mag);
+        atk.onHitDealt?.(lc, t, hv, mag);
         const tgt = this.voiceFor(this.titanOf(ev.target, ev.titan));
-        tgt.onHitTaken?.(c, t, hv, mag);
+        tgt.onHitTaken?.(lc, t, hv, mag);
         // the bed gets out of the way of a heavy blow (sidechain-style): this is what lets an impact stand 10+ dB over it
         // every blow telemetry calls heavy (energy ≥ 400; continuous beam/field slices are flagged heavy but carry ~10–100)
         if (energy >= DUCK_MIN_ENERGY)
@@ -666,15 +771,19 @@ class Engine implements AudioEngineExt {
         if (ev.strength >= 0.8 && ev.radius >= 220) this.duck(t, clamp01((ev.radius - 220) / 160));
         return;
       case 'ko': {
-        this.duck(t, 1);
+        // the hush: the bed empties out, the titan's catastrophe (its own, or the shared one) lands into the silence
+        this.duck(t, 1, KO_HUSH_DB, KO_HUSH_SEC);
         const v = this.voiceFor(this.titanOf(ev.slot));
-        if (v.onKo) {
-          playKoSub(c, t, c.panOf(ev.x));
-          v.onKo(c, t, ev);
-        } else playKo(c, t, ev, c.panOf(ev.x));
+        if (v.onKo) v.onKo(c, t, ev);
+        else playKo(c, t, ev, c.panOf(ev.x));
         return;
       }
       case 'matter': {
+        // a shattering body emits dozens of detach / impact events a second; one sound per kind and fighter per MATTER_REPEAT
+        // (they are the rubble of a blow, not blows: a wall of them filled every gap and flattened the fight's loudness range)
+        const mkey = `m${ev.slot}:${ev.kind}`;
+        if (t < (this.cueAt.get(mkey) ?? -1) + MATTER_REPEAT) return;
+        this.cueAt.set(mkey, t);
         if (!c.take(0)) return;
         const owner = ev.slot >= 0 ? this.voiceFor(this.titanOf(ev.slot)) : null;
         if (!owner?.onMatter?.(c, t, ev)) playMatter(c, t, ev, c.panOf(ev.x));
@@ -691,13 +800,15 @@ class Engine implements AudioEngineExt {
         return;
       case 'resource': {
         if (ev.kind === 'break' && c.take(0)) {
-          partials(c, makeOut(c, 0, 0.4), t, 660, GLASS, { decay: 0.3, gain: 0.08 });
+          lowBell(c, makeOut(c, 0, 0.4), t, 164.81, BELL, { decay: 0.6, gain: 0.08 });
         }
         return;
       }
       case 'cue': {
         // a cue the sim repeats tick after tick (Gate C: the Planet's ring-capture 12 times in one second, stacking bells into
-        // the loudest moments of the fight) sounds once per CUE_REPEAT
+        // the loudest moments of the fight) sounds once per CUE_REPEAT. The fighter's `hit-centre / hit-edge / hit-glancing`
+        // cues annotate the physics of a blow the `hit` event already voices: silent here
+        if (ev.id.startsWith('hit-')) return;
         const key = `${ev.slot}:${ev.id}`;
         if (t < (this.cueAt.get(key) ?? -1) + CUE_REPEAT) return;
         this.cueAt.set(key, t);
@@ -723,34 +834,32 @@ class Engine implements AudioEngineExt {
   }
 
   private genericMove(c: VoiceCtx, t: number, ev: Extract<SimEvent, { t: 'move' }>): void {
-    noiseHit(c, makeOut(c, c.panOf(ev.x), 0.2), t, {
-      dur: 0.16,
-      gain: 0.07,
-      filter: { type: 'bandpass', f0: 700, f1: 1800, q: 1 },
-      attack: 0.05,
-    });
+    swell(c, makeOut(c, c.panOf(ev.x), 0.2), t, { dur: 0.22, gain: 0.08, f0: 120, f1: 600 });
   }
 
   private roundSound(c: VoiceCtx, t: number, ev: Extract<SimEvent, { t: 'round' }>): void {
     this.score?.roundEvent(ev.phase, t);
     const o = makeOut(c, 0, 0.6);
+    const sub = makeOut(c, 0, 0.1);
     switch (ev.phase) {
       case 'intro':
-        thump(c, makeOut(c, 0, 0), t, 66, 28, 1.2, 0.5);
+        boom(c, sub, t, { f0: 66, f1: 28, dur: 1.4, gain: 0.5 });
         break;
       case 'fight':
-        riser(c, o, t, 0.25, 0.08, 800, 5000);
-        thump(c, makeOut(c, 0, 0), t + 0.25, 78, 30, 0.9, 0.6);
-        partials(c, o, t + 0.25, 587.33, GLASS, { decay: 0.9, gain: 0.08, shimmer: 0.3 });
+        // the bell of the arena: pressure gathers, the ground drops, a great bronze bell answers
+        swell(c, o, t, { dur: 0.3, gain: 0.12, f0: 100, f1: 800, sub: 0.06 });
+        boom(c, sub, t + 0.3, { f0: 82, f1: 30, dur: 1.1, gain: 0.6, drive: 2.8 });
+        lowBell(c, o, t + 0.3, 73.42, BELL, { decay: 2.2, gain: 0.12, shimmer: 0.3 });
         break;
       case 'timeover':
-        tone(c, o, t, { f0: 196, f1: 174, dur: 1.4, gain: 0.14, type: 'triangle', attack: 0.05 });
+        tone(c, o, t, { f0: 98, f1: 87, dur: 1.6, gain: 0.16, type: 'triangle', attack: 0.05 });
         break;
       case 'end':
       case 'match':
-        for (const [i, f] of [587.33, 739.99, 880, 1174.66].entries())
-          partials(c, o, t + 0.15 + i * 0.1, f, GLASS, {
-            decay: ev.phase === 'match' ? 2.4 : 1.4,
+        // a low open chord of bronze (D2 A2 D3 F♯3), long
+        for (const [i, f] of [73.42, 110, 146.83, 185].entries())
+          lowBell(c, o, t + 0.15 + i * 0.12, f, BELL, {
+            decay: ev.phase === 'match' ? 3.2 : 2,
             gain: 0.12,
             shimmer: 0.3,
           });
@@ -762,13 +871,14 @@ class Engine implements AudioEngineExt {
 
   /**
    * Sidechain-style duck of the WHOLE bed (titan beds, score, the bed's reverb) under a heavy event: `k` 0..1 picks the depth
-   * (DUCK_DB) and the time it stays down (DUCK_SEC). A deeper event inside a duck re-ducks; a lighter one leaves it alone.
+   * (DUCK_DB) and the time it stays down (DUCK_SEC), unless a depth and hold are given (the KO hush). A deeper event inside a
+   * duck re-ducks; a lighter one leaves it alone.
    */
-  private duck(t: number, k: number): void {
+  private duck(t: number, k: number, depthDb?: number, holdSec?: number): void {
     const g = this.g;
     if (!g) return;
-    const depth = DUCK_DB[0] + (DUCK_DB[1] - DUCK_DB[0]) * clamp01(k);
-    const sec = DUCK_SEC[0] + (DUCK_SEC[1] - DUCK_SEC[0]) * clamp01(k);
+    const depth = depthDb ?? DUCK_DB[0] + (DUCK_DB[1] - DUCK_DB[0]) * clamp01(k);
+    const sec = holdSec ?? DUCK_SEC[0] + (DUCK_SEC[1] - DUCK_SEC[0]) * clamp01(k);
     if (t < this.duckUntil - 0.02 && depth <= this.duckDepth) {
       // already down at least this far: only stretch the hold if this one would end later
       if (t + sec <= this.duckUntil) return;
@@ -777,9 +887,11 @@ class Engine implements AudioEngineExt {
     this.duckDepth = depth;
     const p = g.duck.gain;
     p.cancelScheduledValues(t);
-    // down in ~10 ms, held, then back with a 120 ms time constant (the hold ends early enough that the ≥ 3 dB-down time is `sec`)
-    p.setTargetAtTime(dbToGain(-depth), t, 0.01);
-    p.setTargetAtTime(1, t + Math.max(0.05, sec - 0.06), 0.12);
+    // down in ~10 ms, held, then back with a 120 ms time constant (the hold ends early enough that the ≥ 3 dB-down time is `sec`);
+    // the KO hush falls a little softer (40 ms) and comes back slowly (0.5 s), under the decay
+    const hushed = depthDb !== undefined;
+    p.setTargetAtTime(dbToGain(-depth), t, hushed ? 0.04 : 0.01);
+    p.setTargetAtTime(1, t + Math.max(0.05, sec - 0.06), hushed ? 0.5 : 0.12);
   }
 
   /* ------------------------------------------------------------------------------------------------ *
@@ -928,12 +1040,12 @@ class Engine implements AudioEngineExt {
 function playImpactWhoosh(c: VoiceCtx, t: number, pan: number, power: number): void {
   const o = makeOut(c, pan, 0.25);
   noiseHit(c, o, t, {
-    dur: 0.16 + 0.1 * power,
-    gain: 0.1 + 0.08 * power,
-    filter: { type: 'bandpass', f0: 500, f1: 2200, q: 0.9 },
+    dur: 0.2 + 0.1 * power,
+    gain: 0.12 + 0.08 * power,
+    filter: { type: 'bandpass', f0: 900, f1: 180, q: 0.9 },
     attack: 0.02,
   });
-  thump(c, makeOut(c, pan * 0.3, 0), t, 90, 40, 0.2, 0.15 + 0.2 * power);
+  boom(c, makeOut(c, pan * 0.3, 0), t, { f0: 90, f1: 40, dur: 0.3, gain: 0.15 + 0.2 * power });
 }
 
 export type { StageId };

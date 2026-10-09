@@ -1,18 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '@/contracts';
-import { FakeContext, FakeGain, WebAudioViolation, asBase, takeViolations } from '../testing/fakeContext';
 import {
-  GLASS,
-  envelope,
-  gravel,
-  makeOut,
-  noiseHit,
-  partials,
-  riser,
-  thump,
-  tone,
-  whistlePass,
-} from './synth';
+  FakeBiquad,
+  FakeContext,
+  FakeGain,
+  FakeOsc,
+  WebAudioViolation,
+  asBase,
+  takeViolations,
+} from '../testing/fakeContext';
+import { GLASS, IRON, envelope, gravel, makeOut, noiseHit, partials, riser, thump, tone } from './synth';
+import {
+  boom,
+  catastrophe,
+  crackle,
+  grind,
+  hush,
+  lowBell,
+  roar,
+  rumble,
+  saturationCurve,
+  swell,
+  whoosh,
+} from './epic';
 import type { VoiceCtx } from './types';
 
 function voiceCtx(seed: number): { c: VoiceCtx; ctx: FakeContext } {
@@ -89,8 +99,43 @@ describe('automation hygiene (Chromium diverges on overlapping ramps: gain 1e8, 
     partials(c, o, 0.1, 500, GLASS, { decay: 0.4, gain: 0.1, shimmer: 0.3 });
     thump(c, o, 0.1, 80, 30, 0.5, 0.5);
     riser(c, o, 0.1, 1, 0.1, 300, 5000);
-    whistlePass(c, 0.1, { f: 900, dur: 0.5, gain: 0.1, panFrom: -1, panTo: 1, wet: 0.3 });
     expect(takeViolations()).toEqual([]);
+  });
+  it('the cataclysm kit schedules well-formed automation, and nothing it plays is a tone above ~1.6 kHz (D34: no whistles)', () => {
+    const { c, ctx } = voiceCtx(4);
+    const o = makeOut(c, -0.2, 0.4);
+    boom(c, o, 0.1, { f0: 110, f1: 30, dur: 1.2, gain: 0.8 });
+    rumble(c, o, 0.1, { dur: 4, gain: 0.2 });
+    swell(c, o, 0.1, { dur: 1, gain: 0.2, f1: 5000, sub: 0.1 }); // asked for 5 kHz: clamped
+    whoosh(c, 0.1, { dur: 0.6, gain: 0.1, panFrom: -1, panTo: 1, wet: 0.3, f0: 4000 });
+    roar(c, o, 0.1, { f: 55, f1: 41, dur: 1.5, gain: 0.1, lp0: 3000, lp1: 200 });
+    lowBell(c, o, 0.1, 400, IRON, { decay: 1, gain: 0.1 });
+    grind(c, o, 0.1, { dur: 0.6, gain: 0.1, f0: 3000, f1: 100, rate: 9, metal: true });
+    crackle(c, o, 0.1, { dur: 1, count: 20, gain: 0.1 });
+    hush(c, o, 0.1, 0.4, 0.2);
+    const at = catastrophe(c, o, o, 1, { size: 1 });
+    expect(at).toBeGreaterThan(1.2);
+    expect(takeViolations()).toEqual([]);
+    for (const n of ctx.nodes) {
+      if (n instanceof FakeOsc && n.frequency.value >= 25)
+        for (const e of n.frequency.events)
+          expect(e.v, 'an oscillator above 1.6 kHz').toBeLessThanOrEqual(1600);
+      if (n instanceof FakeBiquad && n.type !== 'lowpass')
+        for (const e of n.frequency.events)
+          expect(e.v, `a ${n.type} filter above 1.6 kHz`).toBeLessThanOrEqual(1600);
+    }
+  });
+  it('the saturator is odd, monotonic and bounded (harmonics, never clipping past full scale)', () => {
+    for (const drive of [1, 2.4, 6]) {
+      const k = saturationCurve(drive);
+      const n = k.length;
+      expect(k[0]).toBeCloseTo(-1, 5);
+      expect(k[n - 1]).toBeCloseTo(1, 5);
+      for (let i = 1; i < n; i++) expect(k[i]!).toBeGreaterThan(k[i - 1]!);
+      for (let i = 0; i < n; i++) expect(k[i]!).toBeCloseTo(-k[n - 1 - i]!, 5);
+    }
+    // a harder drive lifts quiet input more (more harmonics at the same level)
+    expect(saturationCurve(6)[1500]!).toBeGreaterThan(saturationCurve(1)[1500]!);
   });
   it('envelope keeps the attack strictly inside the duration', () => {
     const ctx = new FakeContext();

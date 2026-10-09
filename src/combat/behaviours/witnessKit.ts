@@ -1,4 +1,5 @@
 import { DamageFlag, clamp, clamp01, type DamageType, type OverlapResult } from '@/contracts';
+import { WITNESS_SCALE } from '@/titans';
 import type { FighterImpl } from '../fighter';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
@@ -198,7 +199,7 @@ export class WitnessKit {
         s.kind = 'point';
         s.x = this.pa.x;
         s.y = this.pa.y;
-        s.r = 10;
+        s.r = 10 * WITNESS_SCALE; // the arc's own thickness (D34: the Witness is painted at WITNESS_SCALE)
         if (
           this.hit(
             f,
@@ -298,7 +299,7 @@ export class WitnessKit {
           s.y0 = this.pa.y;
           s.x1 = this.pb.x;
           s.y1 = this.pb.y;
-          s.width = 12;
+          s.width = 12 * WITNESS_SCALE;
           if (
             this.hit(
               f,
@@ -321,13 +322,14 @@ export class WitnessKit {
         const ux = f.aimUx;
         const uy = f.aimUy;
         for (let k = 0; k < 3; k++) {
-          const d0 = 50 + k * 34;
+          // it starts just outside the head and runs out along the axis (body px at WITNESS_SCALE)
+          const d0 = (50 + k * 34) * WITNESS_SCALE;
           this.mark(
             h,
             h.eyeX + ux * d0,
             h.eyeY + uy * d0,
-            h.eyeX + ux * (d0 + 40),
-            h.eyeY + uy * (d0 + 40),
+            h.eyeX + ux * (d0 + 40 * WITNESS_SCALE),
+            h.eyeY + uy * (d0 + 40 * WITNESS_SCALE),
             20 + k * 12,
             260,
             false,

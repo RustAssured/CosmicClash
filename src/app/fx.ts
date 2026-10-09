@@ -125,6 +125,13 @@ export const IMPACT_SLOTS = 2;
 export const ONSET_GAP = 1 / 3;
 /** Events this close (wall s) to the newest onset belong to the same burst (a hit, its flash and its KO on one tick). */
 const SAME_BURST = 0.05;
+/**
+ * Screen-wide flash (D34): peak by blow weight [light, medium, heavy, catastrophic] (fraction of the flash colour added over the
+ * frame; the original game's washes reached a 0.32 luminance change) and its decay time constant (s, wall).
+ */
+const WASH_PEAK = [0, 0, 0.18, 0.32];
+const WASH_TAU = 0.075;
+const WASH_WHITE: readonly [number, number, number] = [1, 0.96, 0.88];
 /** A light is dropped once its envelope falls below this. */
 const LIGHT_CUTOFF = 0.02;
 /** Intensity slew (per wall second) for what the renderer sees: rising and falling. */
@@ -178,6 +185,9 @@ export class FxState {
   private readonly cometTracks: CometTrack[] = [];
   /** Shared impact VFX (VFX_SPEC): one per landed blow, keyed on the blow's weight (hit.weight, proposal 171). */
   private readonly impactsVfx: VfxImpact[] = [];
+  /** The screen-wide flash (D34): colour, peak, centre (world), and the wall time it struck. */
+  private readonly wash = { r: 1, g: 1, b: 1, peak: 0, x: 0, y: 0, at: -1e9 };
+  private readonly washOut = { r: 1, g: 1, b: 1, a: 0, x: 0, y: 0 };
   private readonly vfxOut: VfxImpact[] = [];
   /** Wall time of each attacker's last light-weight VFX (continuous slices land every few ticks: one spark burst per 0.1 s). */
   private readonly lastLight = [-1, -1];
@@ -247,6 +257,8 @@ export class FxState {
     for (const l of this.impacts) l.live = false;
     this.cometTracks.length = 0;
     this.impactsVfx.length = 0;
+    this.wash.peak = 0;
+    this.wash.at = -1e9;
     this.lastLight[0] = this.lastLight[1] = -1;
     this.wellsOut.length = 0;
   }
@@ -399,12 +411,14 @@ export class FxState {
           const x = e.x ?? (v0.x + v1.x) / 2;
           const y = e.y ?? (v0.y + v1.y) / 2;
           this.impact(x, y, FLASH_LIGHT, 0.6 + a, 90 + 110 * a, 0.16 + 0.2 * a, 0.5 * a);
+          this.washAt(x, y, FLASH_LIGHT, 0.12 + 0.2 * a);
           break;
         }
         case 'ko': {
           const victim = match.fighters[e.slot].view.titan;
           // capped core (Gate B: a 1.6 / 200 px KO light blew a ~150 px area out): bright, local, the wound stays legible
           this.impact(e.x, e.y, lightOf(victim).c, 1.2, 130, 0.45, 1, true);
+          this.washAt(e.x, e.y, WASH_WHITE, WASH_PEAK[3]!);
           this.heat += 3;
           break;
         }
@@ -513,9 +527,34 @@ export class FxState {
    * lighter, a KO blow catastrophic). Events from before proposal 171 fall back to the sim's heavy flag. The debris matter
    * follows the STRUCK titan (the Witness's gold, the Planet's rock and magma).
    */
+  /**
+   * A screen-wide flash (D34: WJ wants the original's washes back). A stronger one replaces the current; a weaker one inside the
+   * current's envelope is ignored. Peaks on its own frame, gone in ≈ 0.25 s (wall) so the wound reads right after.
+   */
+  private washAt(x: number, y: number, c: readonly [number, number, number], peak: number): void {
+    const w = this.wash;
+    if (peak < this.washLevel()) return;
+    w.r = c[0];
+    w.g = c[1];
+    w.b = c[2];
+    w.peak = peak;
+    w.x = x;
+    w.y = y;
+    w.at = this.wall;
+  }
+  private washLevel(alphaSec = 0): number {
+    const age = this.wall + alphaSec - this.wash.at;
+    return age < 0 ? 0 : this.wash.peak * Math.exp(-age / WASH_TAU);
+  }
+
   private vfxHit(e: Extract<SimEvent, { t: 'hit' }>, match: MatchApi): void {
     const w = e.weight ?? (e.heavy ? 'heavy' : e.energy >= 400 ? 'medium' : 'light');
     const weight = (['light', 'medium', 'heavy', 'catastrophic'] as const).indexOf(w) as VfxWeight;
+    // heavy and catastrophic blows go screen-wide (D34), in the blow's own light
+    if (weight >= 2) {
+      const c = e.titan === 'lastone' ? WITNESS_HEAVY : (TYPE_LIGHT[e.type] ?? WASH_WHITE);
+      this.washAt(e.x, e.y, c, WASH_PEAK[weight]! * (1 - 0.5 * clamp(e.blocked, 0, 1)));
+    }
     if (weight === 0) {
       if (this.wall - this.lastLight[e.attacker]! < 0.1) return;
       this.lastLight[e.attacker] = this.wall;
@@ -665,6 +704,15 @@ export class FxState {
     }
     // `flash` is informational now (the renderer never whitens); `aberration` is the strongest local wound refraction
     o.flash = clamp(flash, 0, 1) * comfort;
+    // the screen-wide flash: the renderer applies it scaled by the comfort setting (D5's limits are the comfort mode)
+    const wo = this.washOut;
+    wo.r = this.wash.r;
+    wo.g = this.wash.g;
+    wo.b = this.wash.b;
+    wo.x = this.wash.x;
+    wo.y = this.wash.y;
+    wo.a = this.washLevel(alpha / TICK_HZ);
+    (o as FrameFxVfx).wash = wo;
     o.aberration = clamp(refr, 0, 1) * comfort;
     o.intensity = this.visI;
     o.timeScale = this.timeScale;

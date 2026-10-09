@@ -26,7 +26,7 @@ const H = 360;
 const OX = URI_REF.screenX - URI_REF.originX;
 const OY = URI_REF.screenY - URI_REF.originY;
 
-const parts = new Map(uriPartMatter().map((p) => [p.key, p]));
+const parts = new Map(uriPartMatter(1).map((p) => [p.key, p]));
 
 /** Rasterise every part at its place (4-sample majority: ≥ 2 of 4 sub-samples on matter, as the oracle). */
 function render(

@@ -1,28 +1,18 @@
 import { clamp, clamp01 } from '../dsp/math';
 import { cueKind } from './cues';
 import { bubbles, createBed, lfoInto, noiseBand, scrape, silentGain, subOut, type Bed } from './kit';
-import {
-  BELL,
-  envelope,
-  gravel,
-  makeOut,
-  noiseHit,
-  partials,
-  riser,
-  thump,
-  tone,
-  whistlePass,
-  type Out,
-} from './synth';
+import { BELL, envelope, gravel, makeOut, noiseHit, partials, tone, type Out } from './synth';
 import type { TitanVoice, VoiceCtx } from './types';
 import { atmosphericTear, magmaVent, resonance, subPressure, tectonicCrack } from './materials';
+import { boom, catastrophe, rumble, swell, whoosh } from './epic';
 
 /**
  * THE PLANET: tectonic rumble and wind. Slow, vast, low. The body is rock under an atmosphere, so the sound is the ground
  * grinding, crust groaning under strain, and air moving over it; a moon slam is a huge low impact with a bell-like orbital ring
- * that outlasts it; boiling oceans hiss and bubble; a stripped atmosphere is wind fading away for good.
+ * that outlasts it; boiling oceans surge and blurp low; a stripped atmosphere is wind fading away for good; its KO is the hush and
+ * a world-sized drop. (D34: the 4 kHz boil and steam hisses, the 1.7 kHz wind layer and the Doppler whistles are gone.)
  *
- * The bed is continuous: a brown-noise tremor that grinds on a slow cycle, three layers of wind (low, mid, high) drifting
+ * The bed is continuous: a brown-noise tremor that grinds on a slow cycle, three layers of cosmic wind (130/300/620 Hz) drifting
  * independently, and now and then a crust groan. Wind is the atmosphere: `atmosphere stripped` cues wear it down for the rest
  * of the fight.
  */
@@ -76,15 +66,21 @@ export function createPlanetVoice(): TitanVoice {
   /** The ground taking a blow: a long sub drop, a low rock crunch and a rumble that lingers. */
   const impact = (c: VoiceCtx, t: number, pan: number, mag: number, wet = 0.5, level = 1): void => {
     const o = makeOut(c, pan, wet);
-    thump(c, subOut(c, pan), t, 52 - 10 * mag, 20, 0.7 + 1.4 * mag, (0.34 + 0.3 * mag) * level);
+    boom(c, subOut(c, pan), t, {
+      f0: 60 - 12 * mag,
+      f1: 20,
+      dur: 0.8 + 1.6 * mag,
+      gain: (0.36 + 0.32 * mag) * level,
+      drive: 2.8 + mag,
+    });
     gravel(c, o, t + 0.006, {
       dur: 0.35 + 0.5 * mag,
       grains: 14 + Math.round(24 * mag),
-      f: 300,
+      f: 360,
       spread: 2.2,
-      gain: (0.13 + 0.08 * mag) * level,
+      gain: (0.24 + 0.12 * mag) * level,
       q: 0.9,
-      lowpass: 700,
+      lowpass: 1100,
     });
     noiseHit(c, o, t, {
       dur: 0.5 + 0.9 * mag,
@@ -95,31 +91,50 @@ export function createPlanetVoice(): TitanVoice {
     });
   };
 
-  /** A sharp crack through the crust: bright rock snap and a groan leaning down after it. */
+  /** A crack through the crust: a dark rock snap, rubble, and a groan leaning down after it. */
   const crack = (c: VoiceCtx, t: number, pan: number, mag: number, level = 1): void => {
     const o = makeOut(c, pan, 0.4);
     noiseHit(c, o, t, {
-      dur: 0.05,
-      gain: 0.2 * level,
-      filter: { type: 'highpass', f0: 1800 },
-      attack: 0.0005,
+      dur: 0.06,
+      gain: 0.22 * level,
+      filter: { type: 'bandpass', f0: 750, q: 0.9 },
+      filter2: { type: 'lowpass', f0: 1600 },
+      attack: 0.0006,
     });
-    gravel(c, o, t, { dur: 0.3, grains: 10, f: 1100, spread: 2.6, gain: 0.14 * level, q: 1.4 });
+    gravel(c, o, t, {
+      dur: 0.35,
+      grains: 10,
+      f: 520,
+      spread: 2.4,
+      gain: 0.14 * level,
+      q: 1.2,
+      lowpass: 1300,
+    });
     groan(c, t + 0.03, o, 0.6 + 0.6 * mag, (0.05 + 0.04 * mag) * level, 78);
+    boom(c, subOut(c, pan), t, { f0: 74, f1: 30, dur: 0.5 + 0.5 * mag, gain: (0.16 + 0.14 * mag) * level });
   };
 
-  /** Wind over the atmosphere: a swept band with a slow flutter; `dir` mirrors the sweep. */
+  /** Wind over a world: a swept band of cosmic air with a slow flutter (kept under ~900 Hz). */
   const gust = (
     c: VoiceCtx,
     t: number,
     pan: number,
     dur: number,
     gain: number,
-    f0 = 260,
-    f1 = 1100,
+    f0 = 160,
+    f1 = 600,
     q = 0.8,
   ): void => {
-    scrape(c, makeOut(c, pan, 0.4), t, { dur, f0, f1, q, gain, rate: 3.5, depth: 0.5, attack: dur * 0.4 });
+    scrape(c, makeOut(c, pan, 0.45), t, {
+      dur,
+      f0: Math.min(f0, 900),
+      f1: Math.min(f1, 900),
+      q,
+      gain,
+      rate: 3.5,
+      depth: 0.5,
+      attack: dur * 0.4,
+    });
   };
 
   /** A moon's orbital ring: a big bronze bell tone that sags a little and outlasts the impact that rang it. */
@@ -133,16 +148,20 @@ export function createPlanetVoice(): TitanVoice {
     });
   };
 
-  /** Boiling water: a hiss with bubbles breaking through it. */
+  /**
+   * An ocean boiling off a world: a roiling low surge of steam and great slow blurps breaking through it (it was a 4.2 kHz hiss
+   * with 420 Hz+ chirps: a kettle, not an ocean).
+   */
   const boil = (c: VoiceCtx, t: number, pan: number, dur: number, amount: number, level = 1): void => {
-    const o = makeOut(c, pan, 0.4);
+    const o = makeOut(c, pan, 0.45);
     noiseHit(c, o, t, {
       dur,
-      gain: (0.07 + 0.05 * amount) * level,
-      filter: { type: 'highpass', f0: 4200, q: 0.6 },
+      gain: (0.12 + 0.08 * amount) * level,
+      kind: 'brown',
+      filter: { type: 'bandpass', f0: 380, f1: 220, q: 0.7 },
       attack: dur * 0.25,
     });
-    bubbles(c, o, t, { dur, count: Math.round(10 + 22 * amount), f: 420, gain: 0.05 * level });
+    bubbles(c, o, t, { dur, count: Math.round(8 + 14 * amount), f: 70, gain: 0.07 * level });
   };
 
   return {
@@ -153,7 +172,8 @@ export function createPlanetVoice(): TitanVoice {
       const o = makeOut(c, pan * 0.5, 0.4);
       switch (ev.moveSlot) {
         case 'strike':
-          gust(c, t, pan, 0.25, 0.38, 260, 1100, 0.5);
+          gust(c, t, pan, 0.28, 0.38, 140, 600, 0.6);
+          swell(c, o, t, { dur: 0.28, gain: 0.08, f0: 90, f1: 500, sub: 0.05 });
           break;
         case 'crush':
           // gravity compressing: a groan rising in strain and the PRESSURE building under it
@@ -161,16 +181,16 @@ export function createPlanetVoice(): TitanVoice {
           subPressure(c, t, pan, 0.6, 0.14);
           break;
         case 'signature':
-          // the moon is slung: a swirl of air and a low bell note as it leaves
-          whistlePass(c, t, {
-            f: 240,
-            dur: 0.5,
-            gain: 0.12,
+          // the moon is slung: a moon's mass of air swept around the world
+          whoosh(c, t, {
+            dur: 0.55,
+            gain: 0.3,
             panFrom: pan,
             panTo: clamp(-pan, -1, 1),
             wet: 0.5,
-            approach: 1.3,
-            recede: 0.8,
+            f0: 500,
+            f1: 90,
+            body: 1.2,
           });
           break;
         case 'ultimate':
@@ -207,24 +227,30 @@ export function createPlanetVoice(): TitanVoice {
       // drifting through its own atmosphere: a broad wind whoosh and a sway in the sub
       const pan = c.panOf(ev.x);
       const dir = Math.sign(ev.dirX || 1);
-      whistlePass(c, t, {
-        f: 180,
-        dur: 0.7,
-        gain: 0.05,
+      whoosh(c, t, {
+        dur: 0.75,
+        gain: 0.08,
         panFrom: clamp(pan - 0.5 * dir, -1, 1),
         panTo: clamp(pan + 0.5 * dir, -1, 1),
         wet: 0.5,
-        approach: 1.25,
-        recede: 0.8,
+        f0: 400,
+        f1: 90,
+        body: 1.3,
       });
-      gust(c, t, pan, 0.75, 0.13, 220, 900);
+      gust(c, t, pan, 0.75, 0.13, 140, 520);
       tone(c, makeOut(c, pan * 0.3, 0), t, { f0: 48, f1: 36, dur: 0.7, gain: 0.1, attack: 0.15 });
     },
 
     onHitDealt(c, t, ev, mag) {
       const pan = c.panOf(ev.x);
       if (ev.type === 'CRUSH' || ev.heavy)
-        thump(c, subOut(c, pan), t + 0.01, 40, 18, 0.9 + 0.8 * mag, 0.2 + 0.2 * mag);
+        boom(c, subOut(c, pan), t + 0.01, {
+          f0: 44,
+          f1: 18,
+          dur: 1 + 0.9 * mag,
+          gain: 0.2 + 0.2 * mag,
+          drive: 3,
+        });
       else
         gravel(c, makeOut(c, pan, 0.3), t + 0.01, {
           dur: 0.25,
@@ -263,21 +289,21 @@ export function createPlanetVoice(): TitanVoice {
     onGuard(c, t, ev) {
       // the atmosphere takes it: a swell of wind, a low thud; when it breaks, the crust cracks
       const pan = c.panOf(ev.x);
-      gust(c, t, pan, ev.broke ? 0.9 : 0.5, ev.broke ? 0.16 : 0.1, 400, 1400);
-      thump(c, subOut(c, pan), t, 90, 40, ev.broke ? 0.8 : 0.35, ev.broke ? 0.6 : 0.3);
+      gust(c, t, pan, ev.broke ? 0.9 : 0.5, ev.broke ? 0.16 : 0.1, 220, 700);
+      boom(c, subOut(c, pan), t, { f0: 90, f1: 40, dur: ev.broke ? 0.8 : 0.35, gain: ev.broke ? 0.6 : 0.3 });
       if (ev.broke) crack(c, t + 0.05, pan, 1);
     },
 
     onKo(c, t, ev) {
-      // the world comes apart: a long sub drop, crust groans, a landslide of rock, magma breaking out and the air torn away
+      // the world comes apart: the hush, the drop, then crust groans, a landslide of rock, magma breaking out, the air torn away
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan * 0.4, 0.85);
-      tectonicCrack(c, o, t, 1, resonance(massBy[ev.slot], 1));
-      magmaVent(c, o, t + 0.3, 2.2, 1);
-      atmosphericTear(c, o, t + 0.6, 1);
-      thump(c, subOut(c, pan), t, 50, 16, 3.0, 0.55);
-      for (let i = 0; i < 4; i++) groan(c, t + 0.1 + i * 0.55, o, 1.6, 0.06, 72 - 8 * i);
-      gravel(c, o, t + 0.05, {
+      const at = catastrophe(c, subOut(c, pan), o, t, { size: 1, f0: 48 });
+      tectonicCrack(c, o, at, 1, resonance(massBy[ev.slot], 1));
+      magmaVent(c, o, at + 0.3, 2.2, 1);
+      atmosphericTear(c, o, at + 0.6, 1);
+      for (let i = 0; i < 4; i++) groan(c, at + 0.1 + i * 0.55, o, 1.6, 0.06, 72 - 8 * i);
+      gravel(c, o, at + 0.05, {
         dur: 2.6,
         grains: 80,
         f: 260,
@@ -287,19 +313,7 @@ export function createPlanetVoice(): TitanVoice {
         decayShape: 1.1,
         lowpass: 500,
       });
-      noiseHit(c, o, t, {
-        dur: 3,
-        gain: 0.12,
-        filter: { type: 'lowpass', f0: 600, f1: 50, q: 0.8 },
-        kind: 'brown',
-        attack: 0.02,
-      });
-      noiseHit(c, o, t, {
-        dur: 2.6,
-        gain: 0.07,
-        filter: { type: 'bandpass', f0: 600, f1: 150, q: 0.6 },
-        attack: 0.2,
-      });
+      orbit(c, at + 0.4, pan, 55, 1);
     },
 
     onUltimate(c, t, ev) {
@@ -316,20 +330,21 @@ export function createPlanetVoice(): TitanVoice {
         });
         scrape(c, o, t, {
           dur: 2.4,
-          f0: 250,
-          f1: 1500,
+          f0: 150,
+          f1: 800,
           q: 0.9,
-          gain: 0.14,
+          gain: 0.16,
           rate: 4.5,
           depth: 0.6,
           attack: 1.8,
         });
         for (let i = 0; i < 3; i++) groan(c, t + 0.2 + i * 0.6, o, 1.5, 0.06, 64 + 6 * i);
-        riser(c, o, t, 2.4, 0.06, 200, 2400);
+        swell(c, o, t, { dur: 2.4, gain: 0.14, f0: 70, f1: 900, sub: 0.12, subHz: 34 });
+        catastrophe(c, subOut(c, 0), o, t + 2.4, { pre: 0, size: 0.8, gain: 0.9, f0: 46 });
         impact(c, t + 2.4, 0, 1, 0.9);
         orbit(c, t + 2.4, 0, 82, 1);
       } else {
-        gust(c, t, pan, 1.6, 0.1, 900, 200);
+        gust(c, t, pan, 1.6, 0.1, 700, 140);
       }
     },
 
@@ -341,10 +356,12 @@ export function createPlanetVoice(): TitanVoice {
           boil(c, t, pan, 0.9, m, 1.8);
           return true;
         case 'evaporate':
-          noiseHit(c, makeOut(c, pan, 0.4), t, {
-            dur: 1.0,
-            gain: 0.09,
-            filter: { type: 'highpass', f0: 3800, q: 0.6 },
+          // a sea going up into space: a low roaring exhale of steam
+          noiseHit(c, makeOut(c, pan, 0.45), t, {
+            dur: 1.1,
+            gain: 0.14,
+            kind: 'brown',
+            filter: { type: 'bandpass', f0: 450, f1: 200, q: 0.7 },
             attack: 0.2,
           });
           return true;
@@ -352,8 +369,15 @@ export function createPlanetVoice(): TitanVoice {
           crack(c, t, pan, 0.3 + 0.5 * m, 2);
           return true;
         case 'detach':
-          gravel(c, makeOut(c, pan, 0.3), t, { dur: 0.35, grains: 12, f: 480, spread: 2.4, gain: 0.14 });
-          thump(c, subOut(c, pan), t, 60, 26, 0.4, 0.2 + 0.2 * m);
+          gravel(c, makeOut(c, pan, 0.3), t, {
+            dur: 0.4,
+            grains: 12,
+            f: 400,
+            spread: 2.4,
+            gain: 0.14,
+            lowpass: 1200,
+          });
+          boom(c, subOut(c, pan), t, { f0: 66, f1: 26, dur: 0.5, gain: 0.2 + 0.2 * m });
           return true;
         case 'impact':
           impact(c, t, pan, 0.3 + 0.5 * m, 0.4);
@@ -381,27 +405,36 @@ export function createPlanetVoice(): TitanVoice {
         case 'moon-shatter':
           impact(c, t, pan, 0.9, 0.6, 0.7);
           orbit(c, t + 0.01, pan, 150, 0.6);
-          gravel(c, o, t + 0.02, { dur: 0.9, grains: 34, f: 1400, spread: 2.4, gain: 0.14, q: 1.4 });
+          gravel(c, o, t + 0.02, {
+            dur: 0.9,
+            grains: 34,
+            f: 600,
+            spread: 2.4,
+            gain: 0.14,
+            q: 1.2,
+            lowpass: 1500,
+          });
+          rumble(c, o, t, { dur: 2.2, gain: 0.12, f0: 280, f1: 60 });
           return;
         case 'comet-call':
           // the gravity reaches out: pressure, and a far bell answering
           subPressure(c, t, pan, 0.8, 0.09);
-          orbit(c, t + 0.3, pan, 196, 0.4);
+          orbit(c, t + 0.3, pan, 98, 0.4);
           return;
         case 'comet-capture':
           orbit(c, t, pan, 147, 0.7);
-          gust(c, t, pan, 0.8, 0.3, 300, 900);
+          gust(c, t, pan, 0.8, 0.3, 200, 600);
           return;
         case 'comet-sling':
-          whistlePass(c, t, {
-            f: 260 + 300 * a,
-            dur: 0.7,
-            gain: 0.12,
+          whoosh(c, t, {
+            dur: 0.75,
+            gain: 0.16,
             panFrom: pan,
             panTo: clamp(-pan, -1, 1),
             wet: 0.5,
-            approach: 1.4,
-            recede: 0.7,
+            f0: 500 + 300 * a,
+            f1: 100,
+            body: 1.2,
           });
           atmosphericTear(c, o, t, 0.4 + 0.6 * a);
           return;
@@ -429,7 +462,7 @@ export function createPlanetVoice(): TitanVoice {
         case 'atmo-vent':
           // failure 1/4: the atmosphere vents away
           atmosphericTear(c, o, t, 1);
-          gust(c, t, pan, 2.2, 0.6, 1500, 200, 0.45);
+          gust(c, t, pan, 2.2, 0.6, 800, 120, 0.45);
           return;
         case 'moons-drift':
           // failure 2/4: the moons' bells ring once more, lower, and recede
@@ -451,7 +484,7 @@ export function createPlanetVoice(): TitanVoice {
           return;
         case 'core-out':
           // failure 4/4: the core goes out — the pressure falls away to nothing
-          thump(c, subOut(c, pan), t, 70, 18, 2.6, 0.5);
+          boom(c, subOut(c, pan), t, { f0: 70, f1: 18, dur: 2.6, gain: 0.5, drive: 3 });
           magmaVent(c, o, t, 2.4, 0.3);
           return;
         default:
@@ -462,13 +495,13 @@ export function createPlanetVoice(): TitanVoice {
           // a moon knocked out of orbit: the bell rings, sags and recedes, over a low boom
           orbit(c, t, pan, 110, 0.8);
           tone(c, makeOut(c, pan, 0.6), t, { f0: 220, f1: 130, dur: 1.6, gain: 0.04, attack: 0.01 });
-          thump(c, subOut(c, pan), t, 60, 24, 0.7, 0.3);
+          boom(c, subOut(c, pan), t, { f0: 60, f1: 24, dur: 0.9, gain: 0.3 });
           return;
         }
         case 'strip': {
           // atmosphere torn away: a rush of wind that does not come back
           stripped[ev.slot] = clamp01(stripped[ev.slot] + 0.3 + 0.3 * a);
-          gust(c, t, pan, 1.6, 0.85, 1400, 250, 0.45);
+          gust(c, t, pan, 1.6, 0.85, 800, 140, 0.45);
           atmosphericTear(c, makeOut(c, pan, 0.5), t, a);
           return;
         }
@@ -485,7 +518,14 @@ export function createPlanetVoice(): TitanVoice {
           impact(c, t + 0.05, pan, 0.4 + 0.3 * a, 0.5);
           return;
         case 'shed':
-          gravel(c, makeOut(c, pan, 0.4), t, { dur: 0.8, grains: 30, f: 460, spread: 2.6, gain: 0.16 });
+          gravel(c, makeOut(c, pan, 0.4), t, {
+            dur: 0.8,
+            grains: 30,
+            f: 400,
+            spread: 2.6,
+            gain: 0.16,
+            lowpass: 1300,
+          });
           return;
         default:
           orbit(c, t, pan, 130, 0.9 + 0.1 * a);
@@ -505,12 +545,13 @@ export function createPlanetVoice(): TitanVoice {
         const grind = silentGain(c, bed.input);
         noiseBand(c, bed, grind, { kind: 'brown', type: 'bandpass', f: 160, q: 2.5 });
         const grindSwing = lfoInto(c, bed, grind.gain, 6.5, 0, 'triangle').depth;
-        // three layers of wind, each drifting on its own slow cycle
+        // three layers of cosmic wind, each drifting on its own slow cycle (D34: lowered from 230 / 640 / 1700 Hz, the top one
+        // was a hiss)
         const winds: Ground['winds'] = [];
         for (const [base, q, weight, rate] of [
-          [230, 0.8, 1, 0.07],
-          [640, 0.7, 0.7, 0.11],
-          [1700, 0.8, 0.4, 0.05],
+          [130, 0.8, 1, 0.07],
+          [300, 0.7, 0.9, 0.11],
+          [620, 0.8, 0.85, 0.05],
         ] as const) {
           const gain = silentGain(c, bed.input);
           const { filter: band } = noiseBand(c, bed, gain, { kind: 'white', type: 'bandpass', f: base, q });
@@ -543,7 +584,7 @@ export function createPlanetVoice(): TitanVoice {
       g.grind.gain.setTargetAtTime(grind, now, 0.4);
       g.grindSwing.gain.setTargetAtTime(grind * 0.5, now, 0.4);
       // (band-passed noise carries only a few percent of the noise power: the wind needs a big gain to be heard at all)
-      for (const w of g.winds) w.gain.gain.setTargetAtTime((0.06 + 0.04 * move) * w.weight * air, now, 0.5);
+      for (const w of g.winds) w.gain.gain.setTargetAtTime((0.09 + 0.05 * move) * w.weight * air, now, 0.5);
       g.bed.pan.pan.setTargetAtTime(clamp(c.panOf(scene.x), -1, 1), now, 0.1);
       // a crust groan every four seconds or so, more often the more of the planet is gone
       if (c.rand() < (0.14 + 0.3 * (1 - clamp01(mass))) * dt)

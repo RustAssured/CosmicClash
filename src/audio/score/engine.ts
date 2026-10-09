@@ -332,12 +332,14 @@ export class ScoreEngine {
   }
 
   private perc(t: number, v: number, pan: number): void {
+    // a skin-and-stone shaker under the taiko (D34: it was a 5.5–8.5 kHz hi-hat tick, a hiss over every fight)
     const o = makeOut(this.c, clamp(pan, -1, 1), 0.3);
     noiseHit(this.c, o, t, {
-      dur: 0.05 + this.rng.next() * 0.05,
-      gain: 0.07 * v,
-      filter: { type: 'highpass', f0: 5500 + this.rng.next() * 3000, q: 0.8 },
-      attack: 0.001,
+      dur: 0.06 + this.rng.next() * 0.05,
+      gain: 0.06 * v,
+      filter: { type: 'bandpass', f0: 900 + this.rng.next() * 600, q: 1.2 },
+      filter2: { type: 'lowpass', f0: 2400 },
+      attack: 0.002,
     });
   }
 
@@ -348,9 +350,11 @@ export class ScoreEngine {
 
   private bell(t: number, degree: number): void {
     // a note of the stage's own scale (not a fixed pentatonic: it would leave the key on the whole-tone and Phrygian stages)
+    // (D34: its glassy upper partials capped at 2.6 kHz: a far bell in a vast space, not a ping. It stays in its own register:
+    // an octave lower, its inharmonic partials land in the pad's and pull the score out of key)
     const hz = degreeToHz(this.music.root + 36, this.music.mode, degree);
     const o = makeOut(this.c, (this.rng.next() - 0.5) * 1.2, Math.min(0.95, 0.7 * this.feel.space));
-    partials(this.c, o, t, hz, GLASS, { decay: 2.2, gain: 0.05, shimmer: 0.3 });
+    partials(this.c, o, t, hz, GLASS, { decay: 2.2, gain: 0.05, shimmer: 0.3, maxHz: 2600 });
   }
 
   /* ------------------------------------------------------------------------------------------------ *

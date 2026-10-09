@@ -25,6 +25,8 @@ import {
   URI_COLD_CORE,
   URI_HOT_CORE,
   URI_ORDER,
+  URI_PARTS,
+  URI_SCALE,
   uriPart,
   type UriPartKey,
   type UriPlaces,
@@ -33,6 +35,7 @@ import {
 import type { RenderLayerLit } from '@/render/unified';
 import type { UriLiveFx, UriPylon } from '@/render/uriLive';
 import { URI_MAT } from '@/titans/uri/maps';
+import { uriGridOf, type UriGrid } from '@/titans/uri/scale';
 import { Behaviour } from '../behaviour';
 import { addDamageResult, type DamageSum } from '../damageSum';
 import { makeFatShape, type FatShape } from '../shapes';
@@ -54,6 +57,8 @@ import type { FighterImpl } from '../fighter';
  * - **Draw order** (spec §4): pylons behind the pelvis (the fighter's own body layer), everything else in front of it, in the
  *   asset's order: upper arms, domes, chamber, forearms, fists, moon.
  * - **Diagnostics** (spec §9, the debug overlay): centre of mass, barycentre of the cores, part pivots, the target vector.
+ * - **Scale** (D34): the rig, the kinetic system and places are in REFERENCE px (oracle parity); the matter is the asset
+ *   resampled to URI_SCALE (each part's grid: GRID), and world = offset + URI_SCALE × reference.
  * - **Damage** (2C, spec §7): the loop is the health; a blow tears the struck chunk out (S4's chunk groups), necks fail and send
  *   the hanging chain away whole, a limb / pylon / moon at half goes in pieces, loop 0 breaks everything apart around the cores.
  */
@@ -86,6 +91,11 @@ interface PartMass {
 }
 
 const ATLAS_ROW = 1024;
+/** World px per reference px (D34: 우리 about 200 px tall). */
+const SC = URI_SCALE;
+/** Every part's grid at the game's scale (the matter maps' size and pivot). */
+const GRID = new Map<UriPartKey, UriGrid>(URI_PARTS.map((p) => [p.key, uriGridOf(p, SC)]));
+const grid = (k: UriPartKey): UriGrid => GRID.get(k)!;
 /** Pylons are drawn behind the pelvis (the primary); every other part in front of it. */
 const BACK_PARTS: readonly UriPartKey[] = ['pyL', 'pyR'];
 
@@ -143,6 +153,7 @@ const FRONT_TO_BACK: readonly UriPartKey[] = [
 type GroupWorld = MatterWorld & {
   setCellGroups?(bodyId: number, groups: Uint16Array): boolean;
   setFieldHeld?(bodyId: number, on: boolean): boolean;
+  setGroupScale?(bodyId: number, scale: number): boolean;
   hitTear?(bodyId: number, wx: number, wy: number, power: number): number;
   groupAt?(bodyId: number, wx: number, wy: number): number;
   releaseGroups?(bodyId: number, fx: number, fy: number, power: number, maxPieces?: number): number;
@@ -238,8 +249,8 @@ export class UriBehaviour extends Behaviour {
     hotY: 0,
     coldX: 0,
     coldY: 0,
-    hotR: Math.round(URI_HOT_CORE[2]),
-    coldR: Math.round(URI_COLD_CORE[2]),
+    hotR: Math.round(URI_HOT_CORE[2] * SC),
+    coldR: Math.round(URI_COLD_CORE[2] * SC),
     t: 0,
     spin: 0,
     hp: 100,
@@ -335,7 +346,7 @@ export class UriBehaviour extends Behaviour {
       let rowH = 0;
       const at = new Map<UriPartKey, [number, number]>();
       for (const k of keys) {
-        const p = uriPart(k);
+        const p = grid(k);
         if (x + p.w > ATLAS_ROW) {
           x = 0;
           y += rowH;
@@ -368,6 +379,8 @@ export class UriBehaviour extends Behaviour {
     // the primary carries its chunk ids too (it tears like every part)
     this.gw.setCellGroups?.(f.body.id, rig.parts.find((p) => p.key === URI_PRIMARY)!.chunks);
     this.gw.setFieldHeld?.(f.body.id, true);
+    // D34: torn pieces fly at 우리's game size (tear numbers are authored in oracle px)
+    this.gw.setGroupScale?.(f.body.id, URI_SCALE);
     for (const p of rig.parts) this.mass.set(p.key, massOf(p.map));
     this.packPlanes(rig);
     this.kin = new UriKinetics(f.seed);
@@ -389,7 +402,7 @@ export class UriBehaviour extends Behaviour {
     const f = this.f;
     const rig = f.rig as UriTitanRig;
     const src = rig.parts.find((p) => p.key === k)!;
-    const meta = uriPart(k);
+    const meta = grid(k);
     const map = cloneUriMap(src.map);
     const ax = Math.round(meta.pivX);
     const ay = Math.round(meta.pivY);
@@ -408,6 +421,7 @@ export class UriBehaviour extends Behaviour {
     this.gw.setCellGroups?.(body.id, src.chunks);
     // held by fields (URI_SPEC §1): a piece a hole cuts off stays put; matter leaves only by tears and releases (S4)
     this.gw.setFieldHeld?.(body.id, true);
+    this.gw.setGroupScale?.(body.id, URI_SCALE);
     f.addRegion(body, true, regrown);
     const isBack = BACK_PARTS.includes(k);
     const [sx, sy] = this.atlasAt.get(k)!;
@@ -634,7 +648,7 @@ export class UriBehaviour extends Behaviour {
       }
       // the opponent, in the rig's reference space (the reference → world offset of the last placement)
       const fv = f.foe?.view;
-      if (fv) this.kin.target = [fv.x - this.ox, fv.y - this.oy];
+      if (fv) this.kin.target = [(fv.x - this.ox) / SC, (fv.y - this.oy) / SC];
       this.refreshIntegrity();
       this.kin.step(1 / 60);
       this.pose = this.kin.currentPose();
@@ -659,14 +673,12 @@ export class UriBehaviour extends Behaviour {
       this.places.moon.y = mv.y;
       this.places.moon.a = mv.a;
     }
-    // reference → world: the primary's anchor cell sits on the fighter's root when the hips are at rest; the whole body
-    // breathes with the oracle's slow idle bob (frame(): sin(t·0.37)·1.2, sin(t·0.53)·1.6)
-    const pel = uriPart(URI_PRIMARY);
-    const restAx = pel.x0 + t.anchorX;
-    const restAy = pel.y0 + t.anchorY;
+    // reference → world (world = offset + SC × reference): the primary's anchor cell sits on the fighter's root when the hips
+    // are at rest; the whole body breathes with the oracle's slow idle bob (frame(): sin(t·0.37)·1.2, sin(t·0.53)·1.6 ref px)
+    const pel = grid(URI_PRIMARY);
     const kt = this.kin ? this.kin.t : 0;
-    this.ox = this.rootX - restAx + Math.sin(kt * 0.37) * 1.2;
-    this.oy = this.rootY - restAy + Math.sin(kt * 0.53) * 1.6;
+    this.ox = this.rootX - pel.x0 - t.anchorX + Math.sin(kt * 0.37) * 1.2 * SC;
+    this.oy = this.rootY - pel.y0 - t.anchorY + Math.sin(kt * 0.53) * 1.6 * SC;
     // never mirrored (spec §5): the primary is drawn and hit as authored, whatever side the opponent is on
     this.writeTransform(t, this.places[URI_PRIMARY], pel.pivX, pel.pivY, t.anchorX, t.anchorY);
     t.facing = 1;
@@ -675,7 +687,7 @@ export class UriBehaviour extends Behaviour {
     this.wroteY = t.y;
     for (const r of this.regions) {
       if (r.lost) continue;
-      const meta = uriPart(r.key);
+      const meta = grid(r.key);
       const bt = r.body.transform;
       this.writeTransform(bt, this.places[r.key], meta.pivX, meta.pivY, r.ax, r.ay);
       bt.facing = 1;
@@ -687,10 +699,10 @@ export class UriBehaviour extends Behaviour {
     // the world-cores ride the torso and jolt in their cradles, never leaving them (the cold one answers −0.7 / −0.6); once the
     // loop has snapped they stay where they were while everything else flies apart around them
     if (this.broken) {
-      this.hot.x = this.coreAt.hx - this.ox;
-      this.hot.y = this.coreAt.hy - this.oy;
-      this.cold.x = this.coreAt.cx - this.ox;
-      this.cold.y = this.coreAt.cy - this.oy;
+      this.hot.x = (this.coreAt.hx - this.ox) / SC;
+      this.hot.y = (this.coreAt.hy - this.oy) / SC;
+      this.cold.x = (this.coreAt.cx - this.ox) / SC;
+      this.cold.y = (this.coreAt.cy - this.oy) / SC;
     } else {
       const B = bodyTransforms(this.pose);
       const c = this.kview.core;
@@ -700,7 +712,10 @@ export class UriBehaviour extends Behaviour {
     this.massCentre();
   }
 
-  /** A body's transform from its part's place: the anchor cell's corner (ax, ay) goes where the pivot's rotation puts it. */
+  /**
+   * A body's transform from its part's place (reference px): the anchor cell's corner (ax, ay, grid px) goes where the pivot's
+   * rotation puts it, the pivot at offset + SC × place.
+   */
   private writeTransform(
     bt: MatterBody['transform'],
     pl: { x: number; y: number; a: number },
@@ -713,8 +728,8 @@ export class UriBehaviour extends Behaviour {
     const s = Math.sin(pl.a);
     const dx = ax - pivX;
     const dy = ay - pivY;
-    bt.x = Math.round(this.ox + pl.x + dx * c - dy * s);
-    bt.y = Math.round(this.oy + pl.y + dx * s + dy * c);
+    bt.x = Math.round(this.ox + SC * pl.x + dx * c - dy * s);
+    bt.y = Math.round(this.oy + SC * pl.y + dx * s + dy * c);
     bt.rot = angleToStep(pl.a);
   }
 
@@ -730,14 +745,14 @@ export class UriBehaviour extends Behaviour {
       const pm = this.mass.get(k);
       const q = this.integ.get(k) ?? 1;
       if (!pm || pm.m <= 0 || q <= 0) continue;
-      const meta = uriPart(k);
+      const meta = grid(k);
       const pl = this.places[k];
       const c = Math.cos(pl.a);
       const s = Math.sin(pl.a);
       const lx = pm.cx - meta.pivX;
       const ly = pm.cy - meta.pivY;
-      sx += pm.m * q * (this.ox + pl.x + lx * c - ly * s);
-      sy += pm.m * q * (this.oy + pl.y + lx * s + ly * c);
+      sx += pm.m * q * (this.ox + SC * pl.x + lx * c - ly * s);
+      sy += pm.m * q * (this.oy + SC * pl.y + lx * s + ly * c);
       M += pm.m * q;
     }
     const cx = M > 0 ? sx / M : this.rootX;
@@ -748,14 +763,14 @@ export class UriBehaviour extends Behaviour {
       const pm = this.mass.get(k);
       const q = this.integ.get(k) ?? 1;
       if (!pm || pm.m <= 0 || q <= 0) continue;
-      const meta = uriPart(k);
+      const meta = grid(k);
       const pl = this.places[k];
       const c = Math.cos(pl.a);
       const s = Math.sin(pl.a);
       const lx = pm.cx - meta.pivX;
       const ly = pm.cy - meta.pivY;
-      const wx = this.ox + pl.x + lx * c - ly * s - cx;
-      const wy = this.oy + pl.y + lx * s + ly * c - cy;
+      const wx = this.ox + SC * pl.x + lx * c - ly * s - cx;
+      const wy = this.oy + SC * pl.y + lx * s + ly * c - cy;
       I += (pm.i2 + pm.m * (wx * wx + wy * wy)) * q;
       R = Math.max(R, Math.hypot(wx, wy) + Math.sqrt(pm.i2 / pm.m) * 1.5);
     }
@@ -920,8 +935,9 @@ export class UriBehaviour extends Behaviour {
   /** A load-bearing neck failed: everything hanging from it drifts away whole, slowly (one velocity for the whole chain). */
   private severChain(key: UriPartKey): void {
     const f = this.f;
-    const vx = (this.rand() - 0.5) * 1.2 * 60;
-    const vy = (0.3 + this.rand() * 0.3) * 60;
+    // (oracle px per frame, in world px per second at the game's scale)
+    const vx = (this.rand() - 0.5) * 1.2 * 60 * SC;
+    const vy = (0.3 + this.rand() * 0.3) * 60 * SC;
     const va = (this.rand() - 0.5) * 0.25 * 0.6;
     for (const k of CHAIN[key]!) {
       const r = this.byKey.get(k)!;
@@ -952,10 +968,10 @@ export class UriBehaviour extends Behaviour {
     const f = this.f;
     this.broken = true;
     this.kin.hp = 0;
-    this.coreAt.hx = this.ox + this.hot.x;
-    this.coreAt.hy = this.oy + this.hot.y;
-    this.coreAt.cx = this.ox + this.cold.x;
-    this.coreAt.cy = this.oy + this.cold.y;
+    this.coreAt.hx = this.ox + SC * this.hot.x;
+    this.coreAt.hy = this.oy + SC * this.hot.y;
+    this.coreAt.cx = this.ox + SC * this.cold.x;
+    this.coreAt.cy = this.oy + SC * this.cold.y;
     const x = this.coreAt.hx;
     const y = this.coreAt.hy;
     f.events.push({ t: 'flash', amount: 1, x, y });
@@ -1003,7 +1019,7 @@ export class UriBehaviour extends Behaviour {
   /** The fists and the command moon (the parts that should move at colossal scale) for `tools/feel/scale.ts`. */
   override trackPoints(out: number[]): number {
     for (const k of ['fistL', 'fistR', 'moon'] as const)
-      out.push(this.ox + this.places[k].x, this.oy + this.places[k].y);
+      out.push(this.ox + SC * this.places[k].x, this.oy + SC * this.places[k].y);
     return 3;
   }
 
@@ -1044,10 +1060,10 @@ export class UriBehaviour extends Behaviour {
     const kv = this.kview;
     // once the loop has snapped the cores stay where they were (the frozen spots), not on the torso that flew apart
     live.broken = this.broken;
-    live.hotX = this.broken ? this.coreAt.hx : this.ox + this.hot.x;
-    live.hotY = this.broken ? this.coreAt.hy : this.oy + this.hot.y;
-    live.coldX = this.broken ? this.coreAt.cx : this.ox + this.cold.x;
-    live.coldY = this.broken ? this.coreAt.cy : this.oy + this.cold.y;
+    live.hotX = this.broken ? this.coreAt.hx : this.ox + SC * this.hot.x;
+    live.hotY = this.broken ? this.coreAt.hy : this.oy + SC * this.hot.y;
+    live.coldX = this.broken ? this.coreAt.cx : this.ox + SC * this.cold.x;
+    live.coldY = this.broken ? this.coreAt.cy : this.oy + SC * this.cold.y;
     live.t = this.kin.t;
     live.spin = 0.25 * this.kin.t;
     live.hp = this.kin.hp;
@@ -1070,8 +1086,8 @@ export class UriBehaviour extends Behaviour {
       const dy = meta.jb![1] - meta.pgY;
       const c = Math.cos(pl.a);
       const sn = Math.sin(pl.a);
-      p.x = this.ox + pl.x + dx * c - dy * sn;
-      p.y = this.oy + pl.y + dx * sn + dy * c;
+      p.x = this.ox + SC * (pl.x + dx * c - dy * sn);
+      p.y = this.oy + SC * (pl.y + dx * sn + dy * c);
       p.a = Math.PI / 2 + pl.a + kv.pylon[s].ang;
       p.th = this.byKey.get(k)!.lost ? 0 : kv.pylon[s].th;
     }
@@ -1151,18 +1167,18 @@ export class UriBehaviour extends Behaviour {
     // part pivots
     for (const k of URI_ORDER) {
       const pl = this.places[k];
-      const x = d.sx(this.ox + pl.x);
-      const y = d.sy(this.oy + pl.y);
+      const x = d.sx(this.ox + SC * pl.x);
+      const y = d.sy(this.oy + SC * pl.y);
       d.line(x - 1, y, x + 1, y, DIAG.pivot);
       d.line(x, y - 1, x, y + 1, DIAG.pivot);
     }
     // the barycentre of the two world-cores, and the cores themselves
-    const hx = d.sx(this.ox + this.hot.x);
-    const hy = d.sy(this.oy + this.hot.y);
-    const cx = d.sx(this.ox + this.cold.x);
-    const cy = d.sy(this.oy + this.cold.y);
-    d.circle(hx, hy, URI_HOT_CORE[2] * 0.25, DIAG.bary);
-    d.circle(cx, cy, URI_COLD_CORE[2] * 0.25, DIAG.bary);
+    const hx = d.sx(this.ox + SC * this.hot.x);
+    const hy = d.sy(this.oy + SC * this.hot.y);
+    const cx = d.sx(this.ox + SC * this.cold.x);
+    const cy = d.sy(this.oy + SC * this.cold.y);
+    d.circle(hx, hy, URI_HOT_CORE[2] * SC * 0.25, DIAG.bary);
+    d.circle(cx, cy, URI_COLD_CORE[2] * SC * 0.25, DIAG.bary);
     d.line(hx, hy, cx, cy, DIAG.bary);
     // centre of mass
     const mx = d.sx(this.cm.x);
@@ -1189,8 +1205,8 @@ export class UriBehaviour extends Behaviour {
     const kv = this.kview;
     for (const s of ['L', 'R'] as const) {
       const p = this.places[s === 'L' ? 'pyL' : 'pyR'];
-      const x = d.sx(this.ox + p.x);
-      const y = d.sy(this.oy + p.y) + 40;
+      const x = d.sx(this.ox + SC * p.x);
+      const y = d.sy(this.oy + SC * p.y) + 40 * SC;
       const a = Math.PI / 2 + p.a + kv.pylon[s].ang;
       d.arrow(x, y, Math.cos(a) * kv.pylon[s].th * 30, Math.sin(a) * kv.pylon[s].th * 30, DIAG.pylon);
     }
@@ -1234,7 +1250,7 @@ export class UriBehaviour extends Behaviour {
   isLost(k: UriPartKey): boolean {
     return k !== URI_PRIMARY && this.byKey.get(k)!.lost;
   }
-  /** Reference → world offset of this tick. */
+  /** Reference → world offset of this tick (world = offset + URI_SCALE × reference). */
   get offset(): { x: number; y: number } {
     return { x: this.ox, y: this.oy };
   }
@@ -1266,17 +1282,18 @@ function recode(
 
 /**
  * A part's load-bearing neck (the oracle's `prepParts` / `neckInt`): its live cells within the neck radius of the joint it is
- * carried by, in its own map. Null for a part no neck carries.
+ * carried by, in its own map (the game's grid: joint and radius at URI_SCALE). Null for a part no neck carries.
  */
 export function uriNeckCells(k: UriPartKey, map: MatterMap): Int32Array | null {
   const n = NECKS.find((e) => e[0] === k);
   if (!n) return null;
-  const [, j, from, R] = n;
+  const [, j, from, R0] = n;
   const J = uriPart(from)[j];
   if (!J) return null;
-  const P = uriPart(k);
-  const lx = J[0] - P.pgX + P.pivX;
-  const ly = J[1] - P.pgY + P.pivY;
+  const G = grid(k);
+  const lx = J[0] * SC - G.x0;
+  const ly = J[1] * SC - G.y0;
+  const R = R0 * SC;
   const out: number[] = [];
   for (let iy = 0; iy < map.h; iy++)
     for (let ix = 0; ix < map.w; ix++) {

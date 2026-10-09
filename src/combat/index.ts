@@ -10,7 +10,7 @@ import { FighterImpl } from './fighter';
 export const createFighter: FighterFactory = (opts: FighterOptions): Fighter =>
   new FighterImpl(opts.witness && opts.def.id === 'lastone' ? { ...opts, def: witnessDef(opts.def) } : opts);
 
-export { FighterImpl } from './fighter';
+export { FighterImpl, PACE } from './fighter';
 export { Behaviour, DefaultBehaviour, type HitInfo, type InterceptResult } from './behaviour';
 export { TUNING } from './tuning';
 export { computeStats, topSpeed } from './stats';

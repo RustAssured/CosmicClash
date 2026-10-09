@@ -332,7 +332,10 @@ export function gravel(
   return src;
 }
 
-/** Riser: filtered noise + a tone stack sweeping upward into a peak at `t + dur`, then cut. */
+/**
+ * Riser: band-passed noise sweeping upward into a peak at `t + dur`, then cut. Menu sounds only (D34: in a fight, pressure builds
+ * with `swell` in epic.ts, which never opens above ~1.2 kHz).
+ */
 export function riser(
   c: VoiceCtx,
   o: Out,
@@ -358,71 +361,6 @@ export function riser(
   g.connect(o.input);
   src.start(t, noiseOffset(c, dur));
   src.stop(t + dur + 0.08);
-}
-
-/** Doppler-style whistle: a sine that falls in pitch as it passes while panning across the field. */
-export function whistlePass(
-  c: VoiceCtx,
-  t: number,
-  w: {
-    f: number;
-    dur: number;
-    gain: number;
-    panFrom: number;
-    panTo: number;
-    wet: number;
-    approach?: number;
-    recede?: number;
-  },
-): void {
-  const ac = c.ac;
-  const p = ac.createStereoPanner();
-  p.pan.setValueAtTime(clamp(w.panFrom, -1, 1), t);
-  p.pan.linearRampToValueAtTime(clamp(w.panTo, -1, 1), t + w.dur);
-  p.connect(c.dry);
-  if (w.wet > 0.001) {
-    const wg = ac.createGain();
-    wg.gain.value = w.wet;
-    p.connect(wg);
-    wg.connect(c.wet);
-  }
-  const g = ac.createGain();
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(w.gain, t + w.dur * 0.35);
-  g.gain.linearRampToValueAtTime(0, t + w.dur);
-  g.connect(p);
-
-  const osc = ac.createOscillator();
-  osc.type = 'sine';
-  const a = w.approach ?? 1.35;
-  const r = w.recede ?? 0.72;
-  const n = 32;
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    // smooth step from the "approaching" pitch to the "receding" pitch, steepest at the pass-by
-    const s = 0.5 + 0.5 * Math.tanh((i / (n - 1) - 0.5) * 6);
-    curve[i] = w.f * (a + (r - a) * s);
-  }
-  osc.frequency.setValueCurveAtTime(curve, t, w.dur);
-  osc.connect(g);
-
-  // breath in the whistle
-  const air = noiseSource(c, 'white');
-  const bp = ac.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.value = w.f * 1.6;
-  bp.Q.value = 6;
-  const ag = ac.createGain();
-  ag.gain.value = 0.25;
-  air.connect(bp);
-  bp.connect(ag);
-  ag.connect(g);
-
-  osc.start(t);
-  osc.stop(t + w.dur + 0.05);
-  air.start(t, noiseOffset(c, w.dur));
-  air.stop(t + w.dur + 0.05);
-  osc.onended = () => p.disconnect();
 }
 
 /** Random pick from an array using the voice RNG. */

@@ -9,7 +9,13 @@ export {
   type TitanRig,
 } from './generate';
 export type { LastOneRig, TendrilRoot, WitnessBody, WitnessRegion, WitnessTitanRig } from './art/lastone';
-export { isWitnessDef, witnessDef, WITNESS_MATERIALS, WITNESS_SHRINE_LIGHT_Y } from './art/lastone';
+export {
+  isWitnessDef,
+  witnessDef,
+  WITNESS_MATERIALS,
+  WITNESS_SCALE,
+  WITNESS_SHRINE_LIGHT_Y,
+} from './art/lastone';
 export type { AsteroidRig } from './art/asteroid';
 export type { BlackHoleRig } from './art/blackhole';
 export {

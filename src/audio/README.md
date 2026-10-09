@@ -29,41 +29,54 @@ Wiring (what the app calls when) is in `docs/proposals/400-b4-ui-input-audio-wir
 
 ```
 impact voices ─► IMPACT bus (sfx fader) ───────────────────────────────┐
-     └ sends ─► space reverb (return 0.75) ────────────────────────────┤
+     └ sends ─► cavern reverb (HP 90, LP 3.2k, return 0.75) ───────────┤
 ui sounds ─► UI bus (sfx fader, −9 dB) ────────────────────────────────┤
-titan beds (sfx fader) ┐                                               ├─► mix ─► HP 50 Hz (24 dB/oct) ─► calibration +11.5 dB
-score (music fader) ───┼─► BED bus (−4.5 dB) ─► glue 2:1 ─► DUCK ──────┘      ─► MASTER ─► TRUE-PEAK LIMITER (−1 dBTP) ─► clip
-bed sends ─► bed reverb┘
+titan beds (sfx fader) ┐                                               ├─► mix ─┬─► HP 50 Hz (24 dB/oct) ─► calibration
+score (music fader) ───┼─► BED bus (−3.5 dB) ─► glue 2:1 ─► DUCK ──────┘        └─► WEIGHT (sub band → rectifier → 70–420 Hz) ─┘
+bed sends ─► bed reverb┘                                       ─► MASTER ─► TRUE-PEAK LIMITER (−1 dBTP) ─► clip
 ```
 
 - **Impacts never pass a compressor**; only the bed is glued (2:1 at −18 dB, its automatic makeup gain taken back).
-- **Bed duck**: 4–8 dB for 300–600 ms under heavy blows, the KO and the big rings (Planet quake, moon slams, nova).
-- **The score breathes**: −15 dB at neutral, full when a fighter commits (wind-up, charge, strike) or the fight heats up.
-- **Laptop speakers (D27)**: the output is high-passed at 50 Hz; `thump`'s weight is its 80–250 Hz knock (an octave triangle plus band noise).
+- **Bed duck**: 4–6.5 dB for 350–550 ms under heavy blows and the big rings (Planet quake, moon slams, nova). **A KO is a hush**
+  (D34): the whole bed falls `KO_HUSH_DB` = 14 dB for `KO_HUSH_SEC` = 1.6 s, and the titan's catastrophe lands into it.
+- **The score breathes**: −8 dB at neutral, full when a fighter commits (wind-up, charge, strike) or the fight heats up.
+- **Laptop speakers (D27, D34)**: the output is high-passed at 50 Hz. "Huge" is made readable in 80–250 Hz twice over: every low
+  body in `voices/epic.ts` is SATURATED (its 3rd/5th harmonics carry it), and the master's `WEIGHT` stage takes the sub band
+  (< 100 Hz, 4th order), passes it through an even, rectifying curve (`weightCurve`: no fundamental, only the 2nd, 4th…
+  harmonics, in proportion to the sub's own level) and adds the 70–420 Hz result back. The ear hears the missing fundamental;
+  headphones still get the real sub.
+- **The cavern** (D34): one generated IR, 4.2 s, dark from its first reflections (`brightStart` 0.3), its sends high-passed at
+  90 Hz (the weight band reaches the tail) and low-passed at 3.2 kHz (no tail ever hisses).
 - **Limiter**: `worklets/limiter.ts`, lookahead 2.5 ms, 4× true-peak detection, a sliding-minimum/moving-average gain (no clicks), release 120 ms. Its core class is the exact code the AudioWorklet runs (stringified), unit-tested in Node. Master sits before it: linear under the ceiling, nothing passes it.
-- **Measured** (`npx tsx tools/ui/audio-verify.ts --round`, a scripted 60 s Witness-vs-Planet round, BS.1770 via `src/telemetry/loudness.ts`): −20.2 LUFS integrated, −1.2 dBTP, LRA 11.7 LU, heavy blows 18.8 dB over the bed (short-term, median), bed duck 5.3 dB for 400 ms, limiter 2–5 dB on heavy blows.
+- **D34 measured** (`--pairs`, real AI fights, 60 s, seed 21, the sim of 2026-10-09 afternoon): −18.2 … −20.5 LUFS integrated
+  for every pair with heavy blows, ≤ −1.2 dBTP, LRA 8–17, heavy blows 13–17 dB over the bed, duck 4–6 dB; share of the output's
+  power above 2 kHz 0.11–0.20 % (was 0.4–9.6 %), 80–250 Hz 59–74 %, 250 Hz–2 kHz 16–26 %. Through a laptop-speaker model
+  (`dev/ui/audio-laptop.ts`) the fights play as loud as before (−22.9 / −26.3 / −24.2 vs −22.3 / −26.7 / −23.6 LUFS).
+- **Pre-D34 measured** (`npx tsx tools/ui/audio-verify.ts --round`, a scripted 60 s Witness-vs-Planet round, BS.1770 via `src/telemetry/loudness.ts`): −20.2 LUFS integrated, −1.2 dBTP, LRA 11.7 LU, heavy blows 18.8 dB over the bed (short-term, median), bed duck 5.3 dB for 400 ms, limiter 2–5 dB on heavy blows.
 - `taps()`: `output` = speakers, `music` = the whole bed after its duck, `sfx` = the impact bus.
 ## Voices (`voices/`)
 
 | File | |
 |---|---|
-| `synth.ts` | the primitives: `tone`, `noiseHit`, `partials` (glass / iron / tink bell sets), `gravel` (granular rock in three nodes), `thump` (sub drop plus a knock for small speakers), `riser`, `whistlePass` (Doppler), all with click-free envelopes |
-| `sfx.ts` | titan-neutral layers: impact, the six damage-type flavours, guard, shockwave, KO, matter, ultimate, cues |
-| `lastone.ts` | **The Last One**: struck glass and ceramic on D pentatonic, tink transients, fracture cracks, a breathing tendril pad that follows its motion, the Gaze's rising eye-flare |
-| `asteroid.ts` | **The Asteroid**: rock crunch, gravel, iron rings off ejecta, a Doppler whistle when it tumbles past, a rolling rumble under it |
-| `nexus.ts` | **Nexus**: hollow inharmonic chain rings (`CHAIN`) that clank and drag, a click-lock when a chain takes hold, a ratcheting tear when it harvests, descending detuned pings when a node goes dark, and a 40-60 Hz heartbeat that throbs faster the more of the graph is alive |
-| `blackhole.ts` | **Black Hole**: a sub-bass drone whose pitch FALLS as mass grows (39 Hz at 1.8x mass, 68 Hz at 0.5x) with pockets of near-silence, rising tidal spirals, gulps, and a Hawking glitter (3-12 kHz) as it runs out of mass |
-| `supernova.ts` | **Supernova**: a broadband roar with crackle grains, both following the fuel (resource), whumps with sub tails, and a breath in and a blast when it goes |
-| `planet.ts` | **Planet**: tectonic rumble, crust groans, wind that fades for good when its atmosphere is stripped (`strip` cues), moon slams with a bell-like orbital ring, boiling-ocean hiss |
-| `kit.ts`, `cues.ts` | shared building blocks of the four (`scrape`, drones with a registry of sources, ...) and the cue keyword table |
-| `index.ts` | `createTitanVoice(id)`: one voice module per titan; an unknown id gets an empty voice (all shared layers) |
+| `synth.ts` | the primitives: `tone`, `noiseHit`, `partials` (glass / iron / chain / bronze bell / tink sets), `gravel` (granular rock in three nodes), `thump` (the score's tuned drum), `riser` (menu only), all with click-free envelopes |
+| `epic.ts` | **the cataclysm kit (D34)**: `boom` (the tectonic drop: a saturated, pitch-falling body, its 80–250 Hz knock, a 200–600 Hz crunch, a dark contact), `rumble` (a long heaving cavern tail), `swell` (a reversed swell into a hit), `whoosh` (a shockwave / mass passing: air sweeping DOWN while it pans; replaces every Doppler whistle), `roar` (detuned low saws through a closing filter), `lowBell` (colossal bells and hulls, nothing above 1.6 kHz), `grind` (rock/metal dragging, chopped by a slow ratchet), `crackle` (low-passed embers and grit), `hush` and `catastrophe` (the KO: the inhale, two drops, a decay of seconds). No tone in the kit sits above ~1.6 kHz (unit-tested) |
+| `sfx.ts` | titan-neutral layers: the three-layer impact (drop, crunch, cavern tail; heavy blows add a deeper drop, a lingering rumble and falling rubble), the six damage-type flavours (all low), guard, shockwave (drop plus a pressure whoosh), KO (`catastrophe`), matter, ultimate, cues |
+| `lastone.ts` | **The Witness**: a temple bell struck by a mountain — colossal bronze (`BELL` on D1–D3) over fired-clay cracks and grinding stone slabs, tendrils that snap like ridge-sized cables (a LOW Karplus–Strong pluck), the Gaze as a low choir whose filter opens as the eye fills and a beam that roars, a low breathing choir bed (D2 A2 D3) |
+| `asteroid.ts` | **The Asteroid**: a tumbling mountain — rock crunch and rubble under 1.6 kHz, a drop on every blow, iron veins ringing like a city-sized anvil (IRON on 70–120 Hz), a hail of boulders for the swarm, a rolling grinding rumble under it |
+| `nexus.ts` | **Nexus**: colossal chains and machinery — chain links as huge hollow rings (`CHAIN` on 69–139 Hz) with a dark knock and grinding metal, a latch is a tower-sized bolt seating home, a node going dark tolls down, and a saturated 43–55 Hz heartbeat that throbs faster the more of the graph is alive |
+| `blackhole.ts` | **Black Hole**: gravity itself — a saturated sub drone whose pitch FALLS as mass grows, pockets of near-silence, an accretion disk that roars low, tidal pull as pressure converging and sinking, gulps, and a dark crackle of evaporation (not glitter) as it runs out of mass |
+| `supernova.ts` | **Supernova**: a furnace — a deep convecting roar and low ember crackle that follow the fuel, flares that roar past, whumps with long sub tails, and a breath in and a blast that rolls on for seconds when it goes |
+| `planet.ts` | **Planet**: tectonic rumble, crust groans, cosmic wind (130/300/620 Hz) that fades for good when its atmosphere is stripped, moon slams with an orbital bronze ring, magma and a boiling ocean as slow low blurps |
+| `uri.ts` | **우리**: a war-body of two dismantled worlds — a megastructure hull that rings like a colossal plate (`HULL`) and grinds when it moves, a dead civilisation's hum (A1 E2 A2 saws), the two worlds' cores thrumming 2.5 Hz apart (41 / 43.5 Hz, saturated), a bowed-metal strain that rises as the loop (its health) gives, fists of planetary matter, and the loop snapping on `break-apart` |
+| `kit.ts`, `cues.ts` | shared building blocks (`scrape`, `bubbles`, beds with a registry of sources, ...) and the cue keyword table |
+| `index.ts` | `createTitanVoice(id)`: one voice module per titan (all seven); an unknown id gets an empty voice (all shared layers) |
 | `ui.ts` | menu sounds and their per-sound level trims (`UI_TRIM`) |
 
 Cue ids (`SimEvent { t: 'cue' }`) are free-form strings owned by each titan. Voices react to the KIND of cue by keyword, so an id
 this engine has never seen still lands on something sensible: `sever`, `dark`, `lost`, `shed`, `break`, `boil`, `strip`,
 `collapse`, `harvest`, `swarm`, `merge`, and the ones the newer titans' own ids need: `blow` (layer-blow), `crack` (crust-crack), `burn` (fuel-burn),
 `latch` (chain-latch), `consume`, `hawking` (`voices/cues.ts`, first keyword found in the id wins; anything else is a generic blip).
-`CUE_TRIM` is per titan (Last One and Asteroid 3, the others 1).
+`CUE_TRIM` is per titan (D34: empty; every voice authors its cues at full level).
 
 A `TitanVoice` implements any subset of `onMove / onCharge / onRelease / onSurge / onHitDealt / onHitTaken / onGuard / onKo /
 onUltimate / onCue / onMatter / update / stop`; anything it leaves out (or, for `onMatter`, returns `false` from) falls back to the
@@ -144,6 +157,8 @@ Renders the real engine through an `OfflineAudioContext` and measures it. Last r
 
 ```bash
 npx tsx tools/ui/audio-verify.ts [--quick|--titans|--stages|--body] [--json]   # the table above (~4 min); the modes are the parts (--body: seconds)
+npx tsx tools/ui/audio-verify.ts --audit [--top=40] [--out=f.json]   # every sound source alone: where its energy lives (the whistle audit, ~30 s)
+npx tsx tools/ui/audio-verify.ts --pairs [--seconds=60] [--wav=dir]  # real AI fights for 7 titan pairs: LUFS, dBTP, LRA, over-bed, duck, band shares (~2.5 min each)
 npx playwright test e2e/ui-audio.spec.ts                 # the same run, asserted
 npx vitest run src/audio                                 # 70 unit tests against the strict fake context
 ```

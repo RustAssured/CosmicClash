@@ -1,5 +1,5 @@
 import { getTitanDef } from '@/titans';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import {
   Btn,
   DamageFlag,
@@ -13,7 +13,7 @@ import {
 } from '@/contracts';
 import type { Match } from '@/sim';
 import type { LastOneRig } from '@/titans';
-import type { FighterImpl } from './fighter';
+import { PACE, type FighterImpl } from './fighter';
 import type { AsteroidBehaviour } from './behaviours/asteroid';
 import type { LastOneBehaviour } from './behaviours/lastone';
 import { ManualSource, createFakeWorld, makeMatch, skipIntro } from './testing/harness';
@@ -277,6 +277,10 @@ describe('Guard: a shell whose strength depends on damage type', () => {
 
 describe('meter, resource and the ultimate', () => {
   it('meter fills from dealing and (less) from receiving damage; the ultimate needs a full meter and spends it', () => {
+    // at the matter's own scale: at the D34 pace the crush leaves the target too broken for the ultimate's beat to land
+    const pace = PACE.damageTaken;
+    PACE.damageTaken = 1;
+    onTestFinished(() => void (PACE.damageTaken = pace));
     const { f0, f1, sa, events, step } = duel(130);
     step(3);
     tap(sa, Btn.CRUSH, step);

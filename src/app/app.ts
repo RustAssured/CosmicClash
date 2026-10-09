@@ -30,7 +30,7 @@ import {
 } from '@/contracts';
 import { createAudioEngine, type AudioEngineExt } from '@/audio';
 import { createAI } from '@/ai';
-import { createFighter } from '@/combat';
+import { createFighter, PACE } from '@/combat';
 import { cameraTargetOf, createCamera, createLoop, type Loop } from '@/engine';
 import { createInputManager, emptyDebugInput } from '@/input';
 import { registerMatchKnobs, releaseMatchKnobs, type KnobAI, type KnobFighter } from '@/debug/matchKnobs';
@@ -502,6 +502,7 @@ export class App {
       s.match.fighters as unknown as KnobFighter[],
       [s.config.slots[0].titan, s.config.slots[1].titan],
       s.ais,
+      PACE,
     );
   }
 

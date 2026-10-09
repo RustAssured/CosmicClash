@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STAGE_IDS } from '@/contracts';
 import {
+  bandEnergies,
   bandLevelDb,
   bandShare,
   countPeaks,
@@ -221,6 +222,19 @@ describe('analysis', () => {
     expect(bandShare(mix, SR, 20, 300)).toBeGreaterThan(0.9);
     expect(bandShare(mix, SR, 3000, 8000)).toBeLessThan(0.1);
     expect(bandShare(new Float32Array(4096), SR, 0, 1000)).toBe(0);
+  });
+  it('bandEnergies splits a long signal into band shares that sum to one', () => {
+    // 100 Hz at amplitude 1, 5 kHz at 0.3: power 1 : 0.09
+    const mix = Float32Array.from(
+      { length: SR * 2 },
+      (_, i) => Math.sin((2 * Math.PI * 100 * i) / SR) + 0.3 * Math.sin((2 * Math.PI * 5000 * i) / SR),
+    );
+    const [lo, mid, hi] = bandEnergies(mix, SR, [20, 250, 2000, 24000]);
+    expect(lo! + mid! + hi!).toBeCloseTo(1, 3);
+    expect(hi).toBeGreaterThan(0.07);
+    expect(hi).toBeLessThan(0.1);
+    expect(mid).toBeLessThan(0.01);
+    expect(bandEnergies(new Float32Array(SR), SR, [0, 100, 1000])).toEqual([0, 0]);
   });
   it("peakFrequency finds a drone's pitch, bandLevelDb measures a band, countPeaks counts beats", () => {
     const drone = Float32Array.from(

@@ -25,6 +25,24 @@ export const MOVE_WEIGHTS: Readonly<Record<string, BlowWeight>> = {
   'planet.crustbreaker': 'heavy',
   'planet.corepulse': 'heavy',
   'planet.cataclysm': 'heavy',
+  // the returning originals (D34): their own mechanics, read on the same ladder
+  'asteroid.shoulder': 'medium', // a hop-check
+  'asteroid.meteor': 'heavy', // the ram
+  'asteroid.swarm': 'light', // each fragment
+  'asteroid.kessler': 'medium', // a storm of many debris hits
+  'nexus.latch': 'medium', // the chain bite that plants the infection
+  'nexus.constrict': 'heavy', // the crushing grab
+  'nexus.harvest': 'light', // continuous tearing
+  'nexus.oog': 'light', // the cage's grinding ticks
+  'blackhole.shear': 'heavy', // tidal shear (huge energy, a short field)
+  'blackhole.maw': 'catastrophic', // the maw: the black hole's heaviest single blow
+  'blackhole.well': 'light', // continuous pull
+  'blackhole.spaghetti': 'light', // continuous spaghettification ticks
+  'supernova.flare': 'medium',
+  'supernova.ejection': 'heavy', // the mass ejection
+  'supernova.prominence': 'light', // a lingering zone
+  'supernova.collapse': 'heavy',
+  'supernova.nova': 'catastrophic', // the nova itself
   // 우리 (VFX_SPEC "Titan hooks": punch / cross / uppercut heavy, double slam catastrophic; its break-apart is the KO blow)
   'uri.punch': 'heavy',
   'uri.cross': 'heavy',

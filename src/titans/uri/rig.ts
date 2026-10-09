@@ -14,7 +14,8 @@ import rigJson from './uri_rig.meta.json';
  *        └─ dome R (same)                                     ── upper arm R            ── forearm R          ── fist R
  *
  * At rest every link is 0 and every transform is the identity: each part's pivot sits exactly at its `pg` and the layout is
- * the reference (spec §2.1). Pure and deterministic; no rendering here.
+ * the reference (spec §2.1). Pure and deterministic; no rendering here. Everything here is in REFERENCE px; the game draws 우리
+ * at `URI_SCALE` of them (D34).
  */
 
 export type UriPartKey =
@@ -85,6 +86,13 @@ const RAW = rigJson as unknown as RawRig;
 
 /** Reference space (the oracle's 403×368 sheet) and where the oracle draws its origin on the 640×360 screen. */
 export const URI_REF = { w: 403, h: 368, originX: 200, originY: 170, screenX: 320, screenY: 186 } as const;
+
+/**
+ * 우리's game size (D34, WJ 2026-10-09: original-like sizes): about 200 px tall instead of the reference's 300. The rig and the
+ * kinetic system stay in reference px (oracle parity); the matter is resampled to this scale at load (scale.ts) and the
+ * behaviour maps reference px to world px by it.
+ */
+export const URI_SCALE = 2 / 3;
 
 const pt = (p: number[] | undefined): readonly [number, number] | null =>
   p && p.length >= 2 ? ([p[0]!, p[1]!] as const) : null;

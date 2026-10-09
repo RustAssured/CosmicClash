@@ -1,11 +1,16 @@
 import type { DamageType } from '@/contracts';
 import { clamp, clamp01 } from '../dsp/math';
-import { GLASS, IRON, gravel, makeOut, noiseHit, partials, riser, thump, tone, pick } from './synth';
+import { BELL, IRON, gravel, makeOut, noiseHit, pick, tone } from './synth';
+import { boom, catastrophe, crackle, grind, lowBell, roar, rumble, swell, whoosh } from './epic';
 import type { GuardEvent, HitEvent, KoEvent, MatterEvent, UltimateEvent, VoiceCtx } from './types';
 
 /**
- * Titan-neutral sounds: the damage-type layers, guard, shockwave, KO, matter and ultimate cues, and the impact sub-bass.
- * Titan voices ADD their own material and character on top of these; a titan without a voice still sounds like a fight.
+ * Titan-neutral sounds: the impact itself, the damage-type layers, guard, shockwave, KO, matter and ultimate cues. Titan voices
+ * ADD their own material and character on top of these; a titan without a voice still sounds like a fight.
+ *
+ * D34: every layer here is built for bodies the size of moons. Impacts are three layers (a pitch-dropping, saturated body; a
+ * low-passed mid crunch; a dark tail into the cavern), heavy blows add a deeper second drop and a rumble that lingers, and
+ * nothing tonal sits above ~1 kHz (no pings, no whistles, no hiss).
  */
 
 /** 0..1 loudness class of a blow from its energy (150 … 9000): logarithmic, like hearing. */
@@ -13,27 +18,53 @@ export const magnitude = (energy: number, heavy: boolean): number =>
   clamp01((Math.log10(Math.max(50, energy)) - 2.0) / 1.9 + (heavy ? 0.12 : 0));
 
 /**
- * The impact itself: sub-bass thump (never sent to the reverb), a mid body knock, and a wet tail whose length grows with
- * the blow. Heavier blows drop lower and ring longer; a blocked blow is duller and quieter.
+ * The impact itself: the tectonic drop (a saturated body that falls in pitch, its knock and a dark contact), a low-passed crunch,
+ * and a wet tail whose length grows with the blow. Heavy blows drop lower, add a second deeper drop and a rumble that lingers in
+ * the cavern. A blocked blow is duller and quieter.
  */
 export function playImpact(c: VoiceCtx, t: number, ev: HitEvent, mag: number, pan: number): void {
   const open = 1 - clamp01(ev.blocked) * 0.6;
-  const sub = makeOut(c, pan * 0.3, 0);
-  const g = (0.22 + 0.62 * mag) * open;
-  const dur = 0.2 + 0.55 * mag + (ev.heavy ? 0.35 : 0);
-  thump(c, sub, t, 92 - 34 * mag, 30 + 8 * (1 - mag), dur, g);
-  if (ev.heavy || mag > 0.6) thump(c, sub, t + 0.012, 58, 26, dur * 1.4, g * 0.55);
-  const body = makeOut(c, pan, 0.22 + 0.4 * mag);
+  const sub = makeOut(c, pan * 0.3, 0.12);
+  // light blows stay light (mag^1.5): the catastrophes are what stand out — contrast, not loudness
+  const g = (0.14 + 0.7 * Math.pow(mag, 1.5)) * open;
+  const dur = 0.3 + 0.7 * mag + (ev.heavy ? 0.5 : 0);
+  boom(c, sub, t, { f0: 104 - 38 * mag, f1: 30 + 8 * (1 - mag), dur, gain: g, drive: 2 + 1.6 * mag });
+  const body = makeOut(c, pan, 0.25 + 0.4 * mag);
+  // the crunch: mass breaking against mass, low-passed (it closes from 1.6 kHz to 220 Hz: body, not hiss)
   noiseHit(c, body, t, {
-    dur: 0.09 + 0.14 * mag,
-    gain: 0.16 * (0.5 + mag) * open,
-    filter: { type: 'lowpass', f0: 1500 - 500 * ev.blocked, f1: 180, q: 0.8 },
-    kind: 'brown',
+    dur: 0.12 + 0.2 * mag,
+    gain: 0.36 * (0.5 + mag) * open,
+    filter: { type: 'lowpass', f0: 1600 - 600 * ev.blocked, f1: 220, q: 0.8 },
     attack: 0.001,
   });
+  // the deep drop for the big ones; the cavern answering for seconds only for the truly heavy (a dense exchange of medium blows
+  // must not fill every gap with tails: the silence between catastrophes is part of their size)
+  if (ev.heavy || mag > 0.6)
+    boom(c, sub, t + 0.03, { f0: 62, f1: 24, dur: dur * 1.6, gain: g * 0.6 * open, drive: 3, knock: 0.4 });
+  if (ev.heavy) {
+    const tail = makeOut(c, pan * 0.5, 0.8);
+    rumble(c, tail, t + 0.02, {
+      dur: 1.2 + 1.8 * mag,
+      gain: 0.12 * mag * open,
+      f0: 520,
+      f1: 100,
+      rate: 1.3,
+    });
+    // and what it threw up comes down: rubble raining for a second or two
+    gravel(c, tail, t + 0.08, {
+      dur: 0.7 + 1.0 * mag,
+      grains: 24 + Math.round(30 * mag),
+      f: 520,
+      spread: 2.2,
+      gain: 0.2 * mag * open,
+      q: 1.1,
+      decayShape: 1.3,
+      lowpass: 1700,
+    });
+  }
 }
 
-/** The damage-type flavour (what KIND of destruction this blow is). */
+/** The damage-type flavour (what KIND of destruction this blow is), every one of them low and heavy. */
 export function playTypeLayer(
   c: VoiceCtx,
   t: number,
@@ -45,138 +76,154 @@ export function playTypeLayer(
   const g = (0.1 + 0.3 * mag) * scale;
   switch (type) {
     case 'FRACTURE': {
-      const o = makeOut(c, pan, 0.3);
-      // crack: two-three ultra-short bright clicks, then the shear
+      // a continent splitting: a dark crack, then the shear grinding down
+      const o = makeOut(c, pan, 0.35);
       for (let i = 0; i < 2 + Math.round(mag * 2); i++)
-        noiseHit(c, o, t + i * (0.006 + c.rand() * 0.03), {
-          dur: 0.012,
-          gain: g * 1.2,
-          filter: { type: 'highpass', f0: 3500 + c.rand() * 3500, q: 0.7 },
-          attack: 0.0005,
+        noiseHit(c, o, t + i * (0.01 + c.rand() * 0.03), {
+          dur: 0.03,
+          gain: g * 0.9,
+          filter: { type: 'bandpass', f0: 900 + c.rand() * 500, q: 1.1 },
+          filter2: { type: 'lowpass', f0: 2000 },
+          attack: 0.0008,
         });
-      noiseHit(c, o, t + 0.004, {
-        dur: 0.13 + 0.06 * mag,
+      grind(c, o, t + 0.01, {
+        dur: 0.3 + 0.3 * mag,
         gain: g * 0.9,
-        filter: { type: 'bandpass', f0: 7000, f1: 1600, q: 1.6 },
+        f0: 700,
+        f1: 160,
+        rate: 13,
+        attack: 0.01,
       });
       break;
     }
     case 'KINETIC': {
-      const o = makeOut(c, pan, 0.2);
+      const o = makeOut(c, pan, 0.25);
       noiseHit(c, o, t, {
-        dur: 0.14 + 0.1 * mag,
+        dur: 0.16 + 0.12 * mag,
         gain: g * 1.3,
-        filter: { type: 'lowpass', f0: 1700, f1: 260, q: 1 },
-        kind: 'white',
+        filter: { type: 'lowpass', f0: 1200, f1: 200, q: 1 },
+        kind: 'brown',
       });
       gravel(c, o, t + 0.01, {
-        dur: 0.25 + 0.15 * mag,
+        dur: 0.3 + 0.2 * mag,
         grains: 10 + Math.round(mag * 14),
-        f: 1100,
-        spread: 2.5,
+        f: 480,
+        spread: 2.2,
         gain: g * 0.9,
+        lowpass: 1400,
       });
       break;
     }
     case 'CRUSH': {
-      const o = makeOut(c, pan * 0.6, 0.35);
+      const o = makeOut(c, pan * 0.6, 0.4);
       noiseHit(c, o, t, {
-        dur: 0.35 + 0.35 * mag,
+        dur: 0.45 + 0.4 * mag,
         gain: g * 1.4,
-        filter: { type: 'lowpass', f0: 420, f1: 70, q: 1.2 },
+        filter: { type: 'lowpass', f0: 380, f1: 60, q: 1.2 },
         kind: 'brown',
         attack: 0.01,
       });
-      tone(c, o, t, { type: 'sawtooth', f0: 75, f1: 38, dur: 0.6 + 0.4 * mag, gain: g * 0.35, attack: 0.02 });
+      roar(c, o, t, { f: 38, f1: 28, dur: 0.7 + 0.5 * mag, gain: g * 0.5, attack: 0.02, lp0: 260, lp1: 120 });
       break;
     }
     case 'THERMAL': {
-      const o = makeOut(c, pan, 0.28);
+      // a firestorm: a roar of burning gas and embers (no sizzle)
+      const o = makeOut(c, pan, 0.35);
       noiseHit(c, o, t, {
-        dur: 0.22 + 0.15 * mag,
-        gain: g * 1.1,
-        filter: { type: 'bandpass', f0: 700, f1: 3400, q: 0.9 },
+        dur: 0.35 + 0.2 * mag,
+        gain: g * 1.3,
+        kind: 'brown',
+        filter: { type: 'bandpass', f0: 240, f1: 700, q: 0.8 },
         attack: 0.02,
       });
-      gravel(c, o, t + 0.05, {
-        dur: 0.5 + 0.3 * mag,
-        grains: 16 + Math.round(mag * 16),
-        f: 4200,
-        spread: 1.4,
-        gain: g * 0.7,
-        q: 3,
+      crackle(c, o, t + 0.04, {
+        dur: 0.6 + 0.3 * mag,
+        count: 8 + Math.round(10 * mag),
+        gain: g * 0.6,
+        f: 900,
       });
       break;
     }
     case 'TIDAL': {
-      const o = makeOut(c, pan * 0.5, 0.4);
-      tone(c, o, t, { f0: 240, f1: 52, dur: 0.6 + 0.3 * mag, gain: g * 0.9, attack: 0.015 });
+      // gravity wrenching: a pull that sinks, pressure over it
+      const o = makeOut(c, pan * 0.5, 0.45);
+      tone(c, o, t, { f0: 160, f1: 40, dur: 0.7 + 0.3 * mag, gain: g * 0.8, attack: 0.015 });
       noiseHit(c, o, t, {
-        dur: 0.5,
-        gain: g * 0.7,
-        filter: { type: 'bandpass', f0: 2400, f1: 200, q: 2 },
-        attack: 0.02,
+        dur: 0.6,
+        gain: g * 0.8,
+        kind: 'brown',
+        filter: { type: 'bandpass', f0: 700, f1: 110, q: 1.2 },
+        attack: 0.03,
       });
       break;
     }
     case 'ASSIMILATION': {
-      const o = makeOut(c, pan, 0.3);
-      partials(c, o, t, 330, IRON, { decay: 0.3 + 0.2 * mag, gain: g * 0.55 });
-      gravel(c, o, t + 0.02, { dur: 0.2, grains: 9, f: 3200, spread: 1, gain: g * 0.6, q: 6 });
+      // being absorbed: a hull clank and machinery grinding it in
+      const o = makeOut(c, pan, 0.35);
+      lowBell(c, o, t, 82, IRON, { decay: 0.4 + 0.3 * mag, gain: g * 0.5 });
+      grind(c, o, t + 0.02, {
+        dur: 0.3,
+        gain: g * 0.6,
+        f0: 260,
+        f1: 520,
+        rate: 16,
+        metal: true,
+        attack: 0.02,
+      });
       break;
     }
   }
 }
 
-/** Generic guard: a dull thud and a short ring whose tone depends on `type`. */
-export function playGuard(c: VoiceCtx, t: number, ev: GuardEvent, pan: number, ringHz = 900): void {
-  const o = makeOut(c, pan, 0.3);
-  thump(c, makeOut(c, pan * 0.3, 0), t, 120, 50, ev.broke ? 0.7 : 0.3, ev.broke ? 0.7 : 0.4);
-  partials(c, o, t, ringHz, ev.type === 'FRACTURE' || ev.type === 'THERMAL' ? GLASS : IRON, {
-    decay: ev.broke ? 0.9 : 0.35,
-    gain: ev.broke ? 0.2 : 0.14,
+/** Generic guard: a dull thud and a low ring; when it breaks, the shell gives way with a drop and debris. */
+export function playGuard(c: VoiceCtx, t: number, ev: GuardEvent, pan: number, ringHz = 110): void {
+  const o = makeOut(c, pan, 0.35);
+  boom(c, makeOut(c, pan * 0.3, 0), t, {
+    f0: 110,
+    f1: 46,
+    dur: ev.broke ? 0.8 : 0.35,
+    gain: ev.broke ? 0.6 : 0.38,
+    drive: 2,
+  });
+  lowBell(c, o, t, ringHz, ev.type === 'FRACTURE' || ev.type === 'THERMAL' ? BELL : IRON, {
+    decay: ev.broke ? 1.1 : 0.45,
+    gain: ev.broke ? 0.16 : 0.11,
   });
   if (ev.broke) {
-    // the shell gives way: a downward sweep and a burst of debris
-    tone(c, o, t + 0.02, { f0: 900, f1: 90, dur: 0.5, gain: 0.22 });
-    gravel(c, o, t + 0.02, { dur: 0.45, grains: 22, f: 2400, spread: 2, gain: 0.22 });
+    tone(c, o, t + 0.02, { f0: 260, f1: 40, dur: 0.6, gain: 0.18 });
+    gravel(c, o, t + 0.02, { dur: 0.5, grains: 22, f: 420, spread: 2, gain: 0.2, lowpass: 1400 });
   }
 }
 
-/** Expanding ring: a low pressure wave whose pitch falls with radius. */
+/** Expanding ring: a low pressure wave whose pitch falls with radius, and the air it pushes across the field. */
 export function playShockwave(c: VoiceCtx, t: number, strength: number, radius: number, pan: number): void {
   const s = clamp01(strength);
-  const f0 = 70 - clamp(radius / 40, 0, 30) * 0.4;
-  thump(c, makeOut(c, pan * 0.2, 0), t + 0.02, f0, 24, 0.5 + s * 0.9, 0.18 + 0.4 * s);
-  noiseHit(c, makeOut(c, pan, 0.6), t + 0.04, {
-    dur: 0.6 + s * 0.9,
-    gain: 0.08 + 0.12 * s,
-    filter: { type: 'bandpass', f0: 500, f1: 90, q: 0.7 },
-    attack: 0.03,
-    kind: 'brown',
+  const f0 = 72 - clamp(radius / 40, 0, 30) * 0.5;
+  boom(c, makeOut(c, pan * 0.2, 0), t + 0.02, {
+    f0,
+    f1: 24,
+    dur: 0.6 + s * 1.0,
+    gain: 0.18 + 0.36 * s,
+    drive: 2.4,
+    knock: 0.6,
+  });
+  whoosh(c, t + 0.03, {
+    dur: 0.6 + s * 0.8,
+    gain: 0.07 + 0.11 * s,
+    panFrom: pan * 0.3,
+    panTo: clamp(pan * 1.6, -1, 1),
+    wet: 0.6,
+    f0: 600,
+    f1: 80,
   });
 }
 
-/** The weight of a KO: a long two-stage sub drop. Titan voices add their own material on top of this. */
-export function playKoSub(c: VoiceCtx, t: number, _pan: number): void {
-  const sub = makeOut(c, 0, 0);
-  thump(c, sub, t, 68, 22, 1.8, 0.95);
-  thump(c, sub, t + 0.05, 44, 20, 2.4, 0.6);
-}
-
-/** A titan falls (titan-neutral). Enormous, low, long: sub drop, a lowpassed rumble that closes down, falling debris. */
+/** A titan falls (titan-neutral): the hush, the catastrophic drop, a lingering cavern and debris coming down for seconds. */
 export function playKo(c: VoiceCtx, t: number, _ev: KoEvent, pan: number): void {
-  playKoSub(c, t, pan);
   const wet = makeOut(c, pan * 0.4, 0.9);
-  noiseHit(c, wet, t, {
-    dur: 2.2,
-    gain: 0.28,
-    filter: { type: 'lowpass', f0: 1800, f1: 70, q: 0.9 },
-    kind: 'brown',
-    attack: 0.01,
-  });
-  tone(c, wet, t, { f0: 180, f1: 30, dur: 2.0, gain: 0.3, type: 'triangle', attack: 0.02 });
-  gravel(c, wet, t + 0.05, { dur: 1.4, grains: 40, f: 900, spread: 3, gain: 0.3 });
+  const at = catastrophe(c, makeOut(c, 0, 0.1), wet, t, { size: 1 });
+  roar(c, wet, at, { f: 36, f1: 22, dur: 3, gain: 0.12, attack: 0.05, lp0: 500, lp1: 90 });
+  gravel(c, wet, at + 0.05, { dur: 1.8, grains: 40, f: 380, spread: 2.6, gain: 0.24, lowpass: 1200 });
 }
 
 /** Matter-world happenings, scaled by mass moved. */
@@ -186,75 +233,81 @@ export function playMatter(c: VoiceCtx, t: number, ev: MatterEvent, pan: number)
   const o = makeOut(c, pan, 0.3);
   switch (ev.kind) {
     case 'detach':
-      thump(c, makeOut(c, pan * 0.4, 0), t, 80, 38, 0.3 + 0.3 * m, 0.16 + 0.3 * m);
+      boom(c, makeOut(c, pan * 0.4, 0), t, { f0: 84, f1: 36, dur: 0.35 + 0.35 * m, gain: 0.16 + 0.28 * m });
       gravel(c, o, t + 0.02, {
         dur: 0.3 + 0.3 * m,
         grains: 8 + Math.round(m * 14),
-        f: 1500,
-        spread: 2.5,
+        f: 520,
+        spread: 2.2,
         gain: g,
+        lowpass: 1500,
       });
       break;
     case 'crack':
       noiseHit(c, o, t, {
-        dur: 0.03,
-        gain: g * 1.2,
-        filter: { type: 'highpass', f0: 2500 + c.rand() * 3000 },
-        attack: 0.0005,
+        dur: 0.04,
+        gain: g * 1.1,
+        filter: { type: 'bandpass', f0: 900 + c.rand() * 400, q: 1 },
+        filter2: { type: 'lowpass', f0: 1800 },
+        attack: 0.0008,
       });
-      tone(c, o, t, { f0: 1800 + c.rand() * 1200, f1: 900, dur: 0.05, gain: g * 0.4 });
+      tone(c, o, t, { f0: 180 + c.rand() * 60, f1: 70, dur: 0.18, gain: g * 0.5 });
       break;
     case 'ignite':
+      // a world catching fire: a low whoomph, embers
       noiseHit(c, o, t, {
-        dur: 0.35,
-        gain: g,
-        filter: { type: 'bandpass', f0: 600, f1: 2600, q: 0.8 },
-        attack: 0.04,
+        dur: 0.45,
+        gain: g * 1.2,
+        kind: 'brown',
+        filter: { type: 'bandpass', f0: 160, f1: 520, q: 0.8 },
+        attack: 0.05,
       });
-      gravel(c, o, t + 0.05, { dur: 0.4, grains: 14, f: 4500, spread: 1.2, gain: g * 0.6, q: 3 });
+      crackle(c, o, t + 0.05, { dur: 0.5, count: 8, gain: g * 0.5, f: 800 });
       break;
     case 'consume':
-      tone(c, o, t, { f0: 400, f1: 60, dur: 0.5, gain: g * 1.2, attack: 0.02 });
+      tone(c, o, t, { f0: 300, f1: 45, dur: 0.6, gain: g * 1.2, attack: 0.02 });
       break;
     case 'harvest':
-      tone(c, o, t, { f0: 200, f1: 700, dur: 0.35, gain: g * 0.9, type: 'triangle', attack: 0.03 });
+      tone(c, o, t, { f0: 90, f1: 220, dur: 0.4, gain: g * 0.9, type: 'triangle', attack: 0.03 });
       break;
     case 'impact':
-      thump(c, makeOut(c, pan * 0.4, 0), t, 100, 42, 0.25 + 0.25 * m, 0.14 + 0.28 * m);
-      noiseHit(c, o, t, { dur: 0.08, gain: g, filter: { type: 'lowpass', f0: 2000, f1: 400 } });
+      boom(c, makeOut(c, pan * 0.4, 0), t, { f0: 96, f1: 40, dur: 0.3 + 0.3 * m, gain: 0.14 + 0.26 * m });
+      noiseHit(c, o, t, { dur: 0.1, gain: g, kind: 'brown', filter: { type: 'lowpass', f0: 1200, f1: 250 } });
       break;
     case 'evaporate':
-      noiseHit(c, o, t, { dur: 0.9, gain: g, filter: { type: 'highpass', f0: 3000, q: 0.6 }, attack: 0.15 });
+      // matter boiling off into space: a rushing exhale of steam, low
+      noiseHit(c, o, t, {
+        dur: 0.9,
+        gain: g * 0.9,
+        filter: { type: 'bandpass', f0: 700, f1: 300, q: 0.7 },
+        filter2: { type: 'lowpass', f0: 1500 },
+        attack: 0.15,
+      });
       break;
     case 'boil':
-      gravel(c, o, t, { dur: 0.7, grains: 22, f: 700, spread: 2, gain: g, q: 2 });
+      gravel(c, o, t, { dur: 0.7, grains: 22, f: 260, spread: 1.6, gain: g, q: 2, lowpass: 900 });
       break;
   }
 }
 
-/** Ultimate start/end (titan-neutral): a rising swell into a boom, and a resolving fall. */
+/** Ultimate start/end (titan-neutral): a pressure swell into a catastrophic boom, and a resolving fall. */
 export function playUltimate(c: VoiceCtx, t: number, ev: UltimateEvent, pan: number): void {
   const o = makeOut(c, pan * 0.4, 0.7);
   if (ev.phase === 'start') {
-    riser(c, o, t, 1.4, 0.3, 200, 5200);
-    tone(c, o, t, { f0: 55, f1: 220, dur: 1.5, gain: 0.32, type: 'sawtooth', attack: 1.2 });
-    thump(c, makeOut(c, 0, 0), t + 1.4, 70, 26, 1.6, 0.85);
+    swell(c, o, t, { dur: 1.4, gain: 0.3, f0: 90, f1: 900, sub: 0.2, subHz: 40 });
+    roar(c, o, t, { f: 41, f1: 55, dur: 1.5, gain: 0.16, attack: 1.2, lp0: 160, lp1: 700 });
+    catastrophe(c, makeOut(c, 0, 0.1), o, t + 1.4, { pre: 0, size: 0.6, gain: 0.85 });
   } else {
-    tone(c, o, t, { f0: 440, f1: 55, dur: 1.6, gain: 0.25, type: 'triangle', attack: 0.05 });
-    noiseHit(c, o, t, {
-      dur: 1.6,
-      gain: 0.14,
-      filter: { type: 'lowpass', f0: 2600, f1: 120, q: 0.8 },
-      attack: 0.05,
-    });
+    roar(c, o, t, { f: 55, f1: 30, dur: 1.6, gain: 0.12, attack: 0.05, lp0: 700, lp1: 120 });
+    rumble(c, o, t, { dur: 1.8, gain: 0.12, f0: 260, f1: 60 });
   }
 }
 
-/** Unknown / generic cue: a small tick so nothing is silent. */
+/** Unknown / generic cue: a struck low bell so nothing is silent. */
 export function playCueGeneric(c: VoiceCtx, t: number, amount: number, pan: number): void {
-  const o = makeOut(c, pan, 0.25);
-  partials(c, o, t, pick(c, [740, 880, 987, 1174]), GLASS, {
-    decay: 0.22,
+  const o = makeOut(c, pan, 0.35);
+  lowBell(c, o, t, pick(c, [110, 130.81, 146.83, 164.81]), BELL, {
+    decay: 0.6,
     gain: 0.06 + 0.1 * clamp01(amount),
   });
 }

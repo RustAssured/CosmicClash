@@ -1,6 +1,7 @@
 import { createMatterMap, rgba, type MaterialSpec, type MatterMap } from '@/contracts';
 import { uriGrids } from './asset';
-import { URI_PARTS, URI_REF, type UriPartKey } from './rig';
+import { URI_PARTS, URI_REF, URI_SCALE, type UriPartKey } from './rig';
+import { scaleUriFields, uriGridOf } from './scale';
 
 /**
  * 우리's part grids as matter maps (uri/data/uri_rig.json, loaded as is: nothing is repainted).
@@ -11,7 +12,10 @@ import { URI_PARTS, URI_REF, type UriPartKey } from './rig';
  * relief is its form light. The per-pixel chunk ids ride along (`chunks`) for the tearing in 2C. Live shading of rotated
  * parts (normals, the form/live blend) is the lit part pass's job on the GPU; this is the matter and the at-rest look.
  *
- * Deterministic; decoded once per process and cloned per fighter.
+ * D34: the game's matter is at URI_SCALE of the asset (about 200 px tall): each part's fields are resampled once (scale.ts)
+ * before they are decoded. uriPartMatter(1) is the asset at reference size (the oracle comparison tools).
+ *
+ * Deterministic; decoded once per process (per scale) and cloned per fighter.
  */
 
 /** Material codes in the asset (spec §3). */
@@ -266,7 +270,7 @@ export interface Decoded {
   chunk: Uint16Array;
 }
 
-let DECODED: UriPartMatter[] | null = null;
+const DECODED = new Map<number, UriPartMatter[]>();
 
 /** The per-cell fields of one part straight from uri_rig.json (base64): the reference the packed asset is tested against. */
 export function decodeJsonPart(r: RawFields): Decoded {
@@ -288,13 +292,14 @@ export function decodeJsonPart(r: RawFields): Decoded {
   };
 }
 
-function decodeAll(fields: readonly Decoded[] = uriGrids()): UriPartMatter[] {
-  return URI_PARTS.map((meta, pi) => {
-    const f = fields[pi]!;
+function decodeAll(fields: readonly Decoded[], scale: number): UriPartMatter[] {
+  return URI_PARTS.map((part, pi) => {
+    const f = scaleUriFields(part, fields[pi]!, scale);
+    const meta = uriGridOf(part, scale);
     const map = createMatterMap(meta.w, meta.h);
     // the oracle draws its origin (200, 170) at screen (320, 186): use the same screen coordinates for the dither pattern
-    const sx0 = meta.x0 + URI_REF.screenX - URI_REF.originX;
-    const sy0 = meta.y0 + URI_REF.screenY - URI_REF.originY;
+    const sx0 = meta.x0 + Math.round((URI_REF.screenX - URI_REF.originX) * scale);
+    const sy0 = meta.y0 + Math.round((URI_REF.screenY - URI_REF.originY) * scale);
     for (let iy = 0; iy < meta.h; iy++)
       for (let ix = 0; ix < meta.w; ix++) {
         const i = iy * meta.w + ix;
@@ -332,19 +337,23 @@ function decodeAll(fields: readonly Decoded[] = uriGrids()): UriPartMatter[] {
       shade[4 * i + 2] = f.edge[i]!;
       shade[4 * i + 3] = f.mat[i]!;
     }
-    return { key: meta.key, map, chunks: f.chunk, light, shade };
+    return { key: part.key, map, chunks: f.chunk, light, shade };
   });
 }
 
-/** Every part's pristine matter (decoded once; do not mutate: clone before handing a map to the world). */
-export function uriPartMatter(): readonly UriPartMatter[] {
-  if (!DECODED) DECODED = decodeAll();
-  return DECODED;
+/**
+ * Every part's pristine matter at scale (default: the game's, D34), in the grid uriGridOf(part, scale) (decoded once per
+ * scale; do not mutate: clone before handing a map to the world).
+ */
+export function uriPartMatter(scale = URI_SCALE): readonly UriPartMatter[] {
+  let d = DECODED.get(scale);
+  if (!d) DECODED.set(scale, (d = decodeAll(uriGrids(), scale)));
+  return d;
 }
 
 /** Build the part matter from explicitly given fields (tests: the JSON's base64 grids vs the packed asset). */
-export function uriPartMatterFrom(fields: readonly Decoded[]): UriPartMatter[] {
-  return decodeAll(fields);
+export function uriPartMatterFrom(fields: readonly Decoded[], scale = URI_SCALE): UriPartMatter[] {
+  return decodeAll(fields, scale);
 }
 
 /** A private copy of a part's map (the matter world mutates the maps it is given). */

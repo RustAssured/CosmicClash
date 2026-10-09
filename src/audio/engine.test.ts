@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AudioEvent, AudioScene, SimEvent, StageId, TitanId } from '@/contracts';
 import { STAGE_IDS, TITAN_IDS } from '@/contracts';
 import { MODES, STAGE_MUSIC } from './dsp/scales';
-import { DUCK_DB, DUCK_SEC, createAudioEngine } from './engine';
+import { DUCK_DB, DUCK_SEC, KO_HUSH_DB, KO_HUSH_SEC, MATTER_REPEAT, createAudioEngine } from './engine';
 import { VOICES } from './voices';
 import {
   FakeBiquad,
@@ -324,7 +324,12 @@ describe('slice material voices (Phase 2)', () => {
 describe('master chain (the "nothing clips" guarantee)', () => {
   it('ends in high-pass → calibration → master → limiter → safety clip → destination; the impacts never pass a compressor', async () => {
     const { ctx, eng } = await ready();
-    const shapers = ctx.nodes.filter((n): n is FakeShaper => n instanceof FakeShaper);
+    // the master's own shapers: the laptop-weight saturator (WEIGHT) works on a side band and is not part of the limiter chain
+    const shapers = ctx.nodes.filter(
+      (n): n is FakeShaper =>
+        n instanceof FakeShaper && (n.oversample === '4x' || n.outputs.has(ctx.destination)),
+    );
+    expect(ctx.nodes.filter((n) => n instanceof FakeShaper)).toHaveLength(3);
     // without AudioWorklet (this fake) the limiter falls back to a 4× oversampled soft clip; the last node is a hard clip
     expect(shapers).toHaveLength(2);
     const soft = shapers.find((s) => s.oversample === '4x')!;
@@ -423,8 +428,12 @@ describe('master chain (the "nothing clips" guarantee)', () => {
     const hold = ev[ev.length - 1]!.t - ev[ev.length - 2]!.t;
     expect(hold).toBeGreaterThanOrEqual(DUCK_SEC[0] - 0.07);
     expect(hold).toBeLessThanOrEqual(DUCK_SEC[1]);
+    // a KO is the hush (D34): deeper and longer than any blow's duck, so the catastrophe lands into near-silence
     eng.handleAt([{ t: 'ko', slot: 1, x: 800, y: 300 }], 4);
-    expect(-20 * Math.log10(Math.min(...downs()))).toBeCloseTo(DUCK_DB[1], 5);
+    expect(-20 * Math.log10(Math.min(...downs()))).toBeCloseTo(KO_HUSH_DB, 5);
+    const ko = duck.gain.events.filter((e) => e.type === 'target' && e.t >= 4);
+    expect(ko.at(-1)!.t - ko.at(-2)!.t).toBeGreaterThanOrEqual(KO_HUSH_SEC - 0.07);
+    expect(KO_HUSH_DB).toBeGreaterThan(DUCK_DB[1] + 6);
     expect(takeViolations()).toEqual([]);
     void ctx;
   });
@@ -465,6 +474,40 @@ describe('event handling', () => {
     }
     expect(ctx.nodes.length).toBeGreaterThan(5000);
     // the engine contains a voice's exception, so a thrown violation never reaches the test: the fake records them
+    expect(takeViolations()).toEqual([]);
+  });
+  it('no fight sound is a whistle (D34): every oscillator any titan or shared voice plays stays at or under 1.6 kHz', async () => {
+    for (const a of TITAN_IDS) {
+      const { eng, ctx } = await ready(9);
+      eng.updateAt(scene({}, a, TITAN_IDS[(TITAN_IDS.indexOf(a) + 3) % TITAN_IDS.length]!), 1 / 60, 0);
+      const before = ctx.nodes.length;
+      eng.handleAt(allEvents(a, a), 1);
+      for (const n of ctx.nodes.slice(before)) {
+        if (!(n instanceof FakeOsc)) continue;
+        for (const e of n.frequency.events)
+          if (e.v >= 25) expect(e.v, `${a}: a ${n.type} at ${Math.round(e.v)} Hz`).toBeLessThanOrEqual(1600);
+      }
+      expect(takeViolations()).toEqual([]);
+    }
+  });
+  it('the hit-physics cues are silent and a storm of matter events sounds once per MATTER_REPEAT (the fight keeps its range)', async () => {
+    const { eng, ctx } = await ready();
+    eng.updateAt(scene({}, 'lastone', 'planet'), 1 / 60, 0);
+    const n0 = ctx.nodes.length;
+    for (const id of ['hit-centre', 'hit-edge', 'hit-glancing'])
+      eng.handleAt([{ t: 'cue', slot: 1, titan: 'planet', id, x: 900, y: 300, amount: 1 }], 1);
+    expect(ctx.nodes.length).toBe(n0);
+    const detach = { t: 'matter', kind: 'detach', x: 900, y: 300, mass: 200, slot: 1 } as const;
+    eng.handleAt(
+      Array.from({ length: 50 }, () => detach),
+      2,
+    );
+    const one = ctx.nodes.length - n0;
+    expect(one).toBeGreaterThan(4);
+    eng.handleAt([detach], 2 + MATTER_REPEAT / 2);
+    expect(ctx.nodes.length - n0).toBe(one);
+    eng.handleAt([detach], 2 + MATTER_REPEAT + 0.01);
+    expect(ctx.nodes.length - n0).toBeGreaterThan(one);
     expect(takeViolations()).toEqual([]);
   });
   it('a Gaze charge that is held for a second, retargeted every tick, never overlaps its own automation', async () => {

@@ -82,7 +82,23 @@ describe('FxState', () => {
     expect(b.intensity).toBeLessThanOrEqual(1);
   });
 
-  it('a flash event with x,y becomes an impact light there (never a wash)', () => {
+  it('D34: a heavy blow and a KO wash the whole screen briefly (peak at once, gone within 300 ms); light blows do not', () => {
+    const fx = new FxState();
+    const m = mkMatch();
+    const washOf = (): number => (fx.sample(0) as FrameFxVfx).wash?.a ?? 0;
+    fx.tick([{ ...heavyHit(), heavy: false, energy: 100, cellsRemoved: 2, massRemoved: 1 } as SimEvent], m);
+    expect(washOf()).toBe(0);
+    fx.tick([heavyHit(300, 200)], m);
+    const peak = washOf();
+    expect(peak).toBeGreaterThan(0.1);
+    expect((fx.sample(0) as FrameFxVfx).wash).toMatchObject({ x: 300, y: 200 });
+    for (let i = 0; i < 18; i++) fx.tick([], m);
+    expect(washOf()).toBeLessThan(peak * 0.05);
+    fx.tick([{ t: 'ko', slot: 1, x: 410, y: 220 } as SimEvent], m);
+    expect(washOf()).toBeGreaterThan(peak);
+  });
+
+  it('a flash event with x,y becomes an impact light there', () => {
     const fx = new FxState();
     const m = mkMatch();
     fx.tick([{ t: 'flash', amount: 0.7, x: 123, y: 45 }], m);

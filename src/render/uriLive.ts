@@ -8,6 +8,8 @@
  * The deformation state of the loop (`UriLoopState`) is the kinetic system's (Phase 2B); at rest it is the identity.
  */
 
+import { URI_SCALE } from '@/titans/uri/rig';
+
 /** The oracle's ramps for the two world-cores (uri/src/10_parts_render.js `RP.hot`, `RP.cold`). */
 export const URI_CORE_RAMPS = {
   hot: ['#1a0604', '#3a0c06', '#6a1a0a', '#9a300e', '#c45018', '#e07428', '#f49a48', '#ffc480'],
@@ -60,6 +62,12 @@ export interface UriLiveFx {
   loop: UriLoopState;
   /** Draw the live elements right after the part with this z. */
   afterZ: number;
+  /**
+   * 우리's draw scale (URI_SCALE, src/titans/uri/rig.ts, proposal 177; default). Positions and core radii arrive already scaled;
+   * this scales the oracle's reference-px lengths: the loop's and orbit's noise, the loop's sideways shift, the plumes.
+   * The oracle-parity harness passes 1.
+   */
+  scale?: number;
   /**
    * The fists' spread [left, right] (TUNING.md: rest 1.14, load 1.0 … impact ≤ 0.74), written by the kinetic system, and the
    * RenderPart.z of the left / right fist parts. The fists are drawn as rubble: every chunk on its own, pushed out from the pivot
@@ -189,6 +197,7 @@ export function uriLoopPixels(
 ): { back: number; front: number } {
   if (fx.broken) return { back: 0, front: 0 };
   const L = fx.loop;
+  const S = fx.scale ?? URI_SCALE;
   const dmg = 1 - fx.hp / 100;
   const TAU = Math.PI * 2;
   let nb = 0;
@@ -208,7 +217,7 @@ export function uriLoopPixels(
   // loopPtsK (cold core → hot core)
   const A = [fx.coldX, fx.coldY];
   const B = [fx.hotX, fx.hotY];
-  const mx = (A[0]! + B[0]!) / 2 + L.sh * 0.6;
+  const mx = (A[0]! + B[0]!) / 2 + L.sh * 0.6 * S;
   const my = (A[1]! + B[1]!) / 2;
   const dx = B[0]! - A[0]!;
   const dy = B[1]! - A[1]!;
@@ -222,7 +231,7 @@ export function uriLoopPixels(
     const lobe = Math.cos(s) > 0 ? 1 + (L.r - 1) * L.gain : 1 + (L.l - 1) * L.gain;
     const lx = ((d * Math.cos(s)) / den) * 1.3 * lobe;
     let ly = ((d * Math.sin(s) * Math.cos(s)) / den) * 1.35 * lobe * (1 + (L.vt - 1) * L.gain);
-    ly += (1 + 7 * dmg + L.stress * 3) * (n3(k * 0.06, fx.t * 1.6, 3) - 0.5);
+    ly += (1 + 7 * dmg + L.stress * 3) * S * (n3(k * 0.06, fx.t * 1.6, 3) - 0.5);
     loop.push([mx + lx * ux - ly * uy, my + lx * uy + ly * ux, Math.sin(s) * (Math.cos(s) > 0 ? 1 : -1), s]);
   }
   // orbitPts around the hot core
@@ -236,7 +245,7 @@ export function uriLoopPixels(
       const y = Math.sin(s) * R * 0.34;
       orbit.push([
         fx.hotX + x * Math.cos(r) - y * Math.sin(r),
-        fx.hotY + x * Math.sin(r) + y * Math.cos(r) + (1 + 6 * dmg) * (n3(k * 0.1, fx.t * 2, 5) - 0.5),
+        fx.hotY + x * Math.sin(r) + y * Math.cos(r) + (1 + 6 * dmg) * S * (n3(k * 0.1, fx.t * 2, 5) - 0.5),
         Math.sin(s),
         s + 1.6,
       ]);
@@ -271,18 +280,19 @@ export function uriLoopPixels(
  */
 export function uriPlumePixels(fx: UriLiveFx, vx: number, vy: number, out: Float32Array): number {
   if (!fx.pylons) return 0;
+  const S = fx.scale ?? URI_SCALE;
   const cap = Math.floor(out.length / 5);
   let n = 0;
   fx.pylons.forEach((p, side) => {
     if (p.lost || !(p.th > 0)) return;
     const sc = side === 0 ? 'L'.charCodeAt(0) : 'R'.charCodeAt(0);
     const th = Math.max(0.15, p.th);
-    const len = 16 + 30 * th;
-    const cnt = 60 + 80 * Math.min(2, th);
+    const len = (16 + 30 * th) * S;
+    const cnt = Math.round((60 + 80 * Math.min(2, th)) * S);
     for (let k = 0; k < cnt; k++) {
       const f = k / cnt;
       const Ln = f * len * (1 + 0.07 * Math.sin(fx.t * 9 + k * 0.7));
-      const w = (1 - f) * (3 + 2 * th);
+      const w = (1 - f) * (3 + 2 * th) * S;
       const X = p.x + Math.cos(p.a) * Ln + (h3(k, Math.floor(fx.t * 14), sc) - 0.5) * w * Math.sin(p.a);
       const Y = p.y + Math.sin(p.a) * Ln;
       const c = f < 0.25 ? [230, 250, 255] : f < 0.6 ? [120, 170, 240] : [40, 70, 150];

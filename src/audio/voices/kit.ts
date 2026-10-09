@@ -1,19 +1,10 @@
 import { clamp } from '../dsp/math';
-import {
-  GLASS,
-  envelope,
-  makeOut,
-  noiseHit,
-  noiseSource,
-  partials,
-  tone,
-  type Out,
-  type PartialSet,
-} from './synth';
+import { envelope, makeOut, noiseSource, tone, type Out } from './synth';
 import type { VoiceCtx } from './types';
 
 /**
- * Building blocks for the Nexus, Black Hole, Supernova and Planet voices, on top of the primitives in synth.ts. The same rules
+ * Building blocks for the titans' voices (the continuous beds, scrapes, bubbles), on top of the primitives in synth.ts; the
+ * cataclysm kit (booms, swells, whooshes, roars) is `epic.ts`. The same rules
  * apply: every envelope is scheduled up front in time order (no event may land inside a pending ramp), long-lived nodes start
  * silent through `.value` and are only ever retargeted with `setTargetAtTime`.
  */
@@ -65,37 +56,7 @@ export function scrape(
   lfo.stop(t + s.dur + 0.05);
 }
 
-/** A run of tiny metallic clicks whose spacing glides from `from` to `to` seconds: a ratchet, a latch, a tearing zip. */
-export function ratchet(
-  c: VoiceCtx,
-  o: Out,
-  t: number,
-  s: { count: number; from: number; to: number; f: number; gain: number; ping?: PartialSet; pingHz?: number },
-): number {
-  let ti = t;
-  const n = Math.max(1, s.count);
-  for (let i = 0; i < n; i++) {
-    const u = n > 1 ? i / (n - 1) : 0;
-    const gap = s.from * Math.pow(s.to / s.from, u);
-    const g = s.gain * (0.7 + 0.3 * c.rand());
-    noiseHit(c, o, ti, {
-      dur: 0.012,
-      gain: g,
-      filter: { type: 'bandpass', f0: s.f * (0.8 + 0.5 * c.rand()), q: 3 },
-      attack: 0.0005,
-    });
-    if (s.ping)
-      partials(c, o, ti, (s.pingHz ?? s.f * 0.4) * (0.9 + 0.3 * c.rand()), s.ping, {
-        decay: 0.05,
-        gain: g * 0.35,
-        maxHz: 9000,
-      });
-    ti += gap;
-  }
-  return ti;
-}
-
-/** Bubbles: short sine chirps rising in pitch at random moments (boiling water, gas escaping). */
+/** Bubbles: short sine blurps rising in pitch at random moments (keep `f` low: magma, a boiling ocean). */
 export function bubbles(
   c: VoiceCtx,
   o: Out,
@@ -111,49 +72,6 @@ export function bubbles(
       dur: 0.035 + 0.05 * c.rand(),
       gain: s.gain * (0.4 + 0.6 * c.rand()),
       attack: 0.003,
-    });
-  }
-}
-
-/** A run of ringing pings that step DOWN in pitch and fade, each slightly detuned from the last: something going dark. */
-export function pingsDown(
-  c: VoiceCtx,
-  o: Out,
-  t: number,
-  s: {
-    count: number;
-    f: number;
-    step: number;
-    spacing: number;
-    decay: number;
-    gain: number;
-    set: PartialSet;
-  },
-): void {
-  for (let i = 0; i < s.count; i++) {
-    const detune = 1 + (c.rand() - 0.5) * 0.02;
-    partials(c, o, t + i * s.spacing * (1 + 0.15 * i), s.f * Math.pow(s.step, i) * detune, s.set, {
-      decay: s.decay,
-      gain: s.gain * (1 - (0.6 * i) / Math.max(1, s.count)),
-      maxHz: 10000,
-    });
-  }
-}
-
-/** Rising high-frequency glitter: many tiny bright pings (Hawking radiation, embers, sparks). */
-export function glitter(
-  c: VoiceCtx,
-  o: Out,
-  t: number,
-  s: { dur: number; count: number; f: number; spread: number; gain: number },
-): void {
-  for (let i = 0; i < s.count; i++) {
-    const ts = t + Math.pow(c.rand(), 1.4) * s.dur;
-    const f = s.f * Math.pow(2, (c.rand() - 0.3) * s.spread);
-    partials(c, o, ts, f, GLASS, {
-      decay: 0.04 + 0.1 * c.rand(),
-      gain: s.gain * (0.4 + 0.6 * c.rand()),
-      maxHz: 12000,
     });
   }
 }

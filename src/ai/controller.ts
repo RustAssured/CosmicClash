@@ -13,6 +13,7 @@ import {
   type MoveSlot,
   type TitanDef,
 } from '@/contracts';
+import { URI_SCALE } from '@/titans/uri/rig';
 import { levelParams, type LevelParams } from './levels';
 import { buildMoveInfos, surgeDistance, type MoveInfo } from './moves';
 import { NGram, type Token } from './predict';
@@ -25,8 +26,12 @@ const LOG_MAX = 80;
 /** A foe that has shown no move, guard or surge for PASSIVE_FROM ticks (6 s) starts to be treated as passive, fully so PASSIVE_RAMP ticks (6 s) later. */
 const PASSIVE_FROM = 360;
 const PASSIVE_RAMP = 360;
-/** Orbit footwork: the mean gap (ticks) between one AI's own attacks. */
-const ENGAGE_GAP_TICKS = 600;
+/**
+ * Orbit footwork: the mean gap (ticks) between one AI's own attacks. D34 pace (WJ: keep the weight, more energy): 600 →
+ * 330, with PACE.damageTaken 2.1 (fighter.ts): the 7-titan round-robin goes from 63 s rounds at 13.5 contacts/min to ≈ 40 s
+ * at ≈ 15–16.
+ */
+const ENGAGE_GAP_TICKS = 330;
 /**
  * Orbit: a blow that takes this share of the AI's own mass (within ~0.5 s of the stagger) makes it regroup for
  * REGROUP_TICKS (+ jitter) before it commits again.
@@ -42,7 +47,7 @@ const STALE_RAMP = 600;
 const STALE_CUT = 0.6;
 const LATE_TICKS = 25 * 60;
 /** 우리: its kinetic system measures the target from URI_CM0 = reference (200, 158), 67 px above the pelvis anchor (≈ 225). */
-const URI_CM_ABOVE = 67;
+const URI_CM_ABOVE = 67 * URI_SCALE; // (in world px: 우리 is drawn at URI_SCALE of its reference, D34)
 /**
  * Orbit, a round that has gone long presses on: from URGE_FROM ticks into the round the engagement gap shrinks, down to
  * (1 − URGE_CUT) of itself URGE_RAMP ticks later (rounds should end inside 90 s, by KO, not on the clock).

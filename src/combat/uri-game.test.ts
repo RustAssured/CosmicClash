@@ -19,10 +19,19 @@ import type { FighterImpl } from './fighter';
 import type { UriBehaviour } from './behaviours/uri';
 import { skipIntro } from './testing/harness';
 import { makeDamageSum } from './damageSum';
+import { URI_SCALE } from '@/titans/uri/rig';
 
 /** Gate 2D: 우리 in the game (URI_SPEC §6, §10; D31-2). */
 
-function duel(script: string, dx = 260): { m: Match; u: FighterImpl; beh: UriBehaviour; events: SimEvent[] } {
+/**
+ * A duel at a fixed gap: 225 reference px from 우리's root to the foe's centre, drawn at URI_SCALE (D34: 우리 about 200 px
+ * tall, the Planet 121 px). Both the lead punch and the shorter rear cross land on the Planet there (measured: the cross
+ * lands up to a 150 px gap and misses at 173).
+ */
+function duel(
+  script: string,
+  dx = Math.round(225 * URI_SCALE),
+): { m: Match; u: FighterImpl; beh: UriBehaviour; events: SimEvent[] } {
   const cfg: MatchConfig = {
     seed: 11,
     stage: 'nursery',
@@ -90,8 +99,8 @@ describe('우리 in the game (Gate 2D)', () => {
     (d.u as unknown as { debugSetMeter(v: number): void }).debugSetMeter(1);
     // the slam comes down below 우리: put the foe low and close
     const foe = d.m.fighters[1] as unknown as { px: number; py: number };
-    foe.px = d.u.px + 40;
-    foe.py = d.u.py + 110;
+    foe.px = d.u.px + Math.round(40 * URI_SCALE);
+    foe.py = d.u.py + Math.round(110 * URI_SCALE);
     run(d, 140);
     expect(d.events.some((e) => e.t === 'hit' && e.attacker === 0 && e.weight === 'catastrophic')).toBe(true);
   }, 60_000);
@@ -192,7 +201,9 @@ describe('우리 in the game (Gate 2D)', () => {
     m.setSources(createAiSource(m, 0, createAI(4, getTitanDef('uri'), 3, { footwork: 'orbit' })), null);
     const moves = new Set<string>();
     let hits = 0;
-    for (let t = 0; t < 60 * 25; t++) {
+    // (D34: at the game's scale the knocked-back Planet ends further from 우리's shorter reach; the AI's orbit pacing needs
+    // about 40 s for a few blows: measured 4 hits by 32 s, 6 by 45 s with seed 5)
+    for (let t = 0; t < 60 * 40; t++) {
       m.step();
       for (const e of m.events) {
         if (e.t === 'move' && e.slot === 0) moves.add(e.moveId);

@@ -47,8 +47,21 @@ export function registerMatchKnobs(
   fighters: readonly KnobFighter[],
   titans: readonly TitanId[],
   ais: readonly (KnobAI | null)[],
+  pace?: { damageTaken: number },
 ): void {
   releaseMatchKnobs();
+  if (pace)
+    registerTuning(`${PREFIX}pace`, [
+      {
+        key: 'damageTaken',
+        label: 'PACE: DAMAGE TAKEN x',
+        min: 0.5,
+        max: 3,
+        step: 0.05,
+        get: () => pace.damageTaken,
+        set: (v) => (pace.damageTaken = v),
+      },
+    ]);
   fighters.forEach((f, i) => {
     const owner = `${PREFIX}p${i + 1}.${titans[i]}`;
     const knobs: TuningKnob[] = [

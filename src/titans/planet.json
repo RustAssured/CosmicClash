@@ -243,30 +243,29 @@
     }
   ],
   "art": {
-    "w": 210,
-    "h": 210,
-    "coreX": 105,
-    "coreY": 105,
-    "coreRadius": 19,
+    "w": 208,
+    "h": 208,
+    "coreX": 104,
+    "coreY": 104,
+    "coreRadius": 13,
     "params": {
-      "scale": 1.4876,
-      "radius": 80.3,
-      "atmo": 11.9,
-      "surface": 8.2,
-      "crust": 16.4,
-      "magmaR": 40.2,
-      "coreR": 19.3,
+      "radius": 54,
+      "atmo": 8,
+      "surface": 5.5,
+      "crust": 11,
+      "magmaR": 27,
+      "coreR": 13,
       "tilt": -0.4,
       "sea": 0.06,
       "moons": [
         {
-          "r": 22.3,
-          "a": 178.5,
-          "b": 47.6,
+          "r": 15,
+          "a": 120,
+          "b": 32,
           "tilt": -0.12,
           "period": 430,
           "phase": 0.6,
-          "crater": 11.9,
+          "crater": 8,
           "lumpy": 0.2,
           "materials": [
             {
@@ -305,13 +304,13 @@
           ]
         },
         {
-          "r": 16.4,
-          "a": 148.8,
-          "b": 38.7,
+          "r": 11,
+          "a": 100,
+          "b": 26,
           "tilt": 0.22,
           "period": 300,
           "phase": 3.7,
-          "crater": 7.4,
+          "crater": 5,
           "lumpy": 0.7,
           "materials": [
             {
@@ -416,9 +415,9 @@
               "to": 6,
               "shape": {
                 "kind": "point",
-                "ox": 113.06,
+                "ox": 76,
                 "oy": 0,
-                "r": 29.75
+                "r": 20
               },
               "damage": {
                 "type": "CRUSH",
@@ -453,9 +452,9 @@
               "to": 6,
               "shape": {
                 "kind": "point",
-                "ox": 113.06,
+                "ox": 76,
                 "oy": 0,
-                "r": 29.75
+                "r": 20
               },
               "damage": {
                 "type": "CRUSH",
@@ -490,9 +489,9 @@
               "to": 6,
               "shape": {
                 "kind": "point",
-                "ox": 113.06,
+                "ox": 76,
                 "oy": 0,
-                "r": 29.75
+                "r": 20
               },
               "damage": {
                 "type": "CRUSH",
@@ -582,9 +581,9 @@
               "to": 8,
               "shape": {
                 "kind": "point",
-                "ox": 142.81,
-                "oy": -50.58,
-                "r": 65.45
+                "ox": 96,
+                "oy": -34,
+                "r": 44
               },
               "damage": {
                 "type": "CRUSH",
@@ -605,9 +604,9 @@
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "point",
-                "ox": 184.46,
-                "oy": -62.48,
-                "r": 71.4
+                "ox": 124,
+                "oy": -42,
+                "r": 48
               }
             }
           ],
@@ -640,9 +639,9 @@
               "to": 8,
               "shape": {
                 "kind": "point",
-                "ox": 142.81,
+                "ox": 96,
                 "oy": 0,
-                "r": 65.45
+                "r": 44
               },
               "damage": {
                 "type": "CRUSH",
@@ -663,9 +662,9 @@
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "point",
-                "ox": 184.46,
+                "ox": 124,
                 "oy": 0,
-                "r": 71.4
+                "r": 48
               }
             }
           ],
@@ -698,9 +697,9 @@
               "to": 8,
               "shape": {
                 "kind": "point",
-                "ox": 142.81,
-                "oy": 50.58,
-                "r": 65.45
+                "ox": 96,
+                "oy": 34,
+                "r": 44
               },
               "damage": {
                 "type": "CRUSH",
@@ -721,9 +720,9 @@
               "guardPressure": 1,
               "sweepTo": {
                 "kind": "point",
-                "ox": 184.46,
-                "oy": 62.48,
-                "r": 71.4
+                "ox": 124,
+                "oy": 42,
+                "r": 48
               }
             }
           ],
@@ -864,9 +863,9 @@
               "to": 8,
               "shape": {
                 "kind": "field",
-                "ox": 104.13,
+                "ox": 70,
                 "oy": 0,
-                "r": 89.26,
+                "r": 60,
                 "falloff": 1.5
               },
               "damage": {
@@ -896,9 +895,9 @@
               "to": 8,
               "shape": {
                 "kind": "field",
-                "ox": 104.13,
+                "ox": 70,
                 "oy": 0,
-                "r": 89.26,
+                "r": 60,
                 "falloff": 1.5
               },
               "damage": {
@@ -928,9 +927,9 @@
               "to": 8,
               "shape": {
                 "kind": "field",
-                "ox": 104.13,
+                "ox": 70,
                 "oy": 0,
-                "r": 89.26,
+                "r": 60,
                 "falloff": 1.5
               },
               "damage": {
@@ -958,14 +957,14 @@
       "tags": ["charge", "projectile", "comet"],
       "extra": {
         "comet": {
-          "spawnDist": 490.9,
-          "spawnRise": 223.1,
-          "entrySpeed": 386.8,
-          "orbit": 223.1,
+          "spawnDist": 330,
+          "spawnRise": 150,
+          "entrySpeed": 260,
+          "orbit": 150,
           "w0": 1.4,
           "w1": 5.2,
           "spinUp": 2.2,
-          "vRef": 922.3,
+          "vRef": 620,
           "energy": 400,
           "life": 110,
           "mass": 13.5
@@ -1011,9 +1010,9 @@
               "to": 50,
               "shape": {
                 "kind": "field",
-                "ox": 223.14,
+                "ox": 150,
                 "oy": 0,
-                "r": 148.76,
+                "r": 100,
                 "falloff": 1.5
               },
               "damage": {
@@ -1039,9 +1038,9 @@
               "to": 62,
               "shape": {
                 "kind": "point",
-                "ox": 208.26,
+                "ox": 140,
                 "oy": 0,
-                "r": 95.21
+                "r": 64
               },
               "damage": {
                 "type": "CRUSH",
@@ -1079,9 +1078,9 @@
               "to": 50,
               "shape": {
                 "kind": "field",
-                "ox": 223.14,
+                "ox": 150,
                 "oy": 0,
-                "r": 148.76,
+                "r": 100,
                 "falloff": 1.5
               },
               "damage": {
@@ -1107,9 +1106,9 @@
               "to": 62,
               "shape": {
                 "kind": "point",
-                "ox": 208.26,
+                "ox": 140,
                 "oy": 0,
-                "r": 95.21
+                "r": 64
               },
               "damage": {
                 "type": "CRUSH",
@@ -1147,9 +1146,9 @@
               "to": 50,
               "shape": {
                 "kind": "field",
-                "ox": 223.14,
+                "ox": 150,
                 "oy": 0,
-                "r": 148.76,
+                "r": 100,
                 "falloff": 1.5
               },
               "damage": {
@@ -1175,9 +1174,9 @@
               "to": 62,
               "shape": {
                 "kind": "point",
-                "ox": 208.26,
+                "ox": 140,
                 "oy": 0,
-                "r": 95.21
+                "r": 64
               },
               "damage": {
                 "type": "CRUSH",
@@ -1309,8 +1308,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 74.38,
-                "r1": 116.03
+                "r0": 50,
+                "r1": 78
               },
               "damage": {
                 "type": "CRUSH",
@@ -1333,8 +1332,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 208.26,
-                "r1": 261.82
+                "r0": 140,
+                "r1": 176
               }
             }
           ],
@@ -1357,8 +1356,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 74.38,
-                "r1": 116.03
+                "r0": 50,
+                "r1": 78
               },
               "damage": {
                 "type": "CRUSH",
@@ -1381,8 +1380,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 208.26,
-                "r1": 261.82
+                "r0": 140,
+                "r1": 176
               }
             }
           ],
@@ -1405,8 +1404,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 74.38,
-                "r1": 116.03
+                "r0": 50,
+                "r1": 78
               },
               "damage": {
                 "type": "CRUSH",
@@ -1429,8 +1428,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 208.26,
-                "r1": 261.82
+                "r0": 140,
+                "r1": 176
               }
             }
           ],
@@ -1487,10 +1486,10 @@
               "to": 30,
               "shape": {
                 "kind": "cone",
-                "ox": 59.5,
+                "ox": 40,
                 "oy": 0,
                 "angle": -0.72,
-                "range": 312.4,
+                "range": 210,
                 "halfAngle": 0.26
               },
               "damage": {
@@ -1527,10 +1526,10 @@
               "to": 30,
               "shape": {
                 "kind": "cone",
-                "ox": 59.5,
+                "ox": 40,
                 "oy": 0,
                 "angle": 0,
-                "range": 312.4,
+                "range": 210,
                 "halfAngle": 0.26
               },
               "damage": {
@@ -1567,10 +1566,10 @@
               "to": 30,
               "shape": {
                 "kind": "cone",
-                "ox": 59.5,
+                "ox": 40,
                 "oy": 0,
                 "angle": 0.72,
-                "range": 312.4,
+                "range": 210,
                 "halfAngle": 0.26
               },
               "damage": {
@@ -1648,8 +1647,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 59.5,
-                "r1": 119.01
+                "r0": 40,
+                "r1": 80
               },
               "damage": {
                 "type": "CRUSH",
@@ -1672,8 +1671,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 297.52,
-                "r1": 351.07
+                "r0": 200,
+                "r1": 236
               }
             }
           ],
@@ -1696,8 +1695,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 59.5,
-                "r1": 119.01
+                "r0": 40,
+                "r1": 80
               },
               "damage": {
                 "type": "CRUSH",
@@ -1720,8 +1719,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 297.52,
-                "r1": 351.07
+                "r0": 200,
+                "r1": 236
               }
             }
           ],
@@ -1744,8 +1743,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 59.5,
-                "r1": 119.01
+                "r0": 40,
+                "r1": 80
               },
               "damage": {
                 "type": "CRUSH",
@@ -1768,8 +1767,8 @@
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 297.52,
-                "r1": 351.07
+                "r0": 200,
+                "r1": 236
               }
             }
           ],

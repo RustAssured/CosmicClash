@@ -105,6 +105,16 @@ const BIT_SLOT: Record<number, MoveSlot> = {
 const MAX_THREATS = 20;
 const DEFAULT_SHELL: ShellProfile = { absorb: {} };
 
+/**
+ * Global pace (D34): every blow TAKEN does this much more to the MATTER (energy and the infection / harvest / pull / heat
+ * params), for every titan alike (the ratios between titans stay with each one's `balance` knobs). Only the matter: the
+ * knock-back (the world's impulse is divided back out), hit-stun, shudder, meter and guard keep the weight they had, and the
+ * hit event keeps the attacker's energy, so sound, lights and hit-stop do not move either.
+ * Mutable for the debug overlay (`match.pace`; a global, so a value WJ sets there stays for the following matches too).
+ * 2.1 with the AI's 330-tick engagement gap: rounds ≈ 40 s at ≈ 15–16 contacts/min across the roster (D34).
+ */
+export const PACE = { damageTaken: 2.1 };
+
 const makeStats = (): EffectiveStats => ({ speedMul: 1, damageMul: 1, mass: 5, reachMul: 1, tempoMul: 1 });
 
 const emptyBodyStats = (): BodyStats => ({
@@ -2792,7 +2802,8 @@ export class FighterImpl implements Fighter {
     const e = this.evIn;
     e.type = evIn.type;
     e.shape = evIn.shape;
-    e.energy = evIn.energy / this.feel.durability;
+    const taken = 1 / this.feel.durability;
+    e.energy = evIn.energy * taken;
     e.dirX = evIn.dirX;
     e.dirY = evIn.dirY;
     e.duration = evIn.duration;
@@ -2801,8 +2812,7 @@ export class FighterImpl implements Fighter {
     e.originX = evIn.originX;
     e.originY = evIn.originY;
     e.flags = evIn.flags;
-    e.params =
-      this.feel.durability === 1 ? evIn.params : this.scaleParams(evIn.params, 1 / this.feel.durability);
+    e.params = taken === 1 ? evIn.params : this.scaleParams(evIn.params, taken);
     const rawEnergy = e.energy;
 
     // 1. guard shell
@@ -2854,7 +2864,20 @@ export class FighterImpl implements Fighter {
     let dr: Readonly<DamageResult> = EMPTY_DAMAGE_RESULT;
     // the move the incoming blow belongs to, for a behaviour that counts blows rather than volumes (우리's loop)
     this.incomingMoveId = info.moveId;
-    if (e.energy >= 0.5) dr = this.applyWorldDamage(e);
+    // the global pace scales what the blow does to the matter only: knock-back, stun, shudder, meter and guard keep the weight
+    const pace = PACE.damageTaken;
+    if (e.energy >= 0.5) {
+      if (pace === 1) dr = this.applyWorldDamage(e);
+      else {
+        // (scaleParams reuses one scratch object: scale from the incoming params, never from e.params)
+        const e0 = e.energy;
+        e.energy = e0 * pace;
+        e.params = this.scaleParams(evIn.params, taken * pace);
+        dr = this.applyWorldDamage(e);
+        e.energy = e0;
+        e.params = taken === 1 ? evIn.params : this.scaleParams(evIn.params, taken);
+      }
+    }
     const cells = dr.cellsRemoved + ir.extraCells;
     res.cellsRemoved = cells;
     res.massRemoved = dr.massRemoved + ir.extraMass;
@@ -2894,8 +2917,8 @@ export class FighterImpl implements Fighter {
         T.knockRatioMin,
         T.knockRatioMax,
       );
-      const rawX = info.knockX + dr.impulseX * T.worldImpulseGain;
-      const rawY = info.knockY + dr.impulseY * T.worldImpulseGain;
+      const rawX = info.knockX + (dr.impulseX / pace) * T.worldImpulseGain;
+      const rawY = info.knockY + (dr.impulseY / pace) * T.worldImpulseGain;
       const k = T.knockScale * ratio * kbMul * this.feel.knockMul;
       let kx = rawX * k;
       let ky = rawY * k;

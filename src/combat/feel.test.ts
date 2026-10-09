@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import {
   Btn,
   CANCEL_WINDOW_FRACTION,
@@ -10,7 +10,7 @@ import {
   type SimEvent,
 } from '@/contracts';
 import type { Match } from '@/sim';
-import type { FighterImpl } from './fighter';
+import { PACE, type FighterImpl } from './fighter';
 import { topSpeed } from './stats';
 import { makeLab, measureCommand } from './testing/feelLab';
 import { ManualSource, createFakeWorld, makeMatch, skipIntro } from './testing/harness';
@@ -327,6 +327,10 @@ describe('hit-stun, hit-stop and the escape route', () => {
   });
 
   it('hit-stun is short for heavy titans and never a stun-lock; Surge breaks out after a brief window', () => {
+    // the stun mechanics at the matter's own scale: at the D34 pace the six lashes would KO the asteroid first
+    const pace = PACE.damageTaken;
+    PACE.damageTaken = 1;
+    onTestFinished(() => void (PACE.damageTaken = pace));
     const { a, f1, step } = duel({ gap: 110 });
     step(3);
     // the asteroid (light) is battered by repeated lashes

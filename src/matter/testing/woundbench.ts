@@ -68,7 +68,7 @@ export interface BlowResult {
   /** Fluid vented on the impact frame (D33: the gas / ocean a cutting blow crosses), kept out of the one-tick share. */
   ventLoss: number;
   /**
-   * Largest one-tick body-mass loss / loss, both without the impact-frame vent (whole mass otherwise: the shedding budget is
+   * Largest one-tick body-mass loss, the impact-frame vent left out, / everything the blow took (whole mass: the shedding budget is
    * defined on the wound's mass, fluids included).
    */
   maxTickShare: number;
@@ -267,7 +267,7 @@ export function measureBlow(spec: BlowSpec, deps: BenchDeps): BlowResult {
     const wallMs = t === 0 ? 0 : (spec.hitstop + t) * MS_PER_TICK;
     const mass = world.stats(id).mass;
     // D33: the gas / ocean a cutting blow crosses vents as spray on the impact frame — never the wound's slabs, and D1 excepts
-    // fluids — so it is taken out of the one-tick share (numerator and denominator); fluid shed later with slabs still counts.
+    // fluids — so it is left out of the largest one-tick loss (it stays in the total the blow took); fluid shed later with slabs still counts.
     if (t === 0) vent = Math.max(0, fluid0 - fluidMass());
     maxTick = Math.max(maxTick, last - mass - (t === 0 ? vent : 0));
     last = mass;
@@ -343,7 +343,8 @@ export function measureBlow(spec: BlowSpec, deps: BenchDeps): BlowResult {
     loss,
     solidLoss,
     ventLoss: vent,
-    maxTickShare: loss - vent > 0 ? maxTick / (loss - vent) : 0,
+    // (the vent is mass the blow took: it stays in the total; only the one-tick numerator leaves it out)
+    maxTickShare: loss > 0 ? maxTick / loss : 0,
     chunkShare: chunks / Math.max(1e-6, chunks + Math.max(0, parts)),
     shearMs,
     crackCells,

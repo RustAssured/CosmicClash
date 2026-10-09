@@ -13,7 +13,13 @@ import {
   type RenderPart,
   type ViewRect,
 } from '@/contracts';
-import { WITNESS_SHRINE_LIGHT_Y, type WitnessBody, type WitnessRegion, type WitnessTitanRig } from '@/titans';
+import {
+  WITNESS_SCALE,
+  WITNESS_SHRINE_LIGHT_Y,
+  type WitnessBody,
+  type WitnessRegion,
+  type WitnessTitanRig,
+} from '@/titans';
 import { Behaviour } from '../behaviour';
 import { addDamageResult, type DamageSum } from '../damageSum';
 import type { FighterImpl } from '../fighter';
@@ -605,7 +611,7 @@ export class WitnessBehaviour extends Behaviour {
     if (reg.kind === 'arm') {
       const arm = W.arms[reg.arm]!;
       for (let s = reg.segment; s < arm.regions.length; s++) this.severOne(this.byIndex[arm.regions[s]!]!, 0);
-    } else this.severOne(r, reg.kind === 'halo' ? 14 : 0);
+    } else this.severOne(r, reg.kind === 'halo' ? 14 * WITNESS_SCALE : 0);
   }
 
   private severOne(r: Region, drift: number): void {
@@ -752,10 +758,11 @@ export class WitnessBehaviour extends Behaviour {
     const byKey = (k: string): Region | undefined => this.byIndex[W.regions.findIndex((q) => q.key === k)];
     const arm = byKey('arm1.0');
     if (arm)
-      for (const ri of W.arms[W.regions[arm.index]!.arm]!.regions) this.severOne(this.byIndex[ri]!, 10);
+      for (const ri of W.arms[W.regions[arm.index]!.arm]!.regions)
+        this.severOne(this.byIndex[ri]!, 10 * WITNESS_SCALE);
     for (const k of ['halo2', 'halo4']) {
       const r = byKey(k);
-      if (r) this.severOne(r, 12);
+      if (r) this.severOne(r, 12 * WITNESS_SCALE);
     }
     // open the carapace (and the channels behind it) over the second eye, upper right
     const e = this.eyeCentre();
@@ -764,15 +771,16 @@ export class WitnessBehaviour extends Behaviour {
       if (!r) continue;
       for (let n = 0; n < 14; n++) {
         const a = (n / 14) * Math.PI * 2;
-        const d = n % 2 ? 7 : 3;
+        // (design px of the 272 px Witness, painted at WITNESS_SCALE: D34)
+        const d = (n % 2 ? 7 : 3) * WITNESS_SCALE;
         const ev: DamageEvent = {
           ...this.ev2,
           type: 'KINETIC',
           shape: {
             kind: 'point',
-            x: e.x + (33 + Math.cos(a) * d) * this.facing,
-            y: e.y - 27 + Math.sin(a) * d,
-            r: 7,
+            x: e.x + (33 * WITNESS_SCALE + Math.cos(a) * d) * this.facing,
+            y: e.y - 27 * WITNESS_SCALE + Math.sin(a) * d,
+            r: 7 * WITNESS_SCALE,
           },
           energy: 2400,
           dirX: 0,
@@ -893,7 +901,7 @@ export class WitnessBehaviour extends Behaviour {
       rig.worldPoint(this.wr.bodyOf[e.region]!, e.lx, e.ly, this.pt);
       const x = this.pt.x * s;
       const y = this.pt.y;
-      fx.glow(x, y, (e.inner ? 6 : 4) * e.open, 90, 200, 230, 0.9 * e.open);
+      fx.glow(x, y, (e.inner ? 6 : 4) * WITNESS_SCALE * e.open, 90, 200, 230, 0.9 * e.open);
       fx.glow(x, y, 1.6 * e.open, 255, 250, 225, e.open);
     }
     // the main eye's light: steady while it lives; in the failure it flickers and goes out after everything else has gone
@@ -907,7 +915,7 @@ export class WitnessBehaviour extends Behaviour {
     this.light = light;
     if (light > 0.02) {
       rig.worldPoint(this.wr.eye, this.pupilX, this.pupilY, this.pt);
-      fx.glow(this.pt.x * s, this.pt.y, 7, 120, 110, 80, 0.35 * light);
+      fx.glow(this.pt.x * s, this.pt.y, 7 * WITNESS_SCALE, 120, 110, 80, 0.35 * light);
       fx.glow(this.pt.x * s, this.pt.y, 2.2, 160, 230, 255, 0.8 * light);
     }
     this.drawFragments(f.tickNo, light);
@@ -946,8 +954,8 @@ export class WitnessBehaviour extends Behaviour {
         // born along the outer half of the piece, drifting outward past the tip, fading as it goes
         const along = 0.35 + 0.65 * ((k * 0.381966 + a * 0.17) % 1) + u * 0.5;
         const side = ((k * 7 + a) % 3) - 1;
-        const lx = jx + dx * along + (-dy / dl) * side * (3 + 9 * u) + (dx / dl) * 4 * u;
-        const ly = jy + dy * along + (dx / dl) * side * (3 + 9 * u) + (dy / dl) * 4 * u;
+        const lx = jx + dx * along + ((-dy / dl) * side * (3 + 9 * u) + (dx / dl) * 4 * u) * WITNESS_SCALE;
+        const ly = jy + dy * along + ((dx / dl) * side * (3 + 9 * u) + (dy / dl) * 4 * u) * WITNESS_SCALE;
         rig.worldPoint(body, lx, ly, this.pt);
         const k2 = (1 - u) * (1 - u);
         fx.add(Math.round(this.pt.x * s), Math.round(this.pt.y), 40 * k2, 95 * k2, 100 * k2);
@@ -957,9 +965,14 @@ export class WitnessBehaviour extends Behaviour {
     const sh = this.byIndex[W.regions.findIndex((r) => r.kind === 'shrine')];
     if (sh && !sh.lost) {
       const reg = W.regions[sh.index]!;
-      rig.worldPoint(this.wr.bodyOf[sh.index]!, 1.5, WITNESS_SHRINE_LIGHT_Y - reg.pivotY, this.pt);
+      rig.worldPoint(
+        this.wr.bodyOf[sh.index]!,
+        1.5 * WITNESS_SCALE,
+        WITNESS_SHRINE_LIGHT_Y - reg.pivotY,
+        this.pt,
+      );
       const pulse = 0.75 + 0.25 * Math.sin(tick * 0.035);
-      fx.glow(this.pt.x * s, this.pt.y, 9, 120, 105, 70, 0.55 * pulse * light);
+      fx.glow(this.pt.x * s, this.pt.y, 9 * WITNESS_SCALE, 120, 105, 70, 0.55 * pulse * light);
       fx.glow(this.pt.x * s, this.pt.y, 2.5, 255, 245, 210, 0.9 * pulse * light);
     }
   }

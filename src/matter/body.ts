@@ -117,6 +117,11 @@ export class Body implements MatterBody {
    * the joint patch; only slabs a wound releases (and explicit tears / releases) leave. Off for every other body.
    */
   fieldHeld = false;
+  /**
+   * Size of one cell of this body in its authored px (MatterWorldEx.setGroupScale; 우리 at URI_SCALE ≈ 2/3): chunk tearing scales
+   * its piece speeds and its neighbour radius by it, so torn pieces move like the oracle's relative to the body. Default 1.
+   */
+  groupScale = 1;
 
   /** Mass per cell at density 128, by material id. */
   readonly matDensity: Float32Array;

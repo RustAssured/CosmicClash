@@ -17,6 +17,7 @@ import { createMatterWorld, type MatterWorldEx } from '@/matter';
 import { buildMaterialTable } from '@/matter/materials';
 import { URI_MATERIALS, cloneUriMap, uriPartMatter } from '@/titans';
 import { URI_ORDER, URI_REF, uriPart } from '@/titans/uri/rig';
+import { uriGridOf } from '@/titans/uri/scale';
 import { writePng } from '../lead/png';
 import { oracleRest } from './urioracle';
 
@@ -26,12 +27,18 @@ const OFFX = URI_REF.screenX - URI_REF.originX;
 const OFFY = URI_REF.screenY - URI_REF.originY;
 
 /** 우리's 13 region bodies at rest, in draw order: reference pixel (X, Y) ↔ world pixel (X + dx, Y + dy). */
-export function uriRestBodies(world: MatterWorldEx, dx: number, dy: number, slot: 0 | 1 = 0): number[] {
+export function uriRestBodies(
+  world: MatterWorldEx,
+  dx: number,
+  dy: number,
+  slot: 0 | 1 = 0,
+  scale = 1,
+): number[] {
   const mats = buildMaterialTable(URI_MATERIALS);
-  const parts = uriPartMatter();
+  const parts = uriPartMatter(scale);
   return URI_ORDER.map((k, z) => {
     const src = parts.find((p) => p.key === k)!;
-    const meta = uriPart(k);
+    const meta = uriGridOf(uriPart(k), scale);
     const ax = Math.round(meta.pivX);
     const ay = Math.round(meta.pivY);
     const spec: BodySpec = {
@@ -56,6 +63,7 @@ export function uriRestBodies(world: MatterWorldEx, dx: number, dy: number, slot
     const id = world.createBody(spec).id;
     world.setCellGroups(id, src.chunks);
     world.setFieldHeld(id, true); // held by fields (URI_SPEC §1): holes never shed what they cut off
+    world.setGroupScale(id, scale); // torn pieces fly at the body's own scale
 
     return id;
   });

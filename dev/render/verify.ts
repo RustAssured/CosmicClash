@@ -24,6 +24,7 @@ import { createMatch } from '@/sim';
 import { fakeDeps } from '@/sim/testing/fakes';
 import { makeRockBody } from './testSprites';
 import { masterPalette, unifyStagePalette } from '@/render/master';
+import { UNIFIED_LOOK } from '@/render/unified';
 import type { FrameFxVfx } from '@/render/vfx';
 import { STAGES } from '@/stages';
 
@@ -405,11 +406,12 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
           if (!masterSet.has(c)) figOff++;
         }
       }
-    check(
-      'unified: every frame pixel is a palette colour (stage ∪ master), every titan pixel a master colour',
-      off === 0 && figOff === 0 && figs > 1000,
-      `${off} off-palette pixels, ${figOff} of ${figs} titan pixels off the master palette`,
-    );
+    if (UNIFIED_LOOK.snapFinal)
+      check(
+        'unified: every frame pixel is a palette colour (stage ∪ master), every titan pixel a master colour',
+        off === 0 && figOff === 0 && figs > 1000,
+        `${off} off-palette pixels, ${figOff} of ${figs} titan pixels off the master palette`,
+      );
     // the outline: the first empty pixel left of the silhouette on each row is the outline colour
     let rows = 0;
     let outlined = 0;
@@ -424,7 +426,10 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
       if (x0 < 2 || inBody(x0 - 1, y) || inBody(x0 - 1, y - 1) || inBody(x0 - 1, y + 1)) continue;
       rows++;
       const got = f[y * LOGICAL_W + x0 - 1]! >>> 0;
-      if (got === outline) outlined++;
+      // with the final snap the outline is the exact master colour; without it (D34) the post pass's vignette and grain move it
+      // by a few levels: a near-black pixel
+      const lum = 0.2126 * (got & 255) + 0.7152 * ((got >>> 8) & 255) + 0.0722 * ((got >>> 16) & 255);
+      if (UNIFIED_LOOK.snapFinal ? got === outline : lum <= 14) outlined++;
       else seen.add(got.toString(16));
     }
     check(
@@ -439,11 +444,12 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
     let tops = 0;
     for (let y = 0; y < LOGICAL_H; y++)
       for (let x = 0; x < LOGICAL_W; x++) if (inBody(x, y) && capped.has(f[y * LOGICAL_W + x]! >>> 0)) tops++;
-    check(
-      'unified: stone / bone / metal never reach the top step (highlight ceiling)',
-      tops === 0,
-      `${tops} capped colours on the body`,
-    );
+    if (UNIFIED_LOOK.ceiling && UNIFIED_LOOK.snapFinal)
+      check(
+        'unified: stone / bone / metal never reach the top step (highlight ceiling)',
+        tops === 0,
+        `${tops} capped colours on the body`,
+      );
 
     // the VFX weights: a local stepped star (never a disc), growing with the weight, no full-frame wash (D5)
     const bg = blackBackdrop();
@@ -499,6 +505,41 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
       radii[1]! > radii[0]! && radii[2]! > radii[1]! && radii[3]! > radii[2]! && spiky && wash < 0.05,
       `flash reach ${radii.join(' / ')} px, frame luminance rise ${wash.toFixed(4)}`,
     );
+
+    // D34: a screen-wide flash lifts the whole frame at full spectacle and does nothing in comfort mode (D5)
+    {
+      const washLum = (comfort: number): { mean: number; corner: number } => {
+        r.setComfort(comfort);
+        const fw = noFx() as FrameFxVfx;
+        fw.wash = { r: 1, g: 0.96, b: 0.88, a: 0.32, x: view.x0 + 320, y: view.y0 + 180 };
+        r.draw(frameOf([bg], { tick: 1730, fx: fw }));
+        const px = r.captureLogical();
+        // display-space (as seen) mean luma and the far corner's, 0..1
+        const luma = (p: number): number =>
+          (0.2126 * (p & 255) + 0.7152 * ((p >>> 8) & 255) + 0.0722 * ((p >>> 16) & 255)) / 255;
+        let s = 0;
+        for (const p of px) s += luma(p);
+        return { mean: s / px.length, corner: luma(px[8 * LOGICAL_W + 8]!) };
+      };
+      r.debugSetGovernor(false);
+      const base = washLum(1);
+      r.draw(frameOf([bg], { tick: 1731 }));
+      const off = (() => {
+        const px = r.captureLogical();
+        let s = 0;
+        for (const p of px)
+          s += (0.2126 * (p & 255) + 0.7152 * ((p >>> 8) & 255) + 0.0722 * ((p >>> 16) & 255)) / 255;
+        return s / px.length;
+      })();
+      const comfortMode = washLum(0.5);
+      r.setComfort(1);
+      r.debugSetGovernor(true);
+      check(
+        'D34 spectacle: a catastrophic screen-wide flash lifts the whole frame (to its corners); comfort mode (D5) has none',
+        base.mean - off > 0.1 && base.corner > 0.1 && comfortMode.mean - off < 0.002,
+        `display luma rise ${(base.mean - off).toFixed(3)} (corner ${base.corner.toFixed(3)}) at full spectacle, ${(comfortMode.mean - off).toFixed(4)} in comfort mode`,
+      );
+    }
 
     // lit parts: identical to the painted atlas at rest, relit by the one sky as the part turns
     const aw = 24;
@@ -742,7 +783,9 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
       );
       r.setStage('tussenruimte');
     }
-    // governor: a black frame, then the worst case — a full-frame white emissive layer appears in one frame
+    // governor (comfort mode, D34: D5's limits are the comfort setting): a black frame, then the worst case — a full-frame white
+    // emissive layer appears in one frame
+    r.setComfort(0.5);
     r.debugSetGovernor(true);
     r.debugLumaReadback(true);
     r.drainLuma();
@@ -769,10 +812,11 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
     for (let i = 1; i < L.length; i++)
       for (let k = 1; k <= 6 && i - k >= 0; k++) worst = Math.max(worst, Math.abs(L[i]! - L[i - k]!));
     check(
-      'governor: black → full-frame white emissive in one frame stays ≤ 0.20 change within 100 ms',
+      'governor (comfort mode): black → full-frame white emissive in one frame stays ≤ 0.20 change within 100 ms',
       worst <= 0.2 && L[L.length - 1]! > L[0]! + 0.3,
       `max Δ within 6 frames ${worst.toFixed(3)}, from ${L[0]!.toFixed(3)} to ${L[L.length - 1]!.toFixed(3)} after 1.5 s`,
     );
+    r.setComfort(1);
     const samples = r.drainLuma();
     const health = r.debugLumaReadback(false);
     check(
@@ -1207,8 +1251,8 @@ async function main(): Promise<void> {
       );
       r.draw(frameOf([bg, s], { fx, tick: 501 }));
       const c = r.captureLogical();
-      // the unified path snaps every pixel to the palette and has no grain (it would only sparkle through the dither)
-      if (r.unified)
+      // the unified path's final snap has no grain (it would only sparkle through the dither); D34 turned the snap off
+      if (r.unified && UNIFIED_LOOK.snapFinal)
         check(
           'unified path: no grain (a later tick with the same inputs renders the same)',
           maxDiff(a, c).count === 0,

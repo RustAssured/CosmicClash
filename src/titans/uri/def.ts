@@ -7,7 +7,7 @@ import {
   type TitanId,
 } from '@/contracts';
 import { cloneUriMap, URI_MATERIALS, uriPartMatter, type UriPartMatter } from './maps';
-import type { UriPartKey } from './rig';
+import { URI_SCALE, type UriPartKey } from './rig';
 
 /**
  * 우리 (URI) as a titan definition (Phase 2A; uri/docs/URI_SPEC.md, uri/docs/TUNING.md, D31).
@@ -77,8 +77,28 @@ function move(
       // the frame data is the locked oracle's phases, not the classic feel targets (the cross and the slam are shorter)
       lockedTiming: 'uri/docs/TUNING.md Phases (the locked oracle; URI_SPEC §6.4)',
       blow,
+      // where the striking fist arrives, for the AI (proposal 167's own reach; D34: at 우리's game scale)
+      aiReach: aiReach(kinetic),
     },
   };
+}
+
+/**
+ * The AI's model of each blow (src/ai/moves.ts AiReach): where the striking fist arrives from the pelvis anchor in world
+ * orientation, measured at reference scale by S1 (src/ai/moves.ts URI_REACH: a punch lands with the foe's anchor about 270 px
+ * away), and when. D34 draws 우리 at URI_SCALE, so the boxes are scaled by it (the timing and the energy are not).
+ */
+const REACH_REF: Readonly<Record<string, readonly [number, number, number, number, number, number, number]>> =
+  {
+    punch: [120, -170, 300, -10, 0, 14, 500],
+    cross: [40, -150, 230, 0, 0, 16, 650],
+    upper: [60, -330, 260, -90, 0, 14, 550],
+    slam: [-90, -10, 120, 110, 0, 12, 1100],
+  };
+function aiReach(kinetic: string): Record<string, number> {
+  const [x0, y0, x1, y1, from, to, energy] = REACH_REF[kinetic]!;
+  const s = URI_SCALE;
+  return { x0: x0 * s, y0: y0 * s, x1: x1 * s, y1: y1 * s, from, to, energy };
 }
 
 /**

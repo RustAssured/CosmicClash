@@ -733,7 +733,8 @@ void main() {
 
 /* ------------------------------------------------------------------------------------------------ *
  *  Post: shockwave + local wound refraction → chromatic fringe → + bloom + god rays → vignette → grain.
- *  Nothing here changes the whole frame's brightness (D5): there is no flash; light from impacts is LOCAL (impact lights).
+ *  Light from impacts is LOCAL (impact lights); the one whole-frame lift is the D34 wash on heavy blows and KOs, scaled
+ *  by the comfort setting (none in comfort mode, D5).
  *  Everything keeps to the pixel grid: samples snap to whole source pixels and bloom/vignette are dithered.
  * ------------------------------------------------------------------------------------------------ */
 export const POST_FRAG = /* glsl */ `${HEAD}${COMMON}${LIGHTS_GLSL}${FIGURE_GLSL}${SNAP_GLSL}
@@ -741,6 +742,8 @@ uniform sampler2D uFrame;
 uniform sampler2D uBloom;
 uniform sampler2D uBloomB;     // unified path: the far (≈ 10 px) blur; uBloom is then the near (≈ 3 px) one
 uniform vec2 uBloomMix;        // unified path: near, far gains (SHARED_BLOOM); (0, 0) = the classic pyramid in uBloom
+uniform vec4 uWash;            // D34 screen-wide flash: colour, amount (0 = none; already scaled by the comfort setting)
+uniform vec2 uWashAt;          // its centre (logical px): the wash is strongest there and covers the whole frame
 uniform float uShockE[8];      // per shockwave: vertical scale of the ring (1 = round; < 1 = flattened toward the camera)
 uniform sampler2D uGod;
 uniform sampler2D uBayer;
@@ -883,6 +886,12 @@ void main() {
   if (uUnified == 1 && cov > 0.5) bloom = max(bloom - vec3(0.08), vec3(0.0)) * 1.4;
   col = col + bloom * (1.0 - uGlowDamp.x * cov) + rays * (1.0 - uGlowDamp.y * cov);
 
+  // the screen-wide flash (D34): the whole frame lifts toward the blow's light, most at the blow, stepped by the Bayer matrix
+  if (uWash.w > 0.0) {
+    float wd = length(p - uWashAt);
+    float wk = uWash.w * (0.6 + 0.4 * exp(-wd / 200.0));
+    col += uWash.rgb * ditherQ(wk, 16.0, th);
+  }
   float vig = 1.0 - uVignette * pow(smoothstep(0.55, 1.45, length(fromC * vec2(0.85, 1.0))), 1.6);
   col *= ditherQ(vig, 12.0, th);
 

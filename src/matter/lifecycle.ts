@@ -130,6 +130,76 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
         if (xx >= 0 && yy >= 0 && xx < w && yy < h) visit(yy * w + xx, x, y);
       }
   }
+  const reseeded = qt === 0 && missing > 0;
+  if (reseeded) {
+    // Nothing survived (a body blown away or dissolved whole at its KO): regrow each piece of the pristine footprint
+    // (8-connected) from its cell nearest the piece's centroid, else the BFS has no seed and the body would start the next
+    // round empty (an instant KO).
+    const comp = new Int32Array(n).fill(-1);
+    const stack = new Int32Array(n);
+    const seeds: number[] = [];
+    for (let i0 = 0; i0 < n; i0++) {
+      if (s.material[i0] === 0 || comp[i0] !== -1) continue;
+      const id = seeds.length;
+      let sp = 0;
+      let cnt = 0;
+      let sx = 0;
+      let sy = 0;
+      comp[i0] = id;
+      stack[sp++] = i0;
+      const members: number[] = [];
+      while (sp > 0) {
+        const c = stack[--sp]!;
+        members.push(c);
+        const x = c % w;
+        const y = (c - x) / w;
+        sx += x;
+        sy += y;
+        cnt++;
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx;
+            const yy = y + dy;
+            if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+            const j = yy * w + xx;
+            if (s.material[j] !== 0 && comp[j] === -1) {
+              comp[j] = id;
+              stack[sp++] = j;
+            }
+          }
+      }
+      sx /= cnt;
+      sy /= cnt;
+      let best = members[0]!;
+      let bd = Infinity;
+      for (const c of members) {
+        const d = ((c % w) - sx) ** 2 + ((c - (c % w)) / w - sy) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = c;
+        }
+      }
+      seeds.push(best);
+    }
+    for (const best of seeds) {
+      mat[best] = s.material[best]!;
+      map.density[best] = s.density[best]!;
+      map.height[best] = s.height[best]!;
+      map.baseColor[best] = s.baseColor[best]!;
+      map.integrity[best] = 160;
+      map.flags[best] = 0;
+      seen[best] = 1;
+      missing--;
+      const bx = best % w;
+      const by = (best - bx) / w;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = bx + dx;
+          const yy = by + dy;
+          if ((dx !== 0 || dy !== 0) && xx >= 0 && yy >= 0 && xx < w && yy < h) visit(yy * w + xx, bx, by);
+        }
+    }
+  }
   while (qh < qt) {
     const c = queue[qh++]!;
     const x = c % w;
@@ -144,8 +214,7 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
         if (xx >= 0 && yy >= 0 && xx < w && yy < h) visit(yy * w + xx, sx, sy);
       }
   }
-  const target = Math.round(f * missing);
-  if (target > 0) {
+  const target = Math.round(f * missing);  if (target > 0) {
     // 2. Priority = BFS distance + noise (ragged front); order ascending via packed float sort.
     const keys = new Float64Array(qt);
     for (let k = 0; k < qt; k++) {
@@ -203,7 +272,12 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
     // the connectivity pass turns into dust when the round starts. Several passes so cells whose neighbour regrows later join.
     const done = new Uint8Array(qt);
     let grown = 0;
-    for (let pass = 0; pass < 6 && grown < count; pass++) {
+    // Until the target or no more progress: regrowing from a few surviving or reseeded cells the ragged order needs many
+    // more passes than a front along a long surviving edge (the old cap of 6 left a scattered or reseeded body far short
+    // of `fraction` and it started the next round nearly KO'd).
+    const passes = 400;
+    for (let pass = 0, last = -1; pass < passes && grown < count && grown !== last; pass++) {
+      last = grown;
       for (let k = 0; k < qt && grown < count; k++) {
         if (done[k] === 1) continue;
         const c = keys[k]! % 65536;

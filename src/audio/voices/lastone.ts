@@ -1,18 +1,8 @@
 import { clamp, clamp01 } from '../dsp/math';
-import {
-  GLASS,
-  TINK,
-  gravel,
-  makeOut,
-  noiseHit,
-  partials,
-  pick,
-  riser,
-  thump,
-  tone,
-  whistlePass,
-} from './synth';
+import { BELL, gravel, makeOut, pick, tone } from './synth';
+import { subOut } from './kit';
 import type { TitanVoice, VoiceCtx } from './types';
+import { boom, catastrophe, crackle, lowBell, roar, rumble, saturator, swell, whoosh } from './epic';
 import {
   ceramicFracture,
   filamentSnap,
@@ -23,14 +13,17 @@ import {
 } from './materials';
 
 /**
- * THE LAST ONE — glassy celadon. A single ancient eye and a halo of tendrils; the sound is struck glass and ceramic:
- * inharmonic bell partials with a detuned sine shimmer, "tink" transients, high fracture cracks, a soft breathing pad that
- * follows the tendrils' motion and an eye-flare swell while the Gaze charges.
- *
- * Tuning: everything sits on D pentatonic (D F♯ A B) so any two bells that overlap are consonant.
+ * THE WITNESS (id `lastone`): a cathedral-sized colossus of sacred ceramic, stone and bronze around a single eye of white-gold
+ * light. D34 rebuilt it from struck glass (587–1480 Hz bells, 2–7 kHz tinks and shards) into a temple bell struck by a mountain:
+ *  - its body rings as colossal BRONZE (`BELL` partials on D1–D3, none above ~1.4 kHz), slowly beating, wronger when hollowed;
+ *  - it breaks as fired clay and stone (dark cracks, low clay plates, grinding slabs);
+ *  - its tendrils are cables the size of ridges (a LOW plucked snap), its sacred frame strains like bowed metal;
+ *  - the Gaze is not a whine but a pressure: a low choir on D whose filter opens as the eye fills, and a beam that ROARS;
+ *  - its bed is a low choir (D2 A2 D3) that breathes with its motion.
+ * Tuning: everything sits on D (D F♯ A), so any two bells that overlap are consonant.
  */
-const BELLS = [587.33, 739.99, 880, 987.77, 1174.66, 1479.98];
-const LOW = [146.83, 220, 369.99];
+const BELLS = [73.42, 92.5, 110, 146.83];
+const LOW = [73.42, 110, 146.83];
 
 interface Charging {
   gain: GainNode;
@@ -64,7 +57,7 @@ export function createLastOneVoice(): TitanVoice {
     gain.gain.value = 0;
     // setTarget, not a ramp: `hold` events keep retargeting this gain every tick for as long as the charge lasts, and an event
     // that lands inside a pending ramp is undefined behaviour (it produced a full-scale click; see `gravel` in synth.ts)
-    gain.gain.setTargetAtTime(0.06, t, 0.08);
+    gain.gain.setTargetAtTime(0.07, t, 0.1);
     const p = ac.createStereoPanner();
     p.pan.value = clamp(pan * 0.5, -1, 1);
     gain.connect(p);
@@ -75,40 +68,43 @@ export function createLastOneVoice(): TitanVoice {
     wg.connect(c.wet);
     const filter = ac.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 900;
-    filter.Q.value = 0.9;
+    filter.frequency.value = 260;
+    filter.Q.value = 1.4;
+    const sh = saturator(c, 1.8);
+    sh.connect(filter);
     filter.connect(gain);
     const oscs: OscillatorNode[] = [];
+    // a low choir on D: root, fifth, octave, twelfth; saws and a sine, slowly beating
     for (const [i, ratio] of [1, 1.5, 2, 3].entries()) {
       const o = ac.createOscillator();
-      o.type = i === 0 ? 'triangle' : 'sine';
-      o.frequency.setValueAtTime(220 * ratio, t);
-      o.detune.value = (i - 1.5) * 6;
+      o.type = i === 0 ? 'sine' : 'sawtooth';
+      o.frequency.setValueAtTime(LOW[0]! * ratio, t);
+      o.detune.value = (i - 1.5) * 7;
       const og = ac.createGain();
-      og.gain.value = [1, 0.5, 0.4, 0.22][i]!;
+      og.gain.value = [0.6, 0.22, 0.18, 0.1][i]!;
       o.connect(og);
-      og.connect(filter);
+      og.connect(sh);
       o.start(t);
       oscs.push(o);
     }
-    // tremolo: the eye "trembling" as it gathers light
+    // the eye gathering: a slow throb, not a tremble
     const lfo = ac.createOscillator();
-    lfo.frequency.value = 6;
+    lfo.frequency.value = 2.2;
     const lg = ac.createGain();
-    lg.gain.value = 0.035;
+    lg.gain.value = 0.025;
     lfo.connect(lg);
     lg.connect(gain.gain);
     lfo.start(t);
     oscs.push(lfo);
     const noise = ac.createBufferSource();
-    noise.buffer = c.noise;
+    noise.buffer = c.brown;
     noise.loop = true;
     const nf = ac.createBiquadFilter();
     nf.type = 'bandpass';
-    nf.frequency.value = 3000;
-    nf.Q.value = 3;
+    nf.frequency.value = 220;
+    nf.Q.value = 0.8;
     const ng = ac.createGain();
-    ng.gain.value = 0.05;
+    ng.gain.value = 0.5;
     noise.connect(nf);
     nf.connect(ng);
     ng.connect(filter);
@@ -126,6 +122,29 @@ export function createLastOneVoice(): TitanVoice {
     charging.delete(slot);
   };
 
+  /** The sacred body struck: a colossal bronze bell (low, beating), and the clay and stone around it. */
+  const struck = (
+    c: VoiceCtx,
+    t: number,
+    pan: number,
+    mag: number,
+    ring: number,
+    onDamaged: number,
+    slot: 0 | 1,
+  ): void => {
+    const o = makeOut(c, pan, 0.6);
+    const res = resonance(massBy[slot], onDamaged);
+    const f = pick(c, BELLS) * (1.15 - 0.35 * mag) * res.pitch;
+    ceramicFracture(c, o, t, mag * ring, res);
+    lowBell(c, o, t, f, BELL, {
+      decay: (0.9 + 2.2 * mag) * res.decay,
+      gain: (0.08 + 0.1 * mag) * ring,
+      shimmer: 0.4,
+      maxHz: 1400,
+    });
+    if (res.spread > 0.4) wrongHarmonics(c, o, t + 0.02, f, 0.05 * res.spread * ring, res);
+  };
+
   return {
     titan: 'lastone',
 
@@ -133,40 +152,18 @@ export function createLastOneVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const id = ev.moveId;
       if (id.endsWith('lash')) {
-        const o = makeOut(c, pan, 0.3);
-        noiseHit(c, o, t, {
-          dur: 0.2,
-          gain: 0.1,
-          filter: { type: 'bandpass', f0: 900, f1: 2800, q: 1.4 },
-          attack: 0.05,
-        });
-        tone(c, o, t, { f0: 780, f1: 1500, dur: 0.22, gain: 0.05, attack: 0.05 });
+        // a tendril the size of a ridge draws back: air gathering, low
+        swell(c, makeOut(c, pan, 0.3), t, { dur: 0.22, gain: 0.09, f0: 140, f1: 700 });
       } else if (id.endsWith('lunge')) {
-        const o = makeOut(c, pan, 0.25);
-        tone(c, o, t, { f0: 500, f1: 1800, dur: 0.2, gain: 0.07, attack: 0.03 });
-        noiseHit(c, o, t, { dur: 0.16, gain: 0.08, filter: { type: 'highpass', f0: 2500 }, attack: 0.04 });
+        swell(c, makeOut(c, pan, 0.25), t, { dur: 0.2, gain: 0.1, f0: 110, f1: 800, sub: 0.05 });
       } else if (id.endsWith('shatter')) {
-        // the heavy blow gathers: a rising cluster of detuned glass and a low swell
+        // the heavy blow gathers: a reversed swell into the blow, the choir leaning in, the sacred frame straining
         const o = makeOut(c, pan, 0.5);
-        for (const [i, f] of [293.66, 440, 587.33, 739.99].entries())
-          tone(c, o, t + i * 0.04, {
-            f0: f * 0.7,
-            f1: f * 1.6,
-            dur: 0.55,
-            gain: 0.05,
-            attack: 0.3,
-            detune: i * 5,
-          });
-        tone(c, o, t, { f0: 62, f1: 110, dur: 0.6, gain: 0.16, attack: 0.3, type: 'triangle' });
-        // the sacred metal of its frame strains under the load it is about to move
-        strainedMetal(c, o, t, 0.6, 196, 0.03, resonance(massBy[ev.slot]));
+        swell(c, o, t, { dur: 0.6, gain: 0.14, f0: 90, f1: 800, sub: 0.1, subHz: 37 });
+        roar(c, o, t, { f: 73.42, dur: 0.6, gain: 0.05, attack: 0.45, lp0: 200, lp1: 600, noise: 0 });
+        strainedMetal(c, o, t, 0.6, 98, 0.03, resonance(massBy[ev.slot]));
       } else if (!id.endsWith('gaze') && !id.endsWith('lastlight') && !id.endsWith('sidestep')) {
-        noiseHit(c, makeOut(c, pan, 0.2), t, {
-          dur: 0.15,
-          gain: 0.07,
-          filter: { type: 'bandpass', f0: 1200, f1: 2200, q: 1 },
-          attack: 0.04,
-        });
+        swell(c, makeOut(c, pan, 0.2), t, { dur: 0.18, gain: 0.07, f0: 120, f1: 600 });
       }
     },
 
@@ -179,14 +176,14 @@ export function createLastOneVoice(): TitanVoice {
       if (ev.phase === 'hold' || ev.phase === 'start') {
         const f = clamp01(ev.frac);
         ch.frac = f;
-        // brightening and rising as the eye fills: 220 → 660 Hz fundamental, filter opening from 0.9k to 6k; the gain stays
-        // modest: a sustained voice at the level of a hit would be deafening (measured −1 dB peak at first)
-        const base = 220 * (1 + 2 * f);
+        // the eye fills: the choir rises only a fourth (D2 → G2) while its filter OPENS (260 Hz → 1.3 kHz) and it swells: the
+        // pressure of light gathering, not a whine. The gain stays modest: it is held for seconds.
+        const base = LOW[0]! * Math.pow(2, (5 * f) / 12);
         ch.oscs
           .slice(0, 4)
-          .forEach((o, i) => o.frequency.setTargetAtTime(base * [1, 1.5, 2, 3][i]!, t, 0.06));
-        ch.filter.frequency.setTargetAtTime(900 + 5100 * f, t, 0.06);
-        ch.gain.gain.setTargetAtTime(0.06 + 0.075 * f, t, 0.08);
+          .forEach((o, i) => o.frequency.setTargetAtTime(base * [1, 1.5, 2, 3][i]!, t, 0.08));
+        ch.filter.frequency.setTargetAtTime(260 + 1040 * f, t, 0.08);
+        ch.gain.gain.setTargetAtTime(0.07 + 0.09 * f, t, 0.1);
       } else if (ev.phase === 'release') {
         stopGaze(slot, t);
       }
@@ -196,149 +193,148 @@ export function createLastOneVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const p = clamp01(ev.power);
       const id = ev.moveId;
+      const res = resonance(massBy[ev.slot]);
       if (id.endsWith('gaze')) {
-        // the beam: a searing high chord with a shimmering tail
+        // the beam: a roar of light — the choir at full voice through an opening filter, a pressure drop, a bronze bloom
         const o = makeOut(c, pan, 0.6);
-        for (const f of [880, 1174.66, 1479.98])
-          tone(c, o, t, {
-            f0: f,
-            f1: f * 1.02,
-            dur: 0.6 + 0.4 * p,
-            gain: 0.08 + 0.05 * p,
-            attack: 0.01,
-            detune: c.rand() * 8 - 4,
-          });
-        noiseHit(c, o, t, { dur: 0.4, gain: 0.08, filter: { type: 'highpass', f0: 5000 }, attack: 0.01 });
+        roar(c, o, t, {
+          f: 73.42,
+          f1: 69.3,
+          dur: 0.8 + 0.5 * p,
+          gain: 0.13 + 0.06 * p,
+          attack: 0.02,
+          lp0: 1200,
+          lp1: 320,
+          detune: 12,
+        });
+        boom(c, subOut(c, pan), t, { f0: 92, f1: 36, dur: 0.8, gain: 0.35 + 0.2 * p, drive: 2.8 });
+        lowBell(c, o, t, 146.83, BELL, { decay: 1.4, gain: 0.07, shimmer: 0.4 });
       } else if (id.endsWith('lash')) {
-        const o = makeOut(c, pan, 0.3);
-        noiseHit(c, o, t, { dur: 0.018, gain: 0.4, filter: { type: 'highpass', f0: 4500 }, attack: 0.0005 });
-        partials(c, o, t, pick(c, BELLS) * 2, TINK, { decay: 0.16, gain: 0.11 });
-        filamentSnap(c, o, t + 0.005, 880, p * 0.5, resonance(massBy[ev.slot]));
+        // a cable the size of a ridge cracks like a whip: a low snap and a dark crack
+        const o = makeOut(c, pan, 0.35);
+        filamentSnap(c, o, t, 110, 0.5 + 0.5 * p, res);
+        whoosh(c, t, {
+          dur: 0.22,
+          gain: 0.12,
+          panFrom: clamp(pan - 0.3, -1, 1),
+          panTo: clamp(pan + 0.3, -1, 1),
+          wet: 0.3,
+          f0: 900,
+          f1: 200,
+        });
       } else if (id.endsWith('shatter')) {
         const o = makeOut(c, pan, 0.55);
-        thump(c, makeOut(c, pan * 0.3, 0), t, 80, 28, 0.9, 0.55);
-        gravel(c, o, t, { dur: 0.7, grains: 30, f: 6000, spread: 1.6, gain: 0.16, q: 2.4 });
-        partials(c, o, t, 1174.66, GLASS, { decay: 0.9, gain: 0.07, shimmer: 0.35 });
-        stoneShear(c, o, t + 0.02, p, resonance(massBy[ev.slot]));
+        boom(c, subOut(c, pan), t, { f0: 88, f1: 28, dur: 1.1, gain: 0.6, drive: 3 });
+        gravel(c, o, t, { dur: 0.8, grains: 30, f: 900, spread: 1.6, gain: 0.14, q: 1.6, lowpass: 2000 });
+        lowBell(c, o, t, 73.42, BELL, { decay: 1.8, gain: 0.08, shimmer: 0.35 });
+        stoneShear(c, o, t + 0.02, p, res);
       } else if (id.endsWith('lunge')) {
-        noiseHit(c, makeOut(c, pan, 0.2), t, {
-          dur: 0.1,
-          gain: 0.3,
-          filter: { type: 'highpass', f0: 3500 },
-          attack: 0.001,
+        whoosh(c, t, {
+          dur: 0.3,
+          gain: 0.18,
+          panFrom: clamp(pan - 0.4, -1, 1),
+          panTo: clamp(pan + 0.4, -1, 1),
+          wet: 0.25,
+          f0: 800,
+          f1: 140,
         });
       }
     },
 
     onSurge(c, t, ev) {
-      // "charge, and sidestep": a crystalline sweep that lands on a soft bell
+      // "charge, and sidestep": a colossus moving through the air, and its frame settling with a soft bronze note
       const pan = c.panOf(ev.x);
-      whistlePass(c, t, {
-        f: 1250,
-        dur: 0.32,
-        gain: 0.07,
-        panFrom: clamp(pan - 0.4 * Math.sign(ev.dirX || 1), -1, 1),
-        panTo: clamp(pan + 0.4 * Math.sign(ev.dirX || 1), -1, 1),
+      const dir = Math.sign(ev.dirX || 1);
+      whoosh(c, t, {
+        dur: 0.4,
+        gain: 0.09,
+        panFrom: clamp(pan - 0.4 * dir, -1, 1),
+        panTo: clamp(pan + 0.4 * dir, -1, 1),
         wet: 0.4,
-        approach: 1.6,
-        recede: 0.55,
+        f0: 700,
+        f1: 150,
       });
-      partials(c, makeOut(c, pan, 0.5), t + 0.28, pick(c, BELLS), GLASS, {
-        decay: 0.4,
-        gain: 0.05,
-        shimmer: 0.3,
-      });
+      lowBell(c, makeOut(c, pan, 0.5), t + 0.32, pick(c, BELLS) * 2, BELL, { decay: 0.6, gain: 0.03 });
     },
 
     onHitDealt(c, t, ev, mag) {
-      // fracture accent: a bright shard tink riding the shear
+      // fracture accent: a dark crack riding the shear, and the stone it throws
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.35);
-      partials(c, o, t, pick(c, BELLS) * 2, TINK, { decay: 0.12 + 0.18 * mag, gain: 0.05 + 0.07 * mag });
-      if (ev.heavy) gravel(c, o, t + 0.01, { dur: 0.5, grains: 26, f: 7000, spread: 1.4, gain: 0.14, q: 3 });
+      ceramicFracture(c, o, t, 0.4 + 0.4 * mag, resonance(1));
+      if (ev.heavy) crackle(c, o, t + 0.02, { dur: 0.6, count: 14, gain: 0.12, f: 1000 });
     },
 
     onHitTaken(c, t, ev, mag) {
-      // the body is glass: it RINGS. Heavier blows ring lower and longer; blocked blows barely ring.
+      // the body is sacred ceramic around bronze: it RINGS, low. Heavier blows ring lower and longer; blocked blows barely ring.
       const pan = c.panOf(ev.x);
       const ring = 1 - clamp01(ev.blocked) * 0.85;
-      const o = makeOut(c, pan, 0.55);
-      // damage changes the resonance: the more of the body is gone (and the more damaged the struck spot), the lower, longer
-      // and more out of tune it rings — and past a point its overtones go wrong
-      const res = resonance(massBy[ev.target], ev.onDamaged);
-      const f = pick(c, BELLS.slice(0, 4)) * (2.7 - 0.7 * mag) * res.pitch;
-      ceramicFracture(c, o, t, mag * ring, res);
-      if (ev.heavy) stoneShear(c, o, t + 0.01, mag * ring, res);
-      if (res.spread > 0.4) wrongHarmonics(c, o, t + 0.02, f * 0.5, 0.04 * res.spread * ring, res);
-      partials(c, o, t, f, GLASS, {
-        decay: (0.35 + 1.1 * mag) * res.decay,
-        gain: (0.07 + 0.1 * mag) * ring,
-        shimmer: 0.4,
-        attack: 0.001,
-      });
-      // glass rings AND chips: a second, brighter ring an octave up (slightly stretched, so the two beat), a ceramic tink and a
-      // shard click ride every blow (more of the chipping on damaged glass)
-      partials(c, o, t + 0.002, f * 2.03, GLASS, {
-        decay: 0.2 + 0.5 * mag,
-        gain: (0.05 + 0.07 * mag) * ring,
-        attack: 0.001,
-        maxHz: 12000,
-      });
-      partials(c, o, t + 0.004, f * 2.76, TINK, {
-        decay: 0.1,
-        gain: (0.03 + (ev.onDamaged > 0.3 ? 0.06 : 0)) * ring,
-      });
-      noiseHit(c, o, t, {
-        dur: 0.012,
-        gain: 0.1 * ring,
-        filter: { type: 'highpass', f0: 6000 },
-        attack: 0.0004,
-      });
+      struck(c, t, pan, mag, ring, ev.onDamaged, ev.target);
+      if (ev.heavy)
+        stoneShear(c, makeOut(c, pan, 0.5), t + 0.01, mag * ring, resonance(massBy[ev.target], ev.onDamaged));
     },
 
     onGuard(c, t, ev) {
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.5);
-      partials(c, o, t, pick(c, BELLS.slice(2)), GLASS, {
-        decay: ev.broke ? 1.4 : 0.5,
-        gain: ev.broke ? 0.14 : 0.1,
+      lowBell(c, o, t, pick(c, BELLS.slice(1)), BELL, {
+        decay: ev.broke ? 1.8 : 0.7,
+        gain: ev.broke ? 0.12 : 0.09,
         shimmer: 0.3,
       });
-      thump(c, makeOut(c, pan * 0.3, 0), t, 110, 46, ev.broke ? 0.8 : 0.3, ev.broke ? 0.6 : 0.3);
-      if (ev.broke) gravel(c, o, t, { dur: 0.7, grains: 28, f: 5500, spread: 1.6, gain: 0.18, q: 2.4 });
+      boom(c, subOut(c, pan), t, {
+        f0: 104,
+        f1: 44,
+        dur: ev.broke ? 0.9 : 0.35,
+        gain: ev.broke ? 0.55 : 0.3,
+      });
+      if (ev.broke)
+        gravel(c, o, t, { dur: 0.7, grains: 28, f: 800, spread: 1.6, gain: 0.16, q: 1.6, lowpass: 1800 });
     },
 
     onKo(c, t, ev) {
-      // the celadon shell shatters: a shower of glass over a slow falling bell cluster
+      // the colossus falls: the hush, the drop, its bronze tolling down out of tune, a landslide of clay and stone
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.9);
-      gravel(c, o, t, { dur: 1.8, grains: 70, f: 6500, spread: 1.8, gain: 0.55, q: 1.6, decayShape: 1.2 });
+      const at = catastrophe(c, subOut(c, pan), o, t, { size: 1, f0: 58 });
+      gravel(c, o, at, {
+        dur: 2.2,
+        grains: 70,
+        f: 700,
+        spread: 1.8,
+        gain: 0.3,
+        q: 1.4,
+        decayShape: 1.2,
+        lowpass: 1800,
+      });
       // its last sound is wrong: a sacred chord with its overtones slipping out of their series
-      wrongHarmonics(c, o, t + 0.3, 293.66, 0.06, resonance(0.2, 1));
-      for (const [i, f] of [987.77, 739.99, 587.33, 440, 293.66].entries())
-        partials(c, o, t + 0.12 * i, f, GLASS, { decay: 2.2, gain: 0.07, shimmer: 0.4 });
+      wrongHarmonics(c, o, at + 0.3, 73.42, 0.07, resonance(0.2, 1));
+      for (const [i, f] of [146.83, 110, 92.5, 73.42, 55].entries())
+        lowBell(c, o, at + 0.18 * i, f, BELL, { decay: 3, gain: 0.07, shimmer: 0.4 });
     },
 
     onUltimate(c, t, ev) {
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan * 0.3, 0.9);
       if (ev.phase === 'start') {
-        // The Last Light: a choir of glass that swells for 2.4 s, brightening, then blooms
-        for (const [i, f] of [146.83, 293.66, 440, 587.33, 739.99, 1174.66].entries())
+        // The Last Light: a choir of the deep swells for 2.4 s while the pressure gathers, then the light lands like a world
+        for (const [i, f] of [36.71, 73.42, 110, 146.83, 185, 220].entries())
           tone(c, o, t, {
+            type: i < 2 ? 'triangle' : 'sine',
             f0: f,
             f1: f * 1.01,
             dur: 2.6,
-            gain: 0.05 + 0.005 * i,
+            gain: 0.06 - 0.005 * i,
             attack: 2.2,
-            detune: (i - 2.5) * 4,
+            detune: (i - 2.5) * 5,
           });
-        riser(c, o, t, 2.4, 0.16, 800, 9000);
-        thump(c, makeOut(c, 0, 0), t + 2.4, 60, 22, 1.6, 0.9);
-        partials(c, o, t + 2.4, 1174.66, GLASS, { decay: 2.4, gain: 0.12, shimmer: 0.5 });
+        swell(c, o, t, { dur: 2.4, gain: 0.18, f0: 70, f1: 1000, sub: 0.14, subHz: 36.71 });
+        catastrophe(c, subOut(c, 0), o, t + 2.4, { pre: 0, size: 0.7, gain: 0.9, f0: 55 });
+        lowBell(c, o, t + 2.4, 73.42, BELL, { decay: 3.2, gain: 0.12, shimmer: 0.5 });
       } else {
-        for (const [i, f] of [1174.66, 880, 587.33, 440].entries())
-          partials(c, o, t + i * 0.1, f, GLASS, { decay: 1.8, gain: 0.06 });
+        for (const [i, f] of [220, 146.83, 110, 73.42].entries())
+          lowBell(c, o, t + i * 0.14, f, BELL, { decay: 2.2, gain: 0.06 });
+        rumble(c, o, t, { dur: 2, gain: 0.08, f0: 220, f1: 60 });
       }
     },
 
@@ -346,15 +342,16 @@ export function createLastOneVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const a = clamp01(ev.amount);
       if (ev.id.includes('sever')) {
-        const o = makeOut(c, pan, 0.4);
-        // a taut filament (an arm, a tendril) snaps
-        filamentSnap(c, o, t, 660 + 400 * a, a, resonance(massBy[ev.slot]));
-        partials(c, o, t, pick(c, BELLS) * 2, TINK, { decay: 0.14, gain: 0.1 });
-        tone(c, o, t + 0.01, { f0: 1800, f1: 500, dur: 0.14, gain: 0.05 });
+        // a tendril the size of a ridge is severed: the cable snaps low, the stump grinds, the ground takes its weight
+        const o = makeOut(c, pan, 0.45);
+        filamentSnap(c, o, t, 70 + 50 * a, a, resonance(massBy[ev.slot]));
+        boom(c, subOut(c, pan), t + 0.02, { f0: 80, f1: 32, dur: 0.6, gain: 0.25 + 0.15 * a });
+        crackle(c, o, t + 0.01, { dur: 0.5, count: 8, gain: 0.08, f: 900 });
       } else if (ev.id === 'eye-exposed') {
+        // the eye laid bare: the choir draws a breath and a great bell tolls
         const o = makeOut(c, pan, 0.7);
-        partials(c, o, t, 1479.98, GLASS, { decay: 1.2, gain: 0.1, shimmer: 0.5 });
-        riser(c, o, t, 0.8, 0.08 + 0.06 * a, 1200, 7000);
+        swell(c, o, t, { dur: 0.8, gain: 0.08 + 0.05 * a, f0: 90, f1: 700, sub: 0.06 });
+        lowBell(c, o, t + 0.8, 110, BELL, { decay: 2.2, gain: 0.1, shimmer: 0.5 });
       }
     },
 
@@ -368,8 +365,8 @@ export function createLastOneVoice(): TitanVoice {
         gain.gain.value = 0;
         const filter = ac.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.value = 700;
-        filter.Q.value = 0.6;
+        filter.frequency.value = 320;
+        filter.Q.value = 0.7;
         filter.connect(gain);
         const pan = ac.createStereoPanner();
         gain.connect(pan);
@@ -378,33 +375,35 @@ export function createLastOneVoice(): TitanVoice {
         wet.gain.value = 0.6;
         pan.connect(wet);
         wet.connect(c.wet);
+        // a low choir: D2 (triangle), A2 and D3 (saws through the filter), beating against each other
         const oscs = LOW.map((f, i) => {
           const o = ac.createOscillator();
-          o.type = i === 0 ? 'triangle' : 'sine';
+          o.type = i === 0 ? 'triangle' : 'sawtooth';
           o.frequency.value = f;
-          o.detune.value = (i - 1) * 7;
+          o.detune.value = (i - 1) * 8;
           const og = ac.createGain();
-          og.gain.value = [1, 0.7, 0.45][i]!;
+          og.gain.value = [1, 0.4, 0.28][i]!;
           o.connect(og);
           og.connect(filter);
           o.start();
           return o;
         });
         const lfo = ac.createOscillator();
-        lfo.frequency.value = 0.27;
+        lfo.frequency.value = 0.21;
         const lg = ac.createGain();
-        lg.gain.value = 0.012;
+        lg.gain.value = 0.01;
         lfo.connect(lg);
         lg.connect(gain.gain);
         lfo.start();
         oscs.push(lfo);
+        // its breath: a low band of air (it was a 1.9 kHz hiss)
         const breath = ac.createBufferSource();
         breath.buffer = c.noise;
         breath.loop = true;
         const bf = ac.createBiquadFilter();
         bf.type = 'bandpass';
-        bf.frequency.value = 1900;
-        bf.Q.value = 1.6;
+        bf.frequency.value = 340;
+        bf.Q.value = 0.9;
         const breathGain = ac.createGain();
         breathGain.gain.value = 0;
         breath.connect(bf);
@@ -414,12 +413,12 @@ export function createLastOneVoice(): TitanVoice {
         p = { gain, filter, oscs, breath, breathGain, pan };
         pads.set(slot, p);
       }
-      // the tendrils "breathe" in proportion to how fast the titan moves; a quiet floor keeps it alive when still
+      // the choir "breathes" in proportion to how fast the titan moves; a quiet floor keeps it alive when still
       const move = clamp01(scene.speed / 600);
       const now = ac.currentTime;
-      p.gain.gain.setTargetAtTime(0.012 + 0.03 * move, now, 0.25);
-      p.filter.frequency.setTargetAtTime(500 + 1500 * move, now, 0.3);
-      p.breathGain.gain.setTargetAtTime(0.004 + 0.02 * move, now, 0.2);
+      p.gain.gain.setTargetAtTime(0.014 + 0.03 * move, now, 0.25);
+      p.filter.frequency.setTargetAtTime(380 + 800 * move, now, 0.3);
+      p.breathGain.gain.setTargetAtTime(0.006 + 0.03 * move, now, 0.2);
       p.pan.pan.setTargetAtTime(clamp(c.panOf(scene.x), -1, 1), now, 0.1);
     },
 

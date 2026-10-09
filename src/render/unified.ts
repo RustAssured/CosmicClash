@@ -66,3 +66,32 @@ export const SHARED_BLOOM = { nearPx: 3, nearGain: 0.38, farPx: 10, farGain: 0.2
  * true = 우리's stone may reach its ramp top as in the oracle; false = the shared ceiling applies. One switch.
  */
 export const URI_CEILING_EXEMPT = false;
+
+/**
+ * D34 (WJ, 2026-10-09: the original's vivid colour and spectacle back, the best of both): which parts of the unified look stay.
+ * Kept: the outline and depth seams, the one sky, 우리's shading, the shared VFX. Relaxed (each one switch):
+ *  - `snapFinal`: the final 128-colour master snap of every pixel (off: titans keep their own colours, scenery its stage palette
+ *    dither, glow and flashes add smoothly, quantised by the post pass's own Bayer steps as in the original);
+ *  - `ceiling`: the highlight ceiling (only meaningful with the snap);
+ *  - `stagePull`: stage palettes pulled toward the master (off: each stage its own palette);
+ *  - `sharedBloom`: the two-pass shared bloom (off: the original five-level pyramid, stronger and wider);
+ *  - `relight`: titans relit by the other bodies' lights (the original's warm cross-light).
+ */
+export const UNIFIED_LOOK = {
+  snapFinal: false,
+  ceiling: false,
+  stagePull: false,
+  sharedBloom: false,
+  relight: true,
+};
+
+/**
+ * D34 spectacle vs comfort. The comfort setting (UI "flash", 0..1) scales the screen-wide flashes; at or below COMFORT_D5 the
+ * frame never washes (D5's limits: local light only, the luminance governor at its strict limit). Above it the washes come in
+ * linearly and the governor relaxes toward SPECTACLE_GOVERNOR (the original game's washes reached a 0.32 rise).
+ */
+export const COMFORT_D5 = 0.5;
+export const SPECTACLE_GOVERNOR = 0.4;
+/** 0 at or below COMFORT_D5, 1 at full comfort scale 1 (no comfort reduction). */
+export const spectacleOf = (comfort: number): number =>
+  Math.max(0, Math.min(1, (comfort - COMFORT_D5) / (1 - COMFORT_D5)));

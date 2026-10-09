@@ -135,6 +135,7 @@ function layersAt(pose: UriPose, shade: boolean, t: number): RenderLayer[] {
     hp: 100,
     loop: URI_LOOP_REST,
     afterZ: URI_ORDER.indexOf('chamber'),
+    scale: 1,
     fistSpread: [spreadNow, spreadNow],
     fistZ: [URI_ORDER.indexOf('fistL'), URI_ORDER.indexOf('fistR')],
     // the oracle's pylons at rest: thrust 0.5 (PYL init), straight down from each bone end

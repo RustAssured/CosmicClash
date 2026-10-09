@@ -1,20 +1,23 @@
 import { clamp, clamp01 } from '../dsp/math';
 import { fourierCoefficients, heartbeatWave } from '../dsp/waves';
 import { cueKind } from './cues';
-import { createBed, noiseBand, pingsDown, ratchet, scrape, silentGain, subOut, type Bed } from './kit';
-import { CHAIN, TINK, makeOut, noiseHit, partials, pick, riser, thump, tone, whistlePass } from './synth';
+import { createBed, noiseBand, silentGain, subOut, type Bed } from './kit';
+import { CHAIN, makeOut, noiseHit, pick } from './synth';
 import type { TitanVoice, VoiceCtx } from './types';
+import { boom, catastrophe, grind, lowBell, roar, rumble, saturator, swell, whoosh } from './epic';
 
 /**
- * THE NEXUS: a crimson graph of nodes and hardened chains around a crystalline hub. Metal, and a slow pulse.
+ * THE NEXUS: a crimson graph of nodes and hardened chains around a crystalline hub. Metal, machinery and a slow pulse.
  *
- * The sound is chain links: hollow inharmonic ring modes (`CHAIN`) that clank and drag, a latching "click-lock" when a chain
- * takes hold of the enemy (assimilation), a wet ratcheting tear when it harvests, and descending detuned pings when a node
- * goes dark. Under everything a 40-60 Hz heartbeat throbs, faster the more of the graph is alive (`resource`).
+ * D34 scaled every link up to the size of a moon's orbit: a chain link is a colossal hollow ring (`CHAIN` modes on 69–139 Hz,
+ * none above ~1.6 kHz) with a dark knock, a drag is a band of grinding metal under 1.2 kHz chopped by a slow ratchet (clunks, not
+ * clicks), a latch is a bolt the size of a tower seating home, a snap is a cable crack and a drop, and a node going dark is a bell
+ * tolling DOWN. Under everything a 43–55 Hz heartbeat throbs (saturated, so a laptop hears it), faster the more of the graph is
+ * alive (`resource`). The chain whips (2.2 kHz cracks), 0.9–3.4 kHz drags, 3.3 kHz rattle and the 880 Hz Doppler streak are gone.
  *
  * Tuning: the rings sit on a minor-ish cluster (C♯ E G A♯ C♯) so overlapping clanks are dark but never harsh.
  */
-const NODES = [277.18, 329.63, 392, 466.16, 554.37];
+const NODES = [69.3, 82.41, 98, 116.54, 138.59];
 
 interface Pulse {
   bed: Bed;
@@ -33,7 +36,7 @@ const HEART = ((): { real: Float32Array; imag: Float32Array } =>
 export function createNexusVoice(): TitanVoice {
   const pulses = new Map<number, Pulse>();
 
-  /** A chain link struck: hollow ring plus a tiny click on the attack. Heavier blows ring longer and lower. */
+  /** A colossal chain link struck: a hollow ring and a dark knock. Heavier blows ring longer and lower. */
   const clank = (
     c: VoiceCtx,
     t: number,
@@ -41,75 +44,85 @@ export function createNexusVoice(): TitanVoice {
     hz: number,
     mag: number,
     open: number,
-    wet = 0.3,
+    wet = 0.35,
     level = 1,
   ): void => {
     const o = makeOut(c, pan, wet);
-    partials(c, o, t, hz, CHAIN, {
-      decay: 0.14 + 0.55 * mag,
-      gain: (0.07 + 0.09 * mag) * open * level,
-      maxHz: 12000,
+    lowBell(c, o, t, hz, CHAIN, {
+      decay: 0.3 + 0.9 * mag,
+      gain: (0.08 + 0.1 * mag) * open * level,
     });
     noiseHit(c, o, t, {
-      dur: 0.014,
-      gain: 0.16 * open * level,
-      filter: { type: 'highpass', f0: 3200 },
-      attack: 0.0005,
+      dur: 0.07,
+      gain: 0.4 * open * level,
+      filter: { type: 'bandpass', f0: 700, q: 1.1 },
+      filter2: { type: 'lowpass', f0: 1600 },
+      attack: 0.0008,
+    });
+    // the metal grinding against itself as the ring dies
+    grind(c, o, t + 0.01, {
+      dur: 0.2 + 0.4 * mag,
+      gain: 0.1 * open * level,
+      f0: 600,
+      f1: 300,
+      rate: 14,
+      metal: true,
+      attack: 0.01,
     });
   };
 
-  /** A chain snapping: bright crack, a falling whip of pitch, a ring. */
+  /** A chain the size of an orbit snapping: a dark crack, a drop and a ring that sags. */
   const snap = (c: VoiceCtx, t: number, pan: number, amount = 1): void => {
-    const o = makeOut(c, pan, 0.4);
+    const o = makeOut(c, pan, 0.45);
     noiseHit(c, o, t, {
-      dur: 0.02,
+      dur: 0.06,
       gain: 0.22 * amount,
-      filter: { type: 'highpass', f0: 4200 },
-      attack: 0.0004,
+      filter: { type: 'bandpass', f0: 1000, f1: 300, q: 1 },
+      filter2: { type: 'lowpass', f0: 1800 },
+      attack: 0.0006,
     });
-    tone(c, o, t, { f0: 2200, f1: 380, dur: 0.16, gain: 0.05 * amount, attack: 0.001 });
-    partials(c, o, t + 0.004, pick(c, NODES) * 1.5, CHAIN, { decay: 0.4, gain: 0.08 * amount, maxHz: 12000 });
+    boom(c, subOut(c, pan), t, { f0: 110, f1: 36, dur: 0.5, gain: 0.18 * Math.min(2, amount) });
+    lowBell(c, o, t + 0.004, pick(c, NODES) * 1.5, CHAIN, { decay: 0.8, gain: 0.08 * Math.min(2, amount) });
   };
 
-  /** The click-lock: a tick, a clunk as the latch seats, and three quick ratchet clicks. */
+  /** The latch: a bolt the size of a tower seating home — a clunk, a drop, three slow ratchet clunks. */
   const lock = (c: VoiceCtx, t: number, pan: number, mag: number, level = 1): void => {
-    const o = makeOut(c, pan, 0.25);
-    noiseHit(c, o, t, {
-      dur: 0.01,
-      gain: 0.2 * level,
-      filter: { type: 'bandpass', f0: 2600, q: 2 },
-      attack: 0.0003,
+    const o = makeOut(c, pan, 0.3);
+    clank(c, t, pan, NODES[1]!, 0.4, 1, 0.3, 0.8 * level);
+    boom(c, subOut(c, pan), t + 0.045, {
+      f0: 120,
+      f1: 52,
+      dur: 0.25,
+      gain: (0.2 + 0.14 * mag) * level,
+      drive: 2.6,
     });
-    partials(c, o, t + 0.045, 420, CHAIN, { decay: 0.14, gain: 0.13 * level });
-    thump(c, subOut(c, pan), t + 0.045, 140, 70, 0.14, (0.16 + 0.12 * mag) * level);
-    ratchet(c, o, t + 0.09, { count: 3, from: 0.03, to: 0.05, f: 3400, gain: 0.09 * level });
+    grind(c, o, t + 0.09, {
+      dur: 0.22,
+      gain: 0.12 * level,
+      f0: 380,
+      f1: 260,
+      rate: 13,
+      metal: true,
+      attack: 0.01,
+    });
   };
 
-  /** Harvesting: a wet ratcheting tear: a zipping scrape, an accelerating ratchet and a low rip. */
+  /** Harvesting: machinery tearing matter in — a grinding haul that speeds up, and a low rip. */
   const harvest = (c: VoiceCtx, t: number, pan: number, amount: number, level = 1): void => {
     const o = makeOut(c, pan, 0.4);
-    // (a band-passed noise is only a few percent of the noise's power: it takes big gains to be heard)
-    scrape(c, o, t, {
-      dur: 0.42 + 0.2 * amount,
-      f0: 700,
-      f1: 3200,
-      q: 1,
-      gain: 0.5 * level,
-      rate: 46,
-      depth: 0.85,
-      attack: 0.02,
-    });
-    ratchet(c, o, t, {
-      count: 8 + Math.round(6 * amount),
-      from: 0.055,
-      to: 0.02,
-      f: 2400,
-      gain: 0.3 * level,
+    grind(c, o, t, {
+      dur: 0.5 + 0.2 * amount,
+      gain: 0.2 * level,
+      f0: 180,
+      f1: 520,
+      rate: 9 + 8 * amount,
+      metal: true,
+      attack: 0.03,
     });
     noiseHit(c, o, t + 0.02, {
-      dur: 0.4,
+      dur: 0.5,
       gain: 0.3 * level,
-      filter: { type: 'lowpass', f0: 900, f1: 180, q: 0.8 },
+      filter: { type: 'lowpass', f0: 700, f1: 140, q: 0.8 },
       kind: 'brown',
       attack: 0.05,
     });
@@ -122,49 +135,38 @@ export function createNexusVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       switch (ev.moveSlot) {
         case 'strike': {
-          // a chain whipped out: a rising drag and a crack at the far end
+          // a chain hauled back for the throw: a heavy drag
           const o = makeOut(c, pan, 0.3);
-          scrape(c, o, t, { dur: 0.22, f0: 900, f1: 3400, q: 1.2, gain: 0.26, rate: 38, attack: 0.06 });
+          grind(c, o, t, { dur: 0.24, gain: 0.3, f0: 220, f1: 480, rate: 16, metal: true, attack: 0.06 });
+          swell(c, o, t, { dur: 0.24, gain: 0.12, f0: 120, f1: 600 });
           break;
         }
         case 'crush': {
-          // heavy chain hauled tight: a low drag, a creak and a slow rising tension tone
+          // heavy chain hauled tight: a low drag, a groaning tension under it
           const o = makeOut(c, pan, 0.45);
-          scrape(c, o, t, {
-            dur: 0.55,
-            f0: 300,
-            f1: 900,
-            q: 1,
-            gain: 0.45,
-            rate: 14,
-            depth: 0.7,
-            attack: 0.25,
-            kind: 'brown',
-          });
-          tone(c, o, t, { f0: 90, f1: 150, dur: 0.6, gain: 0.09, type: 'sawtooth', attack: 0.3 });
+          grind(c, o, t, { dur: 0.55, gain: 0.4, f0: 140, f1: 300, rate: 8, metal: true, attack: 0.25 });
+          roar(c, o, t, { f: 46, f1: 55, dur: 0.6, gain: 0.14, attack: 0.3, lp0: 180, lp1: 520, noise: 0 });
           break;
         }
         case 'signature': {
-          // chains latching: a ratchet that speeds up as the trap is set
-          ratchet(c, makeOut(c, pan, 0.3), t, {
-            count: 9,
-            from: 0.07,
-            to: 0.025,
-            f: 2800,
-            gain: 0.26,
-            ping: TINK,
-            pingHz: 900,
+          // chains latching: a ratchet of clunks that speeds up as the trap is set
+          grind(c, makeOut(c, pan, 0.3), t, {
+            dur: 0.45,
+            gain: 0.16,
+            f0: 300,
+            f1: 420,
+            rate: 8,
+            metal: true,
+            attack: 0.02,
           });
+          swell(c, makeOut(c, pan, 0.3), t, { dur: 0.45, gain: 0.16, f0: 100, f1: 500 });
           break;
         }
         case 'ultimate': {
-          // the shell begins to form: a ring of pings gathering inward
+          // the shell begins to form: links tolling inward
           const o = makeOut(c, pan * 0.3, 0.6);
-          for (let i = 0; i < 6; i++)
-            partials(c, o, t + i * 0.09, NODES[i % NODES.length]! * (1 + (i % 3)), CHAIN, {
-              decay: 0.5,
-              gain: 0.05,
-            });
+          for (let i = 0; i < 4; i++)
+            lowBell(c, o, t + i * 0.12, NODES[i % NODES.length]!, CHAIN, { decay: 0.8, gain: 0.05 });
           break;
         }
         case 'guard':
@@ -177,121 +179,114 @@ export function createNexusVoice(): TitanVoice {
       const pan = c.panOf(ev.x);
       const p = clamp01(ev.power);
       if (ev.moveSlot === 'crush') {
-        clank(c, t, pan, NODES[0]! * 0.7, 1, 1, 0.5);
-        thump(c, subOut(c, pan), t, 92, 34, 0.6, 0.45 + 0.2 * p);
+        clank(c, t, pan, NODES[0]!, 1, 1, 0.5);
+        boom(c, subOut(c, pan), t, { f0: 92, f1: 30, dur: 0.8, gain: 0.45 + 0.2 * p, drive: 2.8 });
       } else if (ev.moveSlot === 'signature') {
         lock(c, t, pan, p, 1.3);
       } else {
-        const o = makeOut(c, pan, 0.3);
-        noiseHit(c, o, t, {
-          dur: 0.1 + 0.06 * p,
-          gain: 0.34,
-          filter: { type: 'bandpass', f0: 1200, f1: 3800, q: 1.2 },
-          attack: 0.006,
+        whoosh(c, t, {
+          dur: 0.22,
+          gain: 0.18,
+          panFrom: clamp(pan - 0.3, -1, 1),
+          panTo: clamp(pan + 0.3, -1, 1),
+          wet: 0.3,
+          f0: 900,
+          f1: 200,
         });
-        clank(c, t + 0.01, pan, pick(c, NODES) * 2.4, 0.35 + 0.3 * p, 1, 0.3, 1.4);
+        clank(c, t + 0.01, pan, pick(c, NODES) * 1.5, 0.35 + 0.3 * p, 1, 0.3, 1.2);
       }
     },
 
     onSurge(c, t, ev) {
-      // chains reeling the body along: a metallic Doppler streak with a drag under it
+      // chains reeling the body along: the haul and the air it drags (it was an 880 Hz Doppler streak)
       const pan = c.panOf(ev.x);
       const dir = Math.sign(ev.dirX || 1);
-      whistlePass(c, t, {
-        f: 880,
-        dur: 0.4,
-        gain: 0.11,
+      whoosh(c, t, {
+        dur: 0.45,
+        gain: 0.2,
         panFrom: clamp(pan - 0.5 * dir, -1, 1),
         panTo: clamp(pan + 0.5 * dir, -1, 1),
         wet: 0.3,
-        approach: 1.4,
-        recede: 0.6,
+        f0: 700,
+        f1: 140,
       });
-      scrape(c, makeOut(c, pan, 0.2), t, { dur: 0.35, f0: 1500, f1: 700, q: 1.4, gain: 0.26, rate: 30 });
+      grind(c, makeOut(c, pan, 0.2), t, {
+        dur: 0.4,
+        gain: 0.1,
+        f0: 380,
+        f1: 200,
+        rate: 12,
+        metal: true,
+        attack: 0.05,
+      });
     },
 
     onHitDealt(c, t, ev, mag) {
       const pan = c.panOf(ev.x);
       if (ev.type === 'ASSIMILATION') lock(c, t, pan, mag, 0.75);
-      else clank(c, t, pan, pick(c, NODES) * 3, 0.2 + 0.4 * mag, 1 - clamp01(ev.blocked) * 0.6, 0.25);
+      else clank(c, t, pan, pick(c, NODES) * 2, 0.2 + 0.4 * mag, 1 - clamp01(ev.blocked) * 0.6, 0.3);
     },
 
     onHitTaken(c, t, ev, mag) {
       // the body is metal and chain: it CLANKS, the harder the lower and longer; a blocked blow is a dull thunk
       const pan = c.panOf(ev.x);
       const open = 1 - clamp01(ev.blocked) * 0.75;
-      clank(c, t, pan, pick(c, NODES) * 2.6 * (1.5 - 0.6 * mag), mag, open, 0.4);
+      clank(c, t, pan, pick(c, NODES) * (1.6 - 0.6 * mag), mag, open, 0.45);
       if (ev.onDamaged > 0.3) snap(c, t + 0.02, pan, 0.6 * open);
     },
 
     onGuard(c, t, ev) {
       const pan = c.panOf(ev.x);
-      clank(c, t, pan, NODES[1]! * 0.6, ev.broke ? 1 : 0.5, 1, 0.45);
-      thump(c, subOut(c, pan), t, 100, 44, ev.broke ? 0.7 : 0.3, ev.broke ? 0.6 : 0.3);
+      clank(c, t, pan, NODES[1]!, ev.broke ? 1 : 0.5, 1, 0.45);
+      boom(c, subOut(c, pan), t, {
+        f0: 100,
+        f1: 44,
+        dur: ev.broke ? 0.8 : 0.35,
+        gain: ev.broke ? 0.55 : 0.3,
+      });
       if (ev.broke)
-        for (let i = 0; i < 5; i++) snap(c, t + 0.05 + i * 0.07, pan + (c.rand() - 0.5) * 0.4, 0.5);
+        for (let i = 0; i < 4; i++) snap(c, t + 0.06 + i * 0.11, pan + (c.rand() - 0.5) * 0.4, 0.5);
     },
 
     onKo(c, t, ev) {
-      // the graph comes apart link by link, each ring lower and lonelier, then the nodes go dark
+      // the graph comes apart: the hush, the drop, then link after link letting go, each toll lower and lonelier
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.75);
-      for (let i = 0; i < 14; i++) {
-        const at = t + 0.05 + i * (0.08 + 0.02 * i);
-        partials(c, o, at, pick(c, NODES) * Math.pow(0.93, i) * 2.4, CHAIN, {
-          decay: 0.5 + 0.05 * i,
-          gain: 0.05 * (1 - i / 20),
-          maxHz: 11000,
-        });
-        noiseHit(c, o, at, {
-          dur: 0.012,
-          gain: 0.07,
-          filter: { type: 'highpass', f0: 3000 },
-          attack: 0.0004,
+      const at = catastrophe(c, subOut(c, pan), o, t, { size: 1, f0: 58 });
+      for (let i = 0; i < 9; i++) {
+        const when = at + 0.1 + i * (0.12 + 0.03 * i);
+        lowBell(c, o, when, pick(c, NODES) * Math.pow(0.94, i) * 1.5, CHAIN, {
+          decay: 0.9 + 0.1 * i,
+          gain: 0.06 * (1 - i / 14),
         });
       }
-      pingsDown(c, o, t + 0.9, {
-        count: 6,
-        f: 987,
-        step: 0.8,
-        spacing: 0.2,
-        decay: 1.0,
-        gain: 0.04,
-        set: CHAIN,
-      });
-      thump(c, subOut(c, pan), t, 68, 24, 1.8, 0.5);
+      grind(c, o, at, { dur: 2.4, gain: 0.1, f0: 400, f1: 90, rate: 6, metal: true, attack: 0.05 });
     },
 
     onUltimate(c, t, ev) {
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan * 0.3, 0.7);
       if (ev.phase === 'start') {
-        // the shell closes: pings spiralling inward faster and faster, a rising tension, then the crush
+        // the shell closes: links tolling inward faster and faster, the machinery hauling, then the crush
         let at = t;
-        let gap = 0.24;
-        for (let i = 0; i < 16; i++) {
+        let gap = 0.26;
+        for (let i = 0; i < 12; i++) {
           const side = i % 2 === 0 ? -1 : 1;
-          const po = makeOut(c, side * (0.9 - i * 0.05), 0.5);
-          partials(c, po, at, NODES[i % NODES.length]! * (1 + Math.floor(i / 5)) * 1.5, CHAIN, {
-            decay: 0.45,
-            gain: 0.05 + 0.002 * i,
+          const po = makeOut(c, side * (0.9 - i * 0.06), 0.5);
+          lowBell(c, po, at, NODES[i % NODES.length]! * (1 + Math.floor(i / 6) * 0.5), CHAIN, {
+            decay: 0.7,
+            gain: 0.05 + 0.003 * i,
           });
           at += gap;
           gap *= 0.86;
         }
-        riser(c, o, t, 2.4, 0.11, 400, 5200);
-        thump(c, subOut(c, 0), t + 2.4, 62, 22, 1.7, 0.9);
-        clank(c, t + 2.4, 0, NODES[0]! * 0.5, 1, 1, 0.8);
+        grind(c, o, t, { dur: 2.4, gain: 0.12, f0: 120, f1: 420, rate: 6, metal: true, attack: 1.6 });
+        swell(c, o, t, { dur: 2.4, gain: 0.16, f0: 80, f1: 900, sub: 0.1, subHz: 38 });
+        catastrophe(c, subOut(c, 0), o, t + 2.4, { pre: 0, size: 0.6, gain: 0.85, f0: 55 });
+        clank(c, t + 2.4, 0, NODES[0]! * 0.75, 1, 1, 0.8);
       } else {
-        pingsDown(c, o, t, {
-          count: 5,
-          f: 740,
-          step: 0.82,
-          spacing: 0.15,
-          decay: 0.9,
-          gain: 0.06,
-          set: CHAIN,
-        });
+        for (let i = 0; i < 4; i++)
+          lowBell(c, o, t + i * 0.18, NODES[3 - i]!, CHAIN, { decay: 1.2, gain: 0.06 });
       }
     },
 
@@ -319,35 +314,31 @@ export function createNexusVoice(): TitanVoice {
       switch (cueKind(ev.id)) {
         case 'sever':
         case 'break':
-          snap(c, t, pan, 2.4 + 0.6 * a);
+          snap(c, t, pan, 1.4 + 0.6 * a);
           return;
-        case 'dark':
-          pingsDown(c, makeOut(c, pan, 0.5), t, {
-            count: 4,
-            f: 830,
-            step: 0.8,
-            spacing: 0.1,
-            decay: 0.55,
-            gain: 0.25,
-            set: CHAIN,
-          });
+        case 'dark': {
+          // a node goes dark: its bell tolls down, three times, each lower
+          const o = makeOut(c, pan, 0.55);
+          for (let i = 0; i < 3; i++)
+            lowBell(c, o, t + i * 0.16, NODES[4 - i]! * 1.0, CHAIN, {
+              decay: 1.1,
+              gain: 0.16 * (1 - i * 0.2),
+            });
+          rumble(c, o, t, { dur: 1.2, gain: 0.08, f0: 220, f1: 70 });
           return;
+        }
         case 'harvest':
-          harvest(c, t, pan, a, 1.7);
+          harvest(c, t, pan, a, 1.4);
           return;
         case 'latch':
           lock(c, t, pan, 0.6 + 0.4 * a, 1.3);
           return;
         case 'merge':
-          clank(c, t, pan, NODES[0]! * 3, 0.5, 1, 0.5, 2.2);
-          partials(c, makeOut(c, pan, 0.6), t + 0.03, NODES[2]! * 3, CHAIN, {
-            decay: 0.7,
-            gain: 0.11,
-            maxHz: 11000,
-          });
+          clank(c, t, pan, NODES[0]! * 1.5, 0.5, 1, 0.5, 2);
+          lowBell(c, makeOut(c, pan, 0.6), t + 0.03, NODES[2]! * 1.5, CHAIN, { decay: 1, gain: 0.1 });
           return;
         default:
-          clank(c, t, pan, pick(c, NODES) * 3, 0.35 + 0.3 * a, 1, 0.4, 2);
+          clank(c, t, pan, pick(c, NODES) * 1.5, 0.35 + 0.3 * a, 1, 0.4, 1.8);
       }
     },
 
@@ -355,13 +346,19 @@ export function createNexusVoice(): TitanVoice {
       const ac = c.ac;
       let p = pulses.get(slot);
       if (!p) {
-        const bed = createBed(c, 0.25);
-        // the pulse: a sine at 40-60 Hz whose gain is driven by a heartbeat-shaped LFO
+        const bed = createBed(c, 0.3);
+        // the pulse: a sine at 43-55 Hz whose gain is driven by a heartbeat-shaped LFO, saturated so its harmonics carry
         const sub = bed.run(ac.createOscillator());
         sub.type = 'sine';
         sub.frequency.value = 48;
+        const sh = saturator(c, 2.6);
+        const shLp = ac.createBiquadFilter();
+        shLp.type = 'lowpass';
+        shLp.frequency.value = 360;
         const beat = silentGain(c, bed.input);
-        sub.connect(beat);
+        sub.connect(sh);
+        sh.connect(shLp);
+        shLp.connect(beat);
         const lfo = ac.createOscillator();
         lfo.setPeriodicWave(ac.createPeriodicWave(HEART.real, HEART.imag));
         lfo.frequency.value = 0.8;
@@ -370,24 +367,25 @@ export function createNexusVoice(): TitanVoice {
         lfo.connect(beatDepth);
         beatDepth.connect(beat.gain);
         bed.run(lfo);
-        // a faint metallic hum (inharmonic partials) and the chain rattle that follows movement
+        // a low metallic hum of the machinery (inharmonic) and the chains' grinding rattle that follows movement
         const humLp = ac.createBiquadFilter();
         humLp.type = 'lowpass';
-        humLp.frequency.value = 1100;
+        humLp.frequency.value = 520;
         const hum = silentGain(c, bed.input);
         humLp.connect(hum);
-        for (const [i, f] of [220, 331.7, 497.3].entries()) {
+        // (an octave above the pulse's band, so it never beats against the heartbeat)
+        for (const [i, f] of [138.59, 208.2, 312.6].entries()) {
           const o = bed.run(ac.createOscillator());
-          o.type = 'sine';
+          o.type = i === 0 ? 'triangle' : 'sine';
           o.frequency.value = f;
           o.detune.value = (i - 1) * 6;
           const og = ac.createGain();
-          og.gain.value = [0.5, 0.35, 0.22][i]!;
+          og.gain.value = [0.6, 0.35, 0.22][i]!;
           o.connect(og);
           og.connect(humLp);
         }
         const rattle = silentGain(c, bed.input);
-        noiseBand(c, bed, rattle, { kind: 'white', type: 'bandpass', f: 3300, q: 4 });
+        noiseBand(c, bed, rattle, { kind: 'white', type: 'bandpass', f: 900, q: 2 });
         p = { bed, sub, lfo, beat, beatDepth, hum, rattle };
         pulses.set(slot, p);
       }
@@ -397,11 +395,11 @@ export function createNexusVoice(): TitanVoice {
       const mass = clamp(scene.massFrac, 0.2, 1.4);
       p.lfo.frequency.setTargetAtTime(0.75 + 1.5 * alive, now, 0.4);
       p.sub.frequency.setTargetAtTime(43 + 12 * alive, now, 0.4);
-      const depth = 0.05 + 0.04 * mass;
+      const depth = 0.04 + 0.03 * mass;
       p.beat.gain.setTargetAtTime(depth * 0.13, now, 0.2); // the LFO's DC is removed, so keep the trough at silence
       p.beatDepth.gain.setTargetAtTime(depth, now, 0.2);
-      p.hum.gain.setTargetAtTime(0.004 + 0.008 * move, now, 0.3);
-      p.rattle.gain.setTargetAtTime(0.0015 + 0.016 * move, now, 0.15);
+      p.hum.gain.setTargetAtTime(0.006 + 0.012 * move, now, 0.3);
+      p.rattle.gain.setTargetAtTime(0.003 + 0.03 * move, now, 0.15);
       p.bed.pan.pan.setTargetAtTime(clamp(c.panOf(scene.x), -1, 1), now, 0.1);
     },
 
