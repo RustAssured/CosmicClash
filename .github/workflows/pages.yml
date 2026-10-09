@@ -32,9 +32,10 @@ jobs:
         run: npm run typecheck
       - name: Unit tests
         run: npm test
-      # vite.config.ts sets base './', so the build works from any sub-path (https://<owner>.github.io/<repo>/).
-      - name: Build
-        run: npm run build
+      # The landing page (site/) at the root and the game at play/ (tools/site/build.ts). vite.config.ts sets base './',
+      # so the game works from any sub-path (https://<owner>.github.io/<repo>/play/).
+      - name: Build site and game
+        run: npm run build:site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

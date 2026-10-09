@@ -10,6 +10,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:site": "tsx tools/site/build.ts",
+    "preview:site": "vite preview --outDir dist",
+    "site:art": "tsx tools/site/art.ts",
+    "site:media": "tsx tools/site/media.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",
