@@ -19,10 +19,7 @@
     <meta property="og:image" content="media/og.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta
-      property="og:image:alt"
-      content="The ADEUK: TITANS logo over a Supernova burning beside a Planet in a vivid nebula"
-    />
+    <meta property="og:image:alt" content="The ADEUK: TITANS logo over a Supernova burning beside a Planet in a vivid nebula" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="ADEUK: TITANS · 아득" />
     <meta name="twitter:description" content="Cosmic titans. Every pixel is matter. Free in your browser." />
@@ -41,6 +38,7 @@
     <link rel="preload" as="image" href="media/hero/poster.jpg" />
     <link rel="stylesheet" href="style.css" />
     <script type="module" src="main.js"></script>
+    <script type="module" src="story.js"></script>
   </head>
   <body>
     <canvas id="stars" aria-hidden="true"></canvas>
@@ -52,6 +50,7 @@
       </a>
       <nav aria-label="Sections">
         <ul>
+          <li><a href="#prologue">Story</a></li>
           <li><a href="#features">Game</a></li>
           <li><a href="#titans">Titans</a></li>
           <li><a href="#media">Screens</a></li>
@@ -83,19 +82,13 @@
         <div class="hero-inner">
           <h1 id="hero-title" class="logo">
             <img class="px logo-en" src="media/type/logo.png" width="285" height="35" alt="ADEUK: TITANS" />
-            <img
-              class="px logo-ko"
-              src="media/type/ko-adeuk.png"
-              width="30"
-              height="14"
-              alt="아득"
-              lang="ko"
-            />
+            <img class="px logo-ko" src="media/type/ko-adeuk.png" width="30" height="14" alt="아득" lang="ko" />
           </h1>
+          <p class="define"><span lang="ko">아득</span> <i>(adeuk)</i> so far away that distance becomes a feeling.</p>
           <p class="hook">Cosmic titans. <span>Every pixel is matter.</span></p>
           <p class="sub">
-            Colossal entities circle each other in vivid nebulae and tear each other apart, pixel by pixel. No
-            health bars: your body <em>is</em> the bar.
+            Colossi the size of worlds circle each other in the dark between galaxies and tear each other apart, pixel by
+            pixel. No health bars: your body <em>is</em> the bar. And the noise of it has started to carry.
           </p>
           <div class="cta">
             <a class="btn btn-play btn-huge" href="play/">
@@ -103,17 +96,67 @@
               <span class="btn-note">Free, in your browser</span>
             </a>
             <button class="btn btn-ghost" type="button" data-open-trailer>
-              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                <path d="M4 2h2v2h2v2h2v2h-2v2h-2v2h-2z" fill="currentColor" transform="translate(1 1)" />
-              </svg>
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 2h2v2h2v2h2v2h-2v2h-2v2h-2z" fill="currentColor" transform="translate(1 1)" /></svg>
               Watch the trailer
             </button>
           </div>
-          <p class="hero-meta">
-            Keyboard or gamepad · two players on one screen or against the AI · desktop browser
-          </p>
+          <p class="hero-meta">Keyboard or gamepad · two players on one screen or against the AI · desktop browser</p>
         </div>
-        <a class="scroll-cue" href="#features" aria-label="Scroll to the game"><span></span></a>
+        <a class="scroll-cue" href="#prologue" aria-label="Scroll to the story"><span></span></a>
+      </section>
+
+
+      <!-- ============================== PROLOGUE (scroll-driven; drawn in code by story.js) ============================== -->
+      <!-- WJ: draft lore copy. Each <li data-beat> is one screen of scroll; story.js has one scene per beat, in order. -->
+      <section id="prologue" class="story" aria-labelledby="prologue-title">
+        <div class="story-stage">
+          <canvas class="px story-cv" aria-hidden="true"></canvas>
+          <h2 id="prologue-title" class="visually-hidden">Prologue</h2>
+          <ol class="beats">
+            <li data-beat="0">
+              <p class="beat-k">I · <span lang="ko">아득</span></p>
+              <p class="beat-line">Out here, distance stops being a number.<br /><em>It becomes a feeling.</em></p>
+              <p class="beat-sub">Two specks of light, further away than anything has a name for. Every so often they touch.</p>
+            </li>
+            <li data-beat="1">
+              <p class="beat-k">II · <span lang="ko">거인들</span></p>
+              <p class="beat-line">Between the galaxies,<br /><em>the old titans fight.</em></p>
+              <p class="beat-sub">A world that pulls. A star that burns out. A lattice that takes. An eye that only opens where it breaks.</p>
+            </li>
+            <li data-beat="2">
+              <p class="beat-k">III · <span lang="ko">우리</span></p>
+              <p class="beat-line">Two worlds died. Their people refused.<br /><em>They built one body from the wreck.</em></p>
+              <p class="beat-sub">Two cores in one loop, carrying each other's load. They named it 우리: <i>we</i>. It is still here.</p>
+            </li>
+            <li data-beat="3">
+              <p class="beat-k">IV · <span lang="ko">충돌</span></p>
+              <p class="beat-line">Every blow they trade<br /><em>is felt across light-years.</em></p>
+              <p class="beat-sub">Crust cracks, holds, shears off and drifts. Nothing out here heals. It only comes apart, slower or faster.</p>
+            </li>
+            <li data-beat="4">
+              <p class="beat-k">V · <span lang="ko">???</span></p>
+              <p class="beat-line beat-horror">Something felt it.</p>
+              <p class="beat-sub">It does not come through the dark. It comes along the edge of it.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ============================== SCALE (scroll-driven zoom-out) ============================== -->
+      <section id="scale" class="scale" aria-labelledby="scale-title">
+        <div class="story-stage">
+          <canvas class="px story-cv" aria-hidden="true"></canvas>
+          <header class="scale-head">
+            <p class="kicker" lang="ko">크기</p>
+            <h2 id="scale-title">How big is a titan?</h2>
+          </header>
+          <ol class="caps">
+            <li data-cap="0"><b>This is Earth.</b> Everyone you know is on it.</li>
+            <li data-cap="1"><b>This is the Planet.</b> It is one of the small titans.</li>
+            <li data-cap="2"><b>This is the arena.</b> 640 × 360 pixels, and every pixel of a titan is matter that can break.</li>
+            <li data-cap="3"><b>This is how much of the final boss fits on the screen.</b></li>
+          </ol>
+        </div>
       </section>
 
       <!-- ============================== WHAT IT IS ============================== -->
@@ -122,23 +165,15 @@
           <p class="kicker" lang="ko">게임</p>
           <h2 id="features-title">A fight where the fighters come apart</h2>
           <p class="lede">
-            Every titan is a body of simulated pixel matter. Damage doesn't drain a bar: it cracks, burns,
-            infects, crushes or devours the actual pixels, each titan in its own way. A round leaves both
-            bodies carved and the arena littered with what came off them.
+            Every titan is a body of simulated pixel matter. Damage doesn't drain a bar: it cracks, burns, infects, crushes
+            or devours the actual pixels, each titan in its own way. A round leaves both bodies carved and the arena littered
+            with what came off them.
           </p>
         </header>
 
         <article class="feature">
           <div class="feature-media">
-            <video
-              class="px"
-              muted
-              loop
-              playsinline
-              preload="none"
-              poster="media/features/orbit.jpg"
-              data-lazy
-            >
+            <video class="px" muted loop playsinline preload="none" poster="media/features/orbit.jpg" data-lazy>
               <source data-src="media/features/orbit.webm" type="video/webm" />
               <source data-src="media/features/orbit.mp4" type="video/mp4" />
             </video>
@@ -146,23 +181,15 @@
           <div class="feature-text">
             <h3><span class="num">01</span> 360° orbital combat</h3>
             <p>
-              No floor, no walls. Titans drift, dash and circle each other through open space with real weight
-              and momentum. Tilt the stick before a blow to choose where it lands: above, ahead or below.
+              No floor, no walls. Titans drift, dash and circle each other through open space with real weight and momentum.
+              Tilt the stick before a blow to choose where it lands: above, ahead or below.
             </p>
           </div>
         </article>
 
         <article class="feature flip">
           <div class="feature-media">
-            <video
-              class="px"
-              muted
-              loop
-              playsinline
-              preload="none"
-              poster="media/features/matter.jpg"
-              data-lazy
-            >
+            <video class="px" muted loop playsinline preload="none" poster="media/features/matter.jpg" data-lazy>
               <source data-src="media/features/matter.webm" type="video/webm" />
               <source data-src="media/features/matter.mp4" type="video/mp4" />
             </video>
@@ -170,24 +197,16 @@
           <div class="feature-text">
             <h3><span class="num">02</span> Destructible pixel matter</h3>
             <p>
-              Wounds <strong>crack</strong>, <strong>hold</strong>, then <strong>shear</strong> off as slabs
-              that tumble away. Lose matter and you get lighter and faster, but weaker; damaged regions hit
-              softer, so carve toward the core.
+              Wounds <strong>crack</strong>, <strong>hold</strong>, then <strong>shear</strong> off as slabs that tumble
+              away. Lose matter and you get lighter and faster, but weaker; damaged regions hit softer, so carve toward the
+              core.
             </p>
           </div>
         </article>
 
         <article class="feature">
           <div class="feature-media">
-            <video
-              class="px"
-              muted
-              loop
-              playsinline
-              preload="none"
-              poster="media/features/impact.jpg"
-              data-lazy
-            >
+            <video class="px" muted loop playsinline preload="none" poster="media/features/impact.jpg" data-lazy>
               <source data-src="media/features/impact.webm" type="video/webm" />
               <source data-src="media/features/impact.mp4" type="video/mp4" />
             </video>
@@ -195,13 +214,12 @@
           <div class="feature-text">
             <h3><span class="num">03</span> Cataclysmic impacts</h3>
             <p>
-              Novae, gravity wells, tidal streams and beams that cross the whole screen. Ultimates fill from
-              dealing
+              Novae, gravity wells, tidal streams and beams that cross the whole screen. Ultimates fill from dealing
               <em>and</em> taking damage, so the comeback is always one blow away.
             </p>
             <p class="small">
-              The game has screen-wide flashes and camera shake; Options has comfort sliders and a one-press
-              Reduced motion preset.
+              The game has screen-wide flashes and camera shake; Options has comfort sliders and a one-press Reduced motion
+              preset.
             </p>
           </div>
         </article>
@@ -228,11 +246,24 @@
           <div class="feature-text">
             <h3><span class="num">04</span> Epic cosmic sound</h3>
             <p>
-              A procedural score that swells with the fight, and huge, dramatic impacts. Every sound is
-              synthesised live in your browser: nothing is downloaded, not even the Hangeul font.
+              A procedural score that swells with the fight, and huge, dramatic impacts. Every sound is synthesised live in
+              your browser: nothing is downloaded, not even the Hangeul font.
             </p>
           </div>
         </article>
+
+        <!-- under the hood: a few hard facts, typed in like a readout. WJ: swap in exact numbers you trust (e.g. matter pixels per titan). -->
+        <div class="readout" aria-labelledby="readout-title">
+          <p class="readout-head" id="readout-title"><span>// under the hood</span> <span lang="ko">속</span></p>
+          <dl>
+            <div><dt>640×360</dt><dd>native resolution, always shown at a whole-number scale: no blurry pixels</dd></div>
+            <div><dt>1 px = 1 cell</dt><dd>every pixel of a titan is simulated matter with its own material and damage</dd></div>
+            <div><dt>3 stages</dt><dd>every wound cracks, holds, then shears off as a slab that keeps tumbling</dd></div>
+            <div><dt>0</dt><dd>health bars. The body is the bar; lose mass and you get lighter, faster, weaker</dd></div>
+            <div><dt>0 files</dt><dd>of art or audio: every sprite, every sound and the Hangeul font is generated in code</dd></div>
+            <div><dt>WebGL</dt><dd>three.js in a browser tab. Free, no install, keyboard or any gamepad</dd></div>
+          </dl>
+        </div>
       </section>
 
       <!-- ============================== TITANS ============================== -->
@@ -240,260 +271,178 @@
         <header class="section-head">
           <p class="kicker" lang="ko">거인들</p>
           <h2 id="titans-title">The titans</h2>
-          <p class="lede">
-            Seven colossi, seven ways to destroy matter. Hover or tap a titan to see it fight.
-          </p>
+          <p class="lede">Seven colossi, seven ways to destroy matter, and each one is a single idea grown to the size of a world. Hover or tap a titan to see it fight.</p>
         </header>
 
         <ul class="roster">
           <li class="titan" style="--accent: #a8bdb2; --accent2: #e8c070">
             <button class="titan-card" type="button" aria-label="The Witness: play its clip">
               <span class="titan-media">
-                <img
-                  class="px portrait"
-                  src="media/titans/witness.png"
-                  width="238"
-                  height="171"
-                  alt=""
-                  loading="lazy"
-                />
+                <img class="px portrait" src="media/titans/witness.png" width="238" height="171" alt="" loading="lazy" />
                 <video muted loop playsinline preload="none" data-titan-clip>
                   <source data-src="media/titans/witness-loop.webm" type="video/webm" />
                   <source data-src="media/titans/witness-loop.mp4" type="video/mp4" />
                 </video>
               </span>
               <span class="titan-text">
+                <span class="titan-essence">perception</span>
                 <span class="titan-name">The Witness</span>
-                <img
-                  class="px ko"
-                  src="media/type/ko-witness.png"
-                  width="77"
-                  height="14"
-                  alt="마지막 하나"
-                  lang="ko"
-                />
+                <img class="px ko" src="media/type/ko-witness.png" width="77" height="14" alt="마지막 하나" lang="ko" />
                 <span class="titan-tag">“The more it breaks, the more it sees.”</span>
-                <span class="titan-mech"
-                  ><b>Fracture.</b> Where its carapace breaks, inner eyes open, and every open eye adds a beam
-                  to its gaze.</span
-                >
+                <span class="titan-lore">The last of something that watched the first stars light. It has seen every ending but its own.</span>
+                <span class="titan-mech"><b>Fracture.</b> Where its carapace breaks, inner eyes open, and every open eye adds a beam to its gaze.</span>
               </span>
             </button>
           </li>
           <li class="titan" style="--accent: #58a6d8; --accent2: #e0b06a">
             <button class="titan-card" type="button" aria-label="Planet: play its clip">
               <span class="titan-media">
-                <img
-                  class="px portrait x2"
-                  style="--w: 121"
-                  src="media/titans/planet.png"
-                  width="121"
-                  height="121"
-                  alt=""
-                  loading="lazy"
-                />
+                <img class="px portrait x2" style="--w: 121" src="media/titans/planet.png" width="121" height="121" alt="" loading="lazy" />
                 <video muted loop playsinline preload="none" data-titan-clip>
                   <source data-src="media/titans/planet-loop.webm" type="video/webm" />
                   <source data-src="media/titans/planet-loop.mp4" type="video/mp4" />
                 </video>
               </span>
               <span class="titan-text">
+                <span class="titan-essence">gravity</span>
                 <span class="titan-name">Planet</span>
-                <img
-                  class="px ko"
-                  src="media/type/ko-planet.png"
-                  width="28"
-                  height="14"
-                  alt="행성"
-                  lang="ko"
-                />
+                <img class="px ko" src="media/type/ko-planet.png" width="28" height="14" alt="행성" lang="ko" />
                 <span class="titan-tag">“All things fall toward me.”</span>
-                <span class="titan-mech"
-                  ><b>Crush.</b> Craters, shock rings and faults; its gravity well packs debris back on as
-                  crust.</span
-                >
+                <span class="titan-lore">A world that never needed life. It has mass, and patience, and everything ends up on it eventually.</span>
+                <span class="titan-mech"><b>Crush.</b> Craters, shock rings and faults; its gravity well packs debris back on as crust.</span>
               </span>
             </button>
           </li>
           <li class="titan" style="--accent: #c9b399; --accent2: #5ccbdc">
             <button class="titan-card" type="button" aria-label="The Asteroid: play its clip">
               <span class="titan-media">
-                <img
-                  class="px portrait x2"
-                  style="--w: 117"
-                  src="media/titans/asteroid.png"
-                  width="117"
-                  height="104"
-                  alt=""
-                  loading="lazy"
-                />
+                <img class="px portrait x2" style="--w: 117" src="media/titans/asteroid.png" width="117" height="104" alt="" loading="lazy" />
                 <video muted loop playsinline preload="none" data-titan-clip>
                   <source data-src="media/titans/asteroid-loop.webm" type="video/webm" />
                   <source data-src="media/titans/asteroid-loop.mp4" type="video/mp4" />
                 </video>
               </span>
               <span class="titan-text">
+                <span class="titan-essence">momentum</span>
                 <span class="titan-name">The Asteroid</span>
-                <img
-                  class="px ko"
-                  src="media/type/ko-asteroid.png"
-                  width="42"
-                  height="14"
-                  alt="소행성"
-                  lang="ko"
-                />
+                <img class="px ko" src="media/type/ko-asteroid.png" width="42" height="14" alt="소행성" lang="ko" />
                 <span class="titan-tag">“Hit, run, hit again.”</span>
-                <span class="titan-mech"
-                  ><b>Kinetic.</b> Ballistic craters and shrapnel that bursts later; every landed blow builds
-                  momentum.</span
-                >
+                <span class="titan-lore">A shard of a world that lost. It has been falling for four billion years and has never once slowed down.</span>
+                <span class="titan-mech"><b>Kinetic.</b> Ballistic craters and shrapnel that bursts later; every landed blow builds momentum.</span>
               </span>
             </button>
           </li>
           <li class="titan" style="--accent: #d63a4e; --accent2: #8fd4ff">
             <button class="titan-card" type="button" aria-label="The Nexus: play its clip">
               <span class="titan-media">
-                <img
-                  class="px portrait"
-                  src="media/titans/nexus.png"
-                  width="160"
-                  height="168"
-                  alt=""
-                  loading="lazy"
-                />
+                <img class="px portrait" src="media/titans/nexus.png" width="160" height="168" alt="" loading="lazy" />
                 <video muted loop playsinline preload="none" data-titan-clip>
                   <source data-src="media/titans/nexus-loop.webm" type="video/webm" />
                   <source data-src="media/titans/nexus-loop.mp4" type="video/mp4" />
                 </video>
               </span>
               <span class="titan-text">
+                <span class="titan-essence">possession</span>
                 <span class="titan-name">The Nexus</span>
-                <img
-                  class="px ko"
-                  src="media/type/ko-nexus.png"
-                  width="42"
-                  height="14"
-                  alt="넥서스"
-                  lang="ko"
-                />
+                <img class="px ko" src="media/type/ko-nexus.png" width="42" height="14" alt="넥서스" lang="ko" />
                 <span class="titan-tag">“Everything connects. Everything is mine.”</span>
-                <span class="titan-mech"
-                  ><b>Assimilation.</b> Converts your cells into its lattice, then harvests them. Cut a chain
-                  and the far side goes dark.</span
-                >
+                <span class="titan-lore">It does not conquer. It connects. And whatever it connects to, it owns.</span>
+                <span class="titan-mech"><b>Assimilation.</b> Converts your cells into its lattice, then harvests them. Cut a chain and the far side goes dark.</span>
               </span>
             </button>
           </li>
           <li class="titan" style="--accent: #ff9a3a; --accent2: #7ab8ff">
             <button class="titan-card" type="button" aria-label="Black Hole: play its clip">
               <span class="titan-media">
-                <img
-                  class="px portrait"
-                  src="media/titans/blackhole.png"
-                  width="172"
-                  height="156"
-                  alt=""
-                  loading="lazy"
-                />
+                <img class="px portrait" src="media/titans/blackhole.png" width="172" height="156" alt="" loading="lazy" />
                 <video muted loop playsinline preload="none" data-titan-clip>
                   <source data-src="media/titans/blackhole-loop.webm" type="video/webm" />
                   <source data-src="media/titans/blackhole-loop.mp4" type="video/mp4" />
                 </video>
               </span>
               <span class="titan-text">
+                <span class="titan-essence">absence</span>
                 <span class="titan-name">Black Hole</span>
-                <img
-                  class="px ko"
-                  src="media/type/ko-blackhole.png"
-                  width="42"
-                  height="14"
-                  alt="블랙홀"
-                  lang="ko"
-                />
+                <img class="px ko" src="media/type/ko-blackhole.png" width="42" height="14" alt="블랙홀" lang="ko" />
                 <span class="titan-tag">“Nothing leaves.”</span>
-                <span class="titan-mech"
-                  ><b>Tidal.</b> Tears matter loose into streams and swallows it, growing heavier and slower
-                  as it feeds.</span
-                >
+                <span class="titan-lore">Not a creature. A wound in space that learned to move toward whatever is left.</span>
+                <span class="titan-mech"><b>Tidal.</b> Tears matter loose into streams and swallows it, growing heavier and slower as it feeds.</span>
               </span>
             </button>
           </li>
           <li class="titan" style="--accent: #ff9a3c; --accent2: #fff0b0">
             <button class="titan-card" type="button" aria-label="Supernova: play its clip">
               <span class="titan-media">
-                <img
-                  class="px portrait"
-                  src="media/titans/supernova.png"
-                  width="183"
-                  height="153"
-                  alt=""
-                  loading="lazy"
-                />
+                <img class="px portrait" src="media/titans/supernova.png" width="183" height="153" alt="" loading="lazy" />
                 <video muted loop playsinline preload="none" data-titan-clip>
                   <source data-src="media/titans/supernova-loop.webm" type="video/webm" />
                   <source data-src="media/titans/supernova-loop.mp4" type="video/mp4" />
                 </video>
               </span>
               <span class="titan-text">
+                <span class="titan-essence">sacrifice</span>
                 <span class="titan-name">Supernova</span>
-                <img
-                  class="px ko"
-                  src="media/type/ko-supernova.png"
-                  width="42"
-                  height="14"
-                  alt="초신성"
-                  lang="ko"
-                />
+                <img class="px ko" src="media/type/ko-supernova.png" width="42" height="14" alt="초신성" lang="ko" />
                 <span class="titan-tag">“Burn bright. Burn out.”</span>
-                <span class="titan-mech"
-                  ><b>Thermal.</b> Heat spreads, ignites and burns to ash. At zero fuel it collapses into one
-                  last nova.</span
-                >
+                <span class="titan-lore">A star in its final second, stretched across a whole war. It will not get another.</span>
+                <span class="titan-mech"><b>Thermal.</b> Heat spreads, ignites and burns to ash. At zero fuel it collapses into one last nova.</span>
               </span>
             </button>
           </li>
           <li class="titan" style="--accent: #ffb060; --accent2: #6a92f8">
             <button class="titan-card" type="button" aria-label="우리 (URI): play its clip">
               <span class="titan-media">
-                <img
-                  class="portrait half"
-                  src="media/titans/uri.png"
-                  width="394"
-                  height="306"
-                  alt=""
-                  loading="lazy"
-                />
+                <img class="portrait half" src="media/titans/uri.png" width="394" height="306" alt="" loading="lazy" />
                 <video muted loop playsinline preload="none" data-titan-clip>
                   <source data-src="media/titans/uri-loop.webm" type="video/webm" />
                   <source data-src="media/titans/uri-loop.mp4" type="video/mp4" />
                 </video>
               </span>
               <span class="titan-text">
+                <span class="titan-essence">refusal</span>
                 <span class="titan-name">URI</span>
                 <img class="px ko" src="media/type/ko-uri.png" width="28" height="14" alt="우리" lang="ko" />
                 <span class="titan-tag">“It refuses to fall apart.”</span>
-                <span class="titan-mech"
-                  ><b>Kinetic.</b> Holds most of every blow inside its loop. When the loop snaps, everything
-                  it held flies apart.</span
-                >
+                <span class="titan-lore">Two worlds, one body, all of us. Held together by a loop that should have snapped long ago.</span>
+                <span class="titan-mech"><b>Kinetic.</b> Holds most of every blow inside its loop. When the loop snaps, everything it held flies apart.</span>
               </span>
             </button>
           </li>
           <li class="titan mystery" style="--accent: #8a3cff; --accent2: #ff4d6d">
-            <div class="titan-card" aria-label="A final boss is coming">
+            <a class="titan-card" href="#edge" aria-label="A final boss is coming: see what is at the edge">
               <span class="titan-media">
                 <span class="jaw" aria-hidden="true"></span>
               </span>
               <span class="titan-text">
+                <span class="titan-essence">hunger</span>
                 <span class="titan-name">???</span>
+                <span class="ko-text" lang="ko">???</span>
                 <span class="titan-tag">“A final boss is coming…”</span>
-                <span class="titan-mech"
-                  >Something vast is opening at the edge of the arena. It does not fight fair.</span
-                >
+                <span class="titan-mech">Something vast is opening at the edge of the arena. It does not fight fair.</span>
+                <span class="titan-more">Look at the edge →</span>
               </span>
-            </div>
+            </a>
           </li>
         </ul>
+      </section>
+
+
+      <!-- ============================== THE EDGE (final boss teaser; drawn in code by story.js) ============================== -->
+      <section id="edge" class="edge" aria-labelledby="edge-title">
+        <canvas class="px story-cv" aria-hidden="true"></canvas>
+        <div class="edge-inner">
+          <p class="kicker" lang="ko">가장자리</p>
+          <h2 id="edge-title" class="visually-hidden">The final boss</h2>
+          <p class="edge-words" aria-label="Hunger. Devours. Ends. Repeats.">
+            <span data-word>Hunger.</span> <span data-word>Devours.</span> <span data-word>Ends.</span> <span data-word>Repeats.</span>
+          </p>
+          <p class="edge-sub">
+            It does not enter the arena. It <em>is</em> the edge of the arena. What you will see is the feeding end. The rest of
+            it does not fit on any screen.
+          </p>
+          <p class="edge-meta">Final boss · coming later</p>
+          <a class="btn btn-ghost" href="#follow">Be there when it opens</a>
+        </div>
       </section>
 
       <!-- ============================== SCREENSHOTS ============================== -->
@@ -505,126 +454,16 @@
         </header>
         <ul class="gallery">
           <!-- data-full: the lossless frame for the lightbox; img: the light thumbnail -->
-          <li>
-            <button type="button" data-full="media/shots/supernova-planet-nursery.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/supernova-planet-nursery.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="Supernova against Planet in the Stellar Nursery"
-              />
-            </button>
-          </li>
-          <li>
-            <button type="button" data-full="media/shots/blackhole-nexus-nursery.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/blackhole-nexus-nursery.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="Black Hole against the Nexus among the nursery's pillars"
-              />
-            </button>
-          </li>
-          <li>
-            <button type="button" data-full="media/shots/witness-planet-nursery.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/witness-planet-nursery.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="The Witness grappling the Planet"
-              />
-            </button>
-          </li>
-          <li>
-            <button type="button" data-full="media/shots/supernova-blackhole-shearfield.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/supernova-blackhole-shearfield.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="Supernova against Black Hole in the Shear Field"
-              />
-            </button>
-          </li>
-          <li>
-            <button type="button" data-full="media/shots/uri-planet.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/uri-planet.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="우리 facing the Planet"
-              />
-            </button>
-          </li>
-          <li>
-            <button type="button" data-full="media/shots/nexus-asteroid-redgiant.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/nexus-asteroid-redgiant.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="The Nexus against the Asteroid in Red Giant's Wake"
-              />
-            </button>
-          </li>
-          <li>
-            <button type="button" data-full="media/shots/witness-asteroid-rim.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/witness-asteroid-rim.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="The Witness against the Asteroid under a spiral galaxy"
-              />
-            </button>
-          </li>
-          <li>
-            <button type="button" data-full="media/shots/planet-supernova-quasar.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/planet-supernova-quasar.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="Planet and Supernova trading beams in the Quasar Void"
-              />
-            </button>
-          </li>
-          <li>
-            <button type="button" data-full="media/shots/witness-planet-mausoleum.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/witness-planet-mausoleum.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="The Witness and the Planet in the Mausoleum"
-              />
-            </button>
-          </li>
-          <li>
-            <button type="button" data-full="media/shots/title.webp">
-              <img
-                class="px"
-                src="media/shots/thumb/title.webp"
-                width="640"
-                height="360"
-                loading="lazy"
-                alt="The title screen"
-              />
-            </button>
-          </li>
+          <li><button type="button" data-full="media/shots/supernova-planet-nursery.webp"><img class="px" src="media/shots/thumb/supernova-planet-nursery.webp" width="640" height="360" loading="lazy" alt="Supernova against Planet in the Stellar Nursery" /></button></li>
+          <li><button type="button" data-full="media/shots/blackhole-nexus-nursery.webp"><img class="px" src="media/shots/thumb/blackhole-nexus-nursery.webp" width="640" height="360" loading="lazy" alt="Black Hole against the Nexus among the nursery's pillars" /></button></li>
+          <li><button type="button" data-full="media/shots/witness-planet-nursery.webp"><img class="px" src="media/shots/thumb/witness-planet-nursery.webp" width="640" height="360" loading="lazy" alt="The Witness grappling the Planet" /></button></li>
+          <li><button type="button" data-full="media/shots/supernova-blackhole-shearfield.webp"><img class="px" src="media/shots/thumb/supernova-blackhole-shearfield.webp" width="640" height="360" loading="lazy" alt="Supernova against Black Hole in the Shear Field" /></button></li>
+          <li><button type="button" data-full="media/shots/uri-planet.webp"><img class="px" src="media/shots/thumb/uri-planet.webp" width="640" height="360" loading="lazy" alt="우리 facing the Planet" /></button></li>
+          <li><button type="button" data-full="media/shots/nexus-asteroid-redgiant.webp"><img class="px" src="media/shots/thumb/nexus-asteroid-redgiant.webp" width="640" height="360" loading="lazy" alt="The Nexus against the Asteroid in Red Giant's Wake" /></button></li>
+          <li><button type="button" data-full="media/shots/witness-asteroid-rim.webp"><img class="px" src="media/shots/thumb/witness-asteroid-rim.webp" width="640" height="360" loading="lazy" alt="The Witness against the Asteroid under a spiral galaxy" /></button></li>
+          <li><button type="button" data-full="media/shots/planet-supernova-quasar.webp"><img class="px" src="media/shots/thumb/planet-supernova-quasar.webp" width="640" height="360" loading="lazy" alt="Planet and Supernova trading beams in the Quasar Void" /></button></li>
+          <li><button type="button" data-full="media/shots/witness-planet-mausoleum.webp"><img class="px" src="media/shots/thumb/witness-planet-mausoleum.webp" width="640" height="360" loading="lazy" alt="The Witness and the Planet in the Mausoleum" /></button></li>
+          <li><button type="button" data-full="media/shots/title.webp"><img class="px" src="media/shots/thumb/title.webp" width="640" height="360" loading="lazy" alt="The title screen" /></button></li>
         </ul>
       </section>
 
@@ -634,162 +473,58 @@
           <p class="kicker" lang="ko">조작</p>
           <h2 id="controls-title">Controls</h2>
           <p class="lede">
-            Best with a gamepad: Switch Pro Controller, Joy-Con, Xbox or PlayStation, no driver needed. Press
-            any button on the page once so the browser shows it to the game. Everything is remappable on the
-            in-game Controller Check.
+            Best with a gamepad: Switch Pro Controller, Joy-Con, Xbox or PlayStation, no driver needed. Press any button on
+            the page once so the browser shows it to the game. Everything is remappable on the in-game Controller Check.
           </p>
         </header>
         <div class="controls-grid">
           <div class="table-wrap">
             <table>
-              <caption>
-                Gamepad (same physical positions on every pad)
-              </caption>
+              <caption>Gamepad (same physical positions on every pad)</caption>
               <thead>
-                <tr>
-                  <th scope="col">Action</th>
-                  <th scope="col">Switch Pro</th>
-                  <th scope="col">Xbox</th>
-                  <th scope="col">PlayStation</th>
-                </tr>
+                <tr><th scope="col">Action</th><th scope="col">Switch Pro</th><th scope="col">Xbox</th><th scope="col">PlayStation</th></tr>
               </thead>
               <tbody>
-                <tr>
-                  <th scope="row">Move and aim</th>
-                  <td colspan="3">Left stick / D-pad</td>
-                </tr>
-                <tr>
-                  <th scope="row">Strike</th>
-                  <td><kbd>Y</kbd></td>
-                  <td><kbd>X</kbd></td>
-                  <td><kbd>□</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Crush</th>
-                  <td><kbd>X</kbd></td>
-                  <td><kbd>Y</kbd></td>
-                  <td><kbd>△</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Surge</th>
-                  <td><kbd>B</kbd></td>
-                  <td><kbd>A</kbd></td>
-                  <td><kbd>✕</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Signature</th>
-                  <td><kbd>A</kbd></td>
-                  <td><kbd>B</kbd></td>
-                  <td><kbd>○</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Ultimate</th>
-                  <td><kbd>ZR</kbd></td>
-                  <td><kbd>RT</kbd></td>
-                  <td><kbd>R2</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Guard</th>
-                  <td><kbd>ZL</kbd></td>
-                  <td><kbd>LT</kbd></td>
-                  <td><kbd>L2</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Feint</th>
-                  <td><kbd>L</kbd></td>
-                  <td><kbd>LB</kbd></td>
-                  <td><kbd>L1</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Gravity</th>
-                  <td><kbd>R</kbd></td>
-                  <td><kbd>RB</kbd></td>
-                  <td><kbd>R1</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Pause</th>
-                  <td><kbd>+</kbd></td>
-                  <td><kbd>Menu</kbd></td>
-                  <td><kbd>Options</kbd></td>
-                </tr>
+                <tr><th scope="row">Move and aim</th><td colspan="3">Left stick / D-pad</td></tr>
+                <tr><th scope="row">Strike</th><td><kbd>Y</kbd></td><td><kbd>X</kbd></td><td><kbd>□</kbd></td></tr>
+                <tr><th scope="row">Crush</th><td><kbd>X</kbd></td><td><kbd>Y</kbd></td><td><kbd>△</kbd></td></tr>
+                <tr><th scope="row">Surge</th><td><kbd>B</kbd></td><td><kbd>A</kbd></td><td><kbd>✕</kbd></td></tr>
+                <tr><th scope="row">Signature</th><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>○</kbd></td></tr>
+                <tr><th scope="row">Ultimate</th><td><kbd>ZR</kbd></td><td><kbd>RT</kbd></td><td><kbd>R2</kbd></td></tr>
+                <tr><th scope="row">Guard</th><td><kbd>ZL</kbd></td><td><kbd>LT</kbd></td><td><kbd>L2</kbd></td></tr>
+                <tr><th scope="row">Feint</th><td><kbd>L</kbd></td><td><kbd>LB</kbd></td><td><kbd>L1</kbd></td></tr>
+                <tr><th scope="row">Gravity</th><td><kbd>R</kbd></td><td><kbd>RB</kbd></td><td><kbd>R1</kbd></td></tr>
+                <tr><th scope="row">Pause</th><td><kbd>+</kbd></td><td><kbd>Menu</kbd></td><td><kbd>Options</kbd></td></tr>
               </tbody>
             </table>
           </div>
           <div class="table-wrap">
             <table>
-              <caption>
-                Keyboard (two players on one board; any layout)
-              </caption>
+              <caption>Keyboard (two players on one board; any layout)</caption>
               <thead>
-                <tr>
-                  <th scope="col">Action</th>
-                  <th scope="col">Player 1</th>
-                  <th scope="col">Player 2</th>
-                </tr>
+                <tr><th scope="col">Action</th><th scope="col">Player 1</th><th scope="col">Player 2</th></tr>
               </thead>
               <tbody>
-                <tr>
-                  <th scope="row">Move and aim</th>
-                  <td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td>
-                  <td>Arrow keys</td>
-                </tr>
-                <tr>
-                  <th scope="row">Strike</th>
-                  <td><kbd>J</kbd></td>
-                  <td><kbd>Num 4</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Crush</th>
-                  <td><kbd>I</kbd></td>
-                  <td><kbd>Num 8</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Surge</th>
-                  <td><kbd>K</kbd></td>
-                  <td><kbd>Num 2</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Signature</th>
-                  <td><kbd>L</kbd></td>
-                  <td><kbd>Num 6</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Ultimate</th>
-                  <td><kbd>O</kbd></td>
-                  <td><kbd>Num 9</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Guard</th>
-                  <td><kbd>Shift</kbd> / <kbd>Space</kbd></td>
-                  <td><kbd>Num 0</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Feint</th>
-                  <td><kbd>Q</kbd> / <kbd>E</kbd></td>
-                  <td><kbd>Num 7</kbd> / <kbd>Num 1</kbd></td>
-                </tr>
-                <tr>
-                  <th scope="row">Pause</th>
-                  <td><kbd>Esc</kbd></td>
-                  <td><kbd>Enter</kbd></td>
-                </tr>
+                <tr><th scope="row">Move and aim</th><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Arrow keys</td></tr>
+                <tr><th scope="row">Strike</th><td><kbd>J</kbd></td><td><kbd>Num 4</kbd></td></tr>
+                <tr><th scope="row">Crush</th><td><kbd>I</kbd></td><td><kbd>Num 8</kbd></td></tr>
+                <tr><th scope="row">Surge</th><td><kbd>K</kbd></td><td><kbd>Num 2</kbd></td></tr>
+                <tr><th scope="row">Signature</th><td><kbd>L</kbd></td><td><kbd>Num 6</kbd></td></tr>
+                <tr><th scope="row">Ultimate</th><td><kbd>O</kbd></td><td><kbd>Num 9</kbd></td></tr>
+                <tr><th scope="row">Guard</th><td><kbd>Shift</kbd> / <kbd>Space</kbd></td><td><kbd>Num 0</kbd></td></tr>
+                <tr><th scope="row">Feint</th><td><kbd>Q</kbd> / <kbd>E</kbd></td><td><kbd>Num 7</kbd> / <kbd>Num 1</kbd></td></tr>
+                <tr><th scope="row">Pause</th><td><kbd>Esc</kbd></td><td><kbd>Enter</kbd></td></tr>
               </tbody>
             </table>
-            <p class="small">
-              Menus: arrows or WASD, <kbd>Space</kbd> / <kbd>Enter</kbd> to confirm, <kbd>Esc</kbd> to go
-              back. Player 2 needs a numpad.
-            </p>
+            <p class="small">Menus: arrows or WASD, <kbd>Space</kbd> / <kbd>Enter</kbd> to confirm, <kbd>Esc</kbd> to go back. Player 2 needs a numpad.</p>
           </div>
         </div>
         <p class="small notice">
-          <strong>Photosensitivity:</strong> the game contains screen-wide flashes and camera shake. Options →
-          Screen shake and Flash effects turn them down; Reduced motion sets both to 25 %. No touch controls
-          yet: phones need a pad or keyboard.
+          <strong>Photosensitivity:</strong> the game contains screen-wide flashes and camera shake. Options → Screen shake and
+          Flash effects turn them down; Reduced motion sets both to 25 %. No touch controls yet: phones need a pad or keyboard.
         </p>
         <div class="cta center">
-          <a class="btn btn-play btn-huge" href="play/"
-            ><span class="btn-main">Play now</span><span class="btn-note">Free, in your browser</span></a
-          >
+          <a class="btn btn-play btn-huge" href="play/"><span class="btn-main">Play now</span><span class="btn-note">Free, in your browser</span></a>
         </div>
       </section>
 
@@ -801,72 +536,33 @@
         </header>
         <div class="press-grid">
           <dl class="facts">
-            <div>
-              <dt>Title</dt>
-              <dd>ADEUK: TITANS <span lang="ko">(아득)</span></dd>
-            </div>
-            <div>
-              <dt>Genre</dt>
-              <dd>Cosmic pixel-art fighting game, 1v1</dd>
-            </div>
-            <div>
-              <dt>Platform</dt>
-              <dd>Web browser (desktop; keyboard or gamepad)</dd>
-            </div>
-            <div>
-              <dt>Price</dt>
-              <dd>Free to play</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>In development</dd>
-            </div>
-            <div>
-              <dt>Players</dt>
-              <dd>1–2 on one screen, or against the AI</dd>
-            </div>
-            <div>
-              <dt>Developer</dt>
-              <dd>
-                WJ
-                <!-- WJ: studio / developer name -->
-              </dd>
-            </div>
-            <div>
-              <dt>Contact</dt>
-              <dd>
-                <a href="mailto:press@example.com" data-todo="contact">press@example.com</a>
-                <!-- WJ: replace with the real press contact -->
-              </dd>
-            </div>
+            <div><dt>Title</dt><dd>ADEUK: TITANS <span lang="ko">(아득)</span></dd></div>
+            <div><dt>Genre</dt><dd>Cosmic pixel-art fighting game, 1v1</dd></div>
+            <div><dt>Platform</dt><dd>Web browser (desktop; keyboard or gamepad)</dd></div>
+            <div><dt>Price</dt><dd>Free to play</dd></div>
+            <div><dt>Status</dt><dd>In development</dd></div>
+            <div><dt>Players</dt><dd>1–2 on one screen, or against the AI</dd></div>
+            <div><dt>Developer</dt><dd>WJ <!-- WJ: studio / developer name --></dd></div>
+            <div><dt>Contact</dt><dd><a href="mailto:press@example.com" data-todo="contact">press@example.com</a> <!-- WJ: replace with the real press contact --></dd></div>
           </dl>
           <div class="press-about">
             <h3>About the game</h3>
             <p>
-              ADEUK: TITANS is a cosmic pixel-art fighting game for the browser in which colossal entities, a
-              planet, a black hole, a supernova, a living lattice and stranger things, physically wear each
-              other down. There is no health bar: every titan's body is a map of simulated pixel matter, and
-              every blow cracks, burns, infects, crushes or devours the actual pixels in the attacker's own
-              way. Wounds crack, hold and shear off as slabs; the fighters grow lighter, faster and weaker as
-              they come apart. Every sprite, sound and font is generated in code.
+              ADEUK: TITANS is a cosmic pixel-art fighting game for the browser in which colossal entities, a planet, a black
+              hole, a supernova, a living lattice and stranger things, physically wear each other down. There is no health
+              bar: every titan's body is a map of simulated pixel matter, and every blow cracks, burns, infects, crushes or
+              devours the actual pixels in the attacker's own way. Wounds crack, hold and shear off as slabs; the fighters
+              grow lighter, faster and weaker as they come apart. Every sprite, sound and font is generated in code.
             </p>
             <h3>Downloads</h3>
             <!-- PRESS-DOWNLOADS: tools/site/build.ts replaces this list with the files in press/ when that folder exists -->
             <ul class="downloads" data-press-list>
               <li><a href="media/trailer/trailer.mp4" download>Trailer (MP4, 720p)</a></li>
               <li><a href="media/hero/loop.mp4" download>Gameplay loop (MP4, 16 s, muted)</a></li>
-              <li>
-                <a href="media/type/logo.png" download
-                  >Logo (transparent PNG, 1×; scale up with nearest neighbour)</a
-                >
-              </li>
+              <li><a href="media/type/logo.png" download>Logo (transparent PNG, 1×; scale up with nearest neighbour)</a></li>
               <li><a href="media/og.jpg" download>Key art (1200×630 JPEG)</a></li>
               <li><a href="media/titans/witness.png" download>Titan portraits (transparent PNG, 1×)</a></li>
-              <li>
-                <a href="media/shots/supernova-planet-nursery.webp" download
-                  >Screenshots (lossless, 640×360)</a
-                >
-              </li>
+              <li><a href="media/shots/supernova-planet-nursery.webp" download>Screenshots (lossless, 640×360)</a></li>
             </ul>
           </div>
         </div>
@@ -908,22 +604,13 @@
         <!-- WJ: rights holder -->
       </p>
       <p class="small">Every sprite, sound and font in the game is generated in code. Built with three.js.</p>
-      <p class="small">
-        <a href="#top">Back to top</a> · <a href="play/">Play</a> · <a href="#press">Press kit</a>
-      </p>
+      <p class="small"><a href="#top">Back to top</a> · <a href="play/">Play</a> · <a href="#press">Press kit</a></p>
     </footer>
 
     <!-- trailer lightbox -->
     <dialog id="trailer" class="lightbox" aria-label="Trailer">
       <div class="lightbox-frame">
-        <video
-          id="trailer-video"
-          class="px"
-          controls
-          playsinline
-          preload="none"
-          poster="media/trailer/poster.jpg"
-        >
+        <video id="trailer-video" class="px" controls playsinline preload="none" poster="media/trailer/poster.jpg">
           <source data-src="media/trailer/trailer.webm" type="video/webm" />
           <source data-src="media/trailer/trailer.mp4" type="video/mp4" />
         </video>

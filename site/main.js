@@ -42,14 +42,28 @@ function starfield() {
     }));
   }
   let t = 0;
+  // near the Edge section, the whole sky is dragged outward toward the screen's rim, and dims
+  const edgeSec = $('#edge');
+  function pullNow() {
+    if (!edgeSec) return 0;
+    const r = edgeSec.getBoundingClientRect();
+    const mid = r.top + r.height / 2 - innerHeight / 2;
+    return Math.max(0, 1 - Math.abs(mid) / (innerHeight * 1.2)) ** 1.5;
+  }
   function draw() {
     ctx.clearRect(0, 0, w, h);
     const scroll = scrollY / SCALE;
+    const pull = pullNow();
     for (const s of stars) {
-      const y = (((s.y - scroll * (0.05 + s.z * 0.25) + t * (0.02 + s.z * 0.08)) % h) + h) % h;
-      const x = s.x;
+      let y = (((s.y - scroll * (0.05 + s.z * 0.25) + t * (0.02 + s.z * 0.08)) % h) + h) % h;
+      let x = s.x;
+      if (pull > 0) {
+        const k = 1 + pull * (0.25 + s.z) * 0.9;
+        x = w / 2 + (x - w / 2) * k;
+        y = h / 2 + (y - h / 2) * k;
+      }
       // gentle twinkle (slow, low amplitude: no flashing)
-      ctx.globalAlpha = 0.35 + s.z * 0.5 + Math.sin(s.tw + t * 0.02) * 0.12;
+      ctx.globalAlpha = (0.35 + s.z * 0.5 + Math.sin(s.tw + t * 0.02) * 0.12) * (1 - pull * 0.55);
       ctx.fillStyle = s.c;
       ctx.fillRect(x | 0, y | 0, 1, 1);
       if (s.z > 0.82) {
@@ -190,8 +204,7 @@ function titans() {
 function dialogs() {
   for (const d of $$('dialog.lightbox')) {
     d.addEventListener('click', (e) => {
-      if (e.target === d || e.target.classList.contains('lightbox-frame') || e.target.closest('[data-close]'))
-        d.close();
+      if (e.target === d || e.target.classList.contains('lightbox-frame') || e.target.closest('[data-close]')) d.close();
     });
   }
   // trailer: full film with sound, opened by a click (a user gesture, so audio may start)
@@ -238,8 +251,7 @@ function dialogs() {
       shot.showModal();
     }),
   );
-  for (const s of $$('[data-step]', shot))
-    s.addEventListener('click', () => show(at + Number(s.dataset.step)));
+  for (const s of $$('[data-step]', shot)) s.addEventListener('click', () => show(at + Number(s.dataset.step)));
   shot.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight') show(at + 1);
     if (e.key === 'ArrowLeft') show(at - 1);

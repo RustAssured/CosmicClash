@@ -20,8 +20,7 @@
   --pixel: 'Jersey 10', 'DotGothic16', ui-monospace, monospace;
   --label: 'Silkscreen', 'DotGothic16', ui-monospace, monospace;
   --ko: 'DotGothic16', 'Pixelify Sans', sans-serif;
-  --body:
-    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   --gutter: clamp(16px, 4vw, 48px);
   --max: 1200px;
   color-scheme: dark;
@@ -46,7 +45,8 @@ body {
   background:
     radial-gradient(1200px 700px at 85% -10%, rgba(255, 77, 141, 0.16), transparent 60%),
     radial-gradient(900px 600px at -10% 30%, rgba(138, 92, 255, 0.14), transparent 60%),
-    radial-gradient(1000px 800px at 100% 70%, rgba(255, 154, 60, 0.1), transparent 60%), var(--void);
+    radial-gradient(1000px 800px at 100% 70%, rgba(255, 154, 60, 0.1), transparent 60%),
+    var(--void);
   color: var(--text);
   font: 400 17px/1.6 var(--body);
   overflow-x: hidden;
@@ -201,8 +201,7 @@ kbd {
   padding: 12px 22px;
   border: 0;
   border-radius: var(--radius);
-  font: 400 23px/1 var(--pixel);
-  letter-spacing: 0.06em;
+  font: 700 15px/1 var(--label);
   text-transform: uppercase;
   text-decoration: none;
   cursor: pointer;
@@ -239,8 +238,8 @@ kbd {
 }
 
 .btn-small {
-  padding: 8px 14px 7px;
-  font-size: 20px;
+  padding: 9px 14px;
+  font-size: 15px;
 }
 
 .btn-huge {
@@ -250,7 +249,7 @@ kbd {
 }
 
 .btn-huge .btn-main {
-  font-size: clamp(38px, 4.6vw, 50px);
+  font-size: clamp(26px, 3.4vw, 36px);
 }
 
 .btn-huge .btn-note {
@@ -310,13 +309,7 @@ kbd {
   background:
     radial-gradient(ellipse 60% 45% at 50% 52%, rgba(7, 4, 15, 0.55) 0%, rgba(7, 4, 15, 0.2) 100%),
     radial-gradient(ellipse at 50% 45%, rgba(7, 4, 15, 0.2) 0%, rgba(7, 4, 15, 0.7) 75%),
-    linear-gradient(
-      to bottom,
-      rgba(7, 4, 15, 0.55) 0%,
-      rgba(7, 4, 15, 0.15) 30%,
-      rgba(7, 4, 15, 0.35) 70%,
-      var(--void) 100%
-    );
+    linear-gradient(to bottom, rgba(7, 4, 15, 0.55) 0%, rgba(7, 4, 15, 0.15) 30%, rgba(7, 4, 15, 0.35) 70%, var(--void) 100%);
 }
 
 .hero-inner {
@@ -351,9 +344,7 @@ kbd {
   margin: 28px 0 8px;
   font: 400 clamp(36px, 4.6vw, 60px) / 1 var(--pixel);
   letter-spacing: 0.01em;
-  text-shadow:
-    0 2px 0 #000,
-    0 0 30px rgba(255, 120, 60, 0.45);
+  text-shadow: 0 2px 0 #000, 0 0 30px rgba(255, 120, 60, 0.45);
 }
 
 .hook span {
@@ -672,6 +663,11 @@ h3 {
   align-self: flex-start;
 }
 
+.ko-text {
+  font-size: 18px;
+  color: var(--celadon);
+}
+
 .titan-tag {
   color: var(--accent2);
   font-style: italic;
@@ -691,7 +687,8 @@ h3 {
 
 /* the mystery card: a silhouetted jaw ring */
 .mystery .titan-card {
-  cursor: default;
+  cursor: pointer;
+  text-decoration: none;
   background:
     radial-gradient(120% 80% at 50% 10%, rgba(138, 60, 255, 0.25), transparent 70%),
     linear-gradient(180deg, #0b0614, #050309);
@@ -921,7 +918,8 @@ tbody th {
   text-align: center;
   background:
     radial-gradient(80% 120% at 50% 0%, rgba(255, 77, 141, 0.2), transparent 70%),
-    radial-gradient(60% 100% at 100% 100%, rgba(255, 154, 60, 0.18), transparent 70%), rgba(14, 10, 28, 0.85);
+    radial-gradient(60% 100% at 100% 100%, rgba(255, 154, 60, 0.18), transparent 70%),
+    rgba(14, 10, 28, 0.85);
   box-shadow:
     0 0 0 1px var(--line),
     0 30px 80px rgba(0, 0, 0, 0.5);
@@ -1159,26 +1157,11 @@ tbody th {
   }
 
   .gallery {
-    gap: 10px;
+    grid-template-columns: 1fr;
   }
 
-  .table-wrap {
-    padding: 12px 10px;
-  }
-
-  table {
-    font-size: 14px;
-  }
-
-  th,
-  td {
-    padding: 6px 4px;
-    white-space: normal;
-  }
-
-  kbd {
-    margin: 1px;
-    padding: 1px 4px;
+  .gallery li:first-child {
+    grid-column: auto;
   }
 }
 
@@ -1236,4 +1219,374 @@ tbody th {
     animation: none !important;
     transition: none !important;
   }
+}
+
+
+/* ================================================================ STORY LAYER (story.js) */
+.define {
+  margin: 22px 0 0;
+  font: 400 13px/1.4 var(--label);
+  letter-spacing: 0.12em;
+  color: var(--celadon);
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px #000;
+}
+.define [lang='ko'] {
+  font-size: 18px;
+  letter-spacing: 0.05em;
+  color: #fff;
+}
+.define i {
+  font-style: normal;
+  color: var(--mute);
+}
+
+/* a tall section with a pinned full-screen stage; scroll drives what is on it */
+.story,
+.scale {
+  position: relative;
+  height: 560vh;
+}
+.scale {
+  height: 420vh;
+}
+.story-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  isolation: isolate;
+}
+.story-cv {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+}
+/* soft fade into and out of the page so the stage has no hard seams */
+.story-stage::before,
+.story-stage::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18vh;
+  z-index: 0;
+  pointer-events: none;
+}
+.story-stage::before {
+  top: 0;
+  background: linear-gradient(var(--void), transparent);
+}
+.story-stage::after {
+  bottom: 0;
+  background: linear-gradient(transparent, var(--void));
+}
+
+.beats,
+.caps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.beats li {
+  position: absolute;
+  left: 50%;
+  bottom: 13vh;
+  z-index: 1;
+  width: min(820px, calc(100% - 2 * var(--gutter)));
+  transform: translate(-50%, 14px);
+  text-align: center;
+  opacity: 0;
+  transition:
+    opacity 0.9s ease,
+    transform 1.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+  pointer-events: none;
+}
+.beats li.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.beat-k {
+  margin: 0 0 14px;
+  font: 400 12px/1 var(--label);
+  letter-spacing: 0.4em;
+  color: var(--ember);
+}
+.beat-line {
+  margin: 0;
+  font: 400 clamp(38px, 5.4vw, 72px) / 0.98 var(--pixel);
+  color: #fff;
+  text-shadow:
+    0 2px 0 #000,
+    0 0 40px rgba(0, 0, 0, 0.9);
+}
+.beat-line em {
+  font-style: normal;
+  color: var(--gold);
+}
+.beat-horror {
+  color: #ff5a5a;
+  letter-spacing: 0.04em;
+  text-shadow:
+    0 2px 0 #000,
+    0 0 30px rgba(255, 40, 60, 0.55);
+  animation: shiver 5s steps(1) infinite;
+}
+@keyframes shiver {
+  0%, 91%, 100% { transform: none; }
+  92% { transform: translate(2px, 0); }
+  94% { transform: translate(-2px, 1px); }
+  96% { transform: translate(1px, -1px); }
+}
+.beat-sub {
+  max-width: 580px;
+  margin: 18px auto 0;
+  color: var(--dim);
+  font-size: clamp(15px, 1.4vw, 18px);
+  text-shadow: 0 1px 3px #000;
+}
+
+.scale-head {
+  position: absolute;
+  top: 12vh;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  text-align: center;
+  pointer-events: none;
+}
+.scale-head h2 {
+  margin: 0;
+}
+.caps li {
+  position: absolute;
+  left: 50%;
+  bottom: 12vh;
+  z-index: 1;
+  width: min(640px, calc(100% - 2 * var(--gutter)));
+  padding: 14px 20px;
+  transform: translate(-50%, 10px);
+  border-left: 2px solid var(--gold);
+  background: rgba(7, 4, 15, 0.72);
+  color: var(--dim);
+  font-size: clamp(15px, 1.4vw, 18px);
+  opacity: 0;
+  transition:
+    opacity 0.6s,
+    transform 0.8s;
+}
+.caps li b {
+  display: block;
+  font: 400 clamp(26px, 2.6vw, 34px) / 1.05 var(--pixel);
+  color: #fff;
+}
+.caps li[data-cap='3'] {
+  border-left-color: #ff4d6d;
+}
+.caps li[data-cap='3'] b {
+  color: #ff8a8a;
+}
+.caps li.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* titan cards: the idea each titan is, and one line of lore */
+.titan-essence {
+  font: 400 10px/1 var(--label);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+}
+.titan-lore {
+  color: #d9cfe6;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.titan-more {
+  margin-top: 4px;
+  font: 400 11px/1 var(--label);
+  letter-spacing: 0.1em;
+  color: #ff6d8a;
+}
+
+/* under the hood: a terminal-ish readout */
+.readout {
+  margin: clamp(56px, 8vw, 96px) auto 0;
+  max-width: 980px;
+  padding: 22px clamp(18px, 3vw, 32px) 26px;
+  border: 1px solid var(--line);
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
+    rgba(14, 10, 28, 0.7);
+}
+.readout-head {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 18px;
+  font: 400 12px/1 var(--label);
+  letter-spacing: 0.2em;
+  color: var(--celadon);
+  text-transform: uppercase;
+}
+.readout dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px 28px;
+  margin: 0;
+}
+.readout dl > div {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.5s,
+    transform 0.5s;
+}
+.readout dl > div.on {
+  opacity: 1;
+  transform: none;
+}
+.readout dt {
+  font: 400 clamp(30px, 3vw, 40px) / 1 var(--pixel);
+  color: var(--gold);
+}
+.readout dd {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+/* the Edge: full-bleed, the thing is too big for the page */
+.edge {
+  position: relative;
+  min-height: 130vh;
+  display: grid;
+  place-items: center;
+  margin-top: clamp(72px, 10vw, 128px);
+  overflow: hidden;
+  isolation: isolate;
+}
+.edge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(var(--void), transparent 22%, transparent 70%, var(--void));
+}
+.edge-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  padding: 0 var(--gutter) 18vh;
+  text-align: center;
+}
+.edge-words {
+  margin: 0 0 22px;
+  font: 400 clamp(44px, 7vw, 96px) / 0.95 var(--pixel);
+  color: #fff;
+}
+.edge-words span {
+  display: inline-block;
+  opacity: 0;
+  transform: scale(1.12);
+  filter: blur(3px);
+  transition:
+    opacity 0.25s,
+    transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 0.6s;
+  text-shadow:
+    0 2px 0 #000,
+    0 0 36px rgba(255, 40, 60, 0.6);
+}
+.edge-words span.on {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+.edge-words span:nth-child(4) {
+  color: #ff5a6a;
+}
+.edge-sub {
+  margin: 0 auto 14px;
+  color: #d9cfe6;
+  font-size: clamp(16px, 1.5vw, 19px);
+  text-shadow: 0 1px 3px #000, 0 0 20px #000;
+}
+.edge-meta {
+  margin: 0 0 26px;
+  font: 400 12px/1 var(--label);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #ff6d8a;
+}
+
+@media (max-width: 760px) {
+  .readout dl {
+    grid-template-columns: 1fr 1fr;
+  }
+  .story {
+    height: 480vh;
+  }
+  .beats li {
+    bottom: 9vh;
+  }
+}
+@media (max-width: 460px) {
+  .readout dl {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* reduced motion: no pinning; every beat and caption is simply there, the canvases hold one still frame */
+.story-static .story,
+.story-static .scale {
+  height: auto;
+}
+.story-static .story-stage {
+  position: relative;
+  height: auto;
+  min-height: 100vh;
+  padding: 18vh 0 14vh;
+}
+.story-static .beats li,
+.story-static .caps li {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  margin: 0 auto 48px;
+  transform: none;
+  opacity: 1;
+}
+.story-static .scale-head {
+  position: relative;
+  top: auto;
+  margin-bottom: 40vh;
+}
+.story-static .edge-words span,
+.story-static .readout dl > div {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+.story-static .beat-horror {
+  animation: none;
+}
+
+/* a soft dark pool behind story text so it always reads over the scene */
+.beats li::before,
+.edge-inner::before {
+  content: '';
+  position: absolute;
+  inset: -40px -80px;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(5, 3, 12, 0.78), rgba(5, 3, 12, 0.4) 60%, transparent);
+}
+.edge-inner::before {
+  inset: -60px -60px 8vh;
 }
