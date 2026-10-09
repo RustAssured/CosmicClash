@@ -112,6 +112,21 @@ S1 measured that two thirds of all lost matter came from drifting debris, not fr
   - it fits the original body limits.
 - **Phase 2 (우리) starts.**
 
+**D34 — Rebuild from the best of both (WJ, 2026-10-09; docs/COMPARISON_ORIGINAL_VS_NOW.md).** WJ compared the original six-titan
+game (6728a3e) with now.
+
+**Keep:** 360° orbit movement, weight and momentum, the Witness design, wounds that read.
+
+**Bring back:**
+- all six titans in the new engine, with the Witness replacing the Last One;
+- original-like sizes (titans about 90–180 px on the 640×360 screen; the Witness about 180 px tall, the Planet 121 px; 우리 scaled down to match);
+- vivid colour and spectacle: the per-stage palettes and bright emissives, and the **screen-wide effects and flashes** (WJ loves them). This relaxes D5 and the unification ceiling;
+- a pace between the original's frantic and today's slow.
+
+**Sound:** much more epic, cosmic and cataclysmic. Drop high-pitched sounds and whistles in favour of huge, dramatic impacts.
+
+**Program:** the 우리 / Mouth integration pauses (우리 stays in the game, scaled; the Mouth is deferred). Supersedes parts of D5, D31-6/D32 (Planet 180 px) and the unification rules.
+
 **D33 — FRACTURE bites solids (Lead, 2026-10-06).** On the 180 px Planet, FRACTURE blows took their contact and slab sizing from
 the outer atmosphere and ocean. They shed only fluid (1 solid mass in 1.5 s), which failed D1. FRACTURE now sizes its slabs from
 the first solid cells; the fluid it crosses vents as spray. Hashes change by design. The approved sampler for 우리 is proposal

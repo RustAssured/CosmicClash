@@ -1,62 +1,32 @@
-# PROGRESS — integrating 우리 (URI) and the Mouth (MASTER_PROMPT.md)
+# PROGRESS
 
-Resume from here. The rules and phases are in `MASTER_PROMPT.md`; the packs are in `uri/`, `mouth/`, `shared/`.
+Resume from here.
 
-## Done
-- **Before this program (the two-titan slice):** the Witness (v3, WJ's concept) and the Planet are playable. Gate C was
-  delivered (`docs/gates/GATE_C.md`), and D30 was confirmed. The other Gate C decisions are open.
-- **Phase 0 audit:** `docs/integration/GATE_0.md` (2026-10-06). No code changes.
+## Current direction: D34, rebuild from the best of both (2026-10-09)
+WJ compared the original six-titan game (6728a3e, the online version; built in `.scratch/orig`) with now
+(docs/COMPARISON_ORIGINAL_VS_NOW.md).
+- **Keep:** orbit movement, weight, the Witness design, readable wounds.
+- **Bring back:**
+  - all six titans (the Witness replaces the Last One);
+  - original-like sizes;
+  - vivid colour, screen-wide effects and flashes (Comfort setting for photosensitivity);
+  - a pace in between.
+- **Sound:** epic, cosmic, cataclysmic; no thin whistles.
+- **Paused:** the 우리 / Mouth integration (MASTER_PROMPT.md). 우리 stays in the game, scaled down; the Mouth is deferred
+  (Gate 3A proposal in docs/integration/GATE_3A.md).
 
-- **Gate 0 approved** (D31 in docs/DECISIONS.md).
+## In progress (round R1)
+- **S5:** colour and spectacle back (stage palettes, all original stages, screen-wide flashes, bloom; Comfort mode).
+- **S2:** the Witness to about 180 px; a plan to scale 우리 to about 200 px (with S4).
+- **S3:** the Planet back to 121 px; the returning titans' matchups.
+- **S1:** the four returning titans playing properly in the new engine; pace in between; a quick round-robin.
+- **S6** (new, audio): the epic sound overhaul.
 
-- **Phase 1 delivered and Gate 1 approved** (D32). The Planet is 180 px.
+## Next
+- **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.
+- Then a full balance pass.
 
-- **Phase 2A + 2B committed** (a42c5ff).
-  - **2A:** 우리 at rest is pixel-identical to the oracle's rest frame (77,396 / 77,396 pixels), with a 100 % rest silhouette; the
-    oracle's shading, cores, loop, moon and rubble fists.
-  - **2B:** the kinetics port matches the oracle in 16 move × side runs (13 exact, 3 within one oracle frame), frozen as a
-    regression fixture.
-- **Open for WJ:** the highlight ceiling for 우리 (oracle top step vs the unification rule; switch `URI_CEILING_EXEMPT`).
-
-- **Gate 2C committed** (9ce8637): 우리's damage and breaking, matching the oracle's behaviour.
-- **Gate 3A proposal written** (docs/integration/GATE_3A.md); it waits for WJ's 7 answers.
-
-## In progress
-- **S1, Gate 2D:**
-  - the `healthPct` hook;
-  - input buffering and cancel windows;
-  - fist hitboxes;
-  - hitstop via `takeImpact`;
-  - the VFX weights;
-  - 우리's AI;
-  - the roster (proposal 173).
-- **S5:** 2C render leftovers (plume when a pylon is lost, the oracle's break ring, damage visuals in game).
-
-## Earlier: Phase 2A (우리 render parity), plus the Gate 1 follow-ups
-- **S4:** the uri_rig.json loader into matter region bodies, the 4-sample majority sampler (contract + GLSL), the rest
-  silhouette overlap test.
-- **S2:** 우리's titan definition, behaviour and rig hierarchy; never mirrored. 2B (kinetics) follows.
-- **S5:**
-  - the Planet's atmosphere glow back;
-  - the one sky live in play;
-  - a quiet perf re-measure;
-  - then 우리's shading, cores, loop and moon.
-- **S3:** the Brace test at 180 px.
-- **Gate 2A:** rest silhouette 100 %; a side-by-side with the oracle at rest; no smear at 30° / 90° / 150°.
-
-## Phase 1 assignments (historical)
-- **S5:** master palette with Bayer palette snap, one global light for titans, shared bloom and outline, the lit part pass
-  foundation, the shared VFX module (four weights).
-- **S1:** the debug overlay framework (toggle, sliders, diagnostics registry), and the hitstop/shake table by weight with
-  the cap raised for heavy and catastrophic.
-- **S3:** the Planet enlarged to read as an equal, with size options for WJ.
-
-## Next gate
-- **Gate 1:**
-  - captures of the four VFX weights on a neutral background;
-  - a before/after of the Witness, the Planet and the arenas through the master palette and one sky;
-  - the Planet size options.
-
-## Open questions
-- **The Mouth's health readout:** not a bar; propose at Gate 3A.
-- **Backdrops:** new, vaster ones after the integration (WJ).
+## History
+- Slice Gates A–C delivered (docs/gates/).
+- Integration Gates 0, 1, 2A–2D delivered (docs/integration/).
+- Decisions D23–D34 in docs/DECISIONS.md.
