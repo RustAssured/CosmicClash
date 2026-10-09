@@ -214,7 +214,8 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
         if (xx >= 0 && yy >= 0 && xx < w && yy < h) visit(yy * w + xx, sx, sy);
       }
   }
-  const target = Math.round(f * missing);  if (target > 0) {
+  const target = Math.round(f * missing);
+  if (target > 0) {
     // 2. Priority = BFS distance + noise (ragged front); order ascending via packed float sort.
     const keys = new Float64Array(qt);
     for (let k = 0; k < qt; k++) {

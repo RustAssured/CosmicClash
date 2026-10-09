@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import {
   DEFAULT_ARENA,
   DEFAULT_LIGHTING,
@@ -11,7 +11,7 @@ import { createMatterWorld } from '@/matter';
 import { createMatch, createScriptSource, type Match } from '@/sim';
 import { getTitanDef, WITNESS_SCALE, witnessDef } from '@/titans';
 import { createFighter } from './index';
-import type { FighterImpl } from './fighter';
+import { PACE, type FighterImpl } from './fighter';
 import type { WitnessBehaviour } from './behaviours/witness';
 import { makeMatch, skipIntro } from './testing/harness';
 
@@ -227,6 +227,11 @@ describe('the Witness in game (witness=1)', () => {
     expect(none).toBe(0);
   });
   it('FRACTURE GAZE: breaking the carapace open opens inner eyes, and every open eye adds a beam (more damage)', () => {
+    // at the matter's own scale: at the D34 pace (×2.1) the open gaze takes the asteroid near its KO within the window, where
+    // integrityPct saturates (mass dealt is still 3.3× the closed gaze's, but the % reads only 1.2×)
+    const pace = PACE.damageTaken;
+    PACE.damageTaken = 1;
+    onTestFinished(() => void (PACE.damageTaken = pace));
     const gaze = (openUp: boolean): { eyes: number; dealt: number } => {
       const { m, w, beh } = witnessMatch(7, 'asteroid');
       const foe = m.fighters[1] as FighterImpl;

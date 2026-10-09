@@ -127,6 +127,11 @@ game (6728a3e) with now.
 
 **Program:** the 우리 / Mouth integration pauses (우리 stays in the game, scaled; the Mouth is deferred). Supersedes parts of D5, D31-6/D32 (Planet 180 px) and the unification rules.
 
+**D35 — The vibe is right; the Mouth becomes a final boss (WJ, 2026-10-09).** After round R1, WJ: "Love it… just love the vibe".
+- **Balance:** imperfect balance against the AI is accepted for now.
+- **The Mouth:** comes later as **a final boss** rather than a roster fighter. Gate 3A (docs/integration/GATE_3A.md) is the starting point for that design.
+- **Next:** footage and shots for a website, and promotion.
+
 **D33 — FRACTURE bites solids (Lead, 2026-10-06).** On the 180 px Planet, FRACTURE blows took their contact and slab sizing from
 the outer atmosphere and ocean. They shed only fluid (1 solid mass in 1.5 s), which failed D1. FRACTURE now sizes its slabs from
 the first solid cells; the fluid it crosses vents as spray. Hashes change by design. The approved sampler for 우리 is proposal

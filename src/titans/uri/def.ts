@@ -248,6 +248,8 @@ export function uriDef(): TitanDef {
     ui: { accent: '#ffb060', accent2: '#6a92f8', tagline: 'It refuses to fall apart.' },
     // D31-2: the pack defines no movement verb and no defence for 우리; none is invented
     unboundSlots: ['surge', 'guard'],
+    // D34 round-robin (S1, n = 4 per pair at PACE 2.1): provisional until the full balance pass
+    ...({ balance: { power: 3.0, durability: 1.1 } } as object),
   };
   return DEF;
 }
