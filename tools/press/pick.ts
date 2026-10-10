@@ -32,7 +32,10 @@ const SIGNATURE: Record<string, string> = {
   'asteroid:rubble-pile': 'asteroid-rubble',
 };
 const per = Number(arg('per', '6'));
-const scan = JSON.parse(readFileSync(`${WORK}/scan.json`, 'utf8')) as Record<string, ScanResult & { cfg: PressCfg }>;
+const scan = JSON.parse(readFileSync(`${WORK}/scan.json`, 'utf8')) as Record<
+  string,
+  ScanResult & { cfg: PressCfg }
+>;
 
 const weightOf = (m: Moment): number =>
   m.k === 'ko'
@@ -63,9 +66,11 @@ for (const [key, r] of Object.entries(scan)) {
   };
   for (const m of ms) {
     if (m.k === 'ko') add('ko', m, `KO slot ${m.slot}`);
-    else if (m.k === 'hit' && m.d === 'catastrophic') add(`cat-${r.cfg[m.slot === 0 ? 'a' : 'b']}`, m, `catastrophic on ${m.titan}`);
+    else if (m.k === 'hit' && m.d === 'catastrophic')
+      add(`cat-${r.cfg[m.slot === 0 ? 'a' : 'b']}`, m, `catastrophic on ${m.titan}`);
     else if (m.k === 'ult') add(`ult-${m.titan}`, m, `ultimate ${m.titan}`);
-    else if (m.k === 'cue' && SIGNATURE[`${m.titan}:${m.d}`]) add(SIGNATURE[`${m.titan}:${m.d}`]!, m, `${m.titan} ${m.d}`);
+    else if (m.k === 'cue' && SIGNATURE[`${m.titan}:${m.d}`])
+      add(SIGNATURE[`${m.titan}:${m.d}`]!, m, `${m.titan} ${m.d}`);
   }
 }
 // best per category, at most two per config, anchors 6 s apart
@@ -82,7 +87,9 @@ for (const [cat, list] of [...byCat.entries()].sort()) {
     keep.push(c);
   }
   picked.push(...keep);
-  console.log(`${cat}: ${keep.map((k) => `${k.score.toFixed(0)} ${k.id.split('@').slice(1).join('@')}`).join(' | ')}`);
+  console.log(
+    `${cat}: ${keep.map((k) => `${k.score.toFixed(0)} ${k.id.split('@').slice(1).join('@')}`).join(' | ')}`,
+  );
 }
 writeFileSync(`${WORK}/candidates.json`, JSON.stringify(picked, null, 1));
 console.log(`${picked.length} candidates`);

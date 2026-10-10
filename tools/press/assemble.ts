@@ -123,7 +123,12 @@ interface Card {
 type Part = Seg | Card;
 const isCard = (p: Part): p is Card => 'image' in p;
 
-function cut(parts: Part[], file: string, vf: (label: string, i: number, p: Part) => string, enc: string[]): void {
+function cut(
+  parts: Part[],
+  file: string,
+  vf: (label: string, i: number, p: Part) => string,
+  enc: string[],
+): void {
   const inputs: string[] = [];
   const idx = new Map<string, number>();
   const input = (path: string, img = false): number => {
@@ -165,7 +170,19 @@ function cut(parts: Part[], file: string, vf: (label: string, i: number, p: Part
   });
   g.push(`${labels.join('')}concat=n=${parts.length}:v=1:a=1[v][a]`);
   writeFileSync(`${TMP}/graph.txt`, g.join(';\n'));
-  ff([...inputs, '-filter_complex_script', `${TMP}/graph.txt`, '-map', '[v]', '-map', '[a]', '-r', '60', ...enc, file]);
+  ff([
+    ...inputs,
+    '-filter_complex_script',
+    `${TMP}/graph.txt`,
+    '-map',
+    '[v]',
+    '-map',
+    '[a]',
+    '-r',
+    '60',
+    ...enc,
+    file,
+  ]);
   const d = parts.reduce((a, p) => a + (isCard(p) ? p.d : span(p).d), 0);
   console.log(`${file}: ${d.toFixed(1)} s, ${size(file)}`);
 }
@@ -272,11 +289,44 @@ if (on('vertical')) {
     { clip: 'uri-break-apart', at: 3781, pre: 1.6, post: 3.0 },
   ];
   const last = span(parts[parts.length - 1] as Seg);
-  parts.push({ image: TITLE, d: 3.5, audio: { clip: 'uri-break-apart', from: last.ss + last.d }, fadeIn: 0.4 });
+  parts.push({
+    image: TITLE,
+    d: 3.5,
+    audio: { clip: 'uri-break-apart', from: last.ss + last.d },
+    fadeIn: 0.4,
+  });
   const raw = `${TMP}/vertical-raw.mp4`;
-  cut(parts, raw, vf, ['-c:v', 'libx264', '-preset', 'medium', '-crf', '8', '-pix_fmt', 'yuv444p', '-c:a', 'pcm_s16le', '-f', 'mov']);
+  cut(parts, raw, vf, [
+    '-c:v',
+    'libx264',
+    '-preset',
+    'medium',
+    '-crf',
+    '8',
+    '-pix_fmt',
+    'yuv444p',
+    '-c:a',
+    'pcm_s16le',
+    '-f',
+    'mov',
+  ]);
   const file = out(`${PRESS}/video/adeuk-titans-vertical-1080x1920.mp4`);
-  ff(['-i', raw, '-loop', '1', '-i', top, '-filter_complex', '[0:v][1:v]overlay=0:0:shortest=1[v]', '-map', '[v]', '-map', '0:a', ...H264(16), file]);
+  ff([
+    '-i',
+    raw,
+    '-loop',
+    '1',
+    '-i',
+    top,
+    '-filter_complex',
+    '[0:v][1:v]overlay=0:0:shortest=1[v]',
+    '-map',
+    '[v]',
+    '-map',
+    '0:a',
+    ...H264(16),
+    file,
+  ]);
   console.log(`${file}: ${size(file)}`);
 }
 
@@ -345,9 +395,7 @@ if (on('loops')) {
 
 /* ---------- 4. hero stills: lossless 1080p frames ×2 nearest → 3840×2160 ---------- */
 if (on('stills')) {
-  const picks = arg('picks', '')
-    .split(',')
-    .filter(Boolean);
+  const picks = arg('picks', '').split(',').filter(Boolean);
   const list = picks.length ? picks : (JSON.parse(readFileSync(`${WORK}/stills.json`, 'utf8')) as string[]);
   let n = 0;
   for (const name of list) {

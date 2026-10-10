@@ -66,12 +66,24 @@ const patch = (html: string): string => {
     html = html.replace(from, to);
   };
   rep('for(let y=Math.floor(opp.y-58);', 'if(window.__noOpp!==true)for(let y=Math.floor(opp.y-58);');
-  rep('for(let k=0;k<6;k++){const r=rng(k*13+5);rock(', 'if(window.__noRocks!==true)for(let k=0;k<6;k++){const r=rng(k*13+5);rock(');
+  rep(
+    'for(let k=0;k<6;k++){const r=rng(k*13+5);rock(',
+    'if(window.__noRocks!==true)for(let k=0;k<6;k++){const r=rng(k*13+5);rock(',
+  );
   rep('if(shake>.4){', 'if(shake>.4&&window.__noShake!==true){');
   // the prototype's readability aids (the red tell ring, the speed-echo rings) are UI, not the creature
-  rep("if(move&&(lab==='load'||lab==='reach'))ringPx(", "if(window.__noTell!==true&&move&&(lab==='load'||lab==='reach'))ringPx(");
-  rep('for(const q of trail)if(q.a>.3)ringPx(', 'for(const q of trail)if(window.__noTell!==true&&q.a>.3)ringPx(');
-  rep("const cv=document.getElementById('cv'),gx=cv.getContext('2d');", "window.__fig=fig;window.__emc=emc;const cv=document.getElementById('cv'),gx=cv.getContext('2d');");
+  rep(
+    "if(move&&(lab==='load'||lab==='reach'))ringPx(",
+    "if(window.__noTell!==true&&move&&(lab==='load'||lab==='reach'))ringPx(",
+  );
+  rep(
+    'for(const q of trail)if(q.a>.3)ringPx(',
+    'for(const q of trail)if(window.__noTell!==true&&q.a>.3)ringPx(',
+  );
+  rep(
+    "const cv=document.getElementById('cv'),gx=cv.getContext('2d');",
+    "window.__fig=fig;window.__emc=emc;const cv=document.getElementById('cv'),gx=cv.getContext('2d');",
+  );
   rep(
     'window.__F={DMG,',
     'window.__F={setFight:v=>{fightBack=v;},setOppMoves:v=>{oppMoves=v;},setVariant:v=>{variant=v;},setSlide:v=>{slideIn=v;sv=0;},DMG,',
@@ -100,14 +112,22 @@ try {
       };
       Object.assign(window, { __noOpp: true, __noRocks: true, __noShake: true, __noTell: true });
     });
-    await page.route('**/mouth-oracle.html', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: html }));
+    await page.route('**/mouth-oracle.html', (r) =>
+      r.fulfill({ status: 200, contentType: 'text/html', body: html }),
+    );
     await page.goto(`${url}/mouth-oracle.html`);
     await page.waitForFunction(() => (window as unknown as { __F?: unknown }).__F !== undefined);
     const dir = `${TWORK}/mouth-${m.id}`;
     mkdirSync(dir, { recursive: true });
     await page.evaluate(
       ([tx, ty, v]) => {
-        const F = (window as unknown as { __F: Record<string, (...a: unknown[]) => unknown> & { opp: { x: number; y: number; vx: number; vy: number } } }).__F;
+        const F = (
+          window as unknown as {
+            __F: Record<string, (...a: unknown[]) => unknown> & {
+              opp: { x: number; y: number; vx: number; vy: number };
+            };
+          }
+        ).__F;
         F.setFight!(false);
         F.setOppMoves!(false);
         F.setVariant!(v);
@@ -134,7 +154,8 @@ try {
           both.set(a, 0);
           both.set(e, a.length);
           let out = '';
-          for (let i = 0; i < both.length; i += 0x8000) out += String.fromCharCode(...both.subarray(i, i + 0x8000));
+          for (let i = 0; i < both.length; i += 0x8000)
+            out += String.fromCharCode(...both.subarray(i, i + 0x8000));
           return btoa(out);
         },
         [m.s(f), f === m.bite] as const,

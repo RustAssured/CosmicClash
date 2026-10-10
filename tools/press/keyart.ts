@@ -85,7 +85,11 @@ for (let y = 0; y < H; y++) {
     const c = art[y * W + x]!;
     const f = 1 - k;
     art[y * W + x] =
-      (0xff000000 | (Math.round(((c >>> 16) & 255) * f) << 16) | (Math.round(((c >>> 8) & 255) * f) << 8) | Math.round((c & 255) * f)) >>> 0;
+      (0xff000000 |
+        (Math.round(((c >>> 16) & 255) * f) << 16) |
+        (Math.round(((c >>> 8) & 255) * f) << 8) |
+        Math.round((c & 255) * f)) >>>
+      0;
   }
 }
 const scaled = (id: TitanId, k: number): Portrait => {
@@ -130,8 +134,7 @@ for (let y = 0; y < logo.h * lk; y++)
     else {
       const d = art[i]!;
       const t = a / 255;
-      const mix = (s: number): number =>
-        Math.round(((c >>> s) & 255) * t + ((d >>> s) & 255) * (1 - t)) << s;
+      const mix = (s: number): number => Math.round(((c >>> s) & 255) * t + ((d >>> s) & 255) * (1 - t)) << s;
       art[i] = (0xff000000 | mix(16) | mix(8) | mix(0)) >>> 0;
     }
   }

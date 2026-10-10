@@ -37,7 +37,10 @@ try {
   const worker = await openWorker(browser, url);
   if (process.argv.includes('--check')) {
     const c: PressCfg = { a: 'uri', b: 'lastone', stage: 'mausoleum', seed: 21, ai: 4 };
-    const r = (await worker.evaluate(([c, n]) => window.__press!.scan(c, n), [c, 1300] as const)) as ScanResult;
+    const r = (await worker.evaluate(([c, n]) => window.__press!.scan(c, n), [
+      c,
+      1300,
+    ] as const)) as ScanResult;
     const { page } = await openGame(browser, `${url}/?${query(c)}&freeze=1&aftermath=0&q=0&hud=0`, {
       width: 640,
       height: 360,
@@ -59,9 +62,13 @@ try {
     for (const [a, b, stage] of PAIRS) {
       const c: PressCfg = { a, b, stage, seed, ai: 4 };
       const t0 = Date.now();
-      const r = (await worker.evaluate(([c, n]) => window.__press!.scan(c, n), [c, maxTicks] as const)) as ScanResult;
+      const r = (await worker.evaluate(([c, n]) => window.__press!.scan(c, n), [
+        c,
+        maxTicks,
+      ] as const)) as ScanResult;
       out[cfgKey(c)] = { ...r, cfg: c };
-      const n = (k: string, d?: string): number => r.moments.filter((m) => m.k === k && (!d || m.d === d)).length;
+      const n = (k: string, d?: string): number =>
+        r.moments.filter((m) => m.k === k && (!d || m.d === d)).length;
       console.log(
         `${cfgKey(c)}: end ${r.endTick}, cat ${n('hit', 'catastrophic')}, heavy ${n('hit', 'heavy')}, ko ${n('ko')}, cues ${n('cue')}, ult ${n('ult')} (${((Date.now() - t0) / 1000).toFixed(0)} s)`,
       );

@@ -29,10 +29,11 @@ try {
     if (only && !only.split(',').includes(s.name)) continue;
     if (!redo && existsSync(`${CLIPS}/${s.name}.mov`)) continue;
     const t = Date.now();
-    const au = (await worker.evaluate(
-      ([c, a, b]) => window.__press!.audio(c, a, b, 3),
-      [s.cfg, s.t0, s.t1] as const,
-    )) as AudioResult;
+    const au = (await worker.evaluate(([c, a, b]) => window.__press!.audio(c, a, b, 3), [
+      s.cfg,
+      s.t0,
+      s.t1,
+    ] as const)) as AudioResult;
     const wav = `${CLIPS}/${s.name}.wav`;
     writeFileSync(wav, Buffer.from(au.wav, 'base64'));
     const ticks = au.times.length;
@@ -91,7 +92,8 @@ try {
       });
       const png = await page.screenshot({ type: 'png' });
       if (s.stills.includes(s.t0 + i)) writeFileSync(`${STILLS}/${s.name}-${s.t0 + i}.png`, png);
-      for (let r = 0; r < repeat[i]!; r++) if (!ff.stdin.write(png)) await new Promise((res) => ff.stdin.once('drain', res));
+      for (let r = 0; r < repeat[i]!; r++)
+        if (!ff.stdin.write(png)) await new Promise((res) => ff.stdin.once('drain', res));
     }
     ff.stdin.end();
     const code = await done;

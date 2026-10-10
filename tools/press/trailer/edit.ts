@@ -31,7 +31,9 @@ const SEG = `${TWORK}/edit`;
 mkdirSync(SEG, { recursive: true });
 
 function ff(args: string[]): void {
-  const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-sws_flags', 'neighbor', ...args], { stdio: 'inherit' });
+  const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-sws_flags', 'neighbor', ...args], {
+    stdio: 'inherit',
+  });
   if (r.status !== 0) throw new Error(`ffmpeg failed: ${args.join(' ')}`);
 }
 const mb = (p: string): string => `${(statSync(p).size / 1048576).toFixed(1)} MB`;
@@ -73,7 +75,8 @@ function renderCut(c: Cut, file: string): void {
   if ('shot' in s) {
     const f0 = startFrame(c);
     const total = shotLog(s.shot).frames.length;
-    if (f0 + n > total) throw new Error(`${c.name}: needs frames ${f0}–${f0 + n} of ${s.shot} (has ${total})`);
+    if (f0 + n > total)
+      throw new Error(`${c.name}: needs frames ${f0}–${f0 + n} of ${s.shot} (has ${total})`);
     inputs.push('-i', `${TWORK}/${s.shot}.mov`);
     g.push(`[0:v]trim=start_frame=${f0}:end_frame=${f0 + n},setpts=PTS-STARTPTS,format=yuv444p[b]`);
   } else if ('seq' in s) {
@@ -83,7 +86,9 @@ function renderCut(c: Cut, file: string): void {
     // WJ's teaser: already the 640×360 frame ×3; its 30 fps frames are held for two 60 fps frames (no blending)
     if (!existsSync(TEASER)) throw new Error(`${TEASER} is not rendered yet (S7)`);
     inputs.push('-ss', String(s.from), '-t', String(c.dur + 0.1), '-i', TEASER);
-    g.push(`[0:v]fps=60,scale=1920:1080:flags=neighbor,trim=end_frame=${n},setpts=PTS-STARTPTS,format=yuv444p[b]`);
+    g.push(
+      `[0:v]fps=60,scale=1920:1080:flags=neighbor,trim=end_frame=${n},setpts=PTS-STARTPTS,format=yuv444p[b]`,
+    );
   } else if ('card' in s) {
     inputs.push('-loop', '1', '-framerate', '60', '-i', `${TWORK}/cards/${s.card}.png`);
     g.push(`[0:v]trim=end_frame=${n},setpts=PTS-STARTPTS,scale=1920:1080:flags=neighbor,format=yuv444p[b]`);
@@ -94,7 +99,14 @@ function renderCut(c: Cut, file: string): void {
   let last = 'b';
   let k = 1;
   if (c.mouth) {
-    inputs.push('-framerate', '60', '-start_number', String(c.mouth.from), '-i', `${TWORK}/${c.mouth.seq}/%04d.png`);
+    inputs.push(
+      '-framerate',
+      '60',
+      '-start_number',
+      String(c.mouth.from),
+      '-i',
+      `${TWORK}/${c.mouth.seq}/%04d.png`,
+    );
     g.push(
       `[${k}:v]setpts=PTS-STARTPTS+${c.mouth.at}/TB,scale=1920:1080:flags=neighbor[m];[${last}][m]overlay=0:${(c.mouth.dy ?? 0) * 3}:eof_action=pass:format=auto[o${k}]`,
     );
@@ -110,7 +122,24 @@ function renderCut(c: Cut, file: string): void {
     k++;
   }
   g.push(`[${last}]trim=end_frame=${n},format=yuv444p[v]`);
-  ff([...inputs, '-filter_complex', g.join(';'), '-map', '[v]', '-r', '60', '-c:v', 'libx264', '-preset', 'medium', '-crf', '6', '-pix_fmt', 'yuv444p', file]);
+  ff([
+    ...inputs,
+    '-filter_complex',
+    g.join(';'),
+    '-map',
+    '[v]',
+    '-r',
+    '60',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'medium',
+    '-crf',
+    '6',
+    '-pix_fmt',
+    'yuv444p',
+    file,
+  ]);
 }
 
 interface CueRow {
@@ -165,10 +194,14 @@ function build(cuts: Cut[], tag: string): { master: string; rows: CueRow[]; dur:
         startAlpha: fr[0]!.alpha,
         endTick: fr[fr.length - 1]!.tick,
         slowMotion: rates,
-        events: (s.events ?? []).map((e) => ({ ...e, at: +(t + (frameOf(s.shot, e.tick) - f0) / 60).toFixed(3) })),
+        events: (s.events ?? []).map((e) => ({
+          ...e,
+          at: +(t + (frameOf(s.shot, e.tick) - f0) / 60).toFixed(3),
+        })),
         shot: L.shot.what,
       };
-    } else if ('seq' in s) source = { kind: 'black', made: s.kind ?? 'made-in-code', frames: s.seq, from: s.from, note: s.note };
+    } else if ('seq' in s)
+      source = { kind: 'black', made: s.kind ?? 'made-in-code', frames: s.seq, from: s.from, note: s.note };
     else if ('teaser' in s)
       source = {
         kind: 'teaser',
@@ -179,9 +212,30 @@ function build(cuts: Cut[], tag: string): { master: string; rows: CueRow[]; dur:
       };
     else if ('card' in s) source = { kind: s.card === 'logo-card' ? 'logo' : 'black', card: s.card };
     else source = { kind: 'black' };
-    if (c.mouth) source.mouth = { kind: 'oracle', file: 'mouth/reference/demos/mouth-LOCKED-full.html', frames: c.mouth.seq, from: c.mouth.from, at: +(t + c.mouth.at).toFixed(3), note: c.mouth.note };
-    if (c.over?.length) source.cards = c.over.map((o) => ({ card: o.card, in: +(t + o.from).toFixed(3), out: +(t + o.to).toFixed(3) }));
-    rows.push({ id: c.name, n: c.shotNo, name: c.name, in: +t.toFixed(3), out: +(t + n / 60).toFixed(3), source, sound: c.sound });
+    if (c.mouth)
+      source.mouth = {
+        kind: 'oracle',
+        file: 'mouth/reference/demos/mouth-LOCKED-full.html',
+        frames: c.mouth.seq,
+        from: c.mouth.from,
+        at: +(t + c.mouth.at).toFixed(3),
+        note: c.mouth.note,
+      };
+    if (c.over?.length)
+      source.cards = c.over.map((o) => ({
+        card: o.card,
+        in: +(t + o.from).toFixed(3),
+        out: +(t + o.to).toFixed(3),
+      }));
+    rows.push({
+      id: c.name,
+      n: c.shotNo,
+      name: c.name,
+      in: +t.toFixed(3),
+      out: +(t + n / 60).toFixed(3),
+      source,
+      sound: c.sound,
+    });
     t += n / 60;
   });
   writeFileSync(`${SEG}/${tag}.txt`, list.join('\n'));
@@ -190,12 +244,47 @@ function build(cuts: Cut[], tag: string): { master: string; rows: CueRow[]; dur:
   return { master, rows, dur: t };
 }
 
-const X264 = ['-c:v', 'libx264', '-preset', 'slow', '-crf', '14', '-tune', 'animation', '-pix_fmt', 'yuv420p', '-r', '60'];
-const VP9 = ['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '22', '-row-mt', '1', '-deadline', 'good', '-pix_fmt', 'yuv420p'];
+const X264 = [
+  '-c:v',
+  'libx264',
+  '-preset',
+  'slow',
+  '-crf',
+  '14',
+  '-tune',
+  'animation',
+  '-pix_fmt',
+  'yuv420p',
+  '-r',
+  '60',
+];
+const VP9 = [
+  '-c:v',
+  'libvpx-vp9',
+  '-b:v',
+  '0',
+  '-crf',
+  '22',
+  '-row-mt',
+  '1',
+  '-deadline',
+  'good',
+  '-pix_fmt',
+  'yuv420p',
+];
 function encode(master: string, mix: string, mp4: string, webm?: string): void {
   const hasMix = existsSync(mix);
   const a = hasMix ? ['-i', mix, '-map', '0:v', '-map', '1:a', '-shortest'] : ['-map', '0:v'];
-  ff(['-i', master, ...a, ...X264, ...(hasMix ? ['-c:a', 'aac', '-b:a', '256k'] : []), '-movflags', '+faststart', mp4]);
+  ff([
+    '-i',
+    master,
+    ...a,
+    ...X264,
+    ...(hasMix ? ['-c:a', 'aac', '-b:a', '256k'] : []),
+    '-movflags',
+    '+faststart',
+    mp4,
+  ]);
   console.log(`${mp4}: ${mb(mp4)}${hasMix ? '' : ' (picture lock, no sound yet)'}`);
   if (webm) {
     ff(['-i', master, ...a, ...VP9, ...(hasMix ? ['-c:a', 'libopus', '-b:a', '160k'] : []), webm]);
@@ -207,15 +296,20 @@ const ABOUT =
   'ADEUK: TITANS trailer cue sheet (docs/site/TRAILER.md), 60 fps, times in seconds of the edit. Game shots: source.cfg + t0 (the render starts at that tick, harness ?mode=aivai&…&trailer=1), times[i] = when tick t0+i is first shown in the render, offset = where this cut starts in the render (so edit time = in + times[i] - offset). slowMotion lists the picture rate (sim ticks per frame; game KO slow motion included). events = the key blows/cues at their edit time. kind black/logo = no game sound (made-in-code pictures, cards).';
 /** S6's sheet: { shots: [{ id, in, out, source, sound }], beats } (+ my extras inside each source). */
 function writeSheet(path: string, rows: CueRow[], dur: number, beats: Record<string, number>): void {
-  writeFileSync(path, JSON.stringify({ about: ABOUT, duration: +dur.toFixed(3), shots: rows, beats }, null, 1));
+  writeFileSync(
+    path,
+    JSON.stringify({ about: ABOUT, duration: +dur.toFixed(3), shots: rows, beats }, null, 1),
+  );
   console.log(path);
 }
 const at = (rows: CueRow[], id: string, k: 'in' | 'out'): number => rows.find((r) => r.id === id)![k];
 const eventAt = (rows: CueRow[], id: string): number =>
-  ((rows.find((r) => r.id === id)!.source.events as { at: number }[] | undefined) ?? [])[0]?.at ?? at(rows, id, 'in');
+  ((rows.find((r) => r.id === id)!.source.events as { at: number }[] | undefined) ?? [])[0]?.at ??
+  at(rows, id, 'in');
 if (on('60')) {
   const r = build(CUT_60, 't60');
-  if (!sheetOnly) encode(r.master, `${TRAILER}/mix-60.wav`, `${TRAILER}/trailer-60.mp4`, `${TRAILER}/trailer-60.webm`);
+  if (!sheetOnly)
+    encode(r.master, `${TRAILER}/mix-60.wav`, `${TRAILER}/trailer-60.mp4`, `${TRAILER}/trailer-60.webm`);
   writeSheet(`${TRAILER}/cuesheet.json`, r.rows, r.dur, {
     flash: +(OPEN_TOUCH / 60).toFixed(3),
     firstImpact: eventAt(r.rows, 'first-impact'),
@@ -235,7 +329,8 @@ if (on('15') || on('vertical')) {
     logo: at(r.rows, 'logo', 'in'),
   });
   if (on('15') && !sheetOnly) encode(r.master, `${TRAILER}/mix-15.wav`, `${TRAILER}/trailer-15.mp4`);
-  if (on('vertical') && !sheetOnly) vertical(r.master, `${TRAILER}/mix-15.wav`, 't15', `${TRAILER}/trailer-vertical.mp4`);
+  if (on('vertical') && !sheetOnly)
+    vertical(r.master, `${TRAILER}/mix-15.wav`, 't15', `${TRAILER}/trailer-vertical.mp4`);
 }
 
 /** 1080×1920: the 640×360 frame at ×1 (area reduction is exact on the ×3 blocks), the logo above, a line below. */
@@ -297,7 +392,13 @@ if (on('final')) {
     lastFlash: eventAt(r.rows, 'first-impact'),
     teaserHunt: mOut,
   });
-  if (!sheetOnly) encode(r.master, `${TRAILER}/mix-final.wav`, `${TRAILER}/trailer-final.mp4`, `${TRAILER}/trailer-final.webm`);
+  if (!sheetOnly)
+    encode(
+      r.master,
+      `${TRAILER}/mix-final.wav`,
+      `${TRAILER}/trailer-final.mp4`,
+      `${TRAILER}/trailer-final.webm`,
+    );
 }
 if (on('final15') || on('finalvertical')) {
   const r = build(CUT_FINAL_15, 'final15');
@@ -306,7 +407,8 @@ if (on('final15') || on('finalvertical')) {
     montageOut: at(r.rows, 'teaser-edge', 'in'),
     logo: at(r.rows, 'teaser-logo', 'in'),
   });
-  if (on('final15') && !sheetOnly) encode(r.master, `${TRAILER}/mix-final-15.wav`, `${TRAILER}/trailer-final-15.mp4`);
+  if (on('final15') && !sheetOnly)
+    encode(r.master, `${TRAILER}/mix-final-15.wav`, `${TRAILER}/trailer-final-15.mp4`);
   if (on('finalvertical') && !sheetOnly)
     vertical(r.master, `${TRAILER}/mix-final-15.wav`, 'final15', `${TRAILER}/trailer-final-vertical.mp4`);
 }
@@ -327,7 +429,8 @@ if (on('posters')) {
 if (on('web') && !sheetOnly) {
   const master = `${SEG}/final-master.mov`;
   const mix = `${TRAILER}/mix-final.wav`;
-  if (!existsSync(master) || !existsSync(mix)) throw new Error('web copies need the final master and S6 mix-final.wav');
+  if (!existsSync(master) || !existsSync(mix))
+    throw new Error('web copies need the final master and S6 mix-final.wav');
   const OUT = 'site/media/trailer';
   mkdirSync(OUT, { recursive: true });
   const LIMIT = 15 * 1048576;
@@ -342,9 +445,61 @@ if (on('web') && !sheetOnly) {
       for (const crf of ext === 'mp4' ? [28, 30, 32, 34, 36] : [36, 40, 44, 48]) {
         const v =
           ext === 'mp4'
-            ? ['-c:v', 'libx264', '-preset', 'slow', '-crf', String(crf), '-tune', 'animation', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart']
-            : ['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', String(crf), '-row-mt', '1', '-deadline', 'good', '-cpu-used', '2', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', '-b:a', '96k'];
-        ff(['-i', master, '-i', mix, '-map', '0:v', '-map', '1:a', '-shortest', '-vf', vf, '-r', '60', ...v, file]);
+            ? [
+                '-c:v',
+                'libx264',
+                '-preset',
+                'slow',
+                '-crf',
+                String(crf),
+                '-tune',
+                'animation',
+                '-pix_fmt',
+                'yuv420p',
+                '-c:a',
+                'aac',
+                '-b:a',
+                '128k',
+                '-movflags',
+                '+faststart',
+              ]
+            : [
+                '-c:v',
+                'libvpx-vp9',
+                '-b:v',
+                '0',
+                '-crf',
+                String(crf),
+                '-row-mt',
+                '1',
+                '-deadline',
+                'good',
+                '-cpu-used',
+                '2',
+                '-pix_fmt',
+                'yuv420p',
+                '-c:a',
+                'libopus',
+                '-b:a',
+                '96k',
+              ];
+        ff([
+          '-i',
+          master,
+          '-i',
+          mix,
+          '-map',
+          '0:v',
+          '-map',
+          '1:a',
+          '-shortest',
+          '-vf',
+          vf,
+          '-r',
+          '60',
+          ...v,
+          file,
+        ]);
         const ok = statSync(file).size <= LIMIT;
         console.log(`${file}: ${res} crf ${crf} → ${mb(file)}${ok ? '' : ' (over 15 MB)'}`);
         if (ok) return;
@@ -354,6 +509,16 @@ if (on('web') && !sheetOnly) {
   fit('mp4');
   fit('webm');
   // the poster: the montage's biggest flash (TRAILER.md: shot 2, the first impact), 1080p JPEG
-  ff(['-ss', '0.5', '-i', `${SEG}/t60-01-first-impact.mov`, '-frames:v', '1', '-q:v', '2', `${OUT}/poster.jpg`]);
+  ff([
+    '-ss',
+    '0.5',
+    '-i',
+    `${SEG}/t60-01-first-impact.mov`,
+    '-frames:v',
+    '1',
+    '-q:v',
+    '2',
+    `${OUT}/poster.jpg`,
+  ]);
   console.log(`${OUT}/poster.jpg: ${mb(`${OUT}/poster.jpg`)}`);
 }

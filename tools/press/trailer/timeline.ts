@@ -6,7 +6,13 @@
  */
 export type Src =
   | { shot: string; at: number; pre: number; frame?: undefined; events?: { tick: number; what: string }[] }
-  | { shot: string; frame: number; at?: undefined; pre?: undefined; events?: { tick: number; what: string }[] }
+  | {
+      shot: string;
+      frame: number;
+      at?: undefined;
+      pre?: undefined;
+      events?: { tick: number; what: string }[];
+    }
   | { seq: string; from: number; kind?: string; note?: string }
   | { card: string }
   | { black: true }
@@ -24,7 +30,8 @@ export interface Cut {
   sound: string;
 }
 
-const OPEN_NOTE = 'Black. One pixel of light, a second far away; they touch: a tiny flash (frame 196 of the sequence).';
+const OPEN_NOTE =
+  'Black. One pixel of light, a second far away; they touch: a tiny flash (frame 196 of the sequence).';
 
 export const CUT_60: Cut[] = [
   {
@@ -32,13 +39,19 @@ export const CUT_60: Cut[] = [
     name: 'opening',
     dur: 4,
     src: { seq: 'opening', from: 0, kind: 'made-in-code', note: OPEN_NOTE },
-    sound: 'Sub drone; the flash arrives LATE (light-travel delay): the picture flash is at 3.267 s, its sound after it',
+    sound:
+      'Sub drone; the flash arrives LATE (light-travel delay): the picture flash is at 3.267 s, its sound after it',
   },
   {
     shotNo: 2,
     name: 'first-impact',
     dur: 4,
-    src: { shot: 'first-impact', at: 6606, pre: 0.25, events: [{ tick: 6606, what: 'Supernova catastrophic blow on the Planet (the flash)' }] },
+    src: {
+      shot: 'first-impact',
+      at: 6606,
+      pre: 0.25,
+      events: [{ tick: 6606, what: 'Supernova catastrophic blow on the Planet (the flash)' }],
+    },
     over: [{ card: 'adeuk', from: 0.9, to: 3.8 }],
     sound: 'First impact, huge (hard cut on the flash)',
   },
@@ -51,29 +64,43 @@ export const CUT_60: Cut[] = [
       ['r-blackhole', 7974, 1.0, 'absence', 'The Black Hole: the tidal swirl (a KO)'],
       ['r-supernova', 4724, 0.9, 'sacrifice', 'The Supernova: the nova'],
     ] as const
-  ).map(
-    ([shot, at, pre, word, what]): Cut => ({
-      shotNo: 3,
-      name: shot,
-      dur: 2,
-      src: { shot, at, pre, events: [{ tick: at, what }] },
-      over: [{ card: `word-${word}`, from: 0.25, to: 1.9 }],
-      sound: 'Score builds; cut on hits',
-    }),
-  ),
-  { shotNo: 4, name: 'two-worlds', dur: 1.2, src: { card: 'two-worlds' }, sound: 'Score holds; a breath before 우리' },
+  ).map(([shot, at, pre, word, what]): Cut => ({
+    shotNo: 3,
+    name: shot,
+    dur: 2,
+    src: { shot, at, pre, events: [{ tick: at, what }] },
+    over: [{ card: `word-${word}`, from: 0.25, to: 1.9 }],
+    sound: 'Score builds; cut on hits',
+  })),
+  {
+    shotNo: 4,
+    name: 'two-worlds',
+    dur: 1.2,
+    src: { card: 'two-worlds' },
+    sound: 'Score holds; a breath before 우리',
+  },
   {
     shotNo: 4,
     name: 'uri-fist',
     dur: 4,
-    src: { shot: 'uri-fist', at: 8549, pre: 2.2, events: [{ tick: 8549, what: "우리's fist lands on the Black Hole (catastrophic)" }] },
+    src: {
+      shot: 'uri-fist',
+      at: 8549,
+      pre: 2.2,
+      events: [{ tick: 8549, what: "우리's fist lands on the Black Hole (catastrophic)" }],
+    },
     sound: 'Load-up, the chain through the body, the fist landing, the loop flaring as it holds',
   },
   {
     shotNo: 4,
     name: 'uri-snap',
     dur: 4.8,
-    src: { shot: 'uri-snap', at: 8902, pre: 1.6, events: [{ tick: 8902, what: "우리's loop snaps (break-apart, KO)" }] },
+    src: {
+      shot: 'uri-snap',
+      at: 8902,
+      pre: 1.6,
+      events: [{ tick: 8902, what: "우리's loop snaps (break-apart, KO)" }],
+    },
     over: [{ card: 'uri', from: 3.1, to: 4.8 }],
     sound: 'Drop the music for the snap. Silence, then debris',
   },
@@ -95,14 +122,26 @@ export const CUT_60: Cut[] = [
   ).map(([shot, at, pre, dur]): Cut =>
     shot.startsWith('card:')
       ? { shotNo: 5, name: shot.slice(5), dur, src: { card: shot.slice(5) }, sound: 'Full score (card beat)' }
-      : { shotNo: 5, name: shot, dur, src: { shot, at, pre, events: [{ tick: at, what: shot }] }, sound: 'Full score; cuts get faster' },
+      : {
+          shotNo: 5,
+          name: shot,
+          dur,
+          src: { shot, at, pre, events: [{ tick: at, what: shot }] },
+          sound: 'Full score; cuts get faster',
+        },
   ),
   {
     shotNo: 6,
     name: 'turn',
     dur: 8,
     src: { shot: 'turn', frame: 0 },
-    mouth: { seq: 'mouth-turn', from: 60, at: 1.2, dy: 105, note: 'a coil slides in along the bottom edge (silhouette)' },
+    mouth: {
+      seq: 'mouth-turn',
+      from: 60,
+      at: 1.2,
+      dy: 105,
+      note: 'a coil slides in along the bottom edge (silhouette)',
+    },
     over: [{ card: 'something-felt-it', from: 3.0, to: 7.4 }],
     sound: 'Score cuts out; a low wet sound (the coil enters at 1.2 s)',
   },
@@ -111,7 +150,13 @@ export const CUT_60: Cut[] = [
     name: 'lunge',
     dur: 1.6,
     src: { shot: 'turn', frame: 480 },
-    mouth: { seq: 'mouth-lunge', from: 0, at: 0, dy: 40, note: 'the feeding end comes over the edge and lunges; cut before it lands' },
+    mouth: {
+      seq: 'mouth-lunge',
+      from: 0,
+      at: 0,
+      dy: 40,
+      note: 'the feeding end comes over the edge and lunges; cut before it lands',
+    },
     sound: 'One impact into silence (on the cut to black at the end of this shot)',
   },
   { shotNo: 7, name: 'black', dur: 2.4, src: { black: true }, sound: 'Silence after the impact' },
@@ -119,7 +164,12 @@ export const CUT_60: Cut[] = [
 ];
 
 export const CUT_15: Cut[] = [
-  { ...CUT_60[0]!, name: 'opening', dur: 2, src: { seq: 'opening', from: 120, kind: 'made-in-code', note: OPEN_NOTE } },
+  {
+    ...CUT_60[0]!,
+    name: 'opening',
+    dur: 2,
+    src: { seq: 'opening', from: 120, kind: 'made-in-code', note: OPEN_NOTE },
+  },
   { ...CUT_60[1]!, dur: 2, over: [{ card: 'adeuk', from: 0.6, to: 2 }] },
   {
     shotNo: 3,
@@ -135,10 +185,20 @@ export const CUT_15: Cut[] = [
     ...CUT_60.find((c) => c.name === 'turn')!,
     dur: 3,
     src: { shot: 'turn', frame: 300 },
-    mouth: { seq: 'mouth-turn', from: 260, at: 0, dy: 105, note: 'the coil along the bottom edge (silhouette)' },
+    mouth: {
+      seq: 'mouth-turn',
+      from: 260,
+      at: 0,
+      dy: 105,
+      note: 'the coil along the bottom edge (silhouette)',
+    },
     over: [{ card: 'something-felt-it', from: 0.4, to: 2.9 }],
   },
-  { ...CUT_60.find((c) => c.name === 'lunge')!, dur: 1.5, mouth: { seq: 'mouth-lunge', from: 6, at: 0, dy: 40, note: 'the lunge; cut before it lands' } },
+  {
+    ...CUT_60.find((c) => c.name === 'lunge')!,
+    dur: 1.5,
+    mouth: { seq: 'mouth-lunge', from: 6, at: 0, dy: 40, note: 'the lunge; cut before it lands' },
+  },
   { ...CUT_60.find((c) => c.name === 'logo')!, dur: 2 },
 ];
 

@@ -26,7 +26,7 @@ const around = (t: number, offs = [-30, -12, -4, 0, 4, 10, 20, 35]): number[] =>
 export const SHOTS: Shot[] = [
   {
     name: 'witness-gaze',
-    what: "The Witness opens its eyes: every broken plate a beam (vs the Asteroid, Tussenruimte)",
+    what: 'The Witness opens its eyes: every broken plate a beam (vs the Asteroid, Tussenruimte)',
     cfg: c('asteroid', 'lastone', 'tussenruimte', 22),
     t0: 2830,
     t1: 3230,

@@ -1,4 +1,6 @@
 import {
+  parseScript,
+  type InputSource,
   ROUND_INTRO_TICKS,
   type AudioScene,
   type Difficulty,
@@ -14,7 +16,7 @@ import { createAudioEngine } from '@/audio/engine';
 import { createFighter } from '@/combat';
 import { createMatterWorld } from '@/matter';
 import { TITAN_SKY } from '@/render';
-import { createAiSource, createMatch, type Match } from '@/sim';
+import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
 import { STAGES } from '@/stages';
 import { getTitanDef, witnessDef } from '@/titans';
 import { loadUriAsset } from '@/titans/uri/asset';
@@ -34,6 +36,8 @@ export interface PressCfg {
   stage: StageId;
   seed: number;
   ai: number;
+  /** Scripted input for slot 0 instead of its AI (harness grammar; tick 0 = the fight goes live): cinema P5 takes. */
+  script0?: string;
 }
 
 export interface Moment {
@@ -93,12 +97,16 @@ function buildMatch(c: PressCfg): Match {
     arena: STAGES[c.stage].arena,
     lighting: TITAN_SKY,
   });
-  const src = (slot: 0 | 1): ReturnType<typeof createAiSource> =>
-    createAiSource(
-      m,
-      slot,
-      createAI(c.ai as Difficulty, defOf(config.slots[slot].titan), c.seed * 7 + slot, { footwork: 'orbit' }),
-    );
+  const src = (slot: 0 | 1): InputSource =>
+    slot === 0 && c.script0
+      ? createScriptSource(parseScript(c.script0), ROUND_INTRO_TICKS)
+      : createAiSource(
+          m,
+          slot,
+          createAI(c.ai as Difficulty, defOf(config.slots[slot].titan), c.seed * 7 + slot, {
+            footwork: 'orbit',
+          }),
+        );
   m.setSources(src(0), src(1));
   for (let i = 0; i < ROUND_INTRO_TICKS + 1; i++) m.step();
   return m;
@@ -114,13 +122,23 @@ function momentsOf(ev: readonly SimEvent[], tick: number, out: Moment[]): void {
       const w = e.weight ?? (e.heavy ? 'heavy' : 'medium');
       if (w === 'heavy' || w === 'catastrophic')
         out.push({ tick, k: 'hit', d: w, slot: e.attacker, titan: e.titan, x: e.x, y: e.y, v: e.energy });
-    } else if (e.t === 'ko') out.push({ tick, k: 'ko', d: '', slot: e.slot, titan: '', x: e.x, y: e.y, v: 1 });
+    } else if (e.t === 'ko')
+      out.push({ tick, k: 'ko', d: '', slot: e.slot, titan: '', x: e.x, y: e.y, v: 1 });
     else if (e.t === 'cue')
       out.push({ tick, k: 'cue', d: e.id, slot: e.slot, titan: e.titan, x: e.x, y: e.y, v: e.amount });
     else if (e.t === 'ultimate' && e.phase === 'start')
       out.push({ tick, k: 'ult', d: '', slot: e.slot, titan: e.titan, x: e.x, y: e.y, v: 1 });
     else if (e.t === 'round')
-      out.push({ tick, k: 'round', d: `${e.phase}:${e.round}:${e.winner}`, slot: -1, titan: '', x: 0, y: 0, v: 0 });
+      out.push({
+        tick,
+        k: 'round',
+        d: `${e.phase}:${e.round}:${e.winner}`,
+        slot: -1,
+        titan: '',
+        x: 0,
+        y: 0,
+        v: 0,
+      });
     else if (e.t === 'matter' && e.kind === 'detach' && e.mass >= 40)
       out.push({ tick, k: 'detach', d: '', slot: e.slot, titan: '', x: e.x, y: e.y, v: e.mass });
     else if (e.t === 'flash' && e.amount >= 0.5)

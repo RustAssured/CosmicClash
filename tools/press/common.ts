@@ -6,8 +6,9 @@ export const PRESS = 'press';
 export const WORK = 'press/work';
 
 export const query = (c: PressCfg): string =>
-  `mode=aivai&a=${c.a}&b=${c.b}&stage=${c.stage}&seed=${c.seed}&ai=${c.ai}`;
-export const cfgKey = (c: PressCfg): string => `${c.a}-${c.b}-${c.stage}-${c.seed}`;
+  `mode=aivai&a=${c.a}&b=${c.b}&stage=${c.stage}&seed=${c.seed}&ai=${c.ai}${c.script0 ? `&script0=${encodeURIComponent(c.script0)}` : ''}`;
+export const cfgKey = (c: PressCfg): string =>
+  `${c.a}-${c.b}-${c.stage}-${c.seed}${c.script0 ? `-s${c.script0.length % 97}` : ''}`;
 
 export async function openWorker(browser: Browser, url: string): Promise<Page> {
   const page = await browser.newPage();

@@ -128,5 +128,8 @@ mkdirSync(`${TWORK}/cards`, { recursive: true });
 for (const c of CARDS) writeFrame(`${TWORK}/cards/${c.id}.png`, card(c), c.kind === 'black');
 writeFrame(`${TWORK}/cards/logo-card.png`, logoCard(), true);
 mkdirSync(`${TWORK}/opening`, { recursive: true });
-for (let f = 0; f < OPEN_FRAMES; f++) writeFrame(`${TWORK}/opening/${String(f).padStart(4, '0')}.png`, opening(f), true);
-console.log(`cards: ${CARDS.length + 1}, opening: ${OPEN_FRAMES} frames (touch at frame ${OPEN_TOUCH}); widest card ${Math.max(...CARDS.flatMap((c) => c.lines.map((l) => measureText(l.s, { scale: l.scale, tracking: 1 }))))} px of ${LW}`);
+for (let f = 0; f < OPEN_FRAMES; f++)
+  writeFrame(`${TWORK}/opening/${String(f).padStart(4, '0')}.png`, opening(f), true);
+console.log(
+  `cards: ${CARDS.length + 1}, opening: ${OPEN_FRAMES} frames (touch at frame ${OPEN_TOUCH}); widest card ${Math.max(...CARDS.flatMap((c) => c.lines.map((l) => measureText(l.s, { scale: l.scale, tracking: 1 }))))} px of ${LW}`,
+);

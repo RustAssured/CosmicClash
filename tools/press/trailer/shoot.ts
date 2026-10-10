@@ -42,7 +42,13 @@ const camAt = (s: GameShot, tick: number): HarnessCamera | null => {
   const e = u * u * (3 - 2 * u);
   const mix = (p?: number, q?: number): number | undefined =>
     p === undefined ? q : q === undefined ? p : p + (q - p) * (tick <= a.tick ? 0 : e);
-  return { x: mix(a.x, b.x), y: mix(a.y, b.y), zoom: mix(a.zoom, b.zoom), dolly: mix(a.dolly, b.dolly), still: a.still ?? b.still };
+  return {
+    x: mix(a.x, b.x),
+    y: mix(a.y, b.y),
+    zoom: mix(a.zoom, b.zoom),
+    dolly: mix(a.dolly, b.dolly),
+    still: a.still ?? b.still,
+  };
 };
 
 async function shoot(page: Page, s: GameShot): Promise<void> {
@@ -51,7 +57,26 @@ async function shoot(page: Page, s: GameShot): Promise<void> {
   await page.evaluate(() => window.__ADEUK__!.step(1));
   const ff = spawn(
     'ffmpeg',
-    ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', '60', '-i', '-', '-c:v', 'libx264', '-preset', 'medium', '-crf', '8', '-pix_fmt', 'yuv444p', `${TWORK}/${s.id}.mov`],
+    [
+      '-y',
+      '-loglevel',
+      'error',
+      '-f',
+      'image2pipe',
+      '-framerate',
+      '60',
+      '-i',
+      '-',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'medium',
+      '-crf',
+      '8',
+      '-pix_fmt',
+      'yuv444p',
+      `${TWORK}/${s.id}.mov`,
+    ],
     { stdio: ['pipe', 'inherit', 'inherit'] },
   );
   const done = new Promise<number>((res) => ff.on('exit', (c) => res(c ?? 1)));
@@ -83,7 +108,9 @@ async function shoot(page: Page, s: GameShot): Promise<void> {
   ff.stdin.end();
   const code = await done;
   writeFileSync(`${TWORK}/${s.id}.json`, JSON.stringify({ shot: s, frames: log }));
-  console.log(`${s.id}: ticks ${s.t0}–${s.t1} → ${log.length} frames (${(log.length / 60).toFixed(2)} s), ffmpeg ${code}`);
+  console.log(
+    `${s.id}: ticks ${s.t0}–${s.t1} → ${log.length} frames (${(log.length / 60).toFixed(2)} s), ffmpeg ${code}`,
+  );
 }
 
 const { server, url } = await startRenderServer();
@@ -99,7 +126,9 @@ try {
     });
     await shoot(page, s);
     await page.close();
-    console.log(`  ${((Date.now() - t) / 1000).toFixed(0)} s wall${errors.length ? `; console: ${errors.slice(0, 3).join(' | ')}` : ''}`);
+    console.log(
+      `  ${((Date.now() - t) / 1000).toFixed(0)} s wall${errors.length ? `; console: ${errors.slice(0, 3).join(' | ')}` : ''}`,
+    );
   }
 } finally {
   await browser.close();

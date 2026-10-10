@@ -15,6 +15,7 @@ import type { Candidate } from './pick';
 const file = arg('file', `${WORK}/candidates.json`);
 const offs = arg('offs', '-60,-20,0,15,40').split(',').map(Number);
 const cats = arg('cats', '');
+const outDir = arg('out', WORK);
 let cands = JSON.parse(readFileSync(file, 'utf8')) as Candidate[];
 if (cats) cands = cands.filter((c) => cats.split(',').includes(c.cat));
 const TW = 320;
@@ -29,10 +30,14 @@ try {
   const groups = new Map<string, Candidate[]>();
   for (const c of cands) groups.set(cfgKey(c.cfg), [...(groups.get(cfgKey(c.cfg)) ?? []), c]);
   for (const [key, list] of groups) {
-    const { page } = await openGame(browser, `${url}/?${query(list[0]!.cfg)}&freeze=1&aftermath=0&q=1&hud=0`, {
-      width: 640,
-      height: 360,
-    });
+    const { page } = await openGame(
+      browser,
+      `${url}/?${query(list[0]!.cfg)}&freeze=1&aftermath=0&q=1&hud=0&trailer=1`,
+      {
+        width: 640,
+        height: 360,
+      },
+    );
     const shots = list.flatMap((c) => offs.map((o) => ({ c, t: c.anchor + o }))).sort((a, b) => a.t - b.t);
     for (const s of shots) {
       const now = (await page.evaluate(() => window.__ADEUK__!.summary().tick)) as number;
@@ -61,13 +66,20 @@ for (let sheet = 0; sheet * ROWS < cands.length; sheet++) {
   cv.clear(0xff100808);
   part.forEach((c, i) => {
     const y0 = i * (TH + LABEL);
-    drawText(cv, `${sheet * ROWS + i}  ${c.cat}  ${cfgKey(c.cfg)} @${c.anchor}  score ${c.score.toFixed(0)}`, 4, y0 + 1, {
-      color: 0xffffffff,
-    });
+    drawText(
+      cv,
+      `${sheet * ROWS + i}  ${c.cat}  ${cfgKey(c.cfg)} @${c.anchor}  score ${c.score.toFixed(0)}`,
+      4,
+      y0 + 1,
+      {
+        color: 0xffffffff,
+      },
+    );
     (rows.get(c) ?? []).forEach((f, k) => {
-      for (let y = 0; y < TH; y++) cv.pixels.set(f.subarray(y * TW, y * TW + TW), (y0 + LABEL + y) * W + k * TW);
+      for (let y = 0; y < TH; y++)
+        cv.pixels.set(f.subarray(y * TW, y * TW + TW), (y0 + LABEL + y) * W + k * TW);
     });
   });
-  writePng(`${WORK}/preview-${sheet}.png`, cv.pixels, cv.w, cv.h, 1);
-  console.log(`${WORK}/preview-${sheet}.png`);
+  writePng(`${outDir}/preview-${sheet}.png`, cv.pixels, cv.w, cv.h, 1);
+  console.log(`${outDir}/preview-${sheet}.png`);
 }
