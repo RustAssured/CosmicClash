@@ -71,7 +71,8 @@ const SR = 48000;
 const TICK = 1 / 60;
 const HEAVY_ENERGY = 400;
 
-function newMatch(
+/** A deterministic AI-vs-AI match (the same config always plays the same fight). */
+export function newMatch(
   seed: number,
   level: number,
   footwork: 'classic' | 'orbit',

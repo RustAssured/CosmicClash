@@ -44,13 +44,33 @@ function starfield() {
   let t = 0;
   // near the Edge section, the whole sky is dragged outward toward the screen's rim, and dims
   const edgeSec = $('#edge');
+  // section geometry is measured when the page changes size, not every frame (a per-frame getBoundingClientRect forces a
+  // full layout each frame)
+  const pinned = ['#prologue', '#scale'].map((s) => $(s)).filter(Boolean);
+  let edgeG = null;
+  let pinG = [];
+  function measure() {
+    const m = (el) => {
+      const r = el.getBoundingClientRect();
+      return { top: r.top + scrollY, h: r.height };
+    };
+    edgeG = edgeSec ? m(edgeSec) : null;
+    pinG = pinned.map(m);
+  }
+  measure();
+  addEventListener('load', measure);
+  if ('ResizeObserver' in window) new ResizeObserver(measure).observe(document.body);
   function pullNow() {
-    if (!edgeSec) return 0;
-    const r = edgeSec.getBoundingClientRect();
-    const mid = r.top + r.height / 2 - innerHeight / 2;
+    if (!edgeG) return 0;
+    const mid = edgeG.top - scrollY + edgeG.h / 2 - innerHeight / 2;
     return Math.max(0, 1 - Math.abs(mid) / (innerHeight * 1.2)) ** 1.5;
   }
+  /** True while a story stage (an opaque full-screen canvas) is pinned over the whole viewport: nothing to draw here. */
+  const covered = () =>
+    !document.documentElement.classList.contains('story-static') &&
+    pinG.some((g) => scrollY >= g.top && scrollY <= g.top + g.h - innerHeight);
   function draw() {
+    if (covered()) return;
     ctx.clearRect(0, 0, w, h);
     const scroll = scrollY / SCALE;
     const pull = pullNow();
@@ -94,6 +114,7 @@ function starfield() {
   start();
   addEventListener('resize', () => {
     resize();
+    measure();
     draw();
   });
   reduceMotion.addEventListener('change', start);
@@ -204,7 +225,8 @@ function titans() {
 function dialogs() {
   for (const d of $$('dialog.lightbox')) {
     d.addEventListener('click', (e) => {
-      if (e.target === d || e.target.classList.contains('lightbox-frame') || e.target.closest('[data-close]')) d.close();
+      if (e.target === d || e.target.classList.contains('lightbox-frame') || e.target.closest('[data-close]'))
+        d.close();
     });
   }
   // trailer: full film with sound, opened by a click (a user gesture, so audio may start)
@@ -251,7 +273,8 @@ function dialogs() {
       shot.showModal();
     }),
   );
-  for (const s of $$('[data-step]', shot)) s.addEventListener('click', () => show(at + Number(s.dataset.step)));
+  for (const s of $$('[data-step]', shot))
+    s.addEventListener('click', () => show(at + Number(s.dataset.step)));
   shot.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight') show(at + 1);
     if (e.key === 'ArrowLeft') show(at - 1);

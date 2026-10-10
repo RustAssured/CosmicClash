@@ -43,8 +43,8 @@ const SOURCES = {
     { src: WP, ss: 7, t: 4 },
     { src: UW, ss: 17.5, t: 4 },
   ] as Cut[],
-  /** the full trailer, with sound (lightbox) */
-  trailer: { src: UW, ss: 0, t: 30 } as Cut,
+  /** the v2 trailer, with sound (lightbox): S5's master; `poster` is the poster frame time (TRAILER.md: shot 2 or 7) */
+  trailer: { src: 'press/trailer/trailer-60.mp4', ss: 0, t: 60, poster: 5 } as Cut & { poster?: number },
   features: {
     orbit: { src: WP, ss: 3, t: 6 },
     matter: { src: WP, ss: 9, t: 6 },
@@ -185,14 +185,19 @@ const groups = {
     poster(`${OUT}/hero/loop.mp4`, `${OUT}/hero/poster.jpg`, 0.5);
   },
   trailer(): void {
+    // the v2 trailer (docs/site/TRAILER.md), web-encoded from S5's master; the page shows its button once this exists
     const c = SOURCES.trailer;
-    encodePair(cutIn(c), `[0:v]${PIX720},fps=30[v];[0:a]anull[a]`, `${OUT}/trailer/trailer`, {
+    if (!existsSync(c.src)) {
+      console.log(`(no ${c.src} yet: the site keeps its trailer button hidden)`);
+      return;
+    }
+    encodePair(cutIn(c), `[0:v]${PIX720},fps=30[v];[0:a]anull[a]`, `${OUT}/trailer/trailer-60`, {
       audio: true,
       crf264: 24,
       crf9: 35,
-      kbps: 3200, // about 12 MB for 30 s
+      kbps: 1900, // about 14 MB for 60 s
     });
-    poster(`${OUT}/trailer/trailer.mp4`, `${OUT}/trailer/poster.jpg`, 3);
+    poster(`${OUT}/trailer/trailer-60.mp4`, `${OUT}/trailer/trailer-60.jpg`, c.poster ?? 3);
   },
   features(): void {
     for (const [name, c] of Object.entries(SOURCES.features)) {

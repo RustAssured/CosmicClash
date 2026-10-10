@@ -52,15 +52,19 @@ async function open(
     if (/\/media\/.*\.(mp4|webm)$/.test(r.url())) media.push(r.url().replace(base, ''));
   });
   await page.goto(base, { waitUntil: 'load' });
+  // the page scrolls smoothly; the checks jump straight to where they look
+  await page.addStyleTag({ content: 'html{scroll-behavior:auto!important}' });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(1500);
   return { page, errors, media };
 }
 
 const unique = (a: string[]): string[] => [...new Set(a)];
+/** ONLY=story,play (comma list) runs a subset: desktop, story, mobile, reduced, play. */
+const want = (g: string): boolean => !process.env.ONLY || process.env.ONLY.split(',').includes(g);
 
 // ---------------------------------------------------------------- desktop
-{
+if (want('desktop')) {
   const { page, errors, media } = await open(browser, { viewport: { width: 1920, height: 1080 } });
   const first = unique(media);
   console.log(`  media fetched on load: ${first.join(', ') || 'none'}`);
@@ -108,15 +112,23 @@ const unique = (a: string[]): string[] => [...new Set(a)];
   await page.addStyleTag({ content: '.nav{display:flex}' });
 
   // the trailer lightbox
+  // (hidden until the v2 trailer exists: tools/site/build.ts shows it when media/trailer/trailer-60.mp4 is there)
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.locator('[data-open-trailer]').first().click();
-  await page.waitForTimeout(2000);
-  check(
-    await page.evaluate(() => (document.getElementById('trailer') as HTMLDialogElement).open),
-    'desktop: trailer opens',
-  );
-  await page.screenshot({ path: `${OUT}/desktop-trailer.png` });
-  await page.keyboard.press('Escape');
+  const tb = page.locator('[data-open-trailer]').first();
+  if (await tb.isVisible()) {
+    await tb.click();
+    await page.waitForTimeout(2000);
+    check(
+      await page.evaluate(() => (document.getElementById('trailer') as HTMLDialogElement).open),
+      'desktop: trailer opens',
+    );
+    await page.screenshot({ path: `${OUT}/desktop-trailer.png` });
+    await page.keyboard.press('Escape');
+  } else {
+    const res = await page.request.get(`${base}media/trailer/trailer-60.mp4`);
+    const isVideo = res.ok() && (res.headers()['content-type'] ?? '').includes('video');
+    check(!isVideo, 'desktop: no trailer yet, and the trailer button is hidden');
+  }
 
   // a screenshot lightbox
   await page.locator('.gallery button').first().click();
@@ -134,8 +146,141 @@ const unique = (a: string[]): string[] => [...new Set(a)];
   await page.context().close();
 }
 
+// ---------------------------------------------------------------- the story layer: prologue, scale reveal, the Edge
+/** Scroll so a pinned section is at progress p (0..1 of its scroll length). */
+async function scrollTo(page: Page, sel: string, p: number): Promise<void> {
+  await page.evaluate(
+    ([s, pp]) => {
+      const el = document.querySelector(s as string) as HTMLElement;
+      const top = el.getBoundingClientRect().top + scrollY;
+      window.scrollTo(0, top + (pp as number) * Math.max(0, el.offsetHeight - innerHeight));
+    },
+    [sel, p],
+  );
+}
+
+/** Frames per second and the worst frame over `ms`, measured with rAF. */
+// (in-page code is passed as strings: tsx's keepNames would inject a `__name` helper the page does not have)
+async function fps(page: Page, ms = 1500): Promise<{ fps: number; worst: number; p95: number }> {
+  return page.evaluate(`new Promise((res) => {
+    const ts = [];
+    const t0 = performance.now();
+    function tick(t) {
+      ts.push(t);
+      if (t - t0 < ${ms}) return requestAnimationFrame(tick);
+      const d = ts.slice(1).map((v, i) => v - ts[i]);
+      const s = [...d].sort((a, b) => a - b);
+      res({
+        fps: Math.round((d.length / (ts[ts.length - 1] - ts[0])) * 1000),
+        worst: Math.round(s[s.length - 1] || 0),
+        p95: Math.round(s[Math.floor(s.length * 0.95)] || 0),
+      });
+    }
+    requestAnimationFrame(tick);
+  })`);
+}
+
+/** How many times the story canvases were redrawn during one second. */
+const storyDraws = (page: Page): Promise<number> =>
+  page.evaluate(`new Promise((res) => {
+    let n = 0;
+    const orig = CanvasRenderingContext2D.prototype.putImageData;
+    CanvasRenderingContext2D.prototype.putImageData = function (...a) {
+      if (this.canvas.classList.contains('story-cv')) n++;
+      return orig.apply(this, a);
+    };
+    setTimeout(() => {
+      CanvasRenderingContext2D.prototype.putImageData = orig;
+      res(n);
+    }, 1000);
+  })`);
+
+/** story.js's own measure: smoothed ms per frame of drawing, the resolution step and the canvas size. */
+const drawCost = (page: Page, id: string): Promise<string> =>
+  page.evaluate(
+    `(() => { const s = (window.__story || {})['${id}']; return s ? s.ms + ' ms at ' + s.w + 'x' + s.h + ' (step +' + s.boost + ')' : '?'; })()`,
+  );
+
+const onIndex = (page: Page, sel: string): Promise<number> =>
+  page.evaluate((s) => [...document.querySelectorAll(s)].findIndex((e) => e.classList.contains('on')), sel);
+
+async function story(page: Page, tag: string): Promise<void> {
+  const perf: string[] = [];
+  // prologue: five beats, one per fifth of the section's scroll
+  for (let i = 0; i < 5; i++) {
+    await scrollTo(page, '#prologue', (i + 0.5) / 5);
+    await page.waitForTimeout(1300);
+    check(
+      (await onIndex(page, '#prologue [data-beat]')) === i,
+      `${tag}: prologue beat ${i + 1} shows its caption`,
+    );
+    await page.screenshot({ path: `${OUT}/${tag}-prologue-${i + 1}.png` });
+    const f = await fps(page);
+    perf.push(
+      `beat ${i + 1}: ${f.fps} fps (p95 ${f.p95} ms, worst ${f.worst} ms) draw ${await drawCost(page, 'prologue')}`,
+    );
+  }
+  // the opt-in soundscape: on, still there (ambient.js loaded and started), off again
+  const amb = page.locator('[data-ambient]');
+  await amb.click();
+  await page.waitForTimeout(1200);
+  const ambOn = (await amb.getAttribute('aria-pressed')) === 'true' && (await amb.isVisible());
+  check(ambOn, `${tag}: the prologue's sound toggle turns the soundscape on`);
+  await amb.click();
+  await page.waitForTimeout(300);
+  // scale reveal: Earth → Planet → arena → the Mouth
+  for (let i = 0; i < 4; i++) {
+    await scrollTo(page, '#scale', Math.min(1, (i + 0.15) / 3.4));
+    await page.waitForTimeout(900);
+    check((await onIndex(page, '#scale [data-cap]')) === i, `${tag}: scale caption ${i + 1} shows`);
+    await page.screenshot({ path: `${OUT}/${tag}-scale-${i + 1}.png` });
+    const f = await fps(page);
+    perf.push(
+      `scale ${i + 1}: ${f.fps} fps (p95 ${f.p95} ms, worst ${f.worst} ms) draw ${await drawCost(page, 'scale')}`,
+    );
+  }
+  // the Edge: the four words land
+  await page.evaluate(() => document.getElementById('edge')!.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(3800);
+  const words = await page.evaluate(() => document.querySelectorAll('#edge [data-word].on').length);
+  check(words === 4, `${tag}: the Edge's four words land (${words})`);
+  await page.screenshot({ path: `${OUT}/${tag}-edge.png` });
+  const f = await fps(page);
+  perf.push(`edge: ${f.fps} fps (p95 ${f.p95} ms, worst ${f.worst} ms) draw ${await drawCost(page, 'edge')}`);
+  // canvases idle when off screen: no story canvas is drawn while the page sits at the controls
+  await page.evaluate(() => document.getElementById('controls')!.scrollIntoView());
+  await page.waitForTimeout(1200);
+  const idle = await storyDraws(page);
+  check(idle === 0, `${tag}: story canvases idle while off screen (${idle} draws in 1 s)`);
+  for (const p of perf) console.log(`  ${tag} ${p}`);
+}
+
+if (want('story')) {
+  const { page, errors } = await open(browser, { viewport: { width: 1920, height: 1080 } });
+  await story(page, 'desktop');
+  check(
+    errors.length === 0,
+    `desktop story: no console errors${errors.length ? `: ${errors.join(' | ')}` : ''}`,
+  );
+  await page.context().close();
+}
+if (want('story')) {
+  const { page, errors } = await open(browser, {
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  await story(page, 'mobile');
+  check(
+    errors.length === 0,
+    `mobile story: no console errors${errors.length ? `: ${errors.join(' | ')}` : ''}`,
+  );
+  await page.context().close();
+}
+
 // ---------------------------------------------------------------- mobile
-{
+if (want('mobile')) {
   const { page, errors } = await open(browser, {
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,
@@ -161,7 +306,7 @@ const unique = (a: string[]): string[] => [...new Set(a)];
 }
 
 // ---------------------------------------------------------------- reduced motion
-{
+if (want('reduced')) {
   const { page, media } = await open(browser, {
     viewport: { width: 1280, height: 800 },
     reducedMotion: 'reduce',
@@ -170,11 +315,29 @@ const unique = (a: string[]): string[] => [...new Set(a)];
     unique(media).length === 0,
     `reduced motion: no clip autoloads (${unique(media).join(', ') || 'none'})`,
   );
+  check(
+    await page.evaluate(() => document.documentElement.classList.contains('story-static')),
+    'reduced motion: story-static is set',
+  );
+  const shown = await page.evaluate(
+    () =>
+      [...document.querySelectorAll('[data-beat], [data-cap], #edge [data-word]')].filter(
+        (e) => getComputedStyle(e).opacity === '1',
+      ).length,
+  );
+  check(shown === 13, `reduced motion: every beat, caption and word is shown (${shown}/13)`);
+  await page.evaluate(() => document.getElementById('prologue')!.scrollIntoView());
+  await page.waitForTimeout(600);
+  const draws = await storyDraws(page);
+  check(draws === 0, `reduced motion: story canvases hold a still frame (${draws} redraws in 1 s)`);
+  await page.addStyleTag({ content: '.nav{display:none}' });
+  await page.locator('#prologue').screenshot({ path: `${OUT}/reduced-prologue.png` });
+  await page.locator('#scale').screenshot({ path: `${OUT}/reduced-scale.png` });
   await page.context().close();
 }
 
 // ---------------------------------------------------------------- Play → the game at play/
-{
+if (want('play')) {
   const { page, errors } = await open(browser, { viewport: { width: 1280, height: 720 } });
   await page.locator('.hero .btn-play').click();
   await page.waitForURL(/\/play\/$/);

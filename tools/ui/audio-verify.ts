@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { launch } from '../lead/browser';
 import type { AuditReport } from '../../dev/ui/audio-audit';
+import type { TrailerReport } from '../../dev/ui/audio-trailer';
 import { startDevServer } from './devserver';
 import type { VerifyReport } from '../../dev/ui/audio-verify';
 import type { TitanReport } from '../../dev/ui/audio-titans';
@@ -24,6 +25,8 @@ import type { FightReport } from '../../dev/ui/audio-fight';
  *             [--seed=21] [--level=4] [--titans=lastone,planet] [--stage=nursery] [--wav=<dir> [--prefix=audio-]]
  *   --pairs   --fight for every pair in PAIRS (every titan twice) or --list="a,b;c,d", one summary row per pair (LUFS, dBTP,
  *             LRA, impact over bed, duck, band shares); [--out=report.json] [--wav=<dir>] and the --fight options
+ *   --trailer the trailer's sound (dev/ui/audio-trailer.ts) from press/trailer/cuesheet.json or the TRAILER.md default:
+ *             press/trailer/mix-<cut>.wav and .json (sync report). [--cut=60|15] [--stems] [--out-dir=press/trailer]
  *   --audit   every sound source alone, measured for its energy above 2 kHz (the whistle audit); [--top=40] [--out=file.json]
  *             [--only=prefix,prefix]
  * Exit code 1 if the page errored or the report is missing.
@@ -41,23 +44,25 @@ const PAIRS = [
   'nexus,blackhole',
   'supernova,uri',
 ];
-const mode = process.argv.includes('--pairs')
-  ? 'pairs'
-  : process.argv.includes('--audit')
-    ? 'audit'
-    : process.argv.includes('--fight')
-      ? 'fight'
-      : process.argv.includes('--round')
-        ? 'round'
-        : process.argv.includes('--body')
-          ? 'body'
-          : process.argv.includes('--titans')
-            ? 'titans'
-            : process.argv.includes('--stages')
-              ? 'stages'
-              : process.argv.includes('--quick')
-                ? 'quick'
-                : '1';
+const mode = process.argv.includes('--trailer')
+  ? 'trailer'
+  : process.argv.includes('--pairs')
+    ? 'pairs'
+    : process.argv.includes('--audit')
+      ? 'audit'
+      : process.argv.includes('--fight')
+        ? 'fight'
+        : process.argv.includes('--round')
+          ? 'round'
+          : process.argv.includes('--body')
+            ? 'body'
+            : process.argv.includes('--titans')
+              ? 'titans'
+              : process.argv.includes('--stages')
+                ? 'stages'
+                : process.argv.includes('--quick')
+                  ? 'quick'
+                  : '1';
 const { server, url } = await startDevServer();
 const browser = await launch();
 let code = 0;
@@ -95,7 +100,23 @@ try {
   };
   const wavDir = arg('wav', '');
   const prefix = arg('prefix', 'audio-');
-  if (mode === 'pairs') {
+  if (mode === 'trailer') {
+    // the trailer's mix: press/trailer/mix-<cut>.wav (+ stems on --stems) and a sync report
+    const cut = arg('cut', '60');
+    const dir = arg('out-dir', 'press/trailer');
+    await page.goto(
+      `${url}/dev/ui/audio.html?verify=trailer&cut=${cut}${process.argv.includes('--stems') ? '&stems=1' : ''}`,
+    );
+    await page.waitForFunction(() => window.__trailer !== undefined, null, { timeout: 3_600_000 });
+    const r = (await page.evaluate(() => window.__trailer)) as TrailerReport;
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `mix-${cut}.wav`), Buffer.from(r.wav, 'base64'));
+    for (const [k, v] of Object.entries(r.stems ?? {}))
+      writeFileSync(join(dir, `mix-${cut}-stem-${k}.wav`), Buffer.from(v, 'base64'));
+    const { wav: _w, stems: _s, ...rest } = r;
+    writeFileSync(join(dir, `mix-${cut}.json`), JSON.stringify(rest, null, 1));
+    console.log(JSON.stringify(rest, null, 1));
+  } else if (mode === 'pairs') {
     // every pair in turn (a fresh page each), then one summary line per pair; --out=file.json keeps the full reports
     const rows: Record<string, unknown>[] = [];
     const reports: FightReport[] = [];
