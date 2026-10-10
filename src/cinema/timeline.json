@@ -1,0 +1,815 @@
+{
+  "comment": "ADEUK: TITANS launch trailer v3 ('우리'), docs/cinema/TRAILER_V3.md. ANIMATIC SKELETON: every shot is a slate (backdrop + its id + its card) until its phase replaces it with the real actors. Times are timeline seconds; edit them to retime.",
+  "fps": 60,
+  "shots": [
+    {
+      "id": "cold-heartbeats",
+      "comment": "ACT 0. Black; two heartbeats out of phase: two hearts (sound only).",
+      "start": 0,
+      "end": 2,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 2],
+          "text": "COLD-HEARTBEATS",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "cold-matter-pixel",
+      "comment": "MATTER CAM: one native pixel of 우리's hot core at ×48, seething through its ramp.",
+      "start": 2,
+      "end": 4,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 2],
+          "text": "COLD-MATTER-PIXEL",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "cold-pullback",
+      "comment": "Snap pull-back (exponential, 18 frames): the pixel is 우리's core; its fist mid-swing in slow motion.",
+      "start": 4,
+      "end": 6,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 2],
+          "text": "COLD-PULLBACK",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "cold-adeuk",
+      "comment": "Freeze, hard cut to white then black. Card: 아득.",
+      "start": 6,
+      "end": 7,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 1],
+          "text": "COLD-ADEUK",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 0.8],
+          "text": "아득",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "before-two-worlds",
+      "comment": "ACT I. Two worlds in a slow binary orbit; city lights; ships string light between them.",
+      "start": 7,
+      "end": 12,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 5],
+          "text": "BEFORE-TWO-WORLDS",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 4.8],
+          "text": "We were two worlds.",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "before-halo-rise",
+      "comment": "A gold arc rises over world A's horizon like a sunrise: the Witness's halo rings. Wrong colour, too slow.",
+      "start": 12,
+      "end": 15,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "BEFORE-HALO-RISE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "before-eye",
+      "comment": "EXTREME CLOSE-UP: the Witness eye at ×8. The pupil contracts; the rings click into alignment.",
+      "start": 15,
+      "end": 17,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 2],
+          "text": "BEFORE-EYE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "before-gaze",
+      "comment": "Its real beam sweeps world A. MATTER CAM on the crust: crack, hold, shear (macro slow motion).",
+      "start": 17,
+      "end": 20,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "BEFORE-GAZE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 2.8],
+          "text": "It looked at us.",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "before-mouth-edge",
+      "comment": "World B. Stars at the frame edge slide sideways; coils pour over the edge; the crane neck rises, jaw-rings open.",
+      "start": 20,
+      "end": 22,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 2],
+          "text": "BEFORE-MOUTH-EDGE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "before-bite",
+      "comment": "The real crane strike: the bite takes half of world B; the camera AND the letterbox bars shake. Then SILENCE #1.",
+      "start": 22,
+      "end": 24,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 2],
+          "text": "BEFORE-BITE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 1.8],
+          "text": "It ate.",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "build-ruin",
+      "comment": "ACT II. The ruin in the silence: two naked cores, the wreck drifting, arks like embers.",
+      "start": 24,
+      "end": 27,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "BUILD-RUIN",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 2.8],
+          "text": "We did not run.",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "build-genesis",
+      "comment": "GENESIS: the two cores hauled together (real rig parts, parallax depth); the loop ignites.",
+      "start": 27,
+      "end": 30,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "BUILD-GENESIS",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "build-assembly",
+      "comment": "Assembly on the beat: each part lands on a drum hit with a weld flash; cut wide <-> MATTER CAM on every landing.",
+      "start": 30,
+      "end": 38,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 8],
+          "text": "BUILD-ASSEMBLY",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "build-fists",
+      "comment": "Fists form from rubble (two slow clenches); the command moon swings in on its tether and locks.",
+      "start": 38,
+      "end": 41,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "BUILD-FISTS",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 2.8],
+          "text": "We built 우리.",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "build-brace",
+      "comment": "우리 lifts its head; the loop flares, pylons ignite; real guard stance. Whispered VO + subtitle.",
+      "start": 41,
+      "end": 44,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "BUILD-BRACE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 2.8],
+          "text": "우리는 아직 여기 있다.\nWe are still here.",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "build-launch",
+      "comment": "It launches AT the camera. Smash cut.",
+      "start": 44,
+      "end": 46,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 2],
+          "text": "BUILD-LAUNCH",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "hunt-burst",
+      "comment": "ACT III. The letterbox BURSTS open to 16:9 on 우리's first landed hit (vs Planet), real gameplay.",
+      "start": 46,
+      "end": 48,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [
+        [0, 0],
+        [0.1, 1]
+      ],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 2],
+          "text": "HUNT-BURST",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "hunt-montage",
+      "comment": "우리 vs Planet, Black Hole, Supernova, Nexus, Asteroid on the beat; 6-frame name slams; 2-3 MATTER CAM wound shears.",
+      "start": 48,
+      "end": 62,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 14],
+          "text": "HUNT-MONTAGE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 13.8],
+          "text": "NO HEALTH BARS.",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "hunt-nova",
+      "comment": "Slow motion: a Supernova nova engulfs 우리; the loop strains and HOLDS. Music ducks to the heartbeat.",
+      "start": 62,
+      "end": 65,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "HUNT-NOVA",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "hunt-eye",
+      "comment": "Through the light, gold rings: the Witness turns. Eye to core (rhymes with before-eye).",
+      "start": 65,
+      "end": 68,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "HUNT-EYE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 2.8],
+          "text": "Then we found the eye.",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "hunt-beams",
+      "comment": "Witness beams against 우리's guard, matter tearing on both; a fist travels at the eye ... cut to black a frame before impact.",
+      "start": 68,
+      "end": 72,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 4],
+          "text": "HUNT-BEAMS",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "hunt-black",
+      "comment": "SILENCE #2: black.",
+      "start": 72,
+      "end": 77,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 5],
+          "text": "HUNT-BLACK",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "edge-wide",
+      "comment": "ACT IV. Wide on the arena after the fight, still; debris drifts.",
+      "start": 77,
+      "end": 80,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "EDGE-WIDE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "edge-slide",
+      "comment": "Stars on all four edges slide to the rim; a coil slides along the bottom edge; neither titan notices.",
+      "start": 80,
+      "end": 83,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "EDGE-SLIDE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "edge-pullback",
+      "comment": "The pull-back: exponential zoom out; the arena a small rectangle dwarfed by the Mouth's coils. HUNGER. DEVOURS. ENDS. REPEATS.",
+      "start": 83,
+      "end": 89,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 6],
+          "text": "EDGE-PULLBACK",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "edge-wipe",
+      "comment": "The jaw-rings close over the camera: a screen-space iris built from the real teeth rows.",
+      "start": 89,
+      "end": 91,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 2],
+          "text": "EDGE-WIPE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    },
+    {
+      "id": "edge-title",
+      "comment": "Title: ADEUK: TITANS · 아득 / FREE IN YOUR BROWSER / FINAL BOSS: COMING.",
+      "start": 91,
+      "end": 94,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 3],
+          "text": "EDGE-TITLE",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        },
+        {
+          "t": [0.3, 2.8],
+          "text": "ADEUK: TITANS\n아득\nFREE IN YOUR BROWSER\nFINAL BOSS: COMING",
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "edge-sting",
+      "comment": "Post-title sting: black, two heartbeats, then a third, wrong one (sound only).",
+      "start": 94,
+      "end": 95,
+      "stage": "tussenruimte",
+      "seed": 1,
+      "letterbox": [[0, 0]],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "cards": [
+        {
+          "t": [0, 1],
+          "text": "EDGE-STING",
+          "scale": 1,
+          "y": 300,
+          "color": "#5a5f78"
+        }
+      ]
+    }
+  ]
+}

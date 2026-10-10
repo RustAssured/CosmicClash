@@ -214,6 +214,8 @@ export interface DebuggableRenderer extends Renderer {
   prepareStage(id: StageId, onProgress?: (fraction: number) => void): Promise<void>;
   /** True when `setStage(id)` / a matching draw would switch instantly (the stage is active or prepared). */
   isStageReady(id: StageId): boolean;
+  /** Cinema: dispose the current scenery and build `id` afresh (no state carried over from earlier frames). */
+  restartStage(id: StageId): Promise<void>;
   /** Read the composited (pre-post) colour or emissive attachment as packed RGBA, top row first. */
   debugReadFrame(attachment: 0 | 1): Uint32Array;
   /** Number of layer textures currently cached, and upload counters. */
@@ -1546,6 +1548,22 @@ class PixelRenderer implements DebuggableRenderer {
       this.bloomFar,
       Math.sqrt(SHARED_BLOOM.farPx ** 2 - SHARED_BLOOM.nearPx ** 2),
     );
+  }
+
+  /**
+   * Cinema (src/cinema): a FRESH scenery for `id` (the reactive stages keep state across frames: shock ripples, broken
+   * fragments, wake dust), so a shot rendered twice starts from the same scenery state. Resolves once it is ready.
+   */
+  async restartStage(id: StageId): Promise<void> {
+    if (this.prepared) {
+      this.disposeStage(this.prepared);
+      this.prepared = null;
+    }
+    for (const j of this.jobs.values()) j.cancelled = true;
+    const old = this.active;
+    this.active = null;
+    if (old) this.disposeStage(old);
+    await this.prepareStage(id);
   }
 
   debugSetUnified(on: boolean): void {

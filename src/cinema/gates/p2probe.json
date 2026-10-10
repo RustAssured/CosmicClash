@@ -1,0 +1,61 @@
+{
+  "comment": "P2 probe (not a gate): where the Witness and World A sit, how the Witness moves under a stick script, and the eye close-up pose (rings, pupil).",
+  "fps": 60,
+  "shots": [
+    {
+      "id": "probe-move",
+      "comment": "Witness drifting away from World A on a held stick (left) at native scale, the game camera without shake.",
+      "start": 0,
+      "end": 3,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 300,
+        "script0": "0:left*400",
+        "worlds": { "1": "A" }
+      },
+      "camera": [{ "t": 0, "shake": false }],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 1]]
+    },
+    {
+      "id": "probe-eye",
+      "comment": "The eye at x4 then x8: the rings click into alignment (0-1 s), the pupil contracts (1-2 s).",
+      "start": 3,
+      "end": 5,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 40,
+        "gap": 300,
+        "worlds": { "1": "A" },
+        "witness": {
+          "slot": 0,
+          "rings": [
+            [0, 0],
+            [1, 1]
+          ],
+          "pupil": [
+            [0, 1],
+            [1, 1],
+            [1.6, 0.4]
+          ]
+        }
+      },
+      "camera": [
+        { "t": 0, "zoom": 4, "focus": [208, 177], "shake": false },
+        { "t": 1, "zoom": 4, "focus": [208, 177], "shake": false },
+        { "t": 1.2, "zoom": 8, "focus": [208, 177], "shake": false }
+      ],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 0]]
+    }
+  ]
+}

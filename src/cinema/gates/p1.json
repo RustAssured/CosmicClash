@@ -1,0 +1,71 @@
+{
+  "comment": "P1 gate (TRAILER_V3 §3): World A and World B (the real Planet: its renderer, its matter, two new palettes, city lights on the night side) and MATTER CAM on World A's crust: crack, hold, shear.",
+  "fps": 60,
+  "shots": [
+    {
+      "id": "p1-worlds",
+      "comment": "The two worlds side by side in the dark at native scale, at half speed: World A (blue and ochre) and World B (violet and teal), city lights breathing on their night sides. The still for the gate.",
+      "start": 0,
+      "end": 4,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "planet",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 300,
+        "worlds": { "0": "A", "1": "B" }
+      },
+      "time": [[0, 0.5]],
+      "camera": [{ "t": 0, "shake": false }],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "p1-gaze-wide",
+      "comment": "Wide: the Witness's real Fracture Gaze (scripted signature) strikes World A; the cut into the macro lands on the first crack.",
+      "start": 4,
+      "end": 6,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 300,
+        "script0": "20:sig*40,160:sig*40",
+        "worlds": { "1": "A" }
+      },
+      "camera": [{ "t": 0, "shake": false }],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "p1-crust-macro",
+      "comment": "MATTER CAM on the crust where the gaze lands (80×34 native pixels at ×8, each pixel a lit cell): the crack in x0.25, the hold (time pushed through the lull), the shear of the second gaze in x0.25.",
+      "start": 6,
+      "end": 13.5,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 50,
+        "gap": 300,
+        "script0": "20:sig*40,160:sig*40",
+        "worlds": { "1": "A" }
+      },
+      "time": [
+        [0, 0.25],
+        [2.4, 1.6],
+        [3.6, 0.25]
+      ],
+      "camera": [{ "t": 0, "zoom": 8, "focus": [410, 178], "shake": false, "matter": true }],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 0]]
+    }
+  ]
+}

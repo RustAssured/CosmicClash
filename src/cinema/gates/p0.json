@@ -1,0 +1,46 @@
+{
+  "comment": "P0 gate (TRAILER_V3 §3): a 5 s test of the cinema core. Real fight, time remap, integer zoom, letterbox burst, a card, a cinema actor.",
+  "fps": 60,
+  "shots": [
+    {
+      "id": "p0-fight",
+      "comment": "The real fight (Planet vs Supernova, Quasar, seed 22, AI 4) at real speed, ramping to x0.25 into the flash; the camera zooms x1 -> x2 exponentially; the bars burst open on the hit.",
+      "start": 0,
+      "end": 3,
+      "stage": "quasar",
+      "seed": 1,
+      "match": { "a": "planet", "b": "supernova", "seed": 22, "ai": 4, "startTick": 6400 },
+      "time": [
+        [0, 1],
+        [1.2, 0.5],
+        [1.6, 0.25]
+      ],
+      "camera": [
+        { "t": 0, "zoom": 1 },
+        { "t": 1.0, "zoom": 1 },
+        { "t": 2.0, "zoom": 2 }
+      ],
+      "letterbox": [
+        [0, 0],
+        [2.4, 0],
+        [2.6, 1]
+      ],
+      "cards": [{ "t": [0.3, 1.2], "text": "아득", "scale": 4 }]
+    },
+    {
+      "id": "p0-space",
+      "comment": "A cinema-only actor (the backdrop star field) with a fixed camera drifting right, bars closed, a two-line card: proves actors, the fixed camera and multi-line cards.",
+      "start": 3,
+      "end": 5,
+      "stage": "tussenruimte",
+      "seed": 2,
+      "camera": [
+        { "t": 0, "x": 0, "y": 0, "zoom": 1 },
+        { "t": 2, "x": 160, "y": 0, "zoom": 1 }
+      ],
+      "letterbox": [[0, 0]],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7, "density": 12 } }],
+      "cards": [{ "t": [0.2, 1.9], "text": "WE WERE\nTWO WORLDS.", "scale": 3 }]
+    }
+  ]
+}

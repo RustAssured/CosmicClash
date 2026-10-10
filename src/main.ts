@@ -7,6 +7,14 @@ import uriBinUrl from '@/titans/uri/uri_rig.bin?url';
 /** Entry point: builds the app, boots into the title (or a harness scenario when URL params ask for one). */
 async function main(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
+  // cinema mode (docs/cinema/TRAILER_V3.md): the trailer's own renderer loop, no menus or input; loaded only when asked for
+  const q = new URLSearchParams(location.search);
+  const cinema = q.get('cinema');
+  if (cinema) {
+    const { startCinema } = await import('@/cinema/cinema');
+    await startCinema(canvas, cinema, q.get('render') === '1');
+    return;
+  }
   const params = parseHarnessParams(location.search);
   // 우리's packed part grids (src/titans/uri/asset.ts): fetched once at boot, decoded in place before any match
   const uriAsset = loadUriAsset(uriBinUrl);

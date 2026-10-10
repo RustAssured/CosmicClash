@@ -1,0 +1,59 @@
+﻿{
+  "comment": "P1 probe 2: where the dithered rectangle beside the bodies comes from.",
+  "fps": 60,
+  "shots": [
+    {
+      "id": "a",
+      "comment": "backdrop on nursery",
+      "start": 0,
+      "end": 0.5,
+      "stage": "nursery",
+      "match": {
+        "a": "planet",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 300,
+        "worlds": { "0": "A", "1": "B" }
+      },
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 1]]
+    },
+    {
+      "id": "b",
+      "comment": "no backdrop, tussenruimte",
+      "start": 0.5,
+      "end": 1,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "planet",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 300,
+        "worlds": { "0": "A", "1": "B" }
+      },
+      "letterbox": [[0, 1]]
+    },
+    {
+      "id": "c",
+      "comment": "backdrop at depth -2 (in front of back debris)",
+      "start": 1,
+      "end": 1.5,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "planet",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 300,
+        "worlds": { "0": "A", "1": "B" }
+      },
+      "actors": [{ "type": "backdrop", "depth": -30, "params": { "seed": 7 } }],
+      "letterbox": [[0, 1]]
+    }
+  ]
+}

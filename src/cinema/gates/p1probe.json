@@ -1,0 +1,43 @@
+{
+  "comment": "P1 probe (not a gate): find where the Witness's gaze lands on World A and when, and see both worlds at native scale.",
+  "fps": 60,
+  "shots": [
+    {
+      "id": "probe-worlds",
+      "comment": "World A and World B side by side, dummies, the game camera: palettes and city lights at native scale.",
+      "start": 0,
+      "end": 1,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "planet",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 300,
+        "worlds": { "0": "A", "1": "B" }
+      },
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 1]]
+    },
+    {
+      "id": "probe-gaze",
+      "comment": "The Witness (scripted: Fracture Gaze, the signature) against World A (a dummy): where and when the beam cracks the crust.",
+      "start": 1,
+      "end": 7,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 300,
+        "script0": "20:sig*40,160:sig*40",
+        "worlds": { "1": "A" }
+      },
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 1]]
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "comment": "P2 gate (TRAILER_V3 §3): 0:12-0:20 of the trailer. The Witness's halo rises over World A's horizon; the eye at x4 and x8 (rings click into alignment, the pupil contracts); its real Fracture Gaze strikes World A; MATTER CAM on the crust. Times here are 0 = 0:12.",
+  "fps": 60,
+  "shots": [
+    {
+      "id": "halo-rise",
+      "comment": "0:12. Over World A's horizon a gold arc rises like a sunrise: the real Witness backs away from behind the planet (stick held left, x0.6) and the picture is turned a quarter (dutch 1) so 'away' is 'up'. Wrong colour, too slow.",
+      "start": 0,
+      "end": 3,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 40,
+        "script0": "0:left*900",
+        "worlds": { "1": "A" },
+        "front": 1
+      },
+      "time": [[0, 0.6]],
+      "camera": [
+        { "t": 0, "zoom": 2, "track": 1, "focus": [-120, 0], "dutch": 1, "shake": false },
+        { "t": 3, "zoom": 2, "track": 1, "focus": [-138, 0], "dutch": 1, "shake": false }
+      ],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "eye-rings",
+      "comment": "0:15. EXTREME CLOSE-UP, first beat: the eye at x4, its halo arcs clicking back into alignment notch by notch.",
+      "start": 3,
+      "end": 4.2,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 40,
+        "gap": 300,
+        "worlds": { "1": "A" },
+        "witness": {
+          "slot": 0,
+          "rings": [
+            [0, 0],
+            [1.0, 1]
+          ]
+        }
+      },
+      "time": [[0, 0.5]],
+      "camera": [{ "t": 0, "zoom": 4, "track": 0, "focus": [0, 0], "shake": false }],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "eye-pupil",
+      "comment": "0:16. The eye at x8, filling the frame: the black pupil contracts as it finds its target.",
+      "start": 4.2,
+      "end": 5.2,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 60,
+        "gap": 300,
+        "worlds": { "1": "A" },
+        "witness": {
+          "slot": 0,
+          "rings": [[0, 1]],
+          "pupil": [
+            [0, 1],
+            [0.2, 1],
+            [0.7, 0.35]
+          ]
+        }
+      },
+      "time": [[0, 0.5]],
+      "camera": [{ "t": 0, "zoom": 8, "track": 0, "focus": [0, 0], "shake": false }],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "gaze-wide",
+      "comment": "0:17. Its real Fracture Gaze (the signature, scripted) strikes World A; the wide holds until the first crack opens.",
+      "start": 5.2,
+      "end": 6.4,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 30,
+        "gap": 300,
+        "script0": "20:sig*40,160:sig*40",
+        "worlds": { "1": "A" }
+      },
+      "camera": [{ "t": 0, "shake": false }],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 0]],
+      "cards": [{ "t": [0.4, 1.2], "text": "It looked at us.", "scale": 2, "y": 322 }]
+    },
+    {
+      "id": "gaze-macro",
+      "comment": "0:18.4. MATTER CAM on the crust where the gaze lands: crack, hold, shear (x0.25, pushed through the lull, x0.25).",
+      "start": 6.4,
+      "end": 8,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 102,
+        "gap": 300,
+        "script0": "20:sig*40,160:sig*40",
+        "worlds": { "1": "A" }
+      },
+      "time": [
+        [0, 0.5],
+        [0.5, 2.5],
+        [1.0, 0.3]
+      ],
+      "camera": [{ "t": 0, "zoom": 8, "focus": [410, 178], "shake": false, "matter": true }],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
+      "letterbox": [[0, 0]],
+      "cards": [{ "t": [0, 1.4], "text": "It looked at us.", "scale": 2, "y": 322 }]
+    }
+  ]
+}
