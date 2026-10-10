@@ -1789,3 +1789,44 @@ tbody th {
 .edge-inner::before {
   inset: -60px -60px 8vh;
 }
+
+/* 우리 beats: text on the left, the titan on the right (wide screens) */
+@media (min-width: 901px) and (min-aspect-ratio: 5/4) {
+  .beats li.side {
+    left: var(--gutter);
+    top: 50%;
+    bottom: auto;
+    width: min(460px, 34vw);
+    transform: translate(0, calc(-50% + 14px));
+    text-align: left;
+  }
+  .beats li.side.on {
+    transform: translate(0, -50%);
+  }
+  .beats li.side .beat-sub {
+    margin-left: 0;
+  }
+  .beats li.side::before {
+    inset: -60px -40px -60px -200px;
+    background: radial-gradient(closest-side, rgba(5, 3, 12, 0.85), rgba(5, 3, 12, 0.5) 60%, transparent);
+  }
+}
+.ko-big {
+  font-size: 0.9em;
+  color: var(--gold);
+}
+.story .story-stage::before,
+.story .story-stage::after {
+  height: 9vh;
+}
+.ko-big {
+  white-space: nowrap;
+}
+/* reduced motion: the 우리 beats stack like the others */
+.story-static .beats li.side {
+  top: auto;
+  left: auto;
+  width: min(820px, calc(100% - 2 * var(--gutter)));
+  transform: none;
+  text-align: center;
+}

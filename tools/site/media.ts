@@ -43,8 +43,11 @@ const SOURCES = {
     { src: WP, ss: 7, t: 4 },
     { src: UW, ss: 17.5, t: 4 },
   ] as Cut[],
-  /** the v2 trailer, with sound (lightbox): S5's master; `poster` is the poster frame time (TRAILER.md: shot 2 or 7) */
-  trailer: { src: 'press/trailer/trailer-60.mp4', ss: 0, t: 60, poster: 5 } as Cut & { poster?: number },
+  /**
+   * The site's trailer, with sound (lightbox). Today WJ's story teaser (rendered by tools/teaser/render.ts); point it at S5's
+   * converged trailer master when that is delivered. `poster`: the poster frame's time (우리 braced).
+   */
+  trailer: { src: 'press/trailer/story-teaser.mp4', ss: 0, t: 61.2, poster: 37 } as Cut & { poster?: number },
   features: {
     orbit: { src: WP, ss: 3, t: 6 },
     matter: { src: WP, ss: 9, t: 6 },
@@ -191,13 +194,13 @@ const groups = {
       console.log(`(no ${c.src} yet: the site keeps its trailer button hidden)`);
       return;
     }
-    encodePair(cutIn(c), `[0:v]${PIX720},fps=30[v];[0:a]anull[a]`, `${OUT}/trailer/trailer-60`, {
+    encodePair(cutIn(c), `[0:v]${PIX720},fps=30[v];[0:a]anull[a]`, `${OUT}/trailer/trailer`, {
       audio: true,
       crf264: 24,
       crf9: 35,
-      kbps: 1900, // about 14 MB for 60 s
+      kbps: 1700, // about 14 MB for 61 s
     });
-    poster(`${OUT}/trailer/trailer-60.mp4`, `${OUT}/trailer/trailer-60.jpg`, c.poster ?? 3);
+    poster(`${OUT}/trailer/trailer.mp4`, `${OUT}/trailer/trailer.jpg`, c.poster ?? 3);
   },
   features(): void {
     for (const [name, c] of Object.entries(SOURCES.features)) {

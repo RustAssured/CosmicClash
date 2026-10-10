@@ -61,8 +61,16 @@ const PRESS = 'press';
 if (existsSync(PRESS)) {
   // only finished deliverables: no work/ folder, no audio stems, mix drafts or JSON notes
   const DELIVERABLE = /\.(mp4|webm|gif|png|jpe?g|webp|zip|pdf|txt|md)$/i;
+  // …and nothing over 60 MB: production masters (a 1080p60 trailer at CRF 14 is ~450 MB) are not web downloads
+  const MAX = 60 * 1048576;
   const isDeliverable = (f: string): boolean =>
-    !f.split(sep).includes('work') && DELIVERABLE.test(f) && !/draft|stem/i.test(f);
+    !f.split(sep).includes('work') &&
+    DELIVERABLE.test(f) &&
+    !/draft|stem/i.test(f) &&
+    statSync(f).size <= MAX;
+  const big = walk(PRESS).filter((f) => DELIVERABLE.test(f) && statSync(f).size > MAX);
+  if (big.length)
+    console.log(`press kit: left out ${big.length} master file(s) over 60 MB: ${big.join(', ')}`);
   const files = walk(PRESS).filter(isDeliverable);
   if (files.length) {
     for (const f of files) {
@@ -88,28 +96,21 @@ if (existsSync(PRESS)) {
   }
 } else console.log('press kit: press/ not found, the page keeps its built-in download list');
 
-// 5. the trailer: S5's v2 cut (press/trailer/trailer-60.{mp4,webm} and a poster) is copied next to the page when it is
-// there; whenever media/trailer/trailer-60.mp4 exists, the "Watch the trailer" button and its download link are shown
-const TR = join(DIST, 'media', 'trailer');
-if (existsSync(join(PRESS, 'trailer'))) {
-  mkdirSync(TR, { recursive: true });
-  for (const f of readdirSync(join(PRESS, 'trailer'))) {
-    if (/^trailer-60\.(mp4|webm)$/.test(f)) cpSync(join(PRESS, 'trailer', f), join(TR, f));
-    else if (/\.(jpe?g|png|webp)$/i.test(f) && /poster/i.test(f))
-      cpSync(join(PRESS, 'trailer', f), join(TR, 'trailer-60.jpg'));
-  }
-}
-if (existsSync(join(TR, 'trailer-60.mp4'))) {
+// 5. the trailer: the site plays its own web encode, site/media/trailer/trailer.{webm,mp4,jpg} (`npm run site:media
+// trailer` makes it from the current master: the story teaser until S5's converged trailer is delivered). The
+// "Watch the trailer" button and its download link are shown only when that file exists.
+const TR = join(DIST, 'media', 'trailer', 'trailer.mp4');
+if (existsSync(TR)) {
   const page = join(DIST, 'index.html');
   const html = readFileSync(page, 'utf8')
     .replace(/(<button[^>]*data-open-trailer)\s+hidden/g, '$1')
     .replace(/(<li data-trailer-link)\s+hidden/g, '$1');
   writeFileSync(page, html);
-  const mb = statSync(join(TR, 'trailer-60.mp4')).size / 1048576;
+  const mb = statSync(TR).size / 1048576;
   console.log(
-    `trailer: shown (trailer-60.mp4, ${mb.toFixed(1)} MB${mb > 15 ? ': over the 15 MB web budget, re-encode' : ''})`,
+    `trailer: shown (${mb.toFixed(1)} MB${mb > 15 ? ': over the 15 MB web budget, re-encode' : ''})`,
   );
-} else console.log('trailer: no media/trailer/trailer-60.mp4 yet, so the trailer button stays hidden');
+} else console.log('trailer: no media/trailer/trailer.mp4 yet, so the trailer button stays hidden');
 
 console.log(
   `site: ${(dirSize(DIST) / 1048576).toFixed(1)} MB in ${DIST}/ (game ${(dirSize(PLAY) / 1048576).toFixed(1)} MB)`,

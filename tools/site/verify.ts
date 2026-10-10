@@ -85,7 +85,8 @@ if (want('desktop')) {
   );
 
   // scroll through so lazy media arrives, then a full-page capture
-  for (let y = 0; y < 12000; y += 700) {
+  const docH = (await page.evaluate('document.documentElement.scrollHeight')) as number;
+  for (let y = 0; y < docH; y += 700) {
     await page.evaluate((yy) => window.scrollTo(0, yy), y);
     await page.waitForTimeout(250);
   }
@@ -206,10 +207,14 @@ const onIndex = (page: Page, sel: string): Promise<number> =>
 
 async function story(page: Page, tag: string): Promise<void> {
   const perf: string[] = [];
-  // prologue: five beats, one per fifth of the section's scroll
-  for (let i = 0; i < 5; i++) {
-    await scrollTo(page, '#prologue', (i + 0.5) / 5);
-    await page.waitForTimeout(1300);
+  // prologue: seven beats of different lengths (story.js PRO[i].w); jump to the middle of each
+  const ws = (await page.evaluate('window.__story.beats')) as number[];
+  const total = ws.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < ws.length; i++) {
+    const at = ws.slice(0, i).reduce((a, b) => a + b, 0) + ws[i]! * 0.5;
+    await scrollTo(page, '#prologue', at / total);
+    // the 우리 beats wait for its sprite (fetched as the story approaches)
+    await page.waitForTimeout(i >= 4 ? 2000 : 1300);
     check(
       (await onIndex(page, '#prologue [data-beat]')) === i,
       `${tag}: prologue beat ${i + 1} shows its caption`,
@@ -325,7 +330,8 @@ if (want('reduced')) {
         (e) => getComputedStyle(e).opacity === '1',
       ).length,
   );
-  check(shown === 13, `reduced motion: every beat, caption and word is shown (${shown}/13)`);
+  // 7 beats, 4 scale captions, 4 Edge words
+  check(shown === 15, `reduced motion: every beat, caption and word is shown (${shown}/15)`);
   await page.evaluate(() => document.getElementById('prologue')!.scrollIntoView());
   await page.waitForTimeout(600);
   const draws = await storyDraws(page);

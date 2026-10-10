@@ -38,6 +38,7 @@ class Px {
     this.ctx = cv.getContext('2d');
     this.w = this.h = 0;
     this.cssW = this.cssH = 0;
+    this.vigs = new Map();
     // the canvas's CSS size, read on resize only (a layout read every frame costs more than the drawing it sizes)
     const measure = () => {
       const r = this.cv.getBoundingClientRect();
@@ -48,8 +49,9 @@ class Px {
     addEventListener('resize', measure);
     if ('ResizeObserver' in window) new ResizeObserver(measure).observe(cv);
   }
-  fit() {
-    const scale = Math.max(this.minScale, Math.ceil(innerWidth / 560)) + this.boost;
+  /** Size the buffer to the canvas: `fixed` forces a scale (the teaser film uses fit(1): the native 640 × 360 canvas). */
+  fit(fixed) {
+    const scale = fixed || Math.max(this.minScale, Math.ceil(innerWidth / 560)) + this.boost;
     const w = Math.max(64, Math.ceil(this.cssW / scale));
     const h = Math.max(36, Math.ceil(this.cssH / scale));
     if (w === this.w && h === this.h) return;
@@ -58,16 +60,31 @@ class Px {
     this.img = this.ctx.createImageData(w, h);
     this.d = this.img.data;
     this.u32 = new Uint32Array(this.d.buffer); // one write per opaque pixel (little-endian RGBA)
-    this.vig = null;
+    this.vigs = new Map();
+  }
+  /** Finish a frame: dim (1 = as is) and vignette strength (0 = none), in one pass over the pixels. */
+  post(dim = 1, vig = 0) {
+    if (vig <= 0) {
+      if (dim < 1) this.dim(dim);
+      return;
+    }
+    // integer maths on whole pixels: a Uint8Clamped multiply per channel costs several times more on a big canvas
+    const v = this.vigMask(vig),
+      u = this.u32;
+    for (let p = 0; p < v.length; p++) {
+      const k = (v[p] * dim * 256) | 0;
+      if (k >= 256) continue;
+      const c = u[p];
+      u[p] =
+        (0xff000000 |
+          (((((c >>> 16) & 255) * k) >> 8) << 16) |
+          (((((c >>> 8) & 255) * k) >> 8) << 8) |
+          (((c & 255) * k) >> 8)) >>>
+        0;
+    }
   }
   clear(c = [5, 3, 12]) {
-    const d = this.d;
-    for (let i = 0; i < d.length; i += 4) {
-      d[i] = c[0];
-      d[i + 1] = c[1];
-      d[i + 2] = c[2];
-      d[i + 3] = 255;
-    }
+    this.u32.fill((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]);
   }
   // put a colour, optionally blended (a < 1) or added (add = true)
   put(x, y, c, a = 1, add = false) {
@@ -98,28 +115,39 @@ class Px {
     return rp[Math.min(rp.length - 1, f - i > t ? i + 1 : i)];
   }
   dim(k) {
-    const d = this.d;
-    for (let i = 0; i < d.length; i += 4) {
-      d[i] *= k;
-      d[i + 1] *= k;
-      d[i + 2] *= k;
+    const u = this.u32;
+    const ki = (k * 256) | 0;
+    if (ki >= 256) return;
+    for (let p = 0; p < u.length; p++) {
+      const c = u[p];
+      u[p] =
+        (0xff000000 |
+          (((((c >>> 16) & 255) * ki) >> 8) << 16) |
+          (((((c >>> 8) & 255) * ki) >> 8) << 8) |
+          (((c & 255) * ki) >> 8)) >>>
+        0;
     }
   }
   // darken towards the edges (cinematic vignette); s: strength
-  vignette(s) {
-    const { w, h, d } = this;
-    // the mask depends only on the size and strength: build it once
-    if (!this.vig || this.vigS !== s) {
-      this.vigS = s;
-      this.vig = new Float32Array(w * h);
+  /** The vignette's falloff for strength s: it depends only on the size and strength, so it is built once. */
+  vigMask(s) {
+    const { w, h } = this;
+    let v = this.vigs.get(s);
+    if (!v) {
+      v = new Float32Array(w * h);
       for (let y = 0; y < h; y++)
         for (let x = 0; x < w; x++) {
           const dx = (x / w - 0.5) * 2;
           const dy = (y / h - 0.5) * 2;
-          this.vig[y * w + x] = 1 - clamp((dx * dx * 0.6 + dy * dy * 0.9 - 0.25) * s);
+          v[y * w + x] = 1 - clamp((dx * dx * 0.6 + dy * dy * 0.9 - 0.25) * s);
         }
+      this.vigs.set(s, v);
     }
-    const v = this.vig;
+    return v;
+  }
+  vignette(s) {
+    const d = this.d;
+    const v = this.vigMask(s);
     for (let p = 0, i = 0; p < v.length; p++, i += 4) {
       const k = v[p];
       if (k === 1) continue;
@@ -172,48 +200,63 @@ const L = (() => {
 // ------------------------------------------------------------ bodies
 /**
  * A surface baked once into a longitude × latitude texture (ramp and value offset per texel). The noise behind a planet
- * costs dozens of sin() per point; a texture lookup costs one atan2 and one asin, and the sphere still turns.
+ * costs dozens of sin() per point; a texture lookup costs one atan2 and one asin, and the sphere still turns. Only for
+ * surfaces marked `tex` (fixed ones); a surface that depends on the light or changes per frame (worldSurf) is evaluated
+ * per pixel as before.
  */
 const TEX_W = 160,
   TEX_H = 80;
 const TEX = new Map();
+const baked = (surf) => ((surf.tex = true), surf);
 function surfTex(surf) {
   let T = TEX.get(surf);
   if (T) return T;
   const ramps = [];
   const ri = new Uint8Array(TEX_W * TEX_H);
   const v = new Float32Array(TEX_W * TEX_H);
+  // a fixed colour a surface shows only in the dark (a world's city lights: worldSurf returns { c } where lam is low)
+  const night = [];
+  const nc = new Uint8Array(TEX_W * TEX_H);
   for (let j = 0; j < TEX_H; j++) {
     const lat = ((j + 0.5) / TEX_H - 0.5) * Math.PI;
     for (let i = 0; i < TEX_W; i++) {
       const lon = ((i + 0.5) / TEX_W - 0.5) * Math.PI * 2;
-      const s = surf(Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon));
+      const X = Math.cos(lat) * Math.sin(lon),
+        Y = Math.sin(lat),
+        Z = Math.cos(lat) * Math.cos(lon);
+      const s = surf(X, Y, Z, 1);
       let k = ramps.indexOf(s.rp);
       if (k < 0) k = ramps.push(s.rp) - 1;
       ri[j * TEX_W + i] = k;
       v[j * TEX_W + i] = s.v || 0;
+      const sn = surf(X, Y, Z, 0);
+      if (sn.c) {
+        let m = night.indexOf(sn.c);
+        if (m < 0) m = night.push(sn.c) - 1;
+        nc[j * TEX_W + i] = m + 1;
+      }
     }
   }
-  T = { ramps, ri, v };
+  T = { ramps, ri, v, night, nc };
   TEX.set(surf, T);
   return T;
 }
 
 /** A lit sphere. surf(nx,ny,nz) → { rp, v } picks the ramp and a value offset for each surface point. */
-function sphere(px, cx, cy, r, surf, rot = 0, rim = null) {
+function sphere(px, cx, cy, r, surf, rot = 0, rim = null, mask = null) {
   if (r < 0.75) {
     const s = surf(0, 0, 1);
-    px.put(cx, cy, px.rc(s.rp, 0.8, cx | 0, cy | 0));
+    px.put(cx, cy, s.c || px.rc(s.rp, 0.8, cx | 0, cy | 0));
     return;
   }
-  const T = surfTex(surf);
+  const T = surf.tex ? surfTex(surf) : null;
+  const TAU = Math.PI * 2;
   const x0 = Math.max(0, Math.floor(cx - r)),
     x1 = Math.min(px.w - 1, Math.ceil(cx + r));
   const y0 = Math.max(0, Math.floor(cy - r)),
     y1 = Math.min(px.h - 1, Math.ceil(cy + r));
   const cr = Math.cos(rot),
     sr = Math.sin(rot);
-  const TAU = Math.PI * 2;
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++) {
       const nx = (x + 0.5 - cx) / r,
@@ -222,39 +265,56 @@ function sphere(px, cx, cy, r, surf, rot = 0, rim = null) {
       if (q > 1) continue;
       const nz = Math.sqrt(1 - q);
       const lam = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
-      const X = nx * cr + nz * sr,
-        Z = -nx * sr + nz * cr;
-      const ti = Math.min(TEX_W - 1, ((Math.atan2(X, Z) / TAU + 0.5) * TEX_W) | 0);
-      const tj = Math.min(
-        TEX_H - 1,
-        ((Math.asin(ny < -1 ? -1 : ny > 1 ? 1 : ny) / Math.PI + 0.5) * TEX_H) | 0,
-      );
-      const k = tj * TEX_W + ti;
-      let v = 0.06 + lam * 0.86 + T.v[k];
+      if (mask && mask(x, y)) continue;
+      if (T) {
+        const X = nx * cr + nz * sr,
+          Z = -nx * sr + nz * cr;
+        const ti = Math.min(TEX_W - 1, ((Math.atan2(X, Z) / TAU + 0.5) * TEX_W) | 0);
+        const tj = Math.min(
+          TEX_H - 1,
+          ((Math.asin(ny < -1 ? -1 : ny > 1 ? 1 : ny) / Math.PI + 0.5) * TEX_H) | 0,
+        );
+        const k = tj * TEX_W + ti;
+        if (lam < 0.14 && T.nc[k]) {
+          px.put(x, y, T.night[T.nc[k] - 1]);
+          continue;
+        }
+        let v = 0.06 + lam * 0.86 + T.v[k];
+        if (rim && q > 0.82) v += (q - 0.82) * 2.2 * (0.3 + lam);
+        px.put(x, y, px.rc(rim && q > 0.82 ? rim : T.ramps[T.ri[k]], v, x, y));
+        continue;
+      }
+      const s = surf(nx * cr + nz * sr, ny, -nx * sr + nz * cr, lam);
+      if (s.c) {
+        px.put(x, y, s.c);
+        continue;
+      }
+      let v = 0.06 + lam * 0.86 + (s.v || 0);
       if (rim && q > 0.82) v += (q - 0.82) * 2.2 * (0.3 + lam);
-      px.put(x, y, px.rc(rim && q > 0.82 ? rim : T.ramps[T.ri[k]], v, x, y));
+      px.put(x, y, px.rc(rim && q > 0.82 ? rim : s.rp, v, x, y));
     }
 }
 
-const earthSurf = (x, y, z) => {
+const earthSurf = baked((x, y, z) => {
   const n = fbm(x * 2.2 + 3, y * 2.2, z * 2.2);
   if (Math.abs(y) > 0.86) return { rp: R.moon, v: 0.25 };
   if (n > 0.55) return { rp: R.land, v: -0.05 };
   return { rp: R.ocean, v: 0 };
-};
-const planetSurf = (x, y, z) => {
+});
+const planetSurf = baked((x, y, z) => {
   const n = fbm(x * 1.6 + 9, y * 1.6 + 2, z * 1.6);
   const c = vnoise(x * 6 + 1, y * 6, z * 6);
   if (n > 0.52) return { rp: R.rock, v: c > 0.78 ? -0.25 : 0 };
   return { rp: R.pocean, v: -0.02 };
-};
-const sunSurf = (x, y, z) => ({ rp: R.sun, v: 0.35 + fbm(x * 3, y * 3, z * 3 + 7) * 0.35 });
-const moonSurf = (x, y, z) => ({ rp: R.moon, v: vnoise(x * 5, y * 5, z * 5) > 0.7 ? -0.2 : 0 });
-// one surface per core (its turning, passed to sphere() as rot, is what moves it; textures are cached per surface)
+});
+const sunSurf = baked((x, y, z) => ({ rp: R.sun, v: 0.35 + fbm(x * 3, y * 3, z * 3 + 7) * 0.35 }));
+const moonSurf = baked((x, y, z) => ({ rp: R.moon, v: vnoise(x * 5, y * 5, z * 5) > 0.7 ? -0.2 : 0 }));
+// one baked surface per core; its turning (sphere's rot, which the callers pass as t) is what moves it
 const CORE_SURF = new Map();
 const coreSurf = (rp) => {
   let f = CORE_SURF.get(rp);
-  if (!f) CORE_SURF.set(rp, (f = (x, y, z) => ({ rp, v: 0.25 + fbm(x * 2.5, y * 2.5, z * 2.5) * 0.45 })));
+  if (!f)
+    CORE_SURF.set(rp, (f = baked((x, y, z) => ({ rp, v: 0.25 + fbm(x * 2.5, y * 2.5, z * 2.5) * 0.45 }))));
   return f;
 };
 
@@ -530,157 +590,719 @@ function drawStars(px, stars, t, { pull = 0, drift = 0, ox = 0, oy = 0 } = {}) {
   }
 }
 
-// ------------------------------------------------------------ the prologue scenes (one per beat)
+// ------------------------------------------------------------ 우리's story: the prologue scenes (one per beat)
+// Two worlds → an eye looks → a mouth eats → ruin → they build 우리 from the wreck → it braces → it hunts.
+
+const W1 = ramp('#06101c', '#0c2a46', '#185078', '#2f80a8', '#6ab4c8', '#c8eef0'); // world A seas
+const W1L = ramp('#0e0c06', '#2a2614', '#4e4626', '#7a6a3a', '#b0985a', '#e8d6a0'); // world A land
+const W2 = ramp('#0a0618', '#1c1238', '#33245e', '#503a88', '#7a62b0', '#c0b0e8'); // world B seas (stranger)
+const W2L = ramp('#0a0a10', '#1e2228', '#3a4448', '#5e7270', '#8aa8a0', '#c8e0d8'); // world B land
+const CIV = [rgb('#e88a3a'), rgb('#ffb060'), rgb('#ffd890')];
+const MAGMA = ramp('#3a0804', '#8a1e06', '#e0520e', '#ff9a30', '#ffe0a0');
+const CARA = ramp('#050908', '#0c1513', '#16261f', '#22392f', '#355647', '#4f7d68', '#7aa898', '#b4d3c3');
+const IRIS = ramp('#1a0e04', '#5c4216', '#8f6b24', '#c39b3e', '#e9c96c', '#fff1b8');
+
+/** A world with city lights on its night side; crack 0..1 opens glowing faults across it. */
+const WORLD_SURF = new Map();
+// baked like the planets (the cracks open in 16 steps; the city lights are kept as their own channel, see surfTex)
+const worldSurf = (sea, land, seed, crack = 0) => {
+  const q = Math.round(clamp(crack) * 16);
+  const key = `${seed}|${q}`;
+  let f = WORLD_SURF.get(key);
+  if (!f) WORLD_SURF.set(key, (f = baked(worldSurfRaw(sea, land, seed, q / 16))));
+  return f;
+};
+const worldSurfRaw =
+  (sea, land, seed, crack = 0) =>
+  (x, y, z, lam) => {
+    if (crack > 0) {
+      const n = vnoise(x * 3.1 + seed, y * 3.1, z * 3.1);
+      const ridge = 1 - Math.abs(2 * n - 1);
+      if (ridge > 1 - crack * 0.16) return { rp: MAGMA, v: 0.5 + (ridge - (1 - crack * 0.16)) * 4 };
+    }
+    const n = fbm(x * 2.2 + seed, y * 2.2, z * 2.2);
+    if (n > 0.53) {
+      if (lam < 0.14 && h3(Math.floor(x * 40), Math.floor(y * 40), Math.floor(z * 40) + seed) > 0.8)
+        return { c: CIV[(h3(x * 9, y * 9, seed) * 3) | 0] };
+      return { rp: land, v: 0 };
+    }
+    return { rp: sea, v: 0 };
+  };
+
+/** The eye that looked. open 0..1; look -1..1 moves the iris; anger reddens the white. */
+function eye(px, cx, cy, ew, eh, open, look, t, anger = 0) {
+  const x0 = Math.max(0, Math.floor(cx - ew * 1.25)),
+    x1 = Math.min(px.w - 1, Math.ceil(cx + ew * 1.25));
+  const y0 = Math.max(0, Math.floor(cy - eh * 1.9)),
+    y1 = Math.min(px.h - 1, Math.ceil(cy + eh * 1.9));
+  const ir = eh * 0.95,
+    icx = cx + look * ew * 0.28,
+    icy = cy + Math.sin(t * 0.02) * eh * 0.05;
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const u = (x + 0.5 - cx) / ew,
+        v = (y + 0.5 - cy) / eh;
+      if (Math.abs(u) > 1.22) continue;
+      const shape = Math.max(0, 1 - u * u) ** 0.75;
+      const lid = open * shape;
+      const av = Math.abs(v);
+      if (av < lid) {
+        // inside: dark wet sclera, the iris, a slit pupil
+        const dx = x + 0.5 - icx,
+          dy = y + 0.5 - icy;
+        const d = Math.hypot(dx, dy) / ir;
+        if (d < 1) {
+          const slit = Math.abs(dx) / (ir * (0.1 + 0.06 * open)) + (dy / ir) ** 2 * 0.4;
+          if (slit < 1) {
+            px.put(x, y, d < 0.18 ? [40, 8, 6] : [2, 1, 2]);
+            continue;
+          }
+          const ang = Math.atan2(dy, dx);
+          const streak =
+            vnoise(Math.cos(ang) * 6 + 3, Math.sin(ang) * 6, d * 3) * 0.5 + Math.sin(ang * 23) * 0.08;
+          px.put(x, y, px.rc(IRIS, 0.25 + (1 - d) * 0.45 + streak * 0.5 - (d > 0.9 ? 0.35 : 0), x, y));
+          continue;
+        }
+        const vein = anger * Math.max(0, Math.sin(Math.atan2(dy, dx) * 9 + d * 7) - 0.6) * (av / lid);
+        const base = 0.18 + (1 - av / lid) * 0.25;
+        px.put(x, y, vein > 0.15 ? px.rc(MAGMA, 0.25 + vein, x, y) : px.rc(CARA, base, x, y));
+      } else if (av < lid + 0.42 + 0.35 * shape) {
+        // the lids: layered carapace plates, lit from above
+        const k = (av - lid) / (0.42 + 0.35 * shape);
+        const plate = Math.sin(k * 9 + u * 3) * 0.5 + 0.5;
+        const top = v < 0 ? 0.25 : -0.05;
+        px.put(x, y, px.rc(CARA, 0.25 + (1 - k) * 0.35 + plate * 0.18 + top - k * 0.2, x, y));
+      }
+    }
+  if (open > 0.3) glow(px, icx, icy, ir * 0.5, IRIS[4], 0.35 * open);
+  return [icx, icy];
+}
+
+/** A beam of sight: a hard bright line with a soft halo, from a to b. */
+function gaze(px, ax, ay, bx, by, a) {
+  const n = Math.ceil(Math.hypot(bx - ax, by - ay));
+  for (let k = 0; k <= n; k++) {
+    const x = lerp(ax, bx, k / n),
+      y = lerp(ay, by, k / n);
+    px.put(x, y, IRIS[5], a, true);
+    px.put(x + 1, y, IRIS[3], a * 0.4, true);
+    px.put(x - 1, y, IRIS[3], a * 0.4, true);
+  }
+}
+
+/** Drifting wreckage: shards in two palettes; gather 0..1 pulls them toward a point. */
+function wreckage(px, t, s, n, seed, cx, cy, spread, gather = 0, gx = cx, gy = cy) {
+  for (let k = 0; k < n; k++) {
+    const a = h3(k, seed, 1) * Math.PI * 2 + t * 0.0008 * (h3(k, seed, 7) - 0.5);
+    const r = (0.25 + h3(k, seed, 2) ** 0.7) * spread;
+    let x = cx + Math.cos(a) * r,
+      y = cy + Math.sin(a) * r * 0.55;
+    x = lerp(x, gx, gather * h3(k, seed, 8));
+    y = lerp(y, gy, gather * h3(k, seed, 8));
+    const z = Math.max(1, (1 + h3(k, seed, 3) * 3) * s);
+    const hot = h3(k, seed, 4) > 0.82;
+    for (let yy = 0; yy < z * 0.8; yy++)
+      for (let xx = 0; xx < z; xx++) {
+        const lit = yy < 1 || xx < 1 ? 0.45 : 0.18;
+        px.put(
+          x + xx,
+          y + yy,
+          hot && yy > z * 0.4
+            ? px.rc(MAGMA, 0.5, x + xx, y + yy)
+            : px.rc(R.hull, lit + h3(k, xx, yy) * 0.15, x + xx, y + yy),
+        );
+      }
+  }
+}
+
+// ---------- 우리 sprite: the real game matter, baked from the locked rig into two poses with per-chunk ids
+const URI = { ready: false, loading: false, A: null, G: null, small: null };
+/** The real Planet and Supernova sprites as pixels ({ width, height, data }), for blitSprite. */
+const SPR = {};
+function loadUri() {
+  if (URI.loading) return;
+  URI.loading = true;
+  const load = (n) =>
+    new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = rej;
+      im.src = `media/story/${n}.png`;
+    });
+  // the real Planet and Supernova too, for drawing the scale reveal into a frame (the teaser film)
+  const sprite = (n) =>
+    new Promise((res) => {
+      const im = new Image();
+      im.onload = () => res({ width: im.width, height: im.height, data: pixelsOf(im) });
+      im.onerror = () => res(null);
+      im.src = `media/titans/${n}.png`;
+    });
+  sprite('planet').then((s) => (SPR.planet = s));
+  sprite('supernova').then((s) => (SPR.supernova = s));
+  Promise.all(['uri-a', 'uri-a-id', 'uri-g', 'uri-g-id'].map(load))
+    .then(([a, ai, g, gi]) => {
+      URI.A = bakeUri(a, ai);
+      URI.G = bakeUri(g, gi);
+      if (window.__CUES) weldsFromCues(URI.A, window.__CUES);
+      URI.small = shrinkUri(URI.A, 6);
+      URI.ready = true;
+    })
+    .catch(() => {});
+}
+function pixelsOf(im) {
+  const c = document.createElement('canvas');
+  c.width = im.width;
+  c.height = im.height;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(im, 0, 0);
+  return g.getImageData(0, 0, im.width, im.height).data;
+}
+// assembly windows (fraction of the genesis beat) per part code; codes follow the rig's part order
+// 1 pyL 2 pyR 3 pelvis 4 uaL 5 uaR 6 domeL 7 domeR 8 chamber 9 faL 10 faR 11 fistL 12 fistR 13 moon · 200 hot core · 201 cold core · 255 loop
+const WIN = {
+  200: [0, 0.16],
+  201: [0, 0.16],
+  255: [0.15, 0.27],
+  8: [0.2, 0.46],
+  3: [0.3, 0.5],
+  1: [0.36, 0.56],
+  2: [0.36, 0.56],
+  6: [0.44, 0.64],
+  7: [0.44, 0.64],
+  4: [0.54, 0.72],
+  5: [0.54, 0.72],
+  9: [0.6, 0.8],
+  10: [0.6, 0.8],
+  11: [0.68, 0.9],
+  12: [0.68, 0.9],
+  13: [0.86, 0.97],
+};
+function bakeUri(im, idim) {
+  const w = im.width,
+    h = im.height,
+    c = pixelsOf(im),
+    id = pixelsOf(idim);
+  const map = new Map();
+  let pyBottom = [0, 0, 0, 0]; // x,y of the two pylon tips
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (c[i + 3] < 128) continue;
+      const code = id[i],
+        ch = id[i + 1] | ((id[i + 2] & 127) << 8),
+        em = id[i + 2] >> 7;
+      const key = code * 65536 + ch;
+      let g = map.get(key);
+      if (!g) map.set(key, (g = { key, code, px: [], sx: 0, sy: 0 }));
+      g.px.push(x, y, c[i], c[i + 1], c[i + 2], em);
+      g.sx += x;
+      g.sy += y;
+      if (code === 1 && y > pyBottom[1]) pyBottom = [x, y, pyBottom[2], pyBottom[3]];
+      if (code === 2 && y > pyBottom[3]) pyBottom = [pyBottom[0], pyBottom[1], x, y];
+    }
+  const list = [...map.values()];
+  for (const g of list) {
+    const n = g.px.length / 6;
+    g.cx = g.sx / n;
+    g.cy = g.sy / n;
+    for (let q = 0; q < g.px.length; q += 6) {
+      g.px[q] -= g.cx;
+      g.px[q + 1] -= g.cy;
+    }
+    g.seed = h3(g.cx * 0.37, g.cy * 0.53, g.code);
+    const win = WIN[g.code] || [0.3, 0.6];
+    g.ta = g.code === 255 ? win[1] : win[0] + 0.1 + g.seed * (win[1] - win[0] - 0.1);
+    // where the piece waits in the wreckage field before it is pulled in
+    const a = g.seed * Math.PI * 2 + g.code;
+    const r = 0.75 + h3(g.code, g.seed * 99, 3) * 0.9;
+    g.fx = Math.cos(a) * w * r * 0.75;
+    g.fy = Math.sin(a) * h * r * 0.6;
+  }
+  // the two cores wait where the two worlds died: left and right
+  for (const g of list) {
+    if (g.code === 200) {
+      g.fx = -w * 0.62;
+      g.fy = 20;
+    }
+    if (g.code === 201) {
+      g.fx = w * 0.62;
+      g.fy = -10;
+    }
+  }
+  return { w, h, list, map, py: pyBottom };
+}
+/**
+ * Trailer mode: take every weld's moment from the score's cue sheet (tools/teaser/cues.json, `welds: [time, code, size]`),
+ * so each chunk lands on its clank in press/teaser/score.wav even if WIN above is retuned. Groups are paired with the
+ * listed welds of the same part and size, in time order; ta is solved from the time with the film's genesis mapping
+ * (trailer.html: f = u · 0.97 and PRO[4] welds at k = f · 1.08 − 0.02). With today's WIN the result is identical.
+ */
+function weldsFromCues(A, cues) {
+  const gen = cues.shots.find((s) => s.name === 'genesis');
+  if (!gen) return;
+  const by = new Map();
+  for (const [time, code, size] of cues.welds) {
+    const k = `${code}|${size}`;
+    (by.get(k) || by.set(k, []).get(k)).push(time);
+  }
+  for (const v of by.values()) v.sort((a, b) => a - b);
+  const groups = new Map();
+  for (const g of A.list) {
+    if (g.code === 255) continue;
+    const k = `${g.code}|${g.px.length / 6}`;
+    (groups.get(k) || groups.set(k, []).get(k)).push(g);
+  }
+  let paired = 0;
+  for (const [k, gs] of groups) {
+    const times = by.get(k);
+    if (!times) continue;
+    gs.sort((a, b) => a.ta - b.ta);
+    gs.forEach((g, i) => {
+      if (times[i] == null) return;
+      g.ta = ((times[i] - gen.start) / gen.dur) * 0.97 * 1.08 - 0.02;
+      paired++;
+    });
+  }
+  URI.cuePaired = paired;
+}
+
+/** A small copy (for distant shots): majority-occupied blocks, averaged colour. */
+function shrinkUri(A, k) {
+  const w = Math.ceil(A.w / k),
+    h = Math.ceil(A.h / k);
+  const acc = new Float32Array(w * h * 5);
+  for (const g of A.list)
+    for (let q = 0; q < g.px.length; q += 6) {
+      const x = Math.round(g.cx + g.px[q]),
+        y = Math.round(g.cy + g.px[q + 1]);
+      const i = ((y / k) | 0) * w + ((x / k) | 0);
+      acc[i * 5] += g.px[q + 2];
+      acc[i * 5 + 1] += g.px[q + 3];
+      acc[i * 5 + 2] += g.px[q + 4];
+      acc[i * 5 + 3] += 1;
+      acc[i * 5 + 4] += g.px[q + 5];
+    }
+  const out = [];
+  for (let i = 0; i < w * h; i++) {
+    const n = acc[i * 5 + 3];
+    if (n < (k * k) / 2) continue;
+    const em = acc[i * 5 + 4] / n > 0.4;
+    out.push(
+      i % w,
+      (i / w) | 0,
+      (acc[i * 5] / n) * (em ? 1.15 : 1),
+      (acc[i * 5 + 1] / n) * (em ? 1.15 : 1),
+      (acc[i * 5 + 2] / n) * (em ? 1.15 : 1),
+      em ? 1 : 0,
+    );
+  }
+  return { w, h, px: out };
+}
+
+const easeOutBack = (u) => 1 + 2.2 * (u - 1) ** 3 + 1.2 * (u - 1) ** 2;
+/**
+ * Draw 우리 with its top-left at (ox, oy).
+ * k: assembly 0..1 (1 = whole). morph: 0..1 from the open stance to the braced guard.
+ * heat: extra glow on the loop and cores. Returns the list of glowing pixels for the bloom pass.
+ */
+function drawUri(px, ox, oy, t, { k = 1, morph = 0, heat = 0 } = {}) {
+  const A = URI.A,
+    G = URI.G;
+  const em = [];
+  const occ =
+    px.occ && px.occ.length === px.w * px.h ? px.occ.fill(0) : (px.occ = new Uint8Array(px.w * px.h));
+  const FL = 0.13;
+  // (speed: one Uint32 write per pixel, no per-pixel arrays, and the outline pass only covers what was drawn; 우리 is
+  // ~77,000 pixels a frame at the game's own pixel size)
+  const u32 = px.u32,
+    PW = px.w,
+    PH = px.h;
+  let bx0 = PW,
+    by0 = PH,
+    bx1 = -1,
+    by1 = -1;
+  const plot = (x, y, r, g, b, e, flash) => {
+    x = Math.round(x);
+    y = Math.round(y);
+    if (x < 0 || y < 0 || x >= PW || y >= PH) return;
+    if (flash > 0) {
+      r += (255 - r) * flash;
+      g += (200 - g) * flash;
+      b += (120 - b) * flash;
+    }
+    const i = y * PW + x;
+    u32[i] = (255 << 24) | ((b & 255) << 16) | ((g & 255) << 8) | (r & 255);
+    occ[i] = 1;
+    if (x < bx0) bx0 = x;
+    if (x > bx1) bx1 = x;
+    if (y < by0) by0 = y;
+    if (y > by1) by1 = y;
+    if (e || flash > 0.3) em.push(i, r, g, b);
+  };
+  const m = ease(clamp(morph));
+  for (const g of A.list) {
+    // assembly: each piece waits in the field, then is hauled in with a little overshoot and welds with a flash
+    let u = 1,
+      flash = 0;
+    if (k < 1) {
+      u = clamp((k - (g.ta - FL)) / FL);
+      flash = k >= g.ta ? Math.max(0, 1 - (k - g.ta) / 0.05) : 0;
+    }
+    let dx = 0,
+      dy = 0;
+    if (u < 1) {
+      const e = easeOutBack(u);
+      const drift = (1 - u) * 6;
+      dx = g.fx * (1 - e) + Math.sin(t * 0.01 + g.seed * 20) * drift;
+      dy = g.fy * (1 - e) + Math.cos(t * 0.013 + g.seed * 17) * drift;
+    }
+    if (g.code === 255) {
+      // the loop ignites around its circuit once both hearts are in place
+      const rev = clamp((k - 0.15) / 0.12);
+      if (rev <= 0 && k < 1) continue;
+      const boost = heat * 0.5 + (k < 1 ? (1 - rev) * 0.6 : 0);
+      if (m > 0.5) continue; // the braced pose has its own loop
+      for (let q = 0; q < g.px.length; q += 6) {
+        if (k < 1 && (Math.atan2(g.px[q + 1], g.px[q]) / Math.PI + 1) / 2 > rev) continue;
+        plot(ox + g.cx + g.px[q], oy + g.cy + g.px[q + 1], g.px[q + 2], g.px[q + 3], g.px[q + 4], 1, boost);
+      }
+      continue;
+    }
+    // stance change: pieces travel from the open stance to the guard; halfway they swap to the guard's own pixels
+    let src = g,
+      mx = 0,
+      my = 0;
+    if (m > 0) {
+      const tw = G.map.get(g.key);
+      if (tw) {
+        if (m < 0.5) {
+          mx = (tw.cx - g.cx) * m;
+          my = (tw.cy - g.cy) * m;
+        } else {
+          src = tw;
+          mx = (g.cx - tw.cx) * (1 - m);
+          my = (g.cy - tw.cy) * (1 - m);
+        }
+      } else if (m >= 0.5) continue;
+    }
+    const hot = g.code === 200 || g.code === 201 ? heat * 0.35 : 0;
+    for (let q = 0; q < src.px.length; q += 6)
+      plot(
+        ox + src.cx + src.px[q] + dx + mx,
+        oy + src.cy + src.px[q + 1] + dy + my,
+        src.px[q + 2],
+        src.px[q + 3],
+        src.px[q + 4],
+        src.px[q + 5],
+        Math.max(flash, hot),
+      );
+  }
+  if (m >= 0.5)
+    for (const g of G.list) {
+      if (A.map.has(g.key) && g.code !== 255) continue;
+      for (let q = 0; q < g.px.length; q += 6)
+        plot(
+          ox + g.cx + g.px[q],
+          oy + g.cy + g.px[q + 1],
+          g.px[q + 2],
+          g.px[q + 3],
+          g.px[q + 4],
+          g.px[q + 5],
+          g.code === 255 ? heat * 0.4 : 0,
+        );
+    }
+  // dark outline round the whole silhouette, like the game's compose pass
+  if (bx1 < 0) return;
+  // the outline covers the body's own frame (pieces still flying in from far away go without it: they are specks)
+  const x0 = Math.max(1, bx0 - 1, Math.floor(ox - 4)),
+    x1 = Math.min(PW - 2, bx1 + 1, Math.ceil(ox + A.w + 4));
+  const y0 = Math.max(1, by0 - 1, Math.floor(oy - 4)),
+    y1 = Math.min(PH - 2, by1 + 1, Math.ceil(oy + A.h + 4));
+  const OUTLINE = (255 << 24) | (8 << 16) | (4 << 8) | 4;
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const i = y * PW + x;
+      if (occ[i]) continue;
+      if (occ[i - 1] || occ[i + 1] || occ[i - PW] || occ[i + PW]) u32[i] = OUTLINE;
+    }
+  // bloom: every glowing pixel spills a little light around itself (additive, 4 neighbours at 0.12, 4 more at 0.05)
+  const d = px.d;
+  const spill = (j, r, g, b, a) => {
+    const o = j * 4;
+    d[o] = Math.min(255, d[o] + r * a);
+    d[o + 1] = Math.min(255, d[o + 1] + g * a);
+    d[o + 2] = Math.min(255, d[o + 2] + b * a);
+  };
+  for (let q = 0; q < em.length; q += 4) {
+    const i = em[q],
+      r = em[q + 1],
+      g = em[q + 2],
+      b = em[q + 3];
+    const x = i % PW,
+      y = (i - x) / PW;
+    if (x > 1 && x < PW - 2 && y > 1 && y < PH - 2) {
+      spill(i - 1, r, g, b, 0.12);
+      spill(i + 1, r, g, b, 0.12);
+      spill(i - PW, r, g, b, 0.12);
+      spill(i + PW, r, g, b, 0.12);
+      spill(i - 2, r, g, b, 0.05);
+      spill(i + 2, r, g, b, 0.05);
+      spill(i - 2 * PW, r, g, b, 0.05);
+      spill(i + 2 * PW, r, g, b, 0.05);
+    }
+  }
+}
+
+/** Weld sparks: short hot streaks flying off where pieces are joining right now. */
+function weldSparks(px, ox, oy, k) {
+  if (!URI.ready || k >= 1) return;
+  for (const g of URI.A.list) {
+    if (g.code === 255 || k < g.ta || k > g.ta + 0.04) continue;
+    const n = 3 + ((g.seed * 5) | 0);
+    for (let j = 0; j < n; j++) {
+      const a = h3(g.key, j, 1) * Math.PI * 2;
+      const d = (k - g.ta) * 900 * (0.5 + h3(g.key, j, 2));
+      const x = ox + g.cx + Math.cos(a) * d,
+        y = oy + g.cy + Math.sin(a) * d;
+      px.put(x, y, [255, 210, 140], 1 - (k - g.ta) / 0.04, true);
+      px.put(x - Math.cos(a), y - Math.sin(a), [255, 120, 40], 0.6 * (1 - (k - g.ta) / 0.04), true);
+    }
+  }
+}
+
+/** Where to put 우리 on screen: right of centre when the text sits on the left (wide screens). */
+function uriPlace(px) {
+  const side = innerWidth > 900 && innerWidth / innerHeight > 1.25;
+  const cx = side ? px.w * 0.62 : px.w * 0.5;
+  return { ox: Math.round(cx - URI.A.w / 2), oy: Math.round(px.h * (side ? 0.5 : 0.42) - URI.A.h / 2), side };
+}
+
 const PRO = [
-  // 0: two specks very far away; now and then they touch and the light arrives late
-  (px, f, t, st) => {
-    drawStars(px, st, t, { drift: 1 });
-    const cx = px.w * 0.5,
-      cy = px.h * 0.36;
-    const a = t * 0.012;
-    const ax = cx + Math.cos(a) * 3,
-      ay = cy + Math.sin(a) * 1.2;
-    const bx = cx - Math.cos(a) * 3,
-      by = cy - Math.sin(a) * 1.2;
-    px.put(ax, ay, R.pocean[4]);
-    px.put(bx, by, R.sun[5]);
-    const flash = Math.max(0, Math.sin(t * 0.035)) ** 40;
-    if (flash > 0.02) glow(px, cx, cy, 2 + flash * 3, R.sun[5], flash);
+  // I. two worlds, close enough to see each other's lights; ships cross between them
+  {
+    w: 1,
+    draw(px, f, t, st) {
+      drawStars(px, st, t, { drift: 1 });
+      const s = px.h / 160;
+      const cx = px.w * 0.5,
+        cy = px.h * 0.3;
+      const a = t * 0.004 + f * 0.6;
+      const A = [cx + Math.cos(a) * 30 * s, cy + Math.sin(a) * 9 * s];
+      const B = [cx - Math.cos(a) * 30 * s, cy - Math.sin(a) * 9 * s];
+      for (let j = 0; j < 9; j++) {
+        const u = (t * 0.004 + j / 9) % 1;
+        const x = lerp(A[0], B[0], u),
+          y = lerp(A[1], B[1], u) - Math.sin(u * Math.PI) * 14 * s;
+        px.put(x, y, CIV[2], 0.9);
+      }
+      const dA = () => sphere(px, A[0], A[1], 19 * s, worldSurf(W1, W1L, 3), t * 0.003, W1);
+      const dB = () => sphere(px, B[0], B[1], 13 * s, worldSurf(W2, W2L, 11), -t * 0.004, W2);
+      if (Math.sin(a) < 0) {
+        dA();
+        dB();
+      } else {
+        dB();
+        dA();
+      }
+    },
   },
-  // 1: the old titans: a world that pulls, a star that burns, circling with dust between them
-  (px, f, t, st) => {
-    drawStars(px, st, t, { drift: 1 });
-    const cx = px.w * 0.5,
-      cy = px.h * 0.36;
-    const s = Math.min(px.h / 160, px.w / 110); // portrait phones: fit the width too
-    const a = t * 0.006 + f * 1.4;
-    const pr = 14 * s,
-      sr = 11 * s;
-    const P = [cx + Math.cos(a) * 34 * s, cy + Math.sin(a) * 12 * s];
-    const S = [cx - Math.cos(a) * 34 * s, cy - Math.sin(a) * 12 * s];
-    for (let k = 0; k < 140; k++) {
-      const b = a - k * 0.02;
-      const r2 = 34 * s + Math.sin(k * 1.3) * 3 * s;
-      px.put(cx + Math.cos(b) * r2, cy + Math.sin(b) * r2 * 0.36 + Math.sin(k) * s, R.rock[3], 0.5 - k / 300);
-    }
-    const back = Math.sin(a) < 0;
-    const drawP = () => sphere(px, P[0], P[1], pr, planetSurf, t * 0.004, R.pocean);
-    const drawS = () => {
-      glow(px, S[0], S[1], sr, R.sun[4], 0.55);
-      sphere(px, S[0], S[1], sr, sunSurf, t * 0.01);
-    };
-    if (back) {
-      drawP();
-      drawS();
-    } else {
-      drawS();
-      drawP();
-    }
+  // II. an eye opened in the dark and looked at them; where it looked, the crust cracked
+  {
+    w: 1,
+    draw(px, f, t, st) {
+      drawStars(px, st, t, { drift: 0.6 });
+      const s = px.h / 160;
+      const open = ease(clamp(f / 0.4));
+      const [ix, iy] = eye(
+        px,
+        px.w * 0.5,
+        px.h * 0.26,
+        px.w * 0.3,
+        px.h * 0.085,
+        open,
+        Math.sin(t * 0.006) * 0.3 + 0.1,
+        t,
+        ease(clamp((f - 0.4) / 0.4)),
+      );
+      const A = [px.w * 0.6, px.h * 0.62],
+        B = [px.w * 0.4, px.h * 0.6];
+      const crack = ease(clamp((f - 0.45) / 0.45));
+      sphere(px, B[0], B[1], 9 * s, worldSurf(W2, W2L, 11, crack * 0.6), -t * 0.004, W2);
+      sphere(px, A[0], A[1], 13 * s, worldSurf(W1, W1L, 3, crack), t * 0.003, W1);
+      if (f > 0.42) {
+        const g = clamp((f - 0.42) / 0.08) * (0.7 + Math.sin(t * 0.3) * 0.15);
+        gaze(px, ix, iy, A[0], A[1], g);
+        gaze(px, ix, iy, B[0], B[1], g * 0.6);
+      }
+    },
   },
-  // 2: 우리: two world-cores in one load-bearing infinity loop, rubble held around them, the command moon above
-  (px, f, t, st) => {
-    drawStars(px, st, t, { drift: 1 });
-    // a little higher than the other beats: this beat's caption runs to four lines
-    const cx = px.w * 0.5,
-      cy = px.h * 0.33;
-    const s = Math.min(px.h / 175, px.w / 140);
-    const A = 46 * s;
-    // rubble shell
-    for (let k = 0; k < 70; k++) {
-      const b = (k / 70) * Math.PI * 2 + t * 0.0015;
-      const rr = A * (1.05 + h3(k, 2, 9) * 0.35);
-      const x = cx + Math.cos(b) * rr,
-        y = cy + Math.sin(b) * rr * 0.62;
-      const z = 1 + h3(k, 3, 9) * 3 * s;
-      for (let yy = 0; yy < z; yy++)
-        for (let xx = 0; xx < z * 1.3; xx++)
+  // III. then something came to eat
+  {
+    w: 1,
+    draw(px, f, t, st) {
+      const k = ease(clamp(f * 1.2));
+      drawStars(px, st, t, { pull: k * 0.5 });
+      const s = px.h / 160;
+      const A = [px.w * 0.36, px.h * 0.44],
+        B = [px.w * 0.6, px.h * 0.4];
+      const bite = ease(clamp((f - 0.35) / 0.4));
+      const mr = px.h * 0.2;
+      const mx = lerp(px.w + mr, B[0] + 10 * s, ease(clamp(f / 0.45))),
+        my = lerp(px.h * 0.25, B[1], ease(clamp(f / 0.45)));
+      // the neck trails back out over the edge
+      const neck = [];
+      for (let j = 0; j <= 10; j++) {
+        const u = j / 10;
+        neck.push({
+          x: lerp(mx + mr * 0.6, px.w + mr * 2, u),
+          y: lerp(my, px.h * 0.15, u) + Math.sin(u * 5 + t * 0.02) * mr * 0.2,
+          r: mr * lerp(0.62, 0.9, u),
+        });
+      }
+      sphere(px, A[0], A[1], 17 * s, worldSurf(W1, W1L, 3, 1), t * 0.003, W1);
+      sphere(
+        px,
+        B[0],
+        B[1],
+        12 * s,
+        worldSurf(W2, W2L, 11, 0.6),
+        -t * 0.004,
+        W2,
+        (x, y) => Math.hypot(x - mx, y - my) < mr * bite * 1.05,
+      );
+      if (bite > 0) wreckage(px, t, s * 0.7, 60, 4, B[0], B[1], 30 * s * bite);
+      tube(px, neck, 9, 1);
+      maw(px, mx, my, mr, 0.3 + (1 - bite) * 0.6, t * 0.02);
+      edgeCoils(px, t, 0.4 + k * 0.4, 1, [1]);
+    },
+  },
+  // IV. ruin: two burning hearts, a sea of wreckage, and people still alive in it
+  {
+    w: 1,
+    draw(px, f, t, st) {
+      drawStars(px, st, t, { drift: 0.4 });
+      const s = px.h / 160;
+      const H1 = [px.w * 0.3, px.h * 0.42],
+        H2 = [px.w * 0.7, px.h * 0.38];
+      wreckage(px, t, s, 220, 2, px.w * 0.5, px.h * 0.42, px.w * 0.55, f * 0.15);
+      glow(px, H1[0], H1[1], 10 * s, R.coreA[3], 0.55);
+      sphere(px, H1[0], H1[1], 11 * s, coreSurf(R.coreA, t * 0.01), t * 0.01);
+      glow(px, H2[0], H2[1], 7 * s, R.coreB[3], 0.6);
+      sphere(px, H2[0], H2[1], 7 * s, coreSurf(R.coreB, -t * 0.02), -t * 0.02);
+      // arks: warm specks, slowly gathering between the hearts
+      for (let j = 0; j < 40; j++) {
+        const a = h3(j, 8, 1) * Math.PI * 2;
+        const r = (0.3 + h3(j, 8, 2)) * px.w * 0.35 * (1 - f * 0.5);
+        px.put(
+          px.w * 0.5 + Math.cos(a + t * 0.002) * r,
+          px.h * 0.42 + Math.sin(a + t * 0.002) * r * 0.4,
+          CIV[1 + (j % 2)],
+          0.95,
+        );
+      }
+    },
+  },
+  // V. they did not run. they built: the wreck is hauled in piece by piece around the two hearts
+  {
+    w: 2.4,
+    side: true,
+    draw(px, f, t, st) {
+      drawStars(px, st, t, { drift: 0.4 });
+      if (!URI.ready) return PRO_FALLBACK(px, f, t);
+      const { ox, oy } = uriPlace(px);
+      const k = clamp(f * 1.08 - 0.02);
+      drawUri(px, ox, oy, t, { k, heat: 0 });
+      weldSparks(px, ox, oy, k);
+    },
+  },
+  // VI. 우리: it wakes, braces, the loop takes the load
+  {
+    w: 1.3,
+    side: true,
+    draw(px, f, t, st) {
+      const brace = ease(clamp((f - 0.08) / 0.4));
+      const flare = f > 0.55 ? Math.max(0, 1 - (f - 0.55) / 0.3) : 0;
+      const shake = flare > 0.6 ? Math.round(Math.sin(t * 2.7) * 2) : 0;
+      drawStars(px, st, t, { drift: 0.4, ox: shake });
+      if (!URI.ready) return PRO_FALLBACK(px, 1, t);
+      const { ox, oy } = uriPlace(px);
+      const A = URI.A;
+      // pylon thrust: two blue-white plumes holding the mass steady
+      const thrust = 0.35 + brace * 0.65;
+      for (const [x, y] of [
+        [A.py[0], A.py[1]],
+        [A.py[2], A.py[3]],
+      ])
+        for (let j = 0; j < 26 * thrust; j++)
           px.put(
-            x + xx,
-            y + yy,
-            px.rc(R.hull, 0.2 + (yy < 1 ? 0.5 : 0) + h3(k, xx, yy) * 0.2, x + xx, y + yy),
+            ox + x + Math.sin(j * 1.7 + t * 0.5) * (j / 12),
+            oy + y + 2 + j,
+            R.coreB[j < 6 ? 5 : 3],
+            (1 - j / (26 * thrust)) * 0.8,
+            true,
           );
-    }
-    const lem = (u) => {
-      const d = 1 + Math.sin(u) ** 2;
-      return [cx + (A * Math.cos(u)) / d, cy + (A * Math.sin(u) * Math.cos(u)) / d];
-    };
-    // cores sit in the lobes; the big hot one breathes, the dense one spins
-    const pulse = 1 + Math.sin(t * 0.05) * 0.04;
-    glow(px, cx - A * 0.62, cy, 12 * s, R.coreA[3], 0.5);
-    sphere(px, cx - A * 0.62, cy, 14 * s * pulse, coreSurf(R.coreA), t * 0.01);
-    glow(px, cx + A * 0.62, cy, 8 * s, R.coreB[3], 0.55);
-    sphere(px, cx + A * 0.62, cy, 9 * s, coreSurf(R.coreB), -t * 0.02);
-    // the loop: light flows through it; f drives the load surge
-    for (let k = 0; k < 600; k++) {
-      const u = (k / 600) * Math.PI * 2;
-      const [x, y] = lem(u);
-      const flow = (Math.sin(u * 2 - t * 0.08) * 0.5 + 0.5) ** 6;
-      px.put(x, y, flow > 0.5 ? R.coreB[5] : R.coreB[3], 0.55 + flow * 0.45);
-      if (flow > 0.7) px.put(x, y - 1, R.coreB[4], 0.4, true);
-    }
-    // command moon on its gravity tether
-    const mx = cx + Math.sin(t * 0.01) * 4 * s,
-      my = cy - A * 0.95 + Math.cos(t * 0.013) * 2 * s;
-    for (let k = 0; k < 14; k++)
-      px.put(lerp(cx, mx, k / 14), lerp(cy - A * 0.2, my, k / 14), R.coreB[3], 0.15);
-    sphere(px, mx, my, 4 * s, moonSurf, 0, null);
-  },
-  // 3: the blow: two bodies meet, a shock ring runs across the sky, matter shears off
-  (px, f, t, st) => {
-    const T = (t % 150) / 150;
-    const shake = T > 0.33 && T < 0.45 ? (Math.sin(t * 3) * 2) | 0 : 0;
-    drawStars(px, st, t, { drift: 1, ox: shake });
-    const cx = px.w * 0.5 + shake,
-      cy = px.h * 0.37;
-    const s = Math.min(px.h / 165, px.w / 150);
-    const close = ease(clamp(T / 0.33));
-    const pr = 18 * s,
-      sr = 13 * s;
-    const P = [cx - lerp(60, 17, close) * s, cy + 4 * s];
-    const S = [cx + lerp(60, 15, close) * s, cy - 2 * s];
-    // debris after impact
-    if (T > 0.33)
-      for (let k = 0; k < 90; k++) {
-        const a = h3(k, 5, 1) * Math.PI * 2;
-        const sp = (20 + h3(k, 5, 2) * 80) * s;
-        const d = (T - 0.33) * sp;
-        const x = cx + Math.cos(a) * d,
-          y = cy + Math.sin(a) * d * 0.7;
-        const c = k % 3 ? R.rock[3 + (k % 2)] : R.sun[4];
-        px.put(x, y, c, 1 - (T - 0.33));
-        px.put(x - Math.cos(a), y - Math.sin(a) * 0.7, c, 0.4 * (1 - T));
+      drawUri(px, ox + shake, oy, t, { k: 1, morph: brace, heat: 0.4 + flare });
+      if (flare > 0) {
+        const cx = ox + A.w * 0.55,
+          cy = oy + A.h * 0.45;
+        const rr = (1 - flare) * px.w * 0.7;
+        for (let a = 0; a < Math.PI * 2; a += 1 / Math.max(8, rr))
+          px.put(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.5, [200, 180, 255], flare * 0.8, true);
       }
-    sphere(px, P[0], P[1], pr, planetSurf, t * 0.004, R.pocean);
-    glow(px, S[0], S[1], sr, R.sun[4], 0.5);
-    sphere(px, S[0], S[1], sr, sunSurf, t * 0.01);
-    if (T > 0.33) {
-      const k = (T - 0.33) / 0.67;
-      const rr = k * Math.max(px.w, px.h) * 0.9;
-      for (let a = 0; a < Math.PI * 2; a += 1 / Math.max(8, rr)) {
-        const x = cx + Math.cos(a) * rr,
-          y = cy + Math.sin(a) * rr * 0.55;
-        px.put(x, y, R.sun[5], (1 - k) * 0.9, true);
-        px.put(x, y + 1, R.sun[3], (1 - k) * 0.5, true);
-      }
-      if (k < 0.12) glow(px, cx, cy, 10 * s * (1 - k * 6), [255, 255, 255], 1 - k * 8);
-    }
+    },
   },
-  // 4: something felt it: the sky is pulled to the edges, coils come over the rim, a maw opens below
-  (px, f, t, st) => {
-    const pull = ease(clamp(f * 1.4));
-    drawStars(px, st, t, { pull, drift: 1 - pull });
-    edgeCoils(px, t, pull, 1);
-    const r = px.h * (0.28 + pull * 0.16);
-    maw(px, px.w * 0.5, px.h + r * (0.95 - pull * 0.75), r, pull, t * 0.02);
+  // VII. now it drifts between the galaxies, hunting an eye and a mouth
+  {
+    w: 1.3,
+    draw(px, f, t, st) {
+      drawStars(px, st, t, { drift: 0.2, ox: -f * 40 });
+      // far away: the eye, half-open, and a coil sliding along the rim of the dark
+      eye(px, px.w * 0.8, px.h * 0.22, px.w * 0.07, px.h * 0.018, 0.5 + Math.sin(t * 0.01) * 0.1, 0, t, 1);
+      const cr = [];
+      for (let j = 0; j <= 14; j++)
+        cr.push({
+          x: px.w * (0.7 + j * 0.03),
+          y: px.h * 0.9 + Math.sin(j * 0.8 + t * 0.01) * px.h * 0.03,
+          r: px.h * 0.02,
+        });
+      tube(px, cr, 2, 0.6, false);
+      if (!URI.ready) return;
+      const S = URI.small;
+      const x0 = Math.round(lerp(px.w * 0.08, px.w * 0.22, f)),
+        y0 = Math.round(px.h * 0.14 + Math.sin(t * 0.01) * 2);
+      for (let q = 0; q < S.px.length; q += 6)
+        px.put(x0 + S.px[q], y0 + S.px[q + 1], [S.px[q + 2], S.px[q + 3], S.px[q + 4]]);
+      glow(px, x0 + S.w * 0.5, y0 + S.h * 0.42, 6, R.coreA[3], 0.35);
+      for (let j = 0; j < 14; j++)
+        px.put(x0 + S.w * (0.4 + (j % 2) * 0.2), y0 + S.h + j, R.coreB[3], 0.5 - j / 30, true);
+    },
   },
 ];
 
+/** If the 우리 sprite has not arrived yet, the old procedural sketch stands in. */
+function PRO_FALLBACK(px, f, t) {
+  const cx = px.w * 0.6,
+    cy = px.h * 0.47;
+  const s = px.h / 175;
+  const A = 46 * s;
+  const lem = (u) => {
+    const d = 1 + Math.sin(u) ** 2;
+    return [cx + (A * Math.cos(u)) / d, cy + (A * Math.sin(u) * Math.cos(u)) / d];
+  };
+  sphere(px, cx - A * 0.62, cy, 14 * s, coreSurf(R.coreA, t * 0.01), t * 0.01);
+  sphere(px, cx + A * 0.62, cy, 9 * s, coreSurf(R.coreB, -t * 0.02), -t * 0.02);
+  for (let k = 0; k < 600 * f; k++) {
+    const [x, y] = lem((k / 600) * Math.PI * 2);
+    px.put(x, y, R.coreB[4], 0.8);
+  }
+}
+
 /** Coils pressing in over the left and right edges (and the top corners), writhing. amt 0..1 */
-function edgeCoils(px, t, amt, thick = 1) {
+function edgeCoils(px, t, amt, thick = 1, sides = [-1, 1]) {
   const { w, h } = px;
   const T = t * 0.01;
   const paths = [];
-  for (const side of [-1, 1]) {
+  for (const side of sides) {
     for (let c = 0; c < 3; c++) {
       const path = [];
       const base = (h / 18) * (1.4 + c * 0.5) * thick;
@@ -746,7 +1368,7 @@ function mouthPath() {
   return MOUTH_PATH;
 }
 
-function scaleScene(px, P, t, st) {
+function scaleScene(px, P, t, st, dom = false) {
   // P: 0..3 along the keys
   const i = Math.min(2, Math.floor(P));
   const f = ease(P - i);
@@ -807,9 +1429,40 @@ function scaleScene(px, P, t, st) {
       if (k % 2) px.put(ex + Math.cos(a) * 4, ey + Math.sin(a) * 4, [184, 228, 244], al * 0.8);
     }
   }
+  const sn = P > 1.2 ? clamp((P - 1.2) * 2) : 0;
+  // the site lays the real sprites over the canvas as images (crisp at any screen size); the film draws them into the
+  // frame itself, at whole-number scales while they are ≥ 1
+  if (!dom) {
+    blitSprite(px, SPR.planet, X(SPRITES.planet.x), Y(SPRITES.planet.y), s, 1);
+    if (sn > 0) blitSprite(px, SPR.supernova, X(SPRITES.supernova.x), Y(SPRITES.supernova.y), s, sn);
+  }
   px.vignette(0.9);
   // where the sprites go, in canvas pixels per world unit (scaleReveal turns it into CSS)
-  return { X, Y, s, supernova: P > 1.2 ? clamp((P - 1.2) * 2) : 0 };
+  return { X, Y, s, supernova: sn };
+}
+
+/** Draw a sprite's pixels (ImageData) centred at (cx, cy), nearest-neighbour, scale s (snapped to whole numbers ≥ 1). */
+function blitSprite(px, im, cx, cy, s, a = 1) {
+  if (!im) return;
+  const k = s >= 1 ? Math.round(s) : s;
+  const w = im.width * k,
+    h = im.height * k;
+  const x0 = Math.round(cx - w / 2),
+    y0 = Math.round(cy - h / 2);
+  const X0 = Math.max(0, x0),
+    X1 = Math.min(px.w, Math.ceil(x0 + w));
+  const Y0 = Math.max(0, y0),
+    Y1 = Math.min(px.h, Math.ceil(y0 + h));
+  const d = im.data;
+  for (let y = Y0; y < Y1; y++) {
+    const sy = Math.min(im.height - 1, ((y - y0) / k) | 0);
+    for (let x = X0; x < X1; x++) {
+      const sx = Math.min(im.width - 1, ((x - x0) / k) | 0);
+      const i = (sy * im.width + sx) * 4;
+      if (d[i + 3] < 128) continue;
+      px.put(x, y, [d[i], d[i + 1], d[i + 2]], a);
+    }
+  }
 }
 
 // ------------------------------------------------------------ wiring
@@ -910,22 +1563,43 @@ function prologue() {
   const cv = $('canvas', sec);
   const beats = $$('[data-beat]', sec);
   const px = new Px(cv);
-  const stars = makeStars(260, 3);
+  const stars = makeStars(300, 3);
   const N = PRO.length;
+  const total = PRO.reduce((a, b) => a + b.w, 0);
+  stats.beats = PRO.map((b) => b.w); // for the site's checks
+  // beats have different lengths (w); the section is as tall as the story (one screen per unit, plus the last screen)
+  const sizeSection = () => (sec.style.height = reduceMotion.matches ? '' : `${(total + 1) * 100}vh`);
+  sizeSection();
+  reduceMotion.addEventListener('change', sizeSection);
+  // the 우리 sprite is fetched once the story is close
+  new IntersectionObserver(
+    ([e], io) => {
+      if (e.isIntersecting) {
+        loadUri();
+        io.disconnect();
+      }
+    },
+    { rootMargin: '150% 0px' },
+  ).observe(sec);
   let cur = -1;
   whenVisible(
     sec,
     (t) => {
-      px.fit();
+      // scroll position → beat i and progress f inside it
+      let P = reduceMotion.matches ? total - 1.5 : progress(sec) * total;
+      let i = 0;
+      while (i < N - 1 && P >= PRO[i].w) P -= PRO[i++].w;
+      const f = clamp(P / PRO[i].w);
+      // 우리 beats render at the game's own pixel size (a whole number of screen pixels per game pixel); the rest are
+      // chunkier and cheaper (and only those take the adaptive step: 우리 keeps its true pixels).
+      const uriBeat = PRO[i].side || i === 4;
+      const uriScale = Math.max(1, Math.min(Math.round(innerHeight / 460), Math.floor(innerWidth / 440)));
+      px.fit(uriBeat ? uriScale : 0);
       px.clear();
-      const P = reduceMotion.matches ? 2.5 : progress(sec) * N;
-      const i = Math.min(N - 1, Math.floor(P));
-      const f = P - i;
-      PRO[i](px, f, t, stars);
+      PRO[i].draw(px, f, t, stars);
       // dip to black between beats
-      const fade = Math.min(clamp(f / 0.12), clamp((1 - f) / 0.1), 1);
-      if (i < N - 1 || f < 0.9) px.dim(0.25 + 0.75 * ease(fade));
-      px.vignette(0.7);
+      const fade = Math.min(clamp(f / 0.08), clamp((1 - f) / 0.08), 1);
+      px.post(i < N - 1 || f < 0.92 ? 0.2 + 0.8 * ease(fade) : 1, 0.6);
       px.show();
       if (i !== cur && !reduceMotion.matches) {
         cur = i;
@@ -955,7 +1629,7 @@ function scaleReveal() {
       const arenaS = raw * dpr >= 1 ? Math.floor(raw * dpr) / dpr : raw;
       KEYS[2].fit = px.cssH / arenaS;
       const P = reduceMotion.matches ? 3 : clamp(progress(sec) * 3.4 - 0.15, 0, 3);
-      const at = scaleScene(px, P, t, stars);
+      const at = scaleScene(px, P, t, stars, true);
       px.show();
       // the real sprites, over the canvas: CSS px per game px, snapped to whole device pixels while it is ≥ 1
       const kx = px.cssW / px.w,
@@ -1133,6 +1807,11 @@ function warm() {
     (s) => () => surfTex(s),
   );
   for (let r = 1; r < 90; r *= 1.06) jobs.push(() => ringStamp(r));
+  // the two worlds at every crack step the eye and the mouth open in them
+  for (let q = 0; q <= 16; q++) {
+    jobs.push(() => surfTex(worldSurf(W1, W1L, 3, q / 16)));
+    jobs.push(() => surfTex(worldSurf(W2, W2L, 11, q / 16)));
+  }
   const idle = window.requestIdleCallback || ((f) => setTimeout(() => f({ timeRemaining: () => 8 }), 50));
   const run = (dl) => {
     while (jobs.length && dl.timeRemaining() > 2) jobs.shift()();
@@ -1153,4 +1832,7 @@ export function story() {
   edge();
   readout();
 }
-story();
+// the teaser film (tools/teaser/trailer.html) imports the scenes and drives them itself
+if (!window.__FILM) story();
+
+export { PRO, Px, makeStars, drawStars, URI, loadUri, scaleScene, edgeCoils, maw, glow, clamp, ease };

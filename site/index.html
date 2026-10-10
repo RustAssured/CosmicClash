@@ -100,16 +100,15 @@
           <p class="hook">Cosmic titans. <span>Every pixel is matter.</span></p>
           <p class="sub">
             Colossi the size of worlds circle each other in the dark between galaxies and tear each other
-            apart, pixel by pixel. No health bars: your body <em>is</em> the bar. And the noise of it has
-            started to carry.
+            apart, pixel by pixel. No health bars: your body <em>is</em> the bar. One of them was built from
+            the wreck of two murdered worlds, and it is hunting.
           </p>
           <div class="cta">
             <a class="btn btn-play btn-huge" href="play/">
               <span class="btn-main">Play now</span>
               <span class="btn-note">Free, in your browser</span>
             </a>
-            <!-- TRAILER: hidden until the v2 trailer (docs/site/TRAILER.md) exists as media/trailer/trailer-60.mp4; tools/site/build.ts
-                 then removes `hidden` (it also copies press/trailer/ in when S5's files are there). -->
+            <!-- TRAILER: hidden until site/media/trailer/trailer.mp4 exists (npm run site:media trailer); tools/site/build.ts then shows it -->
             <button class="btn btn-ghost" type="button" data-open-trailer hidden>
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
                 <path d="M4 2h2v2h2v2h2v2h-2v2h-2v2h-2z" fill="currentColor" transform="translate(1 1)" />
@@ -137,44 +136,64 @@
           </button>
           <ol class="beats">
             <li data-beat="0">
-              <p class="beat-k">I · <span lang="ko">아득</span></p>
+              <p class="beat-k">I · <span lang="ko">두 세계</span></p>
               <p class="beat-line">
-                Out here, distance stops being a number.<br /><em>It becomes a feeling.</em>
+                Once there were two worlds,<br /><em>close enough to see each other's lights.</em>
               </p>
               <p class="beat-sub">
-                Two specks of light, further away than anything has a name for. Every so often they touch.
+                They traded, argued, married across the gap. For a very long time, nothing out here noticed
+                them.
               </p>
             </li>
             <li data-beat="1">
-              <p class="beat-k">II · <span lang="ko">거인들</span></p>
-              <p class="beat-line">Between the galaxies,<br /><em>the old titans fight.</em></p>
+              <p class="beat-k">II · <span lang="ko">눈</span></p>
+              <p class="beat-line">Then something<br /><em>looked at them.</em></p>
               <p class="beat-sub">
-                A world that pulls. A star that burns out. A lattice that takes. An eye that only opens where
-                it breaks.
+                An eye the size of a nebula opened in the dark. Where its gaze fell, the crust split and the
+                seas boiled off.
               </p>
             </li>
             <li data-beat="2">
-              <p class="beat-k">III · <span lang="ko">우리</span></p>
-              <p class="beat-line">
-                Two worlds died. Their people refused.<br /><em>They built one body from the wreck.</em>
-              </p>
+              <p class="beat-k">III · <span lang="ko">입</span></p>
+              <p class="beat-line beat-horror">Then something came to eat.</p>
               <p class="beat-sub">
-                Two cores in one loop, carrying each other's load. They named it 우리: <i>we</i>. It is still
-                here.
+                It came along the edge of the dark, and it did not stop until half a world was gone.
               </p>
             </li>
             <li data-beat="3">
-              <p class="beat-k">IV · <span lang="ko">충돌</span></p>
-              <p class="beat-line">Every blow they trade<br /><em>is felt across light-years.</em></p>
+              <p class="beat-k">IV · <span lang="ko">잔해</span></p>
+              <p class="beat-line">Two burning hearts.<br /><em>A sea of wreckage.</em></p>
               <p class="beat-sub">
-                Crust cracks, holds, shears off and drifts. Nothing out here heals. It only comes apart,
-                slower or faster.
+                And in the wreckage, against all odds, people still alive. Arks, engines, the last cities that
+                could still burn.
               </p>
             </li>
-            <li data-beat="4">
-              <p class="beat-k">V · <span lang="ko">???</span></p>
-              <p class="beat-line beat-horror">Something felt it.</p>
-              <p class="beat-sub">It does not come through the dark. It comes along the edge of it.</p>
+            <li data-beat="4" class="side">
+              <p class="beat-k">V · <span lang="ko">조립</span></p>
+              <p class="beat-line">They did not run.<br /><em>They built.</em></p>
+              <p class="beat-sub">
+                Every ark, every engine, every slab of their old continents, hauled in and welded around the
+                two dead hearts. A body made of despair, because despair was all there was left to build with.
+              </p>
+            </li>
+            <li data-beat="5" class="side">
+              <p class="beat-k">VI · <span lang="ko">우리</span></p>
+              <p class="beat-line">
+                They named it <span lang="ko" class="ko-big">우리</span>.<br /><em>We.</em>
+              </p>
+              <p class="beat-sub">
+                Two worlds, one body, everyone left. One last fighting chance, and someone to answer for what
+                was done.
+              </p>
+            </li>
+            <li data-beat="6">
+              <p class="beat-k">VII · <span lang="ko">사냥</span></p>
+              <p class="beat-line">
+                Now it drifts between the galaxies,<br /><em>hunting a hungry mouth and an angry eye.</em>
+              </p>
+              <p class="beat-sub">
+                Planets, stars, black holes: whatever stands in its way, it goes through.
+              </p>
             </li>
           </ol>
         </div>
@@ -400,8 +419,8 @@
                 >
                 <span class="titan-tag">“The more it breaks, the more it sees.”</span>
                 <span class="titan-lore"
-                  >The last of something that watched the first stars light. It has seen every ending but its
-                  own.</span
+                  >The last of something that watched the first stars light. It looked at two worlds once, and
+                  they cracked.</span
                 >
                 <span class="titan-mech"
                   ><b>Fracture.</b> Where its carapace breaks, inner eyes open, and every open eye adds a beam
@@ -642,8 +661,8 @@
                 <span class="titan-matter" data-titan="uri" style="--m: 1"><b>MATTER</b> 47,019 px</span>
                 <span class="titan-tag">“It refuses to fall apart.”</span>
                 <span class="titan-lore"
-                  >Two worlds, one body, all of us. Held together by a loop that should have snapped long
-                  ago.</span
+                  >Built in despair from two murdered worlds. It is looking for an eye and a mouth, and it
+                  will go through you to get there.</span
                 >
                 <span class="titan-mech"
                   ><b>Kinetic.</b> Holds most of every blow inside its loop. When the loop snaps, everything
@@ -1049,7 +1068,7 @@
             <!-- PRESS-DOWNLOADS: tools/site/build.ts replaces this list with the files in press/ when that folder exists -->
             <ul class="downloads" data-press-list>
               <li data-trailer-link hidden>
-                <a href="media/trailer/trailer-60.mp4" download>Trailer (MP4)</a>
+                <a href="media/trailer/trailer.mp4" download>Trailer (MP4)</a>
               </li>
               <li><a href="media/hero/loop.mp4" download>Gameplay loop (MP4, 16 s, muted)</a></li>
               <li>
@@ -1119,10 +1138,10 @@
           controls
           playsinline
           preload="none"
-          poster="media/trailer/trailer-60.jpg"
+          poster="media/trailer/trailer.jpg"
         >
-          <source data-src="media/trailer/trailer-60.webm" type="video/webm" />
-          <source data-src="media/trailer/trailer-60.mp4" type="video/mp4" />
+          <source data-src="media/trailer/trailer.webm" type="video/webm" />
+          <source data-src="media/trailer/trailer.mp4" type="video/mp4" />
         </video>
       </div>
       <button class="lightbox-close" type="button" data-close aria-label="Close">✕</button>
