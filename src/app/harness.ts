@@ -52,6 +52,19 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
     renderNow(): void {
       app.render(0, 1 / 60);
     },
+    renderAt(alpha: number): void {
+      app.render(Math.min(1, Math.max(0, alpha)), 1 / 60);
+    },
+    timeScale(): number {
+      return app.session?.match.timeScale ?? 1;
+    },
+    setCamera(c): void {
+      app.cameraOverride = c ? { ...c } : null;
+    },
+    camera() {
+      const c = app.lastCamera;
+      return { x: c.x, y: c.y, zoom: c.zoom, dolly: c.dolly };
+    },
     summary(): HarnessSummary {
       const m = app.session?.match;
       if (!m)

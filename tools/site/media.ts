@@ -44,10 +44,10 @@ const SOURCES = {
     { src: UW, ss: 17.5, t: 4 },
   ] as Cut[],
   /**
-   * The site's trailer, with sound (lightbox). Today WJ's story teaser (rendered by tools/teaser/render.ts); point it at S5's
-   * converged trailer master when that is delivered. `poster`: the poster frame's time (우리 braced).
+   * The site's trailer, with sound (lightbox): S5's converged trailer (WJ's story teaser 0–40 s, the gameplay montage,
+   * the teaser 40–61.2 s; tools/press/trailer/edit.ts final). `poster`: the poster frame's time (우리 braced).
    */
-  trailer: { src: 'press/trailer/story-teaser.mp4', ss: 0, t: 61.2, poster: 37 } as Cut & { poster?: number },
+  trailer: { src: 'press/trailer/trailer-final.mp4', ss: 0, t: 80.9, poster: 37 } as Cut & { poster?: number },
   features: {
     orbit: { src: WP, ss: 3, t: 6 },
     matter: { src: WP, ss: 9, t: 6 },
@@ -198,7 +198,7 @@ const groups = {
       audio: true,
       crf264: 24,
       crf9: 35,
-      kbps: 1700, // about 14 MB for 61 s
+      kbps: 1250, // about 14 MB for the 80.9 s converged trailer (≤ 15 MB per format)
     });
     poster(`${OUT}/trailer/trailer.mp4`, `${OUT}/trailer/trailer.jpg`, c.poster ?? 3);
   },

@@ -15,6 +15,7 @@ import {
   type DebugOverlayMode,
   type DebugShape,
   type Difficulty,
+  type HarnessCamera,
   type HarnessParams,
   type HudState,
   type InputSource,
@@ -157,6 +158,14 @@ export class App {
     kickX: 0,
     kickY: 0,
   };
+  /** Trailer capture (harness `setCamera`): a scripted camera over the game camera at render time; null = off. */
+  cameraOverride: HarnessCamera | null = null;
+  /** The camera of the last rendered frame (trailer capture starts scripted moves from it). */
+  get lastCamera(): Readonly<CameraState> {
+    return this.frame.camera;
+  }
+  private readonly trailerCam: CameraState = { ...this.aftCam };
+  private readonly trailerView: RenderFrame['view'] = { x0: 0, y0: 0, w: LOGICAL_W, h: LOGICAL_H };
   private dragX = 0;
   private dragY = 0;
   private wheel = 0;
@@ -671,6 +680,20 @@ export class App {
           kickY: 0,
         });
         f.camera = this.aftCam;
+      } else if (this.cameraOverride) {
+        // trailer capture: a scripted camera (whole-pixel view origin, as the game camera's)
+        const o = this.cameraOverride;
+        const c = Object.assign(this.trailerCam, cam.state);
+        if (o.x !== undefined) c.x = o.x;
+        if (o.y !== undefined) c.y = o.y;
+        if (o.zoom !== undefined) c.zoom = o.zoom;
+        if (o.dolly !== undefined) c.dolly = o.dolly;
+        if (o.still) Object.assign(c, { roll: 0, shakeX: 0, shakeY: 0, kickX: 0, kickY: 0 });
+        const v = this.trailerView;
+        v.x0 = o.x !== undefined ? Math.round(c.x + c.shakeX - LOGICAL_W / 2) : cam.view.x0;
+        v.y0 = o.y !== undefined ? Math.round(c.y + c.shakeY - LOGICAL_H / 2) : cam.view.y0;
+        f.camera = c;
+        f.view = v;
       }
       f.stage = s.config.stage;
       const m = s.match;

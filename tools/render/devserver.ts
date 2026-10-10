@@ -13,6 +13,8 @@ export async function startRenderServer(port = 5201): Promise<{ server: ViteDevS
     logLevel: 'error',
     clearScreen: false,
   });
+  // a folder another tool deletes while Vite scans the tree must not take the spec down (scandir UNKNOWN on Windows)
+  server.watcher.on('error', () => undefined);
   await server.listen();
   const addr = server.httpServer?.address();
   const p = typeof addr === 'object' && addr ? addr.port : port;

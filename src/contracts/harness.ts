@@ -56,6 +56,11 @@ export interface HarnessParams {
   witness: boolean;
   /** `aftermath=0`: skip the aftermath screen after the deciding KO (automated captures and tests run straight to results). */
   aftermath: boolean;
+  /**
+   * `trailer=1` (docs/site/TRAILER.md capture rule 2): clean picture for trailer capture: no HUD, no debug or training
+   * overlays, no aftermath screen. Pair with `freeze=1` and drive frames with `step` / `renderAt` / `setCamera`.
+   */
+  trailer: boolean;
   /** True if ANY harness param was present (the app skips the title and boots straight in). */
   active: boolean;
 }
@@ -164,7 +169,7 @@ export function parseHarnessParams(search: string): HarnessParams {
       return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : -1;
     })(),
     gap: Math.min(700, Math.max(40, parseInt(q.get('gap') ?? '380', 10) || 380)),
-    hud: q.get('hud') !== '0',
+    hud: q.get('hud') !== '0' && q.get('trailer') !== '1',
     debug: q.get('debug') === '1',
     freeze: q.get('freeze') === '1' || (has('t') && q.get('freeze') !== '0'),
     tele: q.get('tele') === '1' ? 1 : q.get('tele') === '2' ? 2 : 0,
@@ -173,7 +178,8 @@ export function parseHarnessParams(search: string): HarnessParams {
     orbit: q.get('orbit') !== '0',
     zdepth: q.get('zdepth') === '1',
     witness: q.get('witness') !== '0',
-    aftermath: q.get('aftermath') !== '0',
+    aftermath: q.get('aftermath') !== '0' && q.get('trailer') !== '1',
+    trailer: q.get('trailer') === '1',
     active: keys.some(has),
   };
 }
@@ -216,6 +222,15 @@ export interface HarnessPerf {
   frames: number;
 }
 
+/** A scripted camera (harness `setCamera`); every field optional, unset fields keep the game camera's value. */
+export interface HarnessCamera {
+  x?: number;
+  y?: number;
+  zoom?: number;
+  dolly?: number;
+  still?: boolean;
+}
+
 /** Exposed as `window.__ADEUK__` whenever the app runs (always safe; used by Playwright evidence/perf tools). */
 export interface AdeukHarnessApi {
   readonly ready: boolean;
@@ -224,6 +239,21 @@ export interface AdeukHarnessApi {
   step(n: number): void;
   /** Render a frame at the current state (no ticks). */
   renderNow(): void;
+  /**
+   * Render a frame `alpha` (0..1) of the way between the last two sim ticks (the loop's own interpolation): slow motion
+   * without held frames: step(1), then renderAt(0), renderAt(1/k), … renderAt((k−1)/k) for ×1/k.
+   */
+  renderAt(alpha: number): void;
+  /** The match's current time scale (KO slow motion, move time-scales; 1 = real time), for retiming captures. */
+  timeScale(): number;
+  /**
+   * A scripted camera for trailer capture, applied on top of the game camera at render time (null = the game camera).
+   * `x`/`y`: the view centre (world px); `zoom`: final-pass zoom (1 = native); `dolly`: scenery push-in 0..1 (the stars
+   * slide outward, sprites stay 1:1); `still`: no shake, roll or impact kick.
+   */
+  setCamera(c: HarnessCamera | null): void;
+  /** The game camera's current view centre and zoom (to start a scripted move from where the game camera is). */
+  camera(): { x: number; y: number; zoom: number; dolly: number };
   summary(): HarnessSummary;
   hash(): number;
   /** Replace the scripted input of a slot (see parseScript grammar); tick 0 = now. */

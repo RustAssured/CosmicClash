@@ -100,6 +100,7 @@ const ui = makeUiLayer();
 const showGrid = q.get('grid') === '1';
 const showUi = q.get('ui') !== '0';
 const showSparks = q.get('sparks') !== '0';
+const showFighters = q.get('fighters') !== '0';
 
 const layers: RenderLayer[] = [];
 
@@ -251,7 +252,8 @@ function buildFrame(alpha: number): RenderFrame {
   sparks.step(simTime);
   if (showGrid) grid.update(camView.x0, camView.y0);
   layers.length = 0;
-  layers.push(rock.layer, star.layer);
+  // `fighters=0`: the stage alone (empty plates for key art)
+  if (showFighters) layers.push(rock.layer, star.layer);
   if (showGrid) layers.push(grid.layer);
   if (showSparks) layers.push(sparks.layer);
   fx.flash = Math.max(0, fx.flash - 0.03);
