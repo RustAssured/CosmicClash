@@ -452,7 +452,7 @@ async function renderScore(sheet: CueSheet, intensityAt: (t: number) => number):
 /* ------------------------------------------------------------------------------------------------ *
  *  the designed beats
  * ------------------------------------------------------------------------------------------------ */
-function designCtx(ac: BaseAudioContext, dest: AudioNode, seed: number): VoiceCtx {
+export function designCtx(ac: BaseAudioContext, dest: AudioNode, seed: number): VoiceCtx {
   const rng = new Rng(seed);
   const mk = (brown: boolean): AudioBuffer => {
     const b = ac.createBuffer(1, SR * 2, SR);
@@ -497,7 +497,7 @@ function designCtx(ac: BaseAudioContext, dest: AudioNode, seed: number): VoiceCt
 }
 
 /** The sub drone: detuned low saws (A1 D2 A2), saturated, under a breathing low-pass, and the wind of the void. */
-function drone(c: VoiceCtx, level: [number, number][], end: number): void {
+export function drone(c: VoiceCtx, level: [number, number][], end: number): void {
   const ac = c.ac;
   const g = ac.createGain();
   g.gain.value = 0;
@@ -561,7 +561,7 @@ function drone(c: VoiceCtx, level: [number, number][], end: number): void {
 }
 
 /** "SOMETHING FELT IT": a low wet sound — something vast and viscous moving at the edge of the world. */
-function wetSound(c: VoiceCtx, from: number, to: number): void {
+export function wetSound(c: VoiceCtx, from: number, to: number): void {
   const ac = c.ac;
   const dur = to - from;
   // the body: brown noise through a slow, resonant, wandering band (a throat, a gut)
