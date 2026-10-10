@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ADEUK story teaser: film renderer</title>
+<link rel="stylesheet" href="node_modules/@fontsource/jersey-10/index.css" />
+<link rel="stylesheet" href="node_modules/@fontsource/silkscreen/index.css" />
+<link rel="stylesheet" href="node_modules/@fontsource/dotgothic16/index.css" />
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; width: 640px; height: 360px; image-rendering: pixelated; }
+</style>
+<script>window.__FILM = true;</script>
+</head>
+<body>
+<canvas id="cv" width="640" height="360"></canvas>
+<script type="module">
+import { PRO, Px, makeStars, drawStars, URI, loadUri, scaleScene, edgeCoils, maw, glow, clamp, ease } from './story.js';
+
+const FPS = 30;
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d', { willReadFrequently: true });
+const px = new Px(cv);
+const st = makeStars(300, 3);
+const st2 = makeStars(300, 7);
+const st3 = makeStars(220, 11);
+
+// ---------- text cards: drawn at native resolution, alpha-thresholded so every letter is crisp pixels
+const tcv = document.createElement('canvas');
+tcv.width = 640;
+tcv.height = 360;
+const tg = tcv.getContext('2d', { willReadFrequently: true });
+function card(text, { font = '28px "Jersey 10"', y = 300, color = [255, 255, 255], a = 1, x = 320, align = 'center', track = 0 }) {
+  if (a <= 0) return;
+  tg.clearRect(0, 0, 640, 360);
+  tg.font = font;
+  tg.textAlign = align;
+  tg.textBaseline = 'middle';
+  tg.letterSpacing = track + 'px';
+  tg.fillStyle = '#fff';
+  tg.fillText(text, x, y);
+  const src = tg.getImageData(0, 0, 640, 360).data;
+  const out = ctx.getImageData(0, 0, 640, 360);
+  const d = out.data;
+  const on = (i) => src[i * 4 + 3] > 110;
+  for (let yy = 1; yy < 359; yy++)
+    for (let xx = 1; xx < 639; xx++) {
+      const i = yy * 640 + xx;
+      if (on(i)) {
+        const j = i * 4;
+        d[j] += (color[0] - d[j]) * a;
+        d[j + 1] += (color[1] - d[j + 1]) * a;
+        d[j + 2] += (color[2] - d[j + 2]) * a;
+      } else if (on(i - 1) || on(i + 1) || on(i - 640) || on(i + 640) || on(i + 641)) {
+        const j = i * 4;
+        d[j] *= 1 - 0.85 * a;
+        d[j + 1] *= 1 - 0.85 * a;
+        d[j + 2] *= 1 - 0.85 * a;
+      }
+    }
+  ctx.putImageData(out, 0, 0);
+}
+const fadeIO = (s, a, b, f = 0.35) => (s < a || s > b ? 0 : Math.min(1, (s - a) / f, (b - s) / f));
+const WHITE = [244, 238, 248], GOLD = [255, 210, 122], RED = [255, 96, 104], CEL = [168, 189, 178];
+
+// ---------- the shots
+const shots = [
+  { name: 'cold', dur: 3.0, draw: (u, t) => { drawStars(px, st, t, { drift: 0.3 }); px.post(0.5, 0.8); }, cards: (s) => [['아득', { font: '32px "DotGothic16"', y: 172, color: CEL, a: fadeIO(s, 0.5, 2.7, 0.6) }]] },
+  { name: 'worlds', dur: 5.0, beat: 0, cards: (s) => [['Once there were two worlds.', { y: 316, a: fadeIO(s, 0.8, 4.5) }]] },
+  { name: 'eye', dur: 6.0, beat: 1, cards: (s) => [['Then something looked at them.', { y: 316, color: GOLD, a: fadeIO(s, 3.0, 5.7) }]] },
+  { name: 'mouth', dur: 5.5, beat: 2, cards: (s) => [['Then something came to eat.', { y: 316, color: RED, a: fadeIO(s, 2.4, 5.2) }]] },
+  { name: 'ruin', dur: 4.0, beat: 3, cards: (s) => [['They did not run.', { y: 316, a: fadeIO(s, 1.2, 3.8) }]] },
+  { name: 'genesis', dur: 11.0, beat: 4, cards: (s) => [['They built.', { y: 330, color: GOLD, a: fadeIO(s, 8.9, 10.8) }]] },
+  {
+    name: 'brace', dur: 5.5, beat: 5,
+    cards: (s) => [
+      ['우리', { font: '32px "DotGothic16"', y: 30, color: GOLD, a: fadeIO(s, 2.5, 5.3) }],
+      ['WE.', { font: '16px "Silkscreen"', y: 338, color: WHITE, a: fadeIO(s, 3.1, 5.3), track: 4 }],
+    ],
+  },
+  {
+    name: 'hunt', dur: 5.0, beat: 6,
+    cards: (s) => [
+      ['Now it hunts.', { y: 300, a: fadeIO(s, 0.7, 2.6) }],
+      ['A hungry mouth. An angry eye.', { y: 300, color: GOLD, a: fadeIO(s, 2.8, 4.8) }],
+    ],
+  },
+  {
+    name: 'scale', dur: 6.0,
+    draw: (u, t) => scaleScene(px, 3 * ease(clamp(u * 1.05)), t, st2),
+    cards: (s) => [
+      ['This is Earth.', { y: 330, a: fadeIO(s, 0.3, 1.5) }],
+      ['This is the arena.', { y: 330, a: fadeIO(s, 2.4, 3.6) }],
+      ['This is how much of it fits.', { y: 330, color: RED, a: fadeIO(s, 4.4, 5.9) }],
+    ],
+  },
+  {
+    name: 'edge', dur: 4.6,
+    draw: (u, t) => {
+      px.clear([3, 1, 6]);
+      const k = ease(clamp(u * 1.3));
+      drawStars(px, st3, t, { pull: 0.3 + k * 0.6, drift: 0.3 });
+      edgeCoils(px, t, 0.55 + k * 0.5, 1.15);
+      const mr = px.h * 0.42;
+      maw(px, px.w * 0.5, px.h + mr * (1.05 - k * 0.6), mr, 0.25 + k * 0.6 + Math.sin(t * 0.03) * 0.04, t * 0.02);
+      px.post(1, 1.1);
+    },
+    cards: (s) => ['HUNGER.', 'DEVOURS.', 'ENDS.', 'REPEATS.'].map((w, i) => [w, { font: '48px "Jersey 10"', y: 150, color: i === 3 ? RED : WHITE, a: s > 0.5 + i * 0.85 && s < 0.5 + (i + 1) * 0.85 - 0.05 ? 1 : 0 }]),
+  },
+  {
+    name: 'logo', dur: 5.6,
+    draw: (u, t) => { drawStars(px, st, t, { drift: 0.2 }); px.post(0.35, 0.9); },
+    cards: (s) => [
+      ['ADEUK: TITANS', { font: '64px "Jersey 10"', y: 158, color: WHITE, a: fadeIO(s, 0.3, 5.4, 0.2), track: 2 }],
+      ['아득', { font: '16px "DotGothic16"', y: 198, color: CEL, a: fadeIO(s, 0.7, 5.4, 0.3) }],
+      ['FREE IN YOUR BROWSER', { font: '16px "Silkscreen"', y: 236, color: GOLD, a: fadeIO(s, 1.4, 5.4, 0.3), track: 2 }],
+      ['FINAL BOSS: COMING', { font: '8px "Silkscreen"', y: 258, color: RED, a: fadeIO(s, 2.2, 5.4, 0.3), track: 2 }],
+    ],
+  },
+];
+let acc = 0;
+for (const sh of shots) (sh.start = acc), (acc += sh.dur);
+const TOTAL = acc;
+
+function renderFrame(n) {
+  const sec = n / FPS;
+  const t = n * 2; // the scenes count time in 60 fps ticks
+  const sh = shots.find((s) => sec < s.start + s.dur) || shots[shots.length - 1];
+  const s = sec - sh.start, u = clamp(s / sh.dur);
+  px.fit(1);
+  px.clear();
+  if (sh.beat !== undefined) {
+    PRO[sh.beat].draw(px, sh.beat === 4 ? u * 0.97 : u, t, st);
+    px.post(1, 0.6);
+  } else sh.draw(u, t);
+  // fade in and out of every shot
+  const fade = Math.min(1, s / 0.35, (sh.dur - s) / 0.35);
+  if (fade < 1) px.post(Math.max(0, fade), 0);
+  px.show();
+  for (const [txt, o] of sh.cards(s)) card(txt, o);
+}
+
+// the moments the sound should land on (seconds)
+function cues() {
+  const at = (name) => shots.find((s) => s.name === name).start;
+  const welds = [];
+  if (URI.ready) {
+    const g0 = at('genesis'), D = shots.find((s) => s.name === 'genesis').dur;
+    for (const g of URI.A.list) {
+      if (g.code === 255) continue;
+      // PRO[4]: k = clamp(f * 1.08 - 0.02), f = u * 0.97
+      const u = (g.ta + 0.02) / 1.08 / 0.97;
+      if (u <= 1) welds.push([g0 + u * D, g.code, g.px.length / 6]);
+    }
+  }
+  return { total: TOTAL, shots: shots.map((s) => ({ name: s.name, start: s.start, dur: s.dur })), welds };
+}
+
+const b64 = (u8) => {
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+window.film = {
+  FPS,
+  total: TOTAL,
+  frames: Math.ceil(TOTAL * FPS),
+  async ready() {
+    loadUri();
+    await document.fonts.load('32px "Jersey 10"');
+    await document.fonts.load('16px "Silkscreen"');
+    await document.fonts.load('32px "DotGothic16"', '아득우리');
+    while (!URI.ready) await new Promise((r) => setTimeout(r, 50));
+    return true;
+  },
+  frame(n) {
+    renderFrame(n);
+    return b64(new Uint8Array(ctx.getImageData(0, 0, 640, 360).data.buffer));
+  },
+  cues,
+};
+</script>
+</body>
+</html>
