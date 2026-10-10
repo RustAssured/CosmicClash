@@ -1,25 +1,83 @@
+import type { SimEvent } from '@/contracts';
+import { DamageFlag } from '@/contracts';
+import { createAudioEngine, laptopVoicing } from '@/audio/engine';
 import { BELL, GLASS, makeOut, noiseHit, partials, tone } from '@/audio/voices/synth';
-import { boom, catastrophe, crackle, grind, lowBell, roar, swell, whoosh } from '@/audio/voices/epic';
-import { ceramicFracture, filamentSnap, resonance, tectonicCrack } from '@/audio/voices/materials';
+import {
+  boom,
+  catastrophe,
+  crackle,
+  grind,
+  lowBell,
+  roar,
+  saturationCurve,
+  swell,
+  whoosh,
+} from '@/audio/voices/epic';
+import { filamentSnap, resonance } from '@/audio/voices/materials';
+import { FxState, buildAudioScene } from '@/app/fx';
+import { buildShotMatch } from '@/cinema/match';
+import { sceneTime, type Shot } from '@/cinema/timeline';
+import { loadUriAsset } from '@/titans/uri/asset';
+import uriBinUrl from '@/titans/uri/uri_rig.bin?url';
 import { designCtx, drone, wetSound } from './audio-trailer';
 
 /**
  * The launch trailer v3's score and sound (docs/cinema/TRAILER_V3.md §1, §2.3), rendered offline by the game's own synth from a
- * PLAN that tools/ui/audio-cinema.ts derives from src/cinema/timeline.json (shot starts, the genesis weld and drum cues, the edge
- * word cues). Every time is snapped to a 60 fps frame, so each hit lands on its frame.
+ * PLAN that tools/ui/audio-cinema.ts derives from src/cinema/timeline.json (the beats as named anchors, the genesis weld and drum
+ * cues, the edge word cues, the hard silences, and every shot that has a real fight). Every sound lands on its 60 fps frame.
  *
- * Five stems, rendered one at a time (`renderCinemaStem`): drone (pads, roars, the room tone, the wet far-away), motifs (우리:
- * two notes a fifth apart, one per world, gaining layers as the body is built; the Witness: glassy, high, a close dissonance;
- * the Mouth: sub and wet noise, no pitch), percussion (the two hearts, the genesis drums on the weld cues, the hunt's beat,
- * the edge's word blows, the sting), SFX (designed beats; the Act III gameplay slots stay empty until S5's takes exist) and VO
- * (an empty slot: WJ's "우리는 아직 여기 있다" may come later; subtitle only for now).
+ * Five stems, rendered one at a time (`renderCinemaStem`):
+ *  - drone: the room tone (never gated), the roars, the pads, the wet far-away;
+ *  - motifs: 우리 (two notes a fifth apart, one per world, gaining layers as the body is built), the Witness (glassy, high, a
+ *    close dissonance), the Mouth (sub and wet noise, no pitch);
+ *  - perc: the two hearts, the genesis drums on the weld cues, the hunt's beat, the word blows, the sting;
+ *  - sfx: the REAL sound of every fight shot (each shot's match replayed exactly as the Director plays it, its sim events fed
+ *    to the game's audio engine on the frame they are first drawn), plus the designed beats (the bite, the ignition, the welds,
+ *    the launch, the jaw wipe);
+ *  - vo: an empty slot (WJ's "우리는 아직 여기 있다"; subtitle only for now).
  * The two HARD silences gate everything but the room tone (the first lets the bite's own ring-out through).
+ * Small speakers: every stem goes out through the game's own laptop voicing (LAPTOP_EQ + the WEIGHT harmonics of the sub) and a
+ * gentle upper-mid exciter (harmonics of the 0.9–3.5 kHz band above 1.8 kHz), so the mix carries on a laptop or a phone while
+ * the real sub stays.
  */
+export interface CinemaAnchors {
+  /** Act 0: the hearts, the matter pixel's roar, the inhale (the pull-back) and the freeze. */
+  cold: number;
+  roar: number;
+  inhale: [number, number];
+  freeze: number;
+  /** Act I. */
+  worlds: [number, number];
+  halo: number;
+  eye: number;
+  gaze: [number, number];
+  mouth: number;
+  bite: number;
+  /** Act II. */
+  ruin: number;
+  genesis: number;
+  loop: number;
+  brace: number;
+  launch: number;
+  /** Act III. */
+  burst: number;
+  nova: [number, number];
+  eyeHunt: number;
+  beams: number;
+  black: number;
+  /** Act IV. */
+  edge: number;
+  slide: number;
+  pull: [number, number];
+  wipe: [number, number];
+  title: number;
+  sting: number;
+}
+
 export interface CinemaPlan {
   duration: number;
   fps: number;
-  /** Shot id → [start, end] (timeline seconds). */
-  shots: Record<string, [number, number]>;
+  a: CinemaAnchors;
   /** The genesis: one drum per part as it completes (two per fist), every chunk's weld. */
   drums: { t: number; part: string; size: number; clench?: number }[];
   welds: number[];
@@ -27,6 +85,8 @@ export interface CinemaPlan {
   words: { word: string; t: number }[];
   /** Hard silences: [from, to, ringOut] (ringOut: the SFX stem's own tail may pass). */
   silences: [number, number, boolean][];
+  /** Every shot with a real fight (as in timeline.json), with the game sound's level in it. */
+  fights: { shot: Shot; level: number }[];
 }
 
 export type StemName = 'drone' | 'motifs' | 'perc' | 'sfx' | 'vo';
@@ -37,13 +97,84 @@ const SR = 48000;
 const URI_A = 146.83;
 const URI_B = 220;
 
-/** A placed cue, for the report: where the score put it (s). */
+/** A placed cue, for the report: where its source puts it and where the score put it (s). */
 export interface PlacedCue {
   stem: StemName;
   name: string;
-  /** The cue as its source gives it, and where it was placed (snapped to its frame). */
   cue: number;
   at: number;
+}
+
+/** The small-speaker pass: the game's laptop voicing plus an upper-mid exciter, `from` → `to`. */
+function smallSpeakerPass(ac: BaseAudioContext, from: AudioNode, to: AudioNode): void {
+  laptopVoicing(ac, from, to);
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 1800;
+  bp.Q.value = 0.6;
+  const drive = ac.createGain();
+  drive.gain.value = 4;
+  const sh = ac.createWaveShaper();
+  sh.curve = saturationCurve(2.2) as Float32Array<ArrayBuffer>;
+  const hp = ac.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 1800;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 6500;
+  const lvl = ac.createGain();
+  lvl.gain.value = 0.22;
+  from.connect(bp);
+  bp.connect(drive);
+  drive.connect(sh);
+  sh.connect(hp);
+  hp.connect(lp);
+  lp.connect(lvl);
+  lvl.connect(to);
+}
+
+/**
+ * One sim tick of a shot's fight exactly as the Director ticks it (src/cinema/director.ts `tickMatch`): the step, then the
+ * shot's injected blows (`match.blows`: real damage, plus the shockwave / flash / shake / hit-stop a blow of that weight sends).
+ */
+function tickShot(
+  m: ReturnType<typeof buildShotMatch>,
+  fx: FxState,
+  shot: Shot,
+  absTick: number,
+): SimEvent[] {
+  m.step();
+  let ev: SimEvent[] = [...(m.events as readonly SimEvent[])];
+  for (const b of (shot.match?.blows ?? []).filter((x) => x.tick === absTick)) {
+    const f = m.fighters[b.slot];
+    const x = f.view.x + b.dx;
+    const y = f.view.y + b.dy;
+    const len = Math.hypot(b.dirX, b.dirY) || 1;
+    m.world.applyDamage(f.body.id, {
+      type: b.type ?? 'CRUSH',
+      shape: { kind: 'point', x, y, r: b.r },
+      energy: b.energy,
+      dirX: b.dirX / len,
+      dirY: b.dirY / len,
+      duration: 1,
+      sourceMass: 12,
+      sourceBodyId: -1,
+      originX: x,
+      originY: y,
+      flags: DamageFlag.PIERCE,
+      params: { penetration: 999, shock: b.shock ?? 260 },
+      weight: 'catastrophic',
+    });
+    ev = [
+      ...ev,
+      { t: 'shockwave', x, y, strength: 1, radius: b.r * 3, hue: -1 },
+      { t: 'flash', amount: 0.9, x, y },
+      { t: 'shake', dirX: b.dirX / len, dirY: b.dirY / len, amp: b.shake ?? 14 },
+      { t: 'hitstop', ticks: 6 },
+    ];
+  }
+  fx.tick(ev, m);
+  return ev;
 }
 
 export async function renderCinemaStem(
@@ -53,24 +184,21 @@ export async function renderCinemaStem(
   const N = Math.ceil(SR * plan.duration);
   const ctx = new OfflineAudioContext(2, N, SR);
   const out = ctx.createGain();
-  out.connect(ctx.destination);
+  smallSpeakerPass(ctx, out, ctx.destination);
   const gated = ctx.createGain(); // everything but the room tone passes the silences' gate
   gated.connect(out);
   const c = designCtx(ctx, gated, 31 + STEMS.indexOf(stem));
   const cues: PlacedCue[] = [];
+  const A = plan.a;
   const fr = (t: number): number => Math.round(t * plan.fps) / plan.fps;
   // a source cue (a weld, a word) is first SEEN on the first frame at or after it: its sound lands on that frame
   const seen = (t: number): number => Math.ceil(t * plan.fps - 1e-6) / plan.fps;
-  const S = (id: string, dt = 0): number => fr((plan.shots[id]?.[0] ?? 0) + dt);
-  const E = (id: string): number => fr(plan.shots[id]?.[1] ?? 0);
-  const has = (id: string): boolean => plan.shots[id] !== undefined;
   const cue = (name: string, t: number, at = fr(t)): number => {
     cues.push({ stem, name, cue: +t.toFixed(4), at: +at.toFixed(4) });
     return at;
   };
   const hearts = (from: number, to: number, gain: number, wrongAt?: number): void => {
-    // two hearts, out of phase: L lub-dub, and R a little later and a little slower
-    // (periods and phase in whole frames: every beat is a frame)
+    // two hearts, out of phase: L lub-dub, and R a little later and a little slower (periods in whole frames)
     for (const [pan, period, phase] of [
       [-0.7, 52 / 60, 0],
       [0.7, 56 / 60, 19 / 60],
@@ -113,7 +241,7 @@ export async function renderCinemaStem(
       const t = fr(at + dt);
       if (cut !== undefined && t >= cut) break; // the motif stops mid-phrase
       const o = makeOut(c, f === URI_A ? -0.35 : 0.35, 0.7);
-      lowBell(c, o, t, f, BELL, { decay: 2.2, gain: gain, shimmer: 0.3 });
+      lowBell(c, o, t, f, BELL, { decay: 2.2, gain, shimmer: 0.3 });
       if (layers >= 2) lowBell(c, o, t, f / 2, BELL, { decay: 2.6, gain: gain * 0.7 });
       if (layers >= 3)
         roar(c, o, t, { f: f / 2, dur: 1.6, gain: gain * 0.5, attack: 0.25, lp0: 700, lp1: 300, noise: 0 });
@@ -148,8 +276,7 @@ export async function renderCinemaStem(
       sub: gain,
       subHz: 30,
     });
-    const o = makeOut(c, -0.2, 0.8);
-    noiseHit(c, o, from, {
+    noiseHit(c, makeOut(c, -0.2, 0.8), from, {
       dur: to - from,
       gain: gain * 0.9,
       kind: 'brown',
@@ -173,84 +300,71 @@ export async function renderCinemaStem(
       rl.connect(rg);
       rg.connect(out);
       room.start(0);
-      // ACT 0: a low roar under the hearts from the matter pixel, the inhale, and silence at the freeze
-      if (has('cold-matter-pixel'))
-        roar(c, makeOut(c, 0, 0.4), S('cold-matter-pixel'), {
-          f: 36.7,
-          dur: E('cold-pullback') - S('cold-matter-pixel'),
-          gain: 0.12,
-          attack: 1,
-          lp0: 300,
-          lp1: 700,
-        });
-      if (has('cold-pullback'))
-        swell(c, makeOut(c, 0, 0.3), S('cold-pullback'), {
-          dur: E('cold-pullback') - S('cold-pullback'),
-          gain: 0.18,
-          f0: 80,
-          f1: 900,
-        });
-      // ACT I: a soft pad under the two worlds, fading as the halo rises
+      roar(c, makeOut(c, 0, 0.4), fr(A.roar), {
+        f: 36.7,
+        dur: A.freeze - A.roar,
+        gain: 0.12,
+        attack: 1,
+        lp0: 300,
+        lp1: 700,
+      });
+      swell(c, makeOut(c, 0, 0.3), fr(A.inhale[0]), {
+        dur: A.inhale[1] - A.inhale[0],
+        gain: 0.18,
+        f0: 80,
+        f1: 900,
+      });
       const lv: [number, number][] = [
         [0, 0],
-        [S('before-two-worlds'), 0],
-        [S('before-two-worlds', 2), 0.09],
-        [S('before-halo-rise', 1), 0.07],
-        [E('before-gaze'), 0.05],
-        [E('before-bite') - 1.5, 0.04],
-        [S('build-genesis'), 0.03],
-        [S('build-genesis', 3), 0.08],
-        [S('build-brace'), 0.12],
-        [S('hunt-burst'), 0.12],
-        [S('hunt-nova'), 0.05],
-        [E('hunt-beams'), 0.1],
-        [S('edge-wide'), 0],
-        [S('edge-title'), 0],
-        [S('edge-title', 0.1), 0.1],
-        [E('edge-title'), 0.02],
+        [A.worlds[0], 0],
+        [A.worlds[0] + 2, 0.09],
+        [A.halo + 1, 0.07],
+        [A.gaze[1], 0.05],
+        [A.bite - 1.5, 0.04],
+        [A.genesis, 0.03],
+        [A.genesis + 3, 0.08],
+        [A.brace, 0.12],
+        [A.burst, 0.12],
+        [A.nova[0], 0.05],
+        [A.black, 0.1],
+        [A.edge, 0],
+        [A.title, 0],
+        [A.title + 0.1, 0.1],
+        [A.sting, 0.02],
         [plan.duration, 0],
       ];
       drone(
         c,
-        lv.sort((a, b) => a[0] - b[0]),
+        lv.sort((x, y) => x[0] - y[0]),
         plan.duration,
       );
       // ACT IV: something wet, far away; the coils
-      if (has('edge-slide')) wetSound(c, S('edge-slide'), S('edge-wipe'));
+      wetSound(c, fr(A.slide), fr(A.wipe[0]));
       break;
     }
     case 'motifs': {
       // ACT I: 우리 first, two notes (one per world) on the pad; it stops mid-phrase when the halo rises
-      if (has('before-two-worlds')) {
-        uriMotif(S('before-two-worlds', 0.6), 1, 0.06);
-        cue('우리 motif (stops mid-phrase)', S('before-two-worlds', 3.2));
-        uriMotif(S('before-two-worlds', 3.2), 1, 0.06, S('before-halo-rise'));
-      }
-      if (has('before-eye')) witness(cue('Witness motif', S('before-eye')), 4, 0.03);
-      if (has('before-mouth-edge'))
-        mouth(cue('Mouth motif', S('before-mouth-edge')), S('before-bite', 0.5), 0.5);
-      // ACT II: 우리 returns as the body is built: one more layer for every few parts
-      if (has('build-assembly')) {
-        const parts = plan.drums.filter((d) => d.part !== 'loop');
-        parts.forEach((d, i) => {
-          if (i % 3 !== 0) return;
-          uriMotif(fr(d.t), 1 + Math.floor((4 * i) / Math.max(1, parts.length - 1)), 0.05, S('build-brace'));
-        });
-      }
-      if (has('build-brace')) uriMotif(cue('우리 motif, full', S('build-brace', 0.3)), 5, 0.08);
+      uriMotif(fr(A.worlds[0] + 0.6), 1, 0.06);
+      cue('우리 motif (stops mid-phrase)', A.worlds[0] + 3.2);
+      uriMotif(fr(A.worlds[0] + 3.2), 1, 0.06, fr(A.halo));
+      witness(cue('Witness motif', A.eye), 4, 0.03);
+      mouth(cue('Mouth motif', A.mouth), fr(A.bite), 0.5);
+      // ACT II: 우리 returns as the body is built: one more layer every few parts
+      const parts = plan.drums.filter((d) => d.part !== 'loop');
+      parts.forEach((d, i) => {
+        if (i % 3 !== 0) return;
+        uriMotif(seen(d.t), 1 + Math.floor((4 * i) / Math.max(1, parts.length - 1)), 0.05, fr(A.brace));
+      });
+      uriMotif(cue('우리 motif, full', A.brace + 0.3), 5, 0.08);
       // ACT III: the full score; it ducks to the hearts in the nova, and the two motifs collide at the eye
-      if (has('hunt-burst'))
-        for (let t = S('hunt-burst'); t < S('hunt-nova') - 1; t += 2.4)
-          uriMotif(fr(t), 5, 0.07, S('hunt-nova'));
-      if (has('hunt-eye')) {
-        witness(cue('Witness motif (collides)', S('hunt-eye')), 5, 0.035);
-        uriMotif(S('hunt-eye', 0.45), 4, 0.07, S('hunt-black'));
-      }
-      if (has('before-mouth-edge') && has('edge-slide')) mouth(S('edge-pullback'), S('edge-wipe'), 0.4);
+      for (let t = A.burst; t < A.nova[0] - 1; t += 2.4) uriMotif(fr(t), 5, 0.07, fr(A.nova[0]));
+      witness(cue('Witness motif (collides)', A.eyeHunt), 5, 0.035);
+      uriMotif(fr(A.eyeHunt + 0.45), 4, 0.07, fr(A.black));
+      mouth(fr(A.pull[0]), fr(A.wipe[0]), 0.4);
       break;
     }
     case 'perc': {
-      if (has('cold-heartbeats')) hearts(S('cold-heartbeats'), S('cold-adeuk'), 0.5);
+      hearts(fr(A.cold), fr(A.freeze), 0.5);
       // the genesis: a drum on every part's weld; the fists' two clenches are heavy hits
       for (const d of plan.drums) {
         const at = cue(`drum ${d.part}${d.clench ? ` clench ${d.clench}` : ''}`, d.t, seen(d.t));
@@ -265,104 +379,75 @@ export async function renderCinemaStem(
         });
       }
       // ACT III: the beat, on a grid that starts on the bars' burst; it drops to the hearts in the nova
-      if (has('hunt-burst')) {
-        const bpm = 104;
-        const beat = 60 / bpm;
-        let i = 0;
-        for (let t = S('hunt-burst'); t < S('hunt-nova') - 0.05; t += beat, i++) {
-          const at = fr(t);
-          const down = i % 4 === 0;
-          if (down) cue('hunt downbeat', t, at);
-          boom(c, makeOut(c, 0, 0.2), at, {
-            f0: down ? 100 : 130,
-            f1: down ? 38 : 60,
-            dur: down ? 0.6 : 0.25,
-            gain: down ? 0.5 : 0.22,
-            crunch: 2,
-          });
-        }
-        hearts(S('hunt-nova'), S('hunt-eye'), 0.4);
-        // the riser into the punch, cut dead a frame before it
-        swell(c, makeOut(c, 0, 0.4), S('hunt-beams'), {
-          dur: S('hunt-black') - S('hunt-beams'),
-          gain: 0.35,
-          f0: 70,
-          f1: 1100,
-          sub: 0.25,
+      const beat = 60 / 104;
+      let i = 0;
+      for (let t = A.burst; t < A.nova[0] - 0.05; t += beat, i++) {
+        const at = fr(t);
+        const down = i % 4 === 0;
+        if (down) cue('hunt downbeat', t, at);
+        boom(c, makeOut(c, 0, 0.2), at, {
+          f0: down ? 100 : 130,
+          f1: down ? 38 : 60,
+          dur: down ? 0.6 : 0.25,
+          gain: down ? 0.5 : 0.22,
+          crunch: 2,
         });
       }
-      // ACT IV: one blow per word; the bite; the title's final hit; the sting
+      hearts(fr(A.nova[0]), fr(A.nova[1]), 0.4);
+      // the riser into the punch, cut dead a frame before it (the gate at the cut to black)
+      swell(c, makeOut(c, 0, 0.4), fr(A.beams), {
+        dur: A.black - A.beams,
+        gain: 0.35,
+        f0: 70,
+        f1: 1100,
+        sub: 0.25,
+      });
       for (const w of plan.words) {
         const at = cue(`word ${w.word}`, w.t, seen(w.t));
         boom(c, makeOut(c, 0, 0.5), at, { f0: 84, f1: 28, dur: 1.4, gain: 0.8, drive: 3.6, crunch: 2.6 });
       }
-      if (has('edge-title')) {
-        const at = cue('title hit', S('edge-title'));
-        catastrophe(c, makeOut(c, 0, 0.15), makeOut(c, 0, 0.9), at, { pre: 0, size: 0.7, gain: 0.8 });
-      }
-      if (has('edge-sting')) {
-        const s = S('edge-sting');
-        hearts(s, s + 0.75, 0.5);
-        hearts(s, s, 0.5, s + 0.78);
-      }
+      catastrophe(c, makeOut(c, 0, 0.15), makeOut(c, 0, 0.9), cue('title hit', A.title), {
+        pre: 0,
+        size: 0.7,
+        gain: 0.8,
+      });
+      hearts(fr(A.sting), fr(A.sting + 0.75), 0.5);
+      hearts(fr(A.sting), fr(A.sting), 0.5, fr(A.sting + 0.78));
       break;
     }
     case 'sfx': {
-      // ACT I: the gaze (beam sizzle) and the crust cracking under it; the bite and its ring-out
-      if (has('before-gaze')) {
-        const g = cue('gaze beam', S('before-gaze'));
-        roar(c, makeOut(c, 0.3, 0.6), g, {
-          f: 73.4,
-          dur: 2.6,
-          gain: 0.12,
-          attack: 0.05,
-          lp0: 1300,
-          lp1: 400,
-        });
-        crackle(c, makeOut(c, 0.2, 0.5), g + 0.3, { dur: 2.4, count: 30, gain: 0.12, f: 1300 });
-        for (const dt of [0.6, 1.3, 2.1])
-          tectonicCrack(c, makeOut(c, -0.2, 0.5), fr(g + dt), 0.8, resonance(0.9));
-        ceramicFracture(c, makeOut(c, 0, 0.5), fr(g + 1.3), 0.6, resonance(1));
-      }
-      if (has('before-mouth-edge')) {
-        const m = S('before-mouth-edge');
-        boom(c, makeOut(c, 0, 0.2), cue('sub drop (the Mouth)', m), {
-          f0: 70,
-          f1: 24,
-          dur: 2,
-          gain: 0.5,
-          drive: 3,
-        });
-        grind(c, makeOut(c, -0.6, 0.6), m + 0.4, { dur: 1.6, gain: 0.12, f0: 160, f1: 90, rate: 4 });
-      }
-      if (has('before-bite')) {
-        const b = cue('the bite (impact; Silence #1 follows)', S('before-bite', 0.5));
-        whoosh(c, fr(b - 0.45), {
-          dur: 0.45,
-          gain: 0.25,
-          panFrom: -0.6,
-          panTo: 0.2,
-          wet: 0.3,
-          f0: 900,
-          f1: 150,
-        });
-        catastrophe(c, makeOut(c, 0, 0.2), makeOut(c, 0, 0.6), b, { pre: 0, size: 0.4, gain: 0.95 });
-      }
+      // the bite (it is a real blow in the match: this is its cinema weight) and its ring-out; Silence #1 follows
+      const b = cue('the bite (impact; Silence #1 follows)', A.bite);
+      whoosh(c, fr(b - 0.45), {
+        dur: 0.45,
+        gain: 0.25,
+        panFrom: -0.6,
+        panTo: 0.2,
+        wet: 0.3,
+        f0: 900,
+        f1: 150,
+      });
+      catastrophe(c, makeOut(c, 0, 0.2), makeOut(c, 0, 0.6), b, { pre: 0, size: 0.4, gain: 0.95 });
+      boom(c, makeOut(c, 0, 0.2), cue('sub drop (the Mouth)', A.mouth), {
+        f0: 70,
+        f1: 24,
+        dur: 2,
+        gain: 0.5,
+        drive: 3,
+      });
+      grind(c, makeOut(c, -0.6, 0.6), fr(A.mouth + 0.4), { dur: 1.6, gain: 0.12, f0: 160, f1: 90, rate: 4 });
       // ACT II: the ignition (a rising ringing whoosh) and a clank on every weld
-      if (has('build-genesis')) {
-        const loop = plan.drums.find((d) => d.part === 'loop')?.t ?? S('build-genesis', 3);
-        swell(c, makeOut(c, 0, 0.6), S('build-genesis'), {
-          dur: fr(loop) - S('build-genesis'),
-          gain: 0.25,
-          f0: 90,
-          f1: 1000,
-          sub: 0.12,
-        });
-        lowBell(c, makeOut(c, 0, 0.9), fr(loop), 110, BELL, { decay: 3, gain: 0.1, shimmer: 0.5 });
-      }
+      swell(c, makeOut(c, 0, 0.6), fr(A.genesis), {
+        dur: seen(A.loop) - fr(A.genesis),
+        gain: 0.25,
+        f0: 90,
+        f1: 1000,
+        sub: 0.12,
+      });
+      lowBell(c, makeOut(c, 0, 0.9), seen(A.loop), 110, BELL, { decay: 3, gain: 0.1, shimmer: 0.5 });
       let last = -1;
       for (const w of plan.welds) {
-        const at = fr(w);
+        const at = seen(w);
         if (at - last < 0.03) continue; // a weld per frame at most
         last = at;
         lowBell(c, makeOut(c, (c.rand() - 0.5) * 0.8, 0.4), at, 180 + 120 * c.rand(), BELL, {
@@ -370,51 +455,119 @@ export async function renderCinemaStem(
           gain: 0.025,
         });
       }
-      // the launch at the camera
-      if (has('build-launch'))
-        whoosh(c, S('build-launch'), {
-          dur: 1.6,
-          gain: 0.3,
-          panFrom: 0,
-          panTo: 0,
-          wet: 0.4,
-          f0: 1000,
-          f1: 120,
-          body: 1.4,
-        });
-      // ACT III: the gameplay SFX come from S5's takes (empty slots until then); the bars' burst gets a designed hit
-      if (has('hunt-burst')) {
-        const h = cue('bars burst (first gameplay hit; game SFX slot)', S('hunt-burst'));
-        boom(c, makeOut(c, 0, 0.2), h, { f0: 100, f1: 30, dur: 1.4, gain: 0.85, drive: 3.6, crunch: 3 });
-      }
+      whoosh(c, fr(A.launch), {
+        dur: 1.6,
+        gain: 0.3,
+        panFrom: 0,
+        panTo: 0,
+        wet: 0.4,
+        f0: 1000,
+        f1: 120,
+        body: 1.4,
+      });
       // ACT IV: the jaw-rings close over the camera: the bite, then black
-      if (has('edge-wipe')) {
-        const w = S('edge-wipe');
-        grind(c, makeOut(c, 0, 0.5), w, {
-          dur: E('edge-wipe') - w - 0.3,
-          gain: 0.2,
-          f0: 300,
-          f1: 90,
-          rate: 9,
-        });
-        const bite = cue('jaw wipe bite', E('edge-wipe') - 0.35);
-        boom(c, makeOut(c, 0, 0.3), bite, { f0: 110, f1: 30, dur: 0.6, gain: 0.7, drive: 3.6, crunch: 3 });
-        filamentSnap(c, makeOut(c, 0, 0.4), bite, 70, 1, resonance(0.4));
-      }
+      grind(c, makeOut(c, 0, 0.5), fr(A.wipe[0]), {
+        dur: A.wipe[1] - A.wipe[0] - 0.3,
+        gain: 0.2,
+        f0: 300,
+        f1: 90,
+        rate: 9,
+      });
+      const bite = cue('jaw wipe bite', A.wipe[1] - 0.35);
+      boom(c, makeOut(c, 0, 0.3), bite, { f0: 110, f1: 30, dur: 0.6, gain: 0.7, drive: 3.6, crunch: 3 });
+      filamentSnap(c, makeOut(c, 0, 0.4), bite, 70, 1, resonance(0.4));
+      crackle(c, makeOut(c, 0, 0.6), bite, { dur: 0.8, count: 10, gain: 0.1 });
       break;
     }
     case 'vo':
-      // WJ's whispered line (우리는 아직 여기 있다) has its slot at the brace; until it is recorded, the subtitle carries it
-      cue('VO slot (empty): 우리는 아직 여기 있다', S('build-brace', 0.5));
+      // WJ's whispered line has its slot at the brace; until it is recorded, the subtitle carries it
+      cue('VO slot (empty): 우리는 아직 여기 있다', A.brace + 0.5);
       break;
   }
-  // the HARD silences: everything but the room tone (and, on the first, the bite's own ring-out) is cut
-  // (windows that touch are merged first: two gates back to back must not reopen for a moment between them)
+  // the REAL fights: every fight shot's sim events, through the game's own engine, on the frame they are first drawn
+  let game: ReturnType<typeof createAudioEngine> | null = null;
+  if (stem === 'sfx' && plan.fights.length) {
+    await loadUriAsset(uriBinUrl);
+    const eng = createAudioEngine({ context: ctx, seed: 5, unsafeBypassLimiter: true });
+    game = eng;
+    await eng.unlock();
+    eng.setVolumes({ music: 0, master: 0 });
+    const frames = Math.round(plan.duration * plan.fps);
+    let cur: {
+      shot: Shot;
+      level: number;
+      m: ReturnType<typeof buildShotMatch>;
+      fx: FxState;
+      ticks: number;
+    } | null = null;
+    // (the game's own output does not pass the stem's gate: its master fader is the gate)
+    const silent = (t: number): boolean => plan.silences.some(([a, b]) => t >= a && t < b);
+    const drive = (n: number): void => {
+      const t = n / plan.fps;
+      const f = plan.fights.find((x) => t >= x.shot.start - 1e-9 && t < x.shot.end - 1e-9);
+      if (f && cur?.shot !== f.shot) {
+        const sm = f.shot.match!;
+        const m = buildShotMatch(sm, f.shot.stage);
+        const fx = new FxState();
+        for (let k = 0; k < (sm.startTick ?? 0) && m.phase !== 'matchend'; k++)
+          tickShot(m, fx, f.shot, k + 1);
+        cur = { shot: f.shot, level: f.level, m, fx, ticks: 0 };
+        eng.setVolumes({ master: silent(t) ? 0 : f.level });
+      }
+      if (!f && cur) {
+        cur = null;
+        eng.setVolumes({ master: 0 });
+      }
+      if (cur) {
+        if (silent(t)) eng.setVolumes({ master: 0 });
+        const target = sceneTime(cur.shot, t - cur.shot.start) * 60;
+        const evs: SimEvent[] = [];
+        while (cur.ticks + 1 <= target + 1e-9 && cur.m.phase !== 'matchend') {
+          cur.ticks++;
+          evs.push(...tickShot(cur.m, cur.fx, cur.shot, (cur.shot.match!.startTick ?? 0) + cur.ticks));
+        }
+        if (evs.length) eng.handleAt(evs, t);
+        const rate = Math.max(
+          0.3,
+          Math.min(
+            1,
+            (sceneTime(cur.shot, t - cur.shot.start + 0.05) - sceneTime(cur.shot, t - cur.shot.start)) / 0.05,
+          ),
+        );
+        const mid = (cur.m.fighters[0].view.x + cur.m.fighters[1].view.x) / 2;
+        const scene = buildAudioScene(cur.m, 'fight', cur.fx.intensity(), mid);
+        eng.updateAt({ ...scene, timeScale: rate }, 1 / plan.fps, t + 0.1);
+      } else
+        eng.updateAt(
+          {
+            phase: 'menu',
+            stage: 'rim',
+            intensity: 0,
+            listenerX: 800,
+            lowestIntegrity: 1,
+            timeScale: 1,
+            fighters: null,
+          },
+          1 / plan.fps,
+          t + 0.1,
+        );
+    };
+    drive(0);
+    for (let n = 1; n < frames; n++) {
+      const at = n / plan.fps;
+      void ctx.suspend(at).then(() => {
+        drive(n);
+        void ctx.resume();
+      });
+    }
+  }
+  // the HARD silences: everything but the room tone (and, on the first, the bite's own ring-out) is cut; windows that touch are
+  // merged first, so two gates back to back never reopen for a moment between them
   const windows: [number, number][] = [];
   for (const [a, b, ringOut] of [...plan.silences].sort((x, y) => x[0] - y[0])) {
     if (ringOut && stem === 'sfx') continue;
-    const last = windows[windows.length - 1];
-    if (last && a <= last[1] + 0.05) last[1] = Math.max(last[1], b);
+    const prev = windows[windows.length - 1];
+    if (prev && a <= prev[1] + 0.05) prev[1] = Math.max(prev[1], b);
     else windows.push([a, b]);
   }
   for (const [a, b] of windows) {
@@ -424,5 +577,6 @@ export async function renderCinemaStem(
     gated.gain.linearRampToValueAtTime(1, b + 0.02);
   }
   const buf = await ctx.startRendering();
+  game?.dispose();
   return { left: buf.getChannelData(0), right: buf.getChannelData(1), cues };
 }

@@ -12,7 +12,10 @@ import {
   designTruePeakFir,
 } from '../../src/telemetry/loudness';
 import { LIMITER_LOOKAHEAD, LimiterCore } from '../../src/audio/worklets/limiter';
-import type { CinemaPlan, PlacedCue, StemName } from '../../dev/ui/audio-cinema';
+import type { CinemaAnchors, CinemaPlan, PlacedCue, StemName } from '../../dev/ui/audio-cinema';
+import { sceneTime, type Shot } from '../../src/cinema/timeline';
+import { laptopLufs } from '../../dev/ui/audio-laptop';
+import { bandEnergies } from '../../src/audio/dsp/analysis';
 
 /**
  * The launch trailer v3's sound, in one command, from the timeline as it stands (docs/cinema/TRAILER_V3.md §2.3):
@@ -37,26 +40,36 @@ const TARGET = -16;
 const STEMS: StemName[] = ['drone', 'motifs', 'perc', 'sfx', 'vo'];
 
 /* ---------------------------------------------------------------- 1. the plan */
-interface Shot {
-  id: string;
-  start: number;
-  end: number;
-}
 const tl = JSON.parse(readFileSync(TIMELINE, 'utf8')) as { fps?: number; shots: Shot[] };
 const fps = tl.fps ?? 60;
-const shots: Record<string, [number, number]> = {};
-for (const s of tl.shots) shots[s.id] = [s.start, s.end];
 const duration = Math.max(...tl.shots.map((s) => s.end));
-const start = (id: string, d = 0): number => shots[id]?.[0] ?? d;
 const notes: string[] = [];
+/** The shots of a beat: the id itself, or every `<id>-…` (S5 splits beats into numbered shots). */
+const beat = (id: string): Shot[] => tl.shots.filter((s) => s.id === id || s.id.startsWith(`${id}-`));
+const start = (id: string, d: number): number => {
+  const b = beat(id);
+  if (!b.length) notes.push(`no shot '${id}' in the timeline: ${d} s assumed`);
+  return b[0]?.start ?? d;
+};
+const end = (id: string, d: number): number => beat(id).at(-1)?.end ?? d;
+/** Timeline second of the frame on which a shot's sim tick `abs` is first drawn (its time remap applied, as the Director does). */
+const tickTime = (shot: Shot, abs: number): number => {
+  const k = abs - (shot.match?.startTick ?? 0);
+  const frames = Math.round((shot.end - shot.start) * fps);
+  for (let n = 0; n <= frames; n++)
+    if (sceneTime(shot, n / fps) * 60 >= k - 1e-9) return shot.start + n / fps;
+  return shot.end;
+};
 
 const png = (f: string): PNG => PNG.sync.read(readFileSync(`src/cinema/assets/${f}.png`));
-const genStart = start('build-genesis', 27);
-const genDur = start('build-brace', genStart + 14) - genStart;
+const gShots = beat('build-genesis');
+const genStart = gShots[0]?.start ?? 27;
+const brace = gShots.length >= 2 ? gShots[gShots.length - 2]!.start : genStart + 14;
+const launchAt = gShots.at(-1)?.start ?? brace + 3;
 const gen = genesisCues(
   bakeUri(png('uri-a'), png('uri-a-id'), png('uri-g'), png('uri-g-id')),
   genStart,
-  genDur,
+  brace - genStart,
 );
 const drums = gen.drums.map((d) => ({
   t: d.t,
@@ -66,22 +79,56 @@ const drums = gen.drums.map((d) => ({
 }));
 const welds = gen.welds.map((w) => w.t);
 
-const pullShift = start('edge-pullback', EDGE.pullStart) - EDGE.pullStart;
-if (Math.abs(pullShift) > 1e-6)
-  notes.push(
-    `edge-pullback starts at ${start('edge-pullback')} in the timeline, ${EDGE.pullStart} in edge.ts: words shifted`,
-  );
-const words = edgeWordCues().map((t, i) => ({ word: EDGE_WORDS[i]!, t: t + pullShift }));
+const edgeShift = start('edge-pull', EDGE.slideStart) - EDGE.slideStart;
+if (Math.abs(edgeShift) > 1e-6)
+  notes.push(`edge-pull starts ${edgeShift.toFixed(3)} s off edge.ts's slideStart: words shifted`);
+const words = edgeWordCues().map((t, i) => ({ word: EDGE_WORDS[i]!, t: t + edgeShift }));
 
-const bite = start('before-bite', 22) + 0.5;
+// the bite is the Mouth shot's injected blow, on the frame it is drawn
+const mouthShot = beat('before-mouth-edge')[0];
+const blow = mouthShot?.match?.blows?.[0];
+const bite = mouthShot && blow ? tickTime(mouthShot, blow.tick) : start('before-mouth-edge', 20) + 2.5;
+const freeze = start('cold-white', 6);
+const a: CinemaAnchors = {
+  cold: start('cold-heartbeats', 0),
+  roar: start('cold-matter-pixel', 2),
+  inhale: [freeze - 2, freeze],
+  freeze,
+  worlds: [start('before-two-worlds', 7), end('before-two-worlds', 12)],
+  halo: start('before-halo-rise', 12),
+  eye: start('before-eye', 15),
+  gaze: [start('before-gaze', 17), end('before-gaze', 20)],
+  mouth: start('before-mouth-edge', 20),
+  bite,
+  ruin: start('build-ruin', 24),
+  genesis: genStart,
+  loop: drums.find((d) => d.part === 'loop')?.t ?? genStart + 3,
+  brace,
+  launch: launchAt,
+  burst: start('hunt-burst', 46),
+  nova: [start('hunt-nova', 62), end('hunt-nova', 65)],
+  eyeHunt: start('hunt-eye', 65),
+  beams: start('hunt-beams', 68),
+  black: start('hunt-black', 72),
+  edge: start('edge-wide', 77),
+  slide: EDGE.slideStart + edgeShift,
+  pull: [EDGE.pullStart + edgeShift, EDGE.pullEnd + edgeShift],
+  wipe: [start('edge-wipe', 89), end('edge-wipe', 91)],
+  title: start('edge-title', 91),
+  sting: start('edge-sting', 94),
+};
 const silences: [number, number, boolean][] = [
   // Silence #1: the bite's own ring-out only, then room tone through the ruin
-  [bite + 0.08, start('build-ruin', 24), true],
-  [start('build-ruin', 24), start('build-genesis', 27), false],
+  [bite + 0.08, a.ruin, true],
+  [a.ruin, a.genesis, false],
   // Silence #2: the cut to black a frame before the punch, room tone only until the edge
-  [start('hunt-black', 72), start('edge-wide', 77), false],
+  [a.black, a.edge, false],
 ];
-const plan: CinemaPlan = { duration, fps, shots, drums, welds, words, silences };
+// every real fight, at the level its act wants it: under the story (Acts 0 and I), full in the hunt, far off at the edge
+const fights = tl.shots
+  .filter((s) => s.match)
+  .map((shot) => ({ shot, level: shot.start >= a.edge ? 0.45 : shot.start >= a.burst ? 1 : 0.55 }));
+const plan: CinemaPlan = { duration, fps, a, drums, welds, words, silences, fights };
 
 /* ---------------------------------------------------------------- 2. the stems */
 const { server, url } = await startDevServer();
@@ -273,6 +320,15 @@ const report = {
   truePeak: +m.truePeak.toFixed(2),
   range: +m.range.toFixed(1),
   limiterDb: +limDb.toFixed(1),
+  /** As a laptop speaker plays it (dev/ui/audio-laptop.ts), and the mix's power above 2 kHz. */
+  laptop: laptopLufs(mixL, mixR, SR),
+  shareAbove2k: +(
+    bandEnergies(
+      Float32Array.from(mixL, (v, i) => 0.5 * (v + mixR[i]!)),
+      SR,
+      [20, 2000, 24000],
+    )[1] ?? 0
+  ).toFixed(4),
   masterGainDb: +(20 * Math.log10(gain)).toFixed(1),
   silences,
   cues: cues.length,
@@ -282,7 +338,9 @@ const report = {
   worstOnsetVsFrameMs: sorted.length ? sorted[sorted.length - 1] : null,
   worstPlaceErrMs: Math.max(...cues.map((c) => Math.abs(c.placeErrMs))),
   notes,
-  gameplaySlots: Object.keys(shots).filter((id) => id.startsWith('hunt-')),
+  anchors: a,
+  /** The fight shots whose real sim events make the SFX stem's game sound, and their level. */
+  fights: fights.map((f) => ({ id: f.shot.id, start: f.shot.start, end: f.shot.end, level: f.level })),
   all: cues,
 };
 writeFileSync(join(OUT, 'cue-report.json'), JSON.stringify(report, null, 1));
