@@ -1,0 +1,40 @@
+{
+  "comment": "P3 gate (TRAILER_V3 §3): 0:20-0:24. World B; the stars at the frame edge slide sideways; the LOCKED Mouth's coils pour in over the bottom edge, the crane neck rises, the jaw-rings open; its real crane strike: the bite takes half of World B, the camera and the letterbox bars shake. Times here are 0 = 0:20.",
+  "fps": 60,
+  "shots": [
+    {
+      "id": "probe",
+      "comment": "0:20-0:24 in one take. World B alone (the real Planet in palette B, a dummy; World A is far off-frame). The Mouth is the LOCKED oracle baked frame by frame (tools/cinema/mouth-strike.ts), drawn in front of the world; its bite at 2.9 s is a real catastrophic blow on World B's matter (match.blows): half the world goes, debris, a flash, the shake moves the bars.",
+      "start": 0,
+      "end": 4,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "planet",
+        "b": "asteroid",
+        "seed": 5,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 700,
+        "worlds": { "0": "B" },
+        "blows": [
+          {
+            "tick": 175,
+            "slot": 0,
+            "dx": 0,
+            "dy": 30,
+            "r": 50,
+            "energy": 14000,
+            "dirX": 0,
+            "dirY": -1,
+            "shake": 16
+          }
+        ]
+      },
+      "hide": "titan-1|asteroid",
+      "camera": [{ "t": 0, "lock": 0, "x": 0, "y": 0, "shake": true }],
+      "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 11, "slide": [0.4, 2.4, 70] } }],
+      "letterbox": [[0, 0]],
+      "cards": [{ "t": [3.1, 4], "text": "It ate.", "scale": 2, "y": 322 }]
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import type { GradeId } from './grade';
 import type { StageId, TitanId } from '@/contracts';
 import { CINEMA_FPS } from './types';
 
@@ -21,6 +22,17 @@ export interface Shot {
   end: number;
   /** The stage whose scenery is drawn behind everything (cinema actors may cover it). */
   stage: StageId;
+  /**
+   * Draw the stage scenery (default: yes, unless an actor at depth ≤ −90 is the backdrop: then the stage is hidden so none of
+   * its light, bloom or rays leaks through the backdrop).
+   */
+  scenery?: boolean;
+  /** Drop the fight's layers whose id matches this regex (e.g. the glow overlays in a MATTER CAM macro: matter only). */
+  hide?: string;
+  /** Per-act grade (src/cinema/grade.ts). */
+  grade?: GradeId;
+  /** Draw the fight alone first and hand it to the edge pull (actors/edgepull.ts setArenaSource) as its arena. */
+  arena?: boolean;
   /** Seed of the shot's random numbers (actors' ctx.rng). */
   seed?: number;
   /** A real fight driving the shot (real titans, real moves, real damage), or none. */
@@ -54,6 +66,23 @@ export interface ShotMatch {
   /** Draw this slot's world (a `worlds` slot) in front of the other fighter: a horizon something rises behind. */
   front?: 0 | 1;
   witness?: { slot: 0 | 1; pupil?: [number, number][]; rings?: [number, number][] };
+  /**
+   * Cinema-only blows (src/cinema/director.ts tickMatch): at absolute sim tick `tick` (after the intro, counted from the
+   * fight going live), real damage on `slot`'s matter: a disc of radius `r` at (dx, dy) from its root, heading (dirX, dirY).
+   */
+  blows?: {
+    tick: number;
+    slot: 0 | 1;
+    dx: number;
+    dy: number;
+    r: number;
+    energy: number;
+    dirX: number;
+    dirY: number;
+    type?: 'CRUSH' | 'KINETIC' | 'FRACTURE' | 'THERMAL' | 'TIDAL';
+    shock?: number;
+    shake?: number;
+  }[];
   /** px between the fighters at round start (default 380). */
   gap?: number;
 }
@@ -69,6 +98,10 @@ export interface CameraKey {
   focus?: [number, number];
   /** MATTER CAM: draw each native pixel as a lit cell of matter (from a zoom of ×8 at the output scale). */
   matter?: boolean;
+  /** First key only: zoom ABOUT the focus point (it keeps its place in the frame; ×1 shows the whole picture). */
+  about?: boolean;
+  /** First key only: a fixed camera on where this fighter stood at the shot's start; x/y become an offset from it. */
+  lock?: 0 | 1;
   /** Track a fighter (slot): the zoom closes in on its root, and `focus` becomes an offset from it (native px). */
   track?: 0 | 1;
   /** Dutch angle in whole quarter turns (1 = the picture turned 90° clockwise): pixels move, never resample. Held. */

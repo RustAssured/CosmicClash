@@ -1,128 +1,141 @@
 {
-  "comment": "ADEUK: TITANS launch trailer v3 ('우리'), docs/cinema/TRAILER_V3.md. ANIMATIC SKELETON: every shot is a slate (backdrop + its id + its card) until its phase replaces it with the real actors. Times are timeline seconds; edit them to retime.",
+  "comment": "ADEUK: TITANS launch trailer v3 ('우리'), docs/cinema/TRAILER_V3.md. The single source of truth: every shot says what it is for; times are timeline seconds (edit them to retime; shots must stay contiguous). Real fights are deterministic (match seed/script/startTick); cinema-only beats are actors (src/cinema/actors).",
   "fps": 60,
   "shots": [
     {
       "id": "cold-heartbeats",
-      "comment": "ACT 0. Black; two heartbeats out of phase: two hearts (sound only).",
+      "comment": "ACT 0, 0:00. Black. Two heartbeats, slightly out of phase: two hearts (sound only; S6 cues at 0.35 L and 0.95 R).",
       "start": 0,
       "end": 2,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
       "actors": [
         {
           "type": "backdrop",
           "depth": -99,
           "params": {
-            "seed": 7
+            "seed": 7,
+            "density": 0
           }
         }
       ],
-      "cards": [
-        {
-          "t": [0, 2],
-          "text": "COLD-HEARTBEATS",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "letterbox": [[0, 0]]
     },
     {
       "id": "cold-matter-pixel",
-      "comment": "MATTER CAM: one native pixel of 우리's hot core at ×48, seething through its ramp.",
+      "comment": "0:02. MATTER CAM: one pixel of 우리's hot core fills the screen (x48, each native pixel a lit tile), seething in x0.25; at 0:04 the snap pull-back (exponential, 18 frames, zoom about the core) shows it is 우리, its fist mid-swing toward something off-screen. Freeze at 0:06 (a frame before the blow lands at 0:46).",
       "start": 2,
-      "end": 4,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
-      "actors": [
+      "end": 6,
+      "stage": "nursery",
+      "match": {
+        "a": "uri",
+        "b": "planet",
+        "seed": 1,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 608
+      },
+      "time": [
+        [0, 0.25],
+        [3.6, 0]
+      ],
+      "camera": [
         {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
+          "t": 0,
+          "zoom": 48,
+          "track": 0,
+          "focus": [28, -38],
+          "about": true,
+          "shake": false,
+          "matter": true
+        },
+        {
+          "t": 2,
+          "zoom": 48,
+          "track": 0,
+          "focus": [28, -38],
+          "shake": false,
+          "matter": true
+        },
+        {
+          "t": 2.3,
+          "zoom": 1,
+          "track": 0,
+          "focus": [28, -38],
+          "shake": false
         }
       ],
-      "cards": [
-        {
-          "t": [0, 2],
-          "text": "COLD-MATTER-PIXEL",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "grade": "build",
+      "letterbox": [[0, 0]]
     },
     {
-      "id": "cold-pullback",
-      "comment": "Snap pull-back (exponential, 18 frames): the pixel is 우리's core; its fist mid-swing in slow motion.",
-      "start": 4,
-      "end": 6,
+      "id": "cold-white",
+      "comment": "0:06. Hard cut to white (5 frames).",
+      "start": 6,
+      "end": 6.083,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
       "actors": [
         {
           "type": "backdrop",
           "depth": -99,
           "params": {
-            "seed": 7
+            "seed": 7,
+            "density": 0,
+            "color": [255, 255, 255]
           }
         }
       ],
-      "cards": [
-        {
-          "t": [0, 2],
-          "text": "COLD-PULLBACK",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "letterbox": [[0, 1]]
     },
     {
       "id": "cold-adeuk",
-      "comment": "Freeze, hard cut to white then black. Card: 아득.",
-      "start": 6,
+      "comment": "0:06. Then black. Card: 아득. Silence.",
+      "start": 6.083,
       "end": 7,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
       "actors": [
         {
           "type": "backdrop",
           "depth": -99,
           "params": {
-            "seed": 7
+            "seed": 7,
+            "density": 0
           }
         }
       ],
+      "letterbox": [[0, 0]],
       "cards": [
         {
-          "t": [0, 1],
-          "text": "COLD-ADEUK",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        },
-        {
-          "t": [0.3, 0.8],
+          "t": [0.15, 0.85],
           "text": "아득",
-          "scale": 2
+          "scale": 4
         }
       ]
     },
     {
       "id": "before-two-worlds",
-      "comment": "ACT I. Two worlds in a slow binary orbit; city lights; ships string light between them.",
+      "comment": "ACT I, 0:07. Two worlds in a slow binary orbit (the real Planet in palettes A and B), city lights breathing on their night sides. A long, still, gentle wide shot. The 우리 motif first, as two notes.",
       "start": 7,
       "end": 12,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
+      "match": {
+        "a": "planet",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 300,
+        "worlds": {
+          "0": "A",
+          "1": "B"
+        }
+      },
+      "time": [[0, 0.5]],
+      "camera": [
+        {
+          "t": 0,
+          "shake": false
+        }
+      ],
       "actors": [
         {
           "type": "backdrop",
@@ -130,492 +143,1699 @@
           "params": {
             "seed": 7
           }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 5],
-          "text": "BEFORE-TWO-WORLDS",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
         },
         {
-          "t": [0.3, 4.8],
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "n": 40,
+            "x": 0,
+            "y": 0,
+            "w": 260,
+            "h": 60,
+            "rise": 1
+          }
+        }
+      ],
+      "grade": "before",
+      "letterbox": [[0, 0]],
+      "cards": [
+        {
+          "t": [0.8, 4.6],
           "text": "We were two worlds.",
-          "scale": 2
+          "scale": 2,
+          "y": 322
         }
       ]
     },
     {
       "id": "before-halo-rise",
-      "comment": "A gold arc rises over world A's horizon like a sunrise: the Witness's halo rings. Wrong colour, too slow.",
+      "comment": "ACT I (P2 gate). 0:12. Over World A's horizon a gold arc rises like a sunrise: the real Witness backs away from behind the planet (stick held left, x0.6) and the picture is turned a quarter (dutch 1) so 'away' is 'up'. Wrong colour, too slow.",
       "start": 12,
       "end": 15,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
-      "actors": [
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 40,
+        "script0": "0:left*900",
+        "worlds": {
+          "1": "A"
+        },
+        "front": 1
+      },
+      "time": [[0, 0.6]],
+      "camera": [
         {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 3],
-          "text": "BEFORE-HALO-RISE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
-    },
-    {
-      "id": "before-eye",
-      "comment": "EXTREME CLOSE-UP: the Witness eye at ×8. The pupil contracts; the rings click into alignment.",
-      "start": 15,
-      "end": 17,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
-      "actors": [
-        {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 2],
-          "text": "BEFORE-EYE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
-    },
-    {
-      "id": "before-gaze",
-      "comment": "Its real beam sweeps world A. MATTER CAM on the crust: crack, hold, shear (macro slow motion).",
-      "start": 17,
-      "end": 20,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
-      "actors": [
-        {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 3],
-          "text": "BEFORE-GAZE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
+          "t": 0,
+          "zoom": 2,
+          "track": 1,
+          "focus": [-120, 0],
+          "dutch": 1,
+          "shake": false
         },
         {
-          "t": [0.3, 2.8],
-          "text": "It looked at us.",
-          "scale": 2
+          "t": 3,
+          "zoom": 2,
+          "track": 1,
+          "focus": [-138, 0],
+          "dutch": 1,
+          "shake": false
         }
-      ]
+      ],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "letterbox": [[0, 0]],
+      "grade": "before"
+    },
+    {
+      "id": "before-eye-rings",
+      "comment": "ACT I (P2 gate). 0:15. EXTREME CLOSE-UP, first beat: the eye at x4, its halo arcs clicking back into alignment notch by notch.",
+      "start": 15,
+      "end": 16.2,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 40,
+        "gap": 300,
+        "worlds": {
+          "1": "A"
+        },
+        "witness": {
+          "slot": 0,
+          "rings": [
+            [0, 0],
+            [1, 1]
+          ]
+        }
+      },
+      "time": [[0, 0.5]],
+      "camera": [
+        {
+          "t": 0,
+          "zoom": 4,
+          "track": 0,
+          "focus": [0, 0],
+          "shake": false
+        }
+      ],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "letterbox": [[0, 0]],
+      "grade": "witness"
+    },
+    {
+      "id": "before-eye-pupil",
+      "comment": "ACT I (P2 gate). 0:16. The eye at x8, filling the frame: the black pupil contracts as it finds its target.",
+      "start": 16.2,
+      "end": 17.2,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 60,
+        "gap": 300,
+        "worlds": {
+          "1": "A"
+        },
+        "witness": {
+          "slot": 0,
+          "rings": [[0, 1]],
+          "pupil": [
+            [0, 1],
+            [0.2, 1],
+            [0.7, 0.35]
+          ]
+        }
+      },
+      "time": [[0, 0.5]],
+      "camera": [
+        {
+          "t": 0,
+          "zoom": 8,
+          "track": 0,
+          "focus": [0, 0],
+          "shake": false
+        }
+      ],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "letterbox": [[0, 0]],
+      "grade": "witness"
+    },
+    {
+      "id": "before-gaze-wide",
+      "comment": "ACT I (P2 gate). 0:17. Its real Fracture Gaze (the signature, scripted) strikes World A; the wide holds until the first crack opens.",
+      "start": 17.2,
+      "end": 18,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 30,
+        "gap": 300,
+        "script0": "20:sig*40,160:sig*40",
+        "worlds": {
+          "1": "A"
+        }
+      },
+      "camera": [
+        {
+          "t": 0,
+          "shake": false
+        }
+      ],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "letterbox": [[0, 0]],
+      "cards": [
+        {
+          "t": [0.3, 0.8],
+          "text": "It looked at us.",
+          "scale": 2,
+          "y": 322
+        }
+      ],
+      "grade": "witness"
+    },
+    {
+      "id": "before-gaze-macro",
+      "comment": "ACT I (P2 gate). 0:18. MATTER CAM, tight on the crack line (x24: about 27×15 native pixels, each a big lit tile): the crack opens (x0.25), time is pushed through the lull, the second gaze shears it (x0.4).",
+      "start": 18,
+      "end": 20,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "lastone",
+        "b": "planet",
+        "seed": 3,
+        "ai": 0,
+        "startTick": 68,
+        "gap": 300,
+        "script0": "20:sig*40,160:sig*40",
+        "worlds": {
+          "1": "A"
+        }
+      },
+      "time": [
+        [0, 0.25],
+        [0.6, 4.5],
+        [1.2, 0.4]
+      ],
+      "hide": "halo|glow|planet-fx|fx-front",
+      "camera": [
+        {
+          "t": 0,
+          "zoom": 24,
+          "track": 1,
+          "focus": [-34, -6],
+          "shake": false,
+          "matter": true
+        }
+      ],
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7
+          }
+        }
+      ],
+      "letterbox": [[0, 0]],
+      "cards": [
+        {
+          "t": [0, 1.8],
+          "text": "It looked at us.",
+          "scale": 2,
+          "y": 322
+        }
+      ],
+      "grade": "witness"
     },
     {
       "id": "before-mouth-edge",
-      "comment": "World B. Stars at the frame edge slide sideways; coils pour over the edge; the crane neck rises, jaw-rings open.",
+      "comment": "ACT I (P3 gate). 0:20-0:24 in one take. World B alone (the real Planet in palette B, a dummy; World A is far off-frame). The Mouth is the LOCKED oracle baked frame by frame (tools/cinema/mouth-strike.ts), drawn in front of the world; its bite at 2.9 s is a real catastrophic blow on World B's matter (match.blows): half the world goes, debris, a flash, the shake moves the bars. SILENCE #1 after the bite (S6).",
       "start": 20,
-      "end": 22,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
-      "actors": [
-        {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 2],
-          "text": "BEFORE-MOUTH-EDGE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
-    },
-    {
-      "id": "before-bite",
-      "comment": "The real crane strike: the bite takes half of world B; the camera AND the letterbox bars shake. Then SILENCE #1.",
-      "start": 22,
       "end": 24,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
+      "match": {
+        "a": "planet",
+        "b": "asteroid",
+        "seed": 5,
+        "ai": 0,
+        "startTick": 0,
+        "gap": 700,
+        "worlds": {
+          "0": "B"
+        },
+        "blows": [
+          {
+            "tick": 175,
+            "slot": 0,
+            "dx": 18,
+            "dy": 24,
+            "r": 50,
+            "energy": 14000,
+            "dirX": -0.6,
+            "dirY": -0.8,
+            "shake": 16
+          }
+        ]
+      },
+      "hide": "titan-1|asteroid",
+      "camera": [
+        {
+          "t": 0,
+          "lock": 0,
+          "x": 100,
+          "y": 70,
+          "shake": true
+        }
+      ],
       "actors": [
         {
           "type": "backdrop",
           "depth": -99,
           "params": {
-            "seed": 7
+            "seed": 11,
+            "slide": [0.4, 2.4, 70]
+          }
+        },
+        {
+          "type": "mouth",
+          "depth": 6,
+          "params": {
+            "pack": "strike",
+            "start": 20
           }
         }
       ],
+      "letterbox": [[0, 0]],
       "cards": [
         {
-          "t": [0, 2],
-          "text": "BEFORE-BITE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        },
-        {
-          "t": [0.3, 1.8],
+          "t": [3.1, 4],
           "text": "It ate.",
-          "scale": 2
+          "scale": 2,
+          "y": 322
         }
-      ]
+      ],
+      "grade": "mouth"
     },
     {
       "id": "build-ruin",
-      "comment": "ACT II. The ruin in the silence: two naked cores, the wreck drifting, arks like embers.",
+      "comment": "ACT II, 0:24. The ruin in the silence: two naked cores, the wreck drifting, arks like embers. Room tone only.",
       "start": 24,
       "end": 27,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
-      "actors": [
+      "camera": [
         {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 3],
-          "text": "BUILD-RUIN",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
+          "t": 0,
+          "x": -30,
+          "y": 6
         },
         {
-          "t": [0.3, 2.8],
+          "t": 3,
+          "x": -21.818,
+          "y": 4.636
+        }
+      ],
+      "actors": [
+        {
+          "type": "parallax",
+          "depth": -95,
+          "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ruin",
+          "depth": -20,
+          "params": {}
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {}
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
+            "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
+          }
+        }
+      ],
+      "grade": "build",
+      "letterbox": [[0, 0]],
+      "cards": [
+        {
+          "t": [0.4, 2.7],
           "text": "We did not run.",
-          "scale": 2
+          "scale": 2,
+          "y": 322
         }
       ]
     },
     {
-      "id": "build-genesis",
-      "comment": "GENESIS: the two cores hauled together (real rig parts, parallax depth); the loop ignites.",
+      "id": "build-genesis-00",
+      "comment": "ACT II 27.00–30.78: the two cores are hauled together and the loop ignites (wide).",
       "start": 27,
-      "end": 30,
+      "end": 30.78,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
+      "camera": [
+        {
+          "t": 0,
+          "x": -21.818,
+          "y": 4.636
+        },
+        {
+          "t": 3.78,
+          "x": -11.509,
+          "y": 2.918
+        }
+      ],
       "actors": [
         {
-          "type": "backdrop",
-          "depth": -99,
+          "type": "parallax",
+          "depth": -95,
           "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
             "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
           }
         }
       ],
-      "cards": [
-        {
-          "t": [0, 3],
-          "text": "BUILD-GENESIS",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "grade": "build",
+      "letterbox": [[0, 0]]
     },
     {
-      "id": "build-assembly",
-      "comment": "Assembly on the beat: each part lands on a drum hit with a weld flash; cut wide <-> MATTER CAM on every landing.",
-      "start": 30,
-      "end": 38,
+      "id": "build-genesis-01",
+      "comment": "ACT II 30.78–33.44: a part lands on its drum hit (MATTER CAM on the landing, x4).",
+      "start": 30.78,
+      "end": 33.44,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
+      "camera": [
+        {
+          "t": 0,
+          "x": -11.509,
+          "y": 2.918,
+          "zoom": 4,
+          "focus": [296, 196],
+          "matter": true
+        },
+        {
+          "t": 2.66,
+          "x": -4.255,
+          "y": 1.709,
+          "zoom": 4,
+          "focus": [296, 196],
+          "matter": true
+        }
+      ],
       "actors": [
         {
-          "type": "backdrop",
-          "depth": -99,
+          "type": "parallax",
+          "depth": -95,
           "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
             "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
           }
         }
       ],
-      "cards": [
-        {
-          "t": [0, 8],
-          "text": "BUILD-ASSEMBLY",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "grade": "build",
+      "letterbox": [[0, 0]]
     },
     {
-      "id": "build-fists",
-      "comment": "Fists form from rubble (two slow clenches); the command moon swings in on its tether and locks.",
-      "start": 38,
+      "id": "build-genesis-02",
+      "comment": "ACT II 33.44–33.98: a part lands on its drum hit (wide).",
+      "start": 33.44,
+      "end": 33.978,
+      "stage": "tussenruimte",
+      "camera": [
+        {
+          "t": 0,
+          "x": -4.255,
+          "y": 1.709
+        },
+        {
+          "t": 0.538,
+          "x": -2.787,
+          "y": 1.465
+        }
+      ],
+      "actors": [
+        {
+          "type": "parallax",
+          "depth": -95,
+          "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
+            "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
+          }
+        }
+      ],
+      "grade": "build",
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "build-genesis-03",
+      "comment": "ACT II 33.98–34.83: a part lands on its drum hit (MATTER CAM on the landing, x4).",
+      "start": 33.978,
+      "end": 34.83,
+      "stage": "tussenruimte",
+      "camera": [
+        {
+          "t": 0,
+          "x": -2.787,
+          "y": 1.465,
+          "zoom": 4,
+          "focus": [270, 210],
+          "matter": true
+        },
+        {
+          "t": 0.852,
+          "x": -0.464,
+          "y": 1.077,
+          "zoom": 4,
+          "focus": [270, 210],
+          "matter": true
+        }
+      ],
+      "actors": [
+        {
+          "type": "parallax",
+          "depth": -95,
+          "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
+            "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
+          }
+        }
+      ],
+      "grade": "build",
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "build-genesis-04",
+      "comment": "ACT II 34.83–35.94: a part lands on its drum hit (wide).",
+      "start": 34.83,
+      "end": 35.935,
+      "stage": "tussenruimte",
+      "camera": [
+        {
+          "t": 0,
+          "x": -0.464,
+          "y": 1.077
+        },
+        {
+          "t": 1.105,
+          "x": 2.55,
+          "y": 0.575
+        }
+      ],
+      "actors": [
+        {
+          "type": "parallax",
+          "depth": -95,
+          "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
+            "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
+          }
+        }
+      ],
+      "grade": "build",
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "build-genesis-05",
+      "comment": "ACT II 35.94–37.02: a part lands on its drum hit (MATTER CAM on the landing, x4).",
+      "start": 35.935,
+      "end": 37.02,
+      "stage": "tussenruimte",
+      "camera": [
+        {
+          "t": 0,
+          "x": 2.55,
+          "y": 0.575,
+          "zoom": 4,
+          "focus": [320, 236],
+          "matter": true
+        },
+        {
+          "t": 1.085,
+          "x": 5.509,
+          "y": 0.082,
+          "zoom": 4,
+          "focus": [320, 236],
+          "matter": true
+        }
+      ],
+      "actors": [
+        {
+          "type": "parallax",
+          "depth": -95,
+          "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
+            "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
+          }
+        }
+      ],
+      "grade": "build",
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "build-genesis-06",
+      "comment": "ACT II 37.02–37.91: a part lands on its drum hit (wide).",
+      "start": 37.02,
+      "end": 37.906,
+      "stage": "tussenruimte",
+      "camera": [
+        {
+          "t": 0,
+          "x": 5.509,
+          "y": 0.082
+        },
+        {
+          "t": 0.886,
+          "x": 7.925,
+          "y": -0.321
+        }
+      ],
+      "actors": [
+        {
+          "type": "parallax",
+          "depth": -95,
+          "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
+            "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
+          }
+        }
+      ],
+      "grade": "build",
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "build-genesis-07",
+      "comment": "ACT II 37.91–38.20: a part lands on its drum hit (MATTER CAM on the landing, x4).",
+      "start": 37.906,
+      "end": 38.199,
+      "stage": "tussenruimte",
+      "camera": [
+        {
+          "t": 0,
+          "x": 7.925,
+          "y": -0.321,
+          "zoom": 4,
+          "focus": [296, 196],
+          "matter": true
+        },
+        {
+          "t": 0.293,
+          "x": 8.725,
+          "y": -0.454,
+          "zoom": 4,
+          "focus": [296, 196],
+          "matter": true
+        }
+      ],
+      "actors": [
+        {
+          "type": "parallax",
+          "depth": -95,
+          "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
+            "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
+          }
+        }
+      ],
+      "grade": "build",
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "build-genesis-08",
+      "comment": "ACT II 38.20–38.50: a part lands on its drum hit (wide).",
+      "start": 38.199,
+      "end": 38.5,
+      "stage": "tussenruimte",
+      "camera": [
+        {
+          "t": 0,
+          "x": 8.725,
+          "y": -0.454
+        },
+        {
+          "t": 0.301,
+          "x": 9.545,
+          "y": -0.591
+        }
+      ],
+      "actors": [
+        {
+          "type": "parallax",
+          "depth": -95,
+          "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
+            "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
+          }
+        }
+      ],
+      "grade": "build",
+      "letterbox": [[0, 0]]
+    },
+    {
+      "id": "build-genesis-09",
+      "comment": "ACT II 38.50–41.00: the fists form from rubble; the command moon locks (wide).",
+      "start": 38.5,
       "end": 41,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
+      "camera": [
+        {
+          "t": 0,
+          "x": 9.545,
+          "y": -0.591
+        },
+        {
+          "t": 2.5,
+          "x": 16.364,
+          "y": -1.727
+        }
+      ],
       "actors": [
         {
-          "type": "backdrop",
-          "depth": -99,
+          "type": "parallax",
+          "depth": -95,
           "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
             "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
           }
         }
       ],
+      "grade": "build",
+      "letterbox": [[0, 0]],
       "cards": [
         {
-          "t": [0, 3],
-          "text": "BUILD-FISTS",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        },
-        {
-          "t": [0.3, 2.8],
+          "t": [0.3, 2.3],
           "text": "We built 우리.",
-          "scale": 2
+          "scale": 2,
+          "y": 322
         }
       ]
     },
     {
-      "id": "build-brace",
-      "comment": "우리 lifts its head; the loop flares, pylons ignite; real guard stance. Whispered VO + subtitle.",
+      "id": "build-genesis-10",
+      "comment": "ACT II 41.00–44.00: 우리 lifts its head and braces (wide).",
       "start": 41,
       "end": 44,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
+      "camera": [
+        {
+          "t": 0,
+          "x": 16.364,
+          "y": -1.727
+        },
+        {
+          "t": 3,
+          "x": 24.545,
+          "y": -3.091
+        }
+      ],
       "actors": [
         {
-          "type": "backdrop",
-          "depth": -99,
+          "type": "parallax",
+          "depth": -95,
           "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
             "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
           }
         }
       ],
+      "grade": "build",
+      "letterbox": [[0, 0]],
       "cards": [
         {
-          "t": [0, 3],
-          "text": "BUILD-BRACE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        },
-        {
-          "t": [0.3, 2.8],
+          "t": [0.5, 2.9],
           "text": "우리는 아직 여기 있다.\nWe are still here.",
-          "scale": 2
+          "scale": 1,
+          "y": 318
         }
       ]
     },
     {
-      "id": "build-launch",
-      "comment": "It launches AT the camera. Smash cut.",
+      "id": "build-genesis-11",
+      "comment": "ACT II 44.00–46.00: it launches at the camera (wide).",
       "start": 44,
       "end": 46,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
+      "camera": [
+        {
+          "t": 0,
+          "x": 24.545,
+          "y": -3.091
+        },
+        {
+          "t": 2,
+          "x": 30,
+          "y": -4
+        }
+      ],
       "actors": [
         {
-          "type": "backdrop",
-          "depth": -99,
+          "type": "parallax",
+          "depth": -95,
           "params": {
+            "layer": "nebula",
+            "seed": 3
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": -60,
+          "params": {
+            "layer": "dust",
+            "seed": 5
+          }
+        },
+        {
+          "type": "ark",
+          "depth": -10,
+          "params": {
+            "gather": 0.03
+          }
+        },
+        {
+          "type": "genesis",
+          "depth": 0,
+          "params": {
+            "start": 27,
+            "dur": 14,
+            "braceAt": 41,
+            "launchAt": 44
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 10,
+          "params": {
+            "layer": "debris",
             "seed": 7
+          }
+        },
+        {
+          "type": "parallax",
+          "depth": 35,
+          "params": {
+            "layer": "fore",
+            "seed": 9
           }
         }
       ],
-      "cards": [
-        {
-          "t": [0, 2],
-          "text": "BUILD-LAUNCH",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "grade": "build",
+      "letterbox": [[0, 0]]
     },
     {
       "id": "hunt-burst",
-      "comment": "ACT III. The letterbox BURSTS open to 16:9 on 우리's first landed hit (vs Planet), real gameplay.",
+      "comment": "ACT III, 0:46. The letterbox BURSTS open to 16:9 on 우리's first landed hit (vs Planet, real gameplay: the fist of the cold open). The full score enters.",
       "start": 46,
       "end": 48,
-      "stage": "tussenruimte",
-      "seed": 1,
+      "stage": "nursery",
+      "match": {
+        "a": "uri",
+        "b": "planet",
+        "seed": 1,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 662
+      },
+      "grade": "hunt",
       "letterbox": [
         [0, 0],
-        [0.1, 1]
-      ],
+        [0.24, 0],
+        [0.32, 1]
+      ]
+    },
+    {
+      "id": "hunt-planet",
+      "comment": "ACT III montage: 우리 vs planet (nursery, seed 2, P5 take #0); the blow lands 0.8s in; name slam on the cut.",
+      "start": 48,
+      "end": 49.8,
+      "stage": "nursery",
+      "match": {
+        "a": "uri",
+        "b": "planet",
+        "seed": 2,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 2027
+      },
+      "grade": "hunt",
+      "letterbox": [[0, 1]],
       "actors": [
         {
-          "type": "backdrop",
-          "depth": -99,
+          "type": "nameslam",
+          "depth": 90,
           "params": {
-            "seed": 7
+            "titan": "planet",
+            "at": 0
           }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 2],
-          "text": "HUNT-BURST",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
         }
       ]
     },
     {
-      "id": "hunt-montage",
-      "comment": "우리 vs Planet, Black Hole, Supernova, Nexus, Asteroid on the beat; 6-frame name slams; 2-3 MATTER CAM wound shears.",
-      "start": 48,
-      "end": 62,
+      "id": "hunt-planet-wound",
+      "comment": "ACT III insert: MATTER CAM on the Planet's wound shearing (x12, tracking it, matter only).",
+      "start": 49.8,
+      "end": 50.6,
+      "stage": "nursery",
+      "match": {
+        "a": "uri",
+        "b": "planet",
+        "seed": 2,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 2073
+      },
+      "time": [[0, 0.5]],
+      "hide": "halo|glow|planet-fx|fx-front",
+      "camera": [
+        {
+          "t": 0,
+          "zoom": 12,
+          "track": 1,
+          "focus": [-20, 0],
+          "shake": false,
+          "matter": true
+        }
+      ],
+      "grade": "hunt",
+      "letterbox": [[0, 1]]
+    },
+    {
+      "id": "hunt-card-1",
+      "comment": "ACT III card: NO HEALTH BARS.",
+      "start": 50.6,
+      "end": 51.4,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 1]],
       "actors": [
         {
           "type": "backdrop",
           "depth": -99,
           "params": {
-            "seed": 7
+            "seed": 7,
+            "density": 0
           }
         }
       ],
+      "letterbox": [[0, 1]],
       "cards": [
         {
-          "t": [0, 14],
-          "text": "HUNT-MONTAGE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        },
-        {
-          "t": [0.3, 13.8],
+          "t": [0, 0.8],
           "text": "NO HEALTH BARS.",
-          "scale": 2
+          "scale": 4
+        }
+      ]
+    },
+    {
+      "id": "hunt-blackhole",
+      "comment": "ACT III montage: 우리 vs blackhole (tussenruimte, seed 3, P5 take #5); the blow lands 0.8s in; name slam on the cut.",
+      "start": 51.4,
+      "end": 53.2,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "uri",
+        "b": "blackhole",
+        "seed": 3,
+        "ai": 4,
+        "script0": "10:right*30,35:strike*6,55:left*20,85:right*35,115:sig*30,210:right*30,235:strike*6,255:left*20,285:right*35,315:sig*30,410:right*30,435:strike*6,455:left*20,485:right*35,515:sig*30,570:ult*10,610:right*30,635:strike*6,655:left*20,685:right*35,715:sig*30,810:right*30,835:strike*6,855:left*20,885:right*35,915:sig*30,1010:right*30,1035:strike*6,1055:left*20,1085:right*35,1115:sig*30,1170:ult*10,1210:right*30,1235:strike*6,1255:left*20,1285:right*35,1315:sig*30,1410:right*30,1435:strike*6,1455:left*20,1485:right*35,1515:sig*30,1610:right*30,1635:strike*6,1655:left*20,1685:right*35,1715:sig*30,1770:ult*10,1810:right*30,1835:strike*6,1855:left*20,1885:right*35,1915:sig*30,2010:right*30,2035:strike*6,2055:left*20,2085:right*35,2115:sig*30,2210:right*30,2235:strike*6,2255:left*20,2285:right*35,2315:sig*30,2370:ult*10",
+        "startTick": 1345
+      },
+      "grade": "hunt",
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "nameslam",
+          "depth": 90,
+          "params": {
+            "titan": "blackhole",
+            "at": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "hunt-supernova",
+      "comment": "ACT III montage: 우리 vs supernova (redgiant, seed 4, P5 take #10); the blow lands 0.8s in; name slam on the cut.",
+      "start": 53.2,
+      "end": 55,
+      "stage": "redgiant",
+      "match": {
+        "a": "uri",
+        "b": "supernova",
+        "seed": 4,
+        "ai": 4,
+        "script0": "10:right*30,35:strike*6,55:left*20,85:right*35,115:sig*30,210:right*30,235:strike*6,255:left*20,285:right*35,315:sig*30,410:right*30,435:strike*6,455:left*20,485:right*35,515:sig*30,570:ult*10,610:right*30,635:strike*6,655:left*20,685:right*35,715:sig*30,810:right*30,835:strike*6,855:left*20,885:right*35,915:sig*30,1010:right*30,1035:strike*6,1055:left*20,1085:right*35,1115:sig*30,1170:ult*10,1210:right*30,1235:strike*6,1255:left*20,1285:right*35,1315:sig*30,1410:right*30,1435:strike*6,1455:left*20,1485:right*35,1515:sig*30,1610:right*30,1635:strike*6,1655:left*20,1685:right*35,1715:sig*30,1770:ult*10,1810:right*30,1835:strike*6,1855:left*20,1885:right*35,1915:sig*30,2010:right*30,2035:strike*6,2055:left*20,2085:right*35,2115:sig*30,2210:right*30,2235:strike*6,2255:left*20,2285:right*35,2315:sig*30,2370:ult*10",
+        "startTick": 1584
+      },
+      "grade": "hunt",
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "nameslam",
+          "depth": 90,
+          "params": {
+            "titan": "supernova",
+            "at": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "hunt-supernova-wound",
+      "comment": "ACT III insert: MATTER CAM on 우리's own wound under the Supernova's blow (x12).",
+      "start": 55,
+      "end": 55.8,
+      "stage": "redgiant",
+      "match": {
+        "a": "uri",
+        "b": "supernova",
+        "seed": 4,
+        "ai": 4,
+        "script0": "10:right*30,35:strike*6,55:left*20,85:right*35,115:sig*30,210:right*30,235:strike*6,255:left*20,285:right*35,315:sig*30,410:right*30,435:strike*6,455:left*20,485:right*35,515:sig*30,570:ult*10,610:right*30,635:strike*6,655:left*20,685:right*35,715:sig*30,810:right*30,835:strike*6,855:left*20,885:right*35,915:sig*30,1010:right*30,1035:strike*6,1055:left*20,1085:right*35,1115:sig*30,1170:ult*10,1210:right*30,1235:strike*6,1255:left*20,1285:right*35,1315:sig*30,1410:right*30,1435:strike*6,1455:left*20,1485:right*35,1515:sig*30,1610:right*30,1635:strike*6,1655:left*20,1685:right*35,1715:sig*30,1770:ult*10,1810:right*30,1835:strike*6,1855:left*20,1885:right*35,1915:sig*30,2010:right*30,2035:strike*6,2055:left*20,2085:right*35,2115:sig*30,2210:right*30,2235:strike*6,2255:left*20,2285:right*35,2315:sig*30,2370:ult*10",
+        "startTick": 1636
+      },
+      "time": [[0, 0.5]],
+      "camera": [
+        {
+          "t": 0,
+          "zoom": 12,
+          "track": 0,
+          "focus": [10, -10],
+          "shake": false,
+          "matter": true
+        }
+      ],
+      "grade": "hunt",
+      "letterbox": [[0, 1]]
+    },
+    {
+      "id": "hunt-card-2",
+      "comment": "ACT III card: YOUR BODY IS THE BAR.",
+      "start": 55.8,
+      "end": 56.8,
+      "stage": "tussenruimte",
+      "actors": [
+        {
+          "type": "backdrop",
+          "depth": -99,
+          "params": {
+            "seed": 7,
+            "density": 0
+          }
+        }
+      ],
+      "letterbox": [[0, 1]],
+      "cards": [
+        {
+          "t": [0, 1],
+          "text": "YOUR BODY IS THE BAR.",
+          "scale": 3
+        }
+      ]
+    },
+    {
+      "id": "hunt-nexus",
+      "comment": "ACT III montage: 우리 vs nexus (shearfield, seed 4, P5 take #16); the blow lands 0.8s in; name slam on the cut.",
+      "start": 56.8,
+      "end": 58.6,
+      "stage": "shearfield",
+      "match": {
+        "a": "uri",
+        "b": "nexus",
+        "seed": 4,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 490
+      },
+      "grade": "hunt",
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "nameslam",
+          "depth": 90,
+          "params": {
+            "titan": "nexus",
+            "at": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "hunt-asteroid",
+      "comment": "ACT III montage: 우리 vs asteroid (rim, seed 1, P5 take #20); the blow lands 0.8s in; name slam on the cut.",
+      "start": 58.6,
+      "end": 60.4,
+      "stage": "rim",
+      "match": {
+        "a": "uri",
+        "b": "asteroid",
+        "seed": 1,
+        "ai": 4,
+        "script0": "10:right*30,35:strike*6,55:left*20,85:right*35,115:sig*30,210:right*30,235:strike*6,255:left*20,285:right*35,315:sig*30,410:right*30,435:strike*6,455:left*20,485:right*35,515:sig*30,570:ult*10,610:right*30,635:strike*6,655:left*20,685:right*35,715:sig*30,810:right*30,835:strike*6,855:left*20,885:right*35,915:sig*30,1010:right*30,1035:strike*6,1055:left*20,1085:right*35,1115:sig*30,1170:ult*10,1210:right*30,1235:strike*6,1255:left*20,1285:right*35,1315:sig*30,1410:right*30,1435:strike*6,1455:left*20,1485:right*35,1515:sig*30,1610:right*30,1635:strike*6,1655:left*20,1685:right*35,1715:sig*30,1770:ult*10,1810:right*30,1835:strike*6,1855:left*20,1885:right*35,1915:sig*30,2010:right*30,2035:strike*6,2055:left*20,2085:right*35,2115:sig*30,2210:right*30,2235:strike*6,2255:left*20,2285:right*35,2315:sig*30,2370:ult*10",
+        "startTick": 642
+      },
+      "grade": "hunt",
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "nameslam",
+          "depth": 90,
+          "params": {
+            "titan": "asteroid",
+            "at": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "hunt-blackhole-2",
+      "comment": "ACT III montage: 우리 vs blackhole (tussenruimte, seed 1, P5 take #6); the blow lands 0.6s in; name slam on the cut.",
+      "start": 60.4,
+      "end": 62,
+      "stage": "tussenruimte",
+      "match": {
+        "a": "uri",
+        "b": "blackhole",
+        "seed": 1,
+        "ai": 4,
+        "script0": "10:right*30,35:strike*6,55:left*20,85:right*35,115:sig*30,210:right*30,235:strike*6,255:left*20,285:right*35,315:sig*30,410:right*30,435:strike*6,455:left*20,485:right*35,515:sig*30,570:ult*10,610:right*30,635:strike*6,655:left*20,685:right*35,715:sig*30,810:right*30,835:strike*6,855:left*20,885:right*35,915:sig*30,1010:right*30,1035:strike*6,1055:left*20,1085:right*35,1115:sig*30,1170:ult*10,1210:right*30,1235:strike*6,1255:left*20,1285:right*35,1315:sig*30,1410:right*30,1435:strike*6,1455:left*20,1485:right*35,1515:sig*30,1610:right*30,1635:strike*6,1655:left*20,1685:right*35,1715:sig*30,1770:ult*10,1810:right*30,1835:strike*6,1855:left*20,1885:right*35,1915:sig*30,2010:right*30,2035:strike*6,2055:left*20,2085:right*35,2115:sig*30,2210:right*30,2235:strike*6,2255:left*20,2285:right*35,2315:sig*30,2370:ult*10",
+        "startTick": 1854
+      },
+      "grade": "hunt",
+      "letterbox": [[0, 1]],
+      "actors": [
+        {
+          "type": "nameslam",
+          "depth": 90,
+          "params": {
+            "titan": "blackhole",
+            "at": 0
+          }
         }
       ]
     },
     {
       "id": "hunt-nova",
-      "comment": "Slow motion: a Supernova nova engulfs 우리; the loop strains and HOLDS. Music ducks to the heartbeat.",
+      "comment": "ACT III, 1:02. Slow motion (x0.3): a Supernova nova engulfs 우리; the loop strains and HOLDS. Music ducks to the heartbeat.",
       "start": 62,
       "end": 65,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 1]],
-      "actors": [
-        {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 3],
-          "text": "HUNT-NOVA",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "stage": "redgiant",
+      "match": {
+        "a": "uri",
+        "b": "supernova",
+        "seed": 1,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 1032
+      },
+      "time": [[0, 0.3]],
+      "grade": "hunt",
+      "letterbox": [[0, 1]]
     },
     {
       "id": "hunt-eye",
-      "comment": "Through the light, gold rings: the Witness turns. Eye to core (rhymes with before-eye).",
+      "comment": "ACT III, 1:05. Through the light, gold rings: the Witness turns. Eye to core: x8 on the eye, its rings clicking (rhymes with 0:15).",
       "start": 65,
       "end": 68,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 1]],
-      "actors": [
-        {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
+      "stage": "mausoleum",
+      "match": {
+        "a": "uri",
+        "b": "lastone",
+        "seed": 4,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 2373,
+        "witness": {
+          "slot": 1,
+          "rings": [
+            [0, 0],
+            [1.2, 1]
+          ]
         }
-      ],
-      "cards": [
+      },
+      "time": [[0, 0.5]],
+      "camera": [
         {
-          "t": [0, 3],
-          "text": "HUNT-EYE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
+          "t": 0,
+          "zoom": 8,
+          "track": 1,
+          "focus": [0, 0],
+          "shake": false
         },
         {
-          "t": [0.3, 2.8],
+          "t": 1.6,
+          "zoom": 8,
+          "track": 1,
+          "focus": [0, 0],
+          "shake": false
+        },
+        {
+          "t": 2.4,
+          "zoom": 2,
+          "track": 1,
+          "focus": [-60, 0],
+          "shake": false
+        }
+      ],
+      "grade": "witness",
+      "letterbox": [[0, 1]],
+      "cards": [
+        {
+          "t": [0.4, 2.8],
           "text": "Then we found the eye.",
-          "scale": 2
+          "scale": 2,
+          "y": 330
         }
       ]
     },
     {
       "id": "hunt-beams",
-      "comment": "Witness beams against 우리's guard, matter tearing on both; a fist travels at the eye ... cut to black a frame before impact.",
+      "comment": "ACT III, 1:08. Witness beams against 우리, matter tearing on both; a fist travels at the eye... CUT TO BLACK a frame before impact (1:12).",
       "start": 68,
       "end": 72,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 1]],
-      "actors": [
-        {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 4],
-          "text": "HUNT-BEAMS",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "stage": "mausoleum",
+      "match": {
+        "a": "uri",
+        "b": "lastone",
+        "seed": 2,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 1702
+      },
+      "grade": "witness",
+      "letterbox": [[0, 1]]
     },
     {
       "id": "hunt-black",
@@ -623,193 +1843,183 @@
       "start": 72,
       "end": 77,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 1]],
       "actors": [
         {
           "type": "backdrop",
           "depth": -99,
           "params": {
-            "seed": 7
+            "seed": 7,
+            "density": 0
           }
         }
       ],
-      "cards": [
-        {
-          "t": [0, 5],
-          "text": "HUNT-BLACK",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "letterbox": [[0, 1]]
     },
     {
       "id": "edge-wide",
-      "comment": "ACT IV. Wide on the arena after the fight, still; debris drifts.",
+      "comment": "ACT IV, 1:17. A wide of the arena after the fight, still (x0.2); debris drifts. Room tone.",
       "start": 77,
       "end": 80,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
-      "actors": [
+      "stage": "mausoleum",
+      "match": {
+        "a": "uri",
+        "b": "lastone",
+        "seed": 4,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 2633
+      },
+      "time": [[0, 0.2]],
+      "camera": [
         {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
+          "t": 0,
+          "shake": false
         }
       ],
-      "cards": [
-        {
-          "t": [0, 3],
-          "text": "EDGE-WIDE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "grade": "edge",
+      "letterbox": [[0, 1]]
     },
     {
-      "id": "edge-slide",
-      "comment": "Stars on all four edges slide to the rim; a coil slides along the bottom edge; neither titan notices.",
+      "id": "edge-pull",
+      "comment": "ACT IV, 1:20. Stars on all four edges slide to the rim; a coil slides along the bottom edge; neither titan notices. 1:23 the pull-back: the arena (the real fight, drawn first: `arena`) shrinks into the Mouth's coils (S7's edgepull). HUNGER. DEVOURS. ENDS. REPEATS., one per coil pass (edgeWordCues).",
       "start": 80,
-      "end": 83,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
-      "actors": [
-        {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
-        }
-      ],
-      "cards": [
-        {
-          "t": [0, 3],
-          "text": "EDGE-SLIDE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
-    },
-    {
-      "id": "edge-pullback",
-      "comment": "The pull-back: exponential zoom out; the arena a small rectangle dwarfed by the Mouth's coils. HUNGER. DEVOURS. ENDS. REPEATS.",
-      "start": 83,
       "end": 89,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
-      "actors": [
+      "stage": "mausoleum",
+      "match": {
+        "a": "uri",
+        "b": "lastone",
+        "seed": 4,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 2669
+      },
+      "time": [[0, 0.2]],
+      "camera": [
         {
-          "type": "backdrop",
-          "depth": -99,
-          "params": {
-            "seed": 7
-          }
+          "t": 0,
+          "shake": false
         }
       ],
+      "arena": true,
+      "actors": [
+        {
+          "type": "edgepull",
+          "depth": 60,
+          "params": {}
+        }
+      ],
+      "grade": "edge",
+      "letterbox": [[0, 1]],
       "cards": [
         {
-          "t": [0, 6],
-          "text": "EDGE-PULLBACK",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
+          "t": [5.017, 5.933],
+          "text": "HUNGER.",
+          "scale": 4
+        },
+        {
+          "t": [5.983, 6.917],
+          "text": "DEVOURS.",
+          "scale": 4
+        },
+        {
+          "t": [6.967, 8.117],
+          "text": "ENDS.",
+          "scale": 4
+        },
+        {
+          "t": [8.167, 8.95],
+          "text": "REPEATS.",
+          "scale": 4
         }
       ]
     },
     {
       "id": "edge-wipe",
-      "comment": "The jaw-rings close over the camera: a screen-space iris built from the real teeth rows.",
+      "comment": "ACT IV, 1:29. The jaw-rings close over the camera (S7's jawwipe: the real teeth rows as an iris), bite, black. (The fight is hidden here: the pull-back ended on the arena as a small rectangle in the coils, so what shows through the closing gullet is the dark.)",
       "start": 89,
       "end": 91,
-      "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
+      "stage": "mausoleum",
+      "match": {
+        "a": "uri",
+        "b": "lastone",
+        "seed": 4,
+        "ai": 4,
+        "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
+        "startTick": 2777
+      },
+      "time": [[0, 0.2]],
+      "camera": [
+        {
+          "t": 0,
+          "shake": false
+        }
+      ],
       "actors": [
         {
           "type": "backdrop",
           "depth": -99,
           "params": {
-            "seed": 7
+            "seed": 7,
+            "density": 0
           }
+        },
+        {
+          "type": "edgepull",
+          "depth": 60,
+          "params": {}
+        },
+        {
+          "type": "jawwipe",
+          "depth": 70,
+          "params": {}
         }
       ],
-      "cards": [
-        {
-          "t": [0, 2],
-          "text": "EDGE-WIPE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "grade": "edge",
+      "letterbox": [[0, 1]],
+      "hide": "."
     },
     {
       "id": "edge-title",
-      "comment": "Title: ADEUK: TITANS · 아득 / FREE IN YOUR BROWSER / FINAL BOSS: COMING.",
+      "comment": "ACT IV, 1:31. Title: ADEUK: TITANS · 아득 / FREE IN YOUR BROWSER / FINAL BOSS: COMING (S7 title). One final hit; a long tail.",
       "start": 91,
       "end": 94,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
       "actors": [
         {
           "type": "backdrop",
           "depth": -99,
           "params": {
-            "seed": 7
+            "seed": 7,
+            "density": 0
+          }
+        },
+        {
+          "type": "title",
+          "depth": 90,
+          "params": {
+            "at": 0
           }
         }
       ],
-      "cards": [
-        {
-          "t": [0, 3],
-          "text": "EDGE-TITLE",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        },
-        {
-          "t": [0.3, 2.8],
-          "text": "ADEUK: TITANS\n아득\nFREE IN YOUR BROWSER\nFINAL BOSS: COMING",
-          "scale": 2
-        }
-      ]
+      "letterbox": [[0, 1]]
     },
     {
       "id": "edge-sting",
-      "comment": "Post-title sting: black, two heartbeats, then a third, wrong one (sound only).",
+      "comment": "ACT IV, 1:34. Post-title sting: black, two heartbeats, then a third, wrong one (sound only).",
       "start": 94,
       "end": 95,
       "stage": "tussenruimte",
-      "seed": 1,
-      "letterbox": [[0, 0]],
       "actors": [
         {
           "type": "backdrop",
           "depth": -99,
           "params": {
-            "seed": 7
+            "seed": 7,
+            "density": 0
           }
         }
       ],
-      "cards": [
-        {
-          "t": [0, 1],
-          "text": "EDGE-STING",
-          "scale": 1,
-          "y": 300,
-          "color": "#5a5f78"
-        }
-      ]
+      "letterbox": [[0, 1]]
     }
   ]
 }

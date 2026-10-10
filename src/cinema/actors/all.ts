@@ -11,3 +11,4 @@ import './nameslam';
 import './edgepull';
 import './jawwipe';
 import './title';
+import './mouth';

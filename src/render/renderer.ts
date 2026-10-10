@@ -216,6 +216,10 @@ export interface DebuggableRenderer extends Renderer {
   isStageReady(id: StageId): boolean;
   /** Cinema: dispose the current scenery and build `id` afresh (no state carried over from earlier frames). */
   restartStage(id: StageId): Promise<void>;
+  /** Cinema: drop the backlight floor behind dark bodies (it reads as a dithered box on the film's black). */
+  setCinema(on: boolean): void;
+  /** Cinema: draw (true) or hide (false) the stage scenery. */
+  setScenery(on: boolean): void;
   /** Read the composited (pre-post) colour or emissive attachment as packed RGBA, top row first. */
   debugReadFrame(attachment: 0 | 1): Uint32Array;
   /** Number of layer textures currently cached, and upload counters. */
@@ -480,6 +484,7 @@ class PixelRenderer implements DebuggableRenderer {
     this.master = null;
     this.layers = new LayerTextures(this.three);
     this.compositor = new LayerCompositor(this.layers, this.emisGain);
+    if (this.haloLift === 0) this.compositor.glowFloor.value = 0.13;
     this.captureRT = null;
     // the timer-query extension object belongs to the dead context: ask the new one
     this.gpuTimer = GpuTimer.create(this.three.getContext() as WebGL2RenderingContext);
@@ -722,6 +727,7 @@ class PixelRenderer implements DebuggableRenderer {
       uLtImp: this.lightImp,
       uNLt: this.nLights,
       uRelight: { value: 0 },
+      uLtFloor: { value: 0.11 },
     });
     this.haloBlur = new FullscreenPass(HALO_BLUR_FRAG, {
       uSrc: { value: null },
@@ -813,6 +819,7 @@ class PixelRenderer implements DebuggableRenderer {
       uLtImp: this.lightImp,
       uNLt: this.nLights,
       uRelight: { value: 0 },
+      uLtFloor: { value: 0.11 },
       uShock: { value: this.postShock },
       uNumShock: { value: 0 },
       uRefr: { value: this.refr },
@@ -844,6 +851,7 @@ class PixelRenderer implements DebuggableRenderer {
       // the oracles' quantize(): titans at spread 26, backgrounds at 18
       uSpread: { value: new Vector2(12, 18) },
       uWash: { value: new Vector4(1, 1, 1, 0) },
+      uBloomFloor: { value: 0 },
       uWashAt: { value: new Vector2() },
       uOutlineIdx: { value: 0 },
     });
@@ -1278,7 +1286,12 @@ class PixelRenderer implements DebuggableRenderer {
       sf.comfort = this.comfort;
       sf.fx = fx;
       scenery.update(sf);
-      scenery.render(this.sceneRT);
+      if (this.sceneryOff) {
+        // cinema: an empty universe (the shot's own actors are the backdrop); nothing of the stage lights, blooms or rays
+        r.setRenderTarget(this.sceneRT);
+        r.setClearColor(0x000000, 0);
+        r.clear(true, false, false);
+      } else scenery.render(this.sceneRT);
     }
     const t1 = now();
 
@@ -1322,7 +1335,7 @@ class PixelRenderer implements DebuggableRenderer {
     du.uBloomGain!.value = look.bloomGain;
     du.uHasLayers!.value = hasLayers ? 1 : 0;
     (du.uHaloParams!.value as Vector4).set(halo.strength, halo.desat, halo.rim, halo.rimReach ?? 1);
-    (du.uHaloLift!.value as Vector2).set(halo.lift ?? DEFAULT_SPRITE_HALO.lift, 0);
+    (du.uHaloLift!.value as Vector2).set(this.haloLift ?? halo.lift ?? DEFAULT_SPRITE_HALO.lift, 0);
     const band = look.fightBand ?? DEFAULT_FIGHT_BAND;
     const restY = STAGES[this.active?.id ?? frame.stage].arena.restY;
     (du.uBand!.value as Vector4).set(
@@ -1400,7 +1413,7 @@ class PixelRenderer implements DebuggableRenderer {
     pu.uNumRefr!.value = this.nRefr;
     // D34: the original's stronger glow at full spectacle; comfort brings it back to the D5 level
     pu.uBloomGain!.value = (0.6 + 0.4 * this.comfort) * (1 + 0.45 * spectacleOf(this.comfort));
-    pu.uGodGain!.value = look.godRayGain * (0.85 + 0.25 * fx.intensity);
+    pu.uGodGain!.value = this.haloLift === 0 ? 0 : look.godRayGain * (0.85 + 0.25 * fx.intensity);
     pu.uVignette!.value = look.vignette;
     pu.uFrameNo!.value = frame.tick & 1023; // grain follows the sim tick: identical frames render identically
     pu.uHasLayers!.value = hasLayers ? 1 : 0;
@@ -1548,6 +1561,28 @@ class PixelRenderer implements DebuggableRenderer {
       this.bloomFar,
       Math.sqrt(SHARED_BLOOM.farPx ** 2 - SHARED_BLOOM.nearPx ** 2),
     );
+  }
+
+  /** Overrides the stage's sprite-halo backlight floor (null = the stage's). */
+  private haloLift: number | null = null;
+  /** Cinema: draw no stage scenery (black, transparent: nothing to light, bloom or ray). */
+  private sceneryOff = false;
+
+  /** Cinema: hide the stage scenery for shots whose own actors are the whole backdrop. */
+  setScenery(on: boolean): void {
+    this.sceneryOff = !on;
+  }
+
+  /**
+   * Cinema (src/cinema): no backlight floor behind dark bodies. On the film's pure black the floor (a box-blurred coverage
+   * lift, there for readability on near-black stages) shows as a dithered rectangle round the bodies.
+   */
+  setCinema(on: boolean): void {
+    this.haloLift = on ? 0 : null;
+    this.postPass.uniforms.uBloomFloor!.value = on ? 1 : 0;
+    this.compositor.glowFloor.value = on ? 0.13 : 0.05;
+    this.ditherPass.uniforms.uLtFloor!.value = on ? 0 : 0.11;
+    this.postPass.uniforms.uLtFloor!.value = on ? 0 : 0.11;
   }
 
   /**

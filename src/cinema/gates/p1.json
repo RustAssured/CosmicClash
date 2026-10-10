@@ -44,7 +44,7 @@
     },
     {
       "id": "p1-crust-macro",
-      "comment": "MATTER CAM on the crust where the gaze lands (80×34 native pixels at ×8, each pixel a lit cell): the crack in x0.25, the hold (time pushed through the lull), the shear of the second gaze in x0.25.",
+      "comment": "MATTER CAM on the crust where the gaze lands (tight on the crack line, ×24: about 27×15 native pixels, each a big lit tile, tracking the planet): the crack in x0.25, the hold (time pushed through the lull), the shear of the second gaze in x0.25.",
       "start": 6,
       "end": 13.5,
       "stage": "tussenruimte",
@@ -60,10 +60,11 @@
       },
       "time": [
         [0, 0.25],
-        [2.4, 1.6],
-        [3.6, 0.25]
+        [2.0, 3],
+        [2.9, 0.3]
       ],
-      "camera": [{ "t": 0, "zoom": 8, "focus": [410, 178], "shake": false, "matter": true }],
+      "hide": "halo|glow|planet-fx|fx-front",
+      "camera": [{ "t": 0, "zoom": 24, "track": 1, "focus": [-34, -6], "shake": false, "matter": true }],
       "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
       "letterbox": [[0, 0]]
     }

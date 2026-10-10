@@ -42,6 +42,7 @@ uniform vec3 uLtCol[4];
 uniform float uLtImp[4];   // 1 = impact light (never owns a sprite, never shades), 0 = body light
 uniform int uNLt;
 uniform int uRelight;      // 1 = relight the sprites (tier >= 1)
+uniform float uLtFloor;    // body light on empty space (0.11; 0 in the cinema: on pure black it dithers into a disc of dots)
 `;
 
 /** sRGB transfer helpers (the frame targets hold sRGB-encoded palette colours). */
@@ -180,7 +181,7 @@ void main() {
       // an impact lights only what is there, in its own hue: dark dust stays dark (no floor term), lit gas gets brighter
       x += x * min(L.w, 0.7) * f * 1.6 * lm;
     } else {
-      x += uLtCol[i] * min(L.w, 1.1) * f * (0.11 + 0.4 * lm);
+      x += uLtCol[i] * min(L.w, 1.1) * f * (uLtFloor + 0.4 * lm);
     }
   }
   // Hue-preserving tone map: identity below the knee (so colours authored on a palette ramp stay on it), a soft
@@ -237,6 +238,7 @@ uniform vec2 uFL;            // facing (+1/-1), lean
 uniform int uScreen;         // 1 = screen-space layer drawn 1:1
 uniform float uAlpha;
 uniform float uEmisGain;
+uniform float uGlowFloor;    // additive glow below this contribution is dropped (0.05; the cinema raises it)
 uniform vec4 uId;            // unified path: titan flag, draw rank / 255, wet, 0 (all 0 for additive layers)
 uniform sampler2D uWet;      // R8 per cell (optional): materials allowed to reach the palette's top step
 uniform int uHasWet;
@@ -267,9 +269,10 @@ void main() {
   if (cell.x >= int(uSize.x) || cell.y >= int(uSize.y)) discard;
   vec4 c = texelFetch(uTex, cell, 0);
   if (c.a <= 0.0) discard;
+  // (uGlowFloor: 0.05 in the game; the cinema raises it, its pure black shows every dithered tail)
   // unified path, additive glow: faint residue (a few levels of a big overlay) would only become a dither checker after the
   // palette snap over whatever lies beneath; below ~5 % it adds nothing
-  if (uId.a > 0.5 && max(c.r, max(c.g, c.b)) * c.a * uAlpha < 0.05) discard;
+  if (uId.a > 0.5 && max(c.r, max(c.g, c.b)) * c.a * uAlpha < uGlowFloor) discard;
   float e = uId.a > 0.5 ? 1.0 : uHasEmis == 1 ? texelFetch(uEmis, cell, 0).r : 0.0;
   float a = c.a * uAlpha;
   oColor = vec4(c.rgb, a);
@@ -742,6 +745,7 @@ uniform sampler2D uFrame;
 uniform sampler2D uBloom;
 uniform sampler2D uBloomB;     // unified path: the far (≈ 10 px) blur; uBloom is then the near (≈ 3 px) one
 uniform vec2 uBloomMix;        // unified path: near, far gains (SHARED_BLOOM); (0, 0) = the classic pyramid in uBloom
+uniform float uBloomFloor;    // cinema: bloom below this many steps is dropped (0 = off, the game)
 uniform vec4 uWash;            // D34 screen-wide flash: colour, amount (0 = none; already scaled by the comfort setting)
 uniform vec2 uWashAt;          // its centre (logical px): the wash is strongest there and covers the whole frame
 uniform float uShockE[8];      // per shockwave: vertical scale of the ring (1 = round; < 1 = flattened toward the camera)
@@ -872,13 +876,16 @@ void main() {
   float th = texelFetch(uBayer, ivec2(gl_FragCoord.xy) & 3, 0).r;
   vec2 uv = pxToUv(sp);
   vec3 bloom = (uBloomMix.x + uBloomMix.y > 0.0 ? texture(uBloom, uv).rgb * uBloomMix.x + texture(uBloomB, uv).rgb * uBloomMix.y : texture(uBloom, uv).rgb) * uBloomGain;
+  // cinema: light below one bloom step is dropped instead of dithered (on pure black it shows as a sparse dot field)
+  if (uBloomFloor > 0.0) bloom *= step(uBloomFloor / uBloomLevels, max(bloom.r, max(bloom.g, bloom.b)));
   bloom = vec3(ditherQ(bloom.r, uBloomLevels, th), ditherQ(bloom.g, uBloomLevels, th), ditherQ(bloom.b, uBloomLevels, th));
   vec4 g = texture(uGod, uv);
   vec3 rays = (uGodColor * g.r + g.gba * uGodTint) * uGodGain;
   rays = vec3(ditherQ(rays.r, uBloomLevels, th), ditherQ(rays.g, uBloomLevels, th), ditherQ(rays.b, uBloomLevels, th));
   // Glow never washes out a sprite's own pixels (silhouettes stay crisp); it still blooms around them.
   float cov = uHasLayers == 1 ? texelFetch(uCover, pxToTexel(clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1)), 0).a : 0.0;
-  if (uRelight == 1 && uNLt >= 2 && cov > 0.5) col = relight(col, floor(sp) + 0.5, th);
+  // (cinema: pure black is empty space under a backdrop layer, not a body: the lights must not paint a dithered disc on it)
+  if (uRelight == 1 && uNLt >= 2 && cov > 0.5 && (uLtFloor > 0.0 || luma(col) > 0.012)) col = relight(col, floor(sp) + 0.5, th);
   // unified path: the glow damping holds on titan bodies only (backdrop / effect layers take the bloom like scenery)
   if (uUnified == 1) cov = titanAt(pxToTexel(clamp(ivec2(floor(sp)), ivec2(0), ivec2(uRes) - 1))) ? 1.0 : 0.0;
   // unified path, on a titan body: only the strong part of the glow lands (near an emissive); the faint wide tail would only

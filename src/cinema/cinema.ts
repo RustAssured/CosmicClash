@@ -13,6 +13,8 @@ import { checkTimeline, durationOf, frameCount, type Timeline } from './timeline
  */
 export interface CinemaApi {
   ready: boolean;
+  /** Debug: the layers of the last frame (id:blend:z). */
+  layerIds(): string[];
   name: string;
   frames: number;
   duration: number;
@@ -58,9 +60,12 @@ export async function startCinema(canvas: HTMLCanvasElement, name: string, rende
   const renderer = createRenderer();
   await renderer.init(canvas, { quality: 2, preserveDrawingBuffer: true });
   renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
-  const director = new Director(tl, renderer);
+  renderer.setCinema(true);
+  const hide = new URLSearchParams(location.search).get('hide');
+  const director = new Director(tl, renderer, hide ? new RegExp(hide) : null);
   const api: CinemaApi = {
     ready: false,
+    layerIds: () => director.layerIds(),
     name,
     frames: frameCount(tl),
     duration: durationOf(tl),

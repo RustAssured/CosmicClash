@@ -85,7 +85,8 @@ const LX = -0.55;
 const LY = -0.62;
 
 /**
- * MATTER CAM (TRAILER_V3 §2.1): one native pixel drawn as a lit cell of matter, b×b output pixels. Its colour is the
+ * MATTER CAM (TRAILER_V3 §2.1): one native pixel drawn as a big lit tile of matter, b×b output pixels (framed tight:
+ * b ≥ 48, fewer and bigger tiles; hot matter is emissive and keeps its glow). Its colour is the
  * pixel's own; its relief comes from the brightness of its neighbours (a height field: a crack is a trench, a lit crust
  * plate a ridge), lit by the one titan sky (upper left), with a bevel (lit top-left rim, shaded bottom-right rim) and a
  * dark grout line between cells, so every pixel reads as a separate piece. Whole output pixels only.
@@ -100,28 +101,38 @@ export function matterCell(
   b: number,
   relief?: Float32Array,
 ): number {
-  // surface normal (−gx, −gy, 1) against the light: relief shading of the whole cell (memoised per native pixel)
+  // relief shading of the whole tile (memoised per native pixel)
   const ri = ny * NATIVE_W + nx;
   let k = relief ? relief[ri]! : NaN;
   if (Number.isNaN(k)) {
+    const l0 = lum(scene, nx, ny);
     const gx = lum(scene, nx + 1, ny) - lum(scene, nx - 1, ny);
     const gy = lum(scene, nx, ny + 1) - lum(scene, nx, ny - 1);
-    k = Math.max(0.55, Math.min(1.35, 1 - 0.9 * (gx * LX + gy * LY)));
+    k = Math.max(0.5, Math.min(1.4, 1 - 1.1 * (gx * LX + gy * LY)));
+    // a trench: a tile much darker than its four neighbours sits deep
+    const around =
+      (lum(scene, nx + 1, ny) + lum(scene, nx - 1, ny) + lum(scene, nx, ny + 1) + lum(scene, nx, ny - 1)) / 4;
+    if (around - l0 > 0.18) k *= 0.72;
     if (relief) relief[ri] = k;
   }
-  const e = Math.max(1, Math.round(b / 12));
-  const grout = b >= 16 ? 1 : 0;
-  if (cx >= b - grout || cy >= b - grout) k *= 0.42;
-  else if (cx < e || cy < e) k *= 1.22;
-  else if (cx >= b - grout - e || cy >= b - grout - e) k *= 0.7;
+  // hot matter (glowing fissures, mantle) is emissive: its face does not darken and its bevel glows
+  const r = c & 255;
+  const hot = r > 190 && r - ((c >>> 16) & 255) > 70 && ((c >>> 8) & 255) > 70;
+  if (hot) k = Math.max(k, 1.05);
+  const look = matterLook(cx, cy, b);
+  if (look === 0) k *= hot ? 0.55 : 0.22;
+  else if (look === 1) k *= 1.28;
+  else if (look === 2) k *= hot ? 0.85 : 0.6;
   const ch = (sh: number): number => Math.min(255, Math.round(((c >>> sh) & 255) * k)) << sh;
   return (0xff000000 | ch(16) | ch(8) | ch(0)) >>> 0;
 }
 
 /** Which of a matter cell's four looks an output pixel at (cx, cy) inside it shows: 0 grout, 1 lit rim, 2 shaded rim, 3 face. */
+function matterGeom(b: number): { e: number; grout: number } {
+  return { e: Math.max(1, Math.round(b / 9)), grout: b >= 16 ? Math.max(1, Math.round(b / 24)) : 0 };
+}
 function matterLook(cx: number, cy: number, b: number): number {
-  const e = Math.max(1, Math.round(b / 12));
-  const grout = b >= 16 ? 1 : 0;
+  const { e, grout } = matterGeom(b);
   if (cx >= b - grout || cy >= b - grout) return 0;
   if (cx < e || cy < e) return 1;
   if (cx >= b - grout - e || cy >= b - grout - e) return 2;
@@ -131,7 +142,7 @@ function matterLook(cx: number, cy: number, b: number): number {
 const LOOK_AT: [(b: number) => number, (b: number) => number][] = [
   [(b) => b - 1, (b) => b - 1],
   [() => 0, (b) => Math.floor(b / 2)],
-  [(b) => b - 1 - (b >= 16 ? 1 : 0), (b) => Math.floor(b / 2)],
+  [(b) => b - 1 - matterGeom(b).grout, (b) => Math.floor(b / 2)],
   [(b) => Math.floor(b / 2), (b) => Math.floor(b / 2)],
 ];
 
@@ -196,7 +207,8 @@ export function composeFrame(
       const nx = k === 0 || k === 2 ? cn : rn;
       const ny = k === 0 || k === 2 ? rn : cn;
       let c = nx >= 0 && ny >= 0 && nx < NATIVE_W && ny < NATIVE_H ? scene[ny * NATIVE_W + nx]! : 0xff000000;
-      if (cells && c !== 0xff000000) {
+      // empty space is not matter: near-black stays black (no tile)
+      if (cells && (c & 255) + ((c >>> 8) & 255) + ((c >>> 16) & 255) > 24) {
         const cx = colL[x]!;
         // four looks per cell (grout, lit rim, shaded rim, face): memoised per cell and look
         const look = matterLook(cx, cy, b);

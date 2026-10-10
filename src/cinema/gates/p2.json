@@ -87,7 +87,7 @@
       "id": "gaze-wide",
       "comment": "0:17. Its real Fracture Gaze (the signature, scripted) strikes World A; the wide holds until the first crack opens.",
       "start": 5.2,
-      "end": 6.4,
+      "end": 6,
       "stage": "tussenruimte",
       "match": {
         "a": "lastone",
@@ -102,12 +102,12 @@
       "camera": [{ "t": 0, "shake": false }],
       "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
       "letterbox": [[0, 0]],
-      "cards": [{ "t": [0.4, 1.2], "text": "It looked at us.", "scale": 2, "y": 322 }]
+      "cards": [{ "t": [0.3, 0.8], "text": "It looked at us.", "scale": 2, "y": 322 }]
     },
     {
       "id": "gaze-macro",
-      "comment": "0:18.4. MATTER CAM on the crust where the gaze lands: crack, hold, shear (x0.25, pushed through the lull, x0.25).",
-      "start": 6.4,
+      "comment": "0:18. MATTER CAM, tight on the crack line (x24: about 27×15 native pixels, each a big lit tile): the crack opens (x0.25), time is pushed through the lull, the second gaze shears it (x0.4).",
+      "start": 6,
       "end": 8,
       "stage": "tussenruimte",
       "match": {
@@ -115,20 +115,21 @@
         "b": "planet",
         "seed": 3,
         "ai": 0,
-        "startTick": 102,
+        "startTick": 68,
         "gap": 300,
         "script0": "20:sig*40,160:sig*40",
         "worlds": { "1": "A" }
       },
       "time": [
-        [0, 0.5],
-        [0.5, 2.5],
-        [1.0, 0.3]
+        [0, 0.25],
+        [0.6, 4.5],
+        [1.2, 0.4]
       ],
-      "camera": [{ "t": 0, "zoom": 8, "focus": [410, 178], "shake": false, "matter": true }],
+      "hide": "halo|glow|planet-fx|fx-front",
+      "camera": [{ "t": 0, "zoom": 24, "track": 1, "focus": [-34, -6], "shake": false, "matter": true }],
       "actors": [{ "type": "backdrop", "depth": -99, "params": { "seed": 7 } }],
       "letterbox": [[0, 0]],
-      "cards": [{ "t": [0, 1.4], "text": "It looked at us.", "scale": 2, "y": 322 }]
+      "cards": [{ "t": [0, 1.8], "text": "It looked at us.", "scale": 2, "y": 322 }]
     }
   ]
 }

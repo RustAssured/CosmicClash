@@ -148,6 +148,8 @@ export class LayerCompositor {
   /** 우리's live pass (created on first use) and whether it drew this frame. */
   private live: UriLivePass | null = null;
   liveUsed = false;
+  /** Additive glow below this contribution is dropped (LAYER_FRAG uGlowFloor). */
+  readonly glowFloor = { value: 0.05 };
   private readonly res = new Vector2(LOGICAL_W, LOGICAL_H);
 
   constructor(
@@ -232,6 +234,7 @@ export class LayerCompositor {
         uScreen: { value: 0 },
         uAlpha: { value: 1 },
         uEmisGain: this.emisGain,
+        uGlowFloor: this.glowFloor,
         uId: { value: new Vector4() },
         uWet: { value: null },
         uHasWet: { value: 0 },

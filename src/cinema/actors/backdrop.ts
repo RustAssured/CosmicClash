@@ -5,7 +5,7 @@ import { registerActor } from './index';
 
 /**
  * `backdrop`: deep space for cinema-only shots: an opaque near-black plate with a seeded star field that parallaxes with the
- * camera by its depth (covers the stage scenery). params: seed (1), density (stars per 10 000 px, 9), color ([4,3,8]).
+ * camera by its depth (covers the stage scenery). params: seed (1), density (stars per 10 000 px, 9), color ([0,0,0]: a near-black that is not a palette colour dithers into a dot lattice on the film).
  * The stars twinkle on whole-pixel steps only (no sub-pixel drift: they move when the camera moves a whole pixel).
  */
 interface Star {
@@ -25,7 +25,7 @@ function packed(r: number, g: number, b: number): number {
 registerActor('backdrop', (id, depth, params): Actor => {
   const seed = Number(params.seed ?? 1);
   const density = Number(params.density ?? 9);
-  const col = (params.color as [number, number, number] | undefined) ?? [4, 3, 8];
+  const col = (params.color as [number, number, number] | undefined) ?? [0, 0, 0];
   const bg = packed(col[0], col[1], col[2]);
   const rng = new Rng(seed);
   const stars: Star[] = [];
@@ -52,10 +52,25 @@ registerActor('backdrop', (id, depth, params): Actor => {
       buf.pixels.fill(bg);
       const ox = Math.round(ctx.view.x0 * par);
       const oy = Math.round(ctx.view.y0 * par);
+      // the edge slide (`slide: [t0, t1, px]`, shot seconds): stars in a band along the frame's edges are dragged sideways
+      // (clockwise round the frame), more the nearer the edge, as if the frame's rim were being pulled: something is there
+      const sl = params.slide as [number, number, number] | undefined;
+      const su = sl ? Math.min(1, Math.max(0, (ctx.shotT - sl[0]) / (sl[1] - sl[0]))) : 0;
+      const pull = sl ? sl[2] * su * su : 0;
       for (const s of stars) {
-        const x = Math.floor((((s.x - ox) % SPAN) + SPAN) % SPAN);
-        const y = Math.floor((((s.y - oy) % SPAN) + SPAN) % SPAN);
+        let x = Math.floor((((s.x - ox) % SPAN) + SPAN) % SPAN);
+        let y = Math.floor((((s.y - oy) % SPAN) + SPAN) % SPAN);
         if (x >= buf.w || y >= buf.h) continue;
+        if (pull) {
+          const band = 70;
+          const kb = Math.max(0, 1 - (buf.h - 1 - y) / band);
+          const kt = Math.max(0, 1 - y / band);
+          const kl = Math.max(0, 1 - x / band);
+          const kr = Math.max(0, 1 - (buf.w - 1 - x) / band);
+          x = Math.round(x - pull * kb * kb + pull * kt * kt);
+          y = Math.round(y + pull * kl * kl - pull * kr * kr);
+          if (x < 0 || y < 0 || x >= buf.w || y >= buf.h) continue;
+        }
         // twinkle: a slow on/off for a few bright stars, in whole frames
         if (s.e && Math.sin(ctx.t * 1.7 + s.tw) < -0.6) continue;
         buf.pixels[y * buf.w + x] = s.c;

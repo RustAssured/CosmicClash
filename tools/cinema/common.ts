@@ -27,7 +27,10 @@ export async function openCinema(
       errors.push(`[console.${m.type()}] ${m.text()}`);
   });
   page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
-  await page.goto(`${url}/?cinema=${name}&render=1`, { waitUntil: 'load' });
+  await page.goto(
+    `${url}/?cinema=${name}&render=1${process.env.CINEMA_HIDE ? `&hide=${encodeURIComponent(process.env.CINEMA_HIDE)}` : ''}`,
+    { waitUntil: 'load' },
+  );
   await page.waitForFunction(() => window.__CINEMA__?.ready === true, null, { timeout: 180_000 });
   const frames = (await page.evaluate(() => window.__CINEMA__!.frames)) as number;
   return { page, errors, frames };

@@ -95,7 +95,7 @@ try {
     }
     if (n % 60 === 0)
       console.log(
-        `  frame ${n}/${to}  ${f.shot}  zoom ${f.zoom.toFixed(2)}  ${((Date.now() - t0) / 1000).toFixed(0)} s`,
+        `  frame ${n}/${to}  ${f.shot}  zoom ${f.zoom.toFixed(2)}  focus ${f.focus.map((v) => v.toFixed(0)).join(',')}  ${((Date.now() - t0) / 1000).toFixed(0)} s`,
       );
   }
   for (const e of encoders) e.ff.stdin!.end();

@@ -2,6 +2,102 @@
 
 The newest entry is first. Renders go to `press/cinema/` (not in git).
 
+## P6: assembly in the Director (S5): full animatic at ×1 rendered, STOP for review
+
+**Gate:**
+- `press/cinema/animatic/trailer-360p.mp4`: 95 s, 60 fps, native ×1, no HUD, rendered entirely by `src/cinema` from `timeline.json`.
+- `animatic-720p.mp4`: the same at ×2 nearest, for viewing.
+- `sheet.png`: one still per second.
+- Deterministic: frames 0, 150, 1300, 2790 and 5000 give the same hash in two cold runs.
+
+**`timeline.json`:** 44 shots, every one commented.
+- Act 0:
+  - MATTER CAM ×48 on 우리's hot core (the P5 Planet fight);
+  - an exponential 18-frame pull-back zooming about the core (`camera.about`), fist mid-swing;
+  - a freeze, a cut to white, then 아득.
+- Act I: the two worlds (palettes A/B, city lights, arks), then the P2 and P3 gates.
+- Act II, S7's actors on the Director:
+  - ruin, ark and parallax ×4, with genesis at start 27 / dur 14;
+  - the assembly montage cuts on every drum cue from `genesis-cues.json`, alternating wide and MATTER CAM ×4;
+  - the fists, the moon, the brace with VO subtitle, the launch.
+- Act III:
+  - the bars burst open at 0:46.3 on the same fist landing;
+  - then the P5 takes vs Planet, Black Hole, Supernova, Nexus, Asteroid and Black Hole, each with S7's 6-frame `nameslam`;
+  - two MATTER CAM wound inserts and the two cards;
+  - the nova in ×0.3; the eye at ×8 with clicking rings (the rhyme with 0:15); the Witness's beams; cut to black.
+- Act IV:
+  - the after-fight wide;
+  - S7's `edgepull` with the real fight handed in as the arena (`shot.arena` → `setArenaSource`), and the word cards on `edgeWordCues()`;
+  - `jawwipe`, `title`, the sting.
+
+**Grades:** `src/cinema/grade.ts` gives per-act grades (before, witness, mouth, build, hunt, edge) as fixed colour functions. Deviation from the brief: the frame is no longer master-snapped since D34, so the grades shift colour in the game's current space instead of mapping inside the 128-colour master.
+
+**Known issues for the next pass:**
+- The 30 s, 15 s and loop cuts aren't built yet (P8).
+- There's no motion blur yet.
+- Some montage takes open a few frames before their action.
+- The hunt eye (1:05) is a different seed's Witness than the 0:15 eye.
+
+## P5: gameplay takes (S5): gate rendered
+
+**Tool:** `tools/cinema/p5-takes.ts`.
+- 우리 (slot 0) runs a SCRIPTED input track (harness grammar, its real moves and real damage) against each opponent's AI (level 4).
+- Opponents and arenas: Planet/Nursery, Black Hole/Tussenruimte, Supernova/Red Giant, Nexus/Shearfield, Asteroid/Rim, the Witness/Mausoleum.
+- Three tracks:
+  - `hunt`: walk in, crush, crush, signature;
+  - `feint`: strike, back off, signature, ultimate;
+  - `brawl`: strike-strike-crush chains.
+- Seeds 1–4: 72 fights, scanned headless by the press worker (now able to script slot 0).
+- Windows are ranked by 우리's landed heavy and catastrophic blows, KOs, break-aparts and ultimates. The top 5 per opponent, all from different fights, make 30 candidates.
+
+**Gate:**
+- `press/cinema/p5/preview-{0,1,2}.png`: contact sheets of the 30 candidates, 5 frames each, rendered by the real game in trailer mode.
+- `candidates.json` (cfg, script and anchor tick for each) and `takes.json` (all scans).
+
+**Picks used in the animatic (candidate #):**
+- 2 (Planet, the cold open and the burst);
+- 0 (Planet);
+- 5 and 6 (Black Hole);
+- 10 and 11 (Supernova, the nova);
+- 16 (Nexus);
+- 20 (Asteroid);
+- 25 and 26 (the Witness's beams, the eye, the edge).
+
+## P3: the Mouth's strike on World B (S5): gate rendered
+
+**Gate (`gates/p3.json` = 0:20–0:24):** `press/cinema/p3-1080p.mp4` and `p3-2160p.mp4`, with stills `p3-f*.png`. Deterministic: the same hash in two cold runs, including frames 175 and 176 around the bite.
+
+**The shot:**
+- World B is the real Planet in palette B, a dummy. The camera is locked on where it stood (`camera.lock`), so it sits high on the left.
+- The backdrop's stars along the frame edges slide sideways (`backdrop.slide`).
+- The Mouth is the LOCKED oracle, baked frame by frame (`tools/cinema/mouth-strike.ts` → `mouth-pack.ts strike` → `press/cinema/work/mouth/strike.cfp`) and played by the new `mouth` actor:
+  - the body slides in along the bottom edge from the right corner and the neck rises;
+  - the head tracks World B, hanging clear of it;
+  - at 2.35 s it begins its real bite (the oracle's MOVES.bite).
+- At contact (2.92 s, sim tick 175) the bite is a real catastrophic blow on World B's matter (`match.blows`, Director `tickMatch`), with its presentation (shockwave, flash, shake, hit-stop).
+  - Half the world is torn off, then the Planet's own failure sheds the crust and leaves the naked core. That is the "two naked cores" of the ruin.
+  - The shake moves the letterbox bars.
+- Card "It ate." in the lower bar.
+
+## Fixes after WJ's P2 review (S5)
+
+**MATTER CAM, which WJ found mushy:**
+- Tight framing: ×24, about 27×15 native pixels, each a 72-px tile at ×3. The camera tracks the planet with an offset on the real crack line.
+- Each pixel is now a distinct lit tile:
+  - relief from its neighbours (a trench is darker);
+  - a wide lit bevel top-left and a shaded bevel bottom-right;
+  - a grout gap;
+  - hot matter (the glowing fissure) stays emissive.
+- Empty space draws no tiles.
+- The glow overlays are dropped in the macro (`shot.hide`), so it shows matter only.
+- The p1 crust macro and the p2 gaze macro are re-rendered. Each reads crack (×0.25) → hold (time pushed through) → shear.
+
+**The dithered rectangle on black:** the post's relight lit the black backdrop as if it were a sprite: a Voronoi split of the body lights, Bayer-stepped, which is why it had a straight edge.
+- In cinema mode (`renderer.setCinema`) the relight skips pure black.
+- The body-light floor on empty space is 0.
+- Shots with a backdrop actor hide the stage scenery (`renderer.setScenery`), so no stage light or bloom leaks through.
+- The game's own look is unchanged.
+
 ## P2: the Witness close-up (S5): rendered, WAITING FOR WJ'S APPROVAL
 
 **Question for WJ:** does the eye read as THE Witness?
