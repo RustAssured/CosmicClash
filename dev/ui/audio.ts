@@ -15,7 +15,7 @@ import { runFightVerification, type FightReport } from './audio-fight';
 import { runStageVerification, type StageReport } from './audio-stages';
 import { runBodyCharacter, runTitanVerification, type TitanReport } from './audio-titans';
 import { runAudit, type AuditReport } from './audio-audit';
-import { DEFAULT_15, DEFAULT_60, renderTrailer, type TrailerReport } from './audio-trailer';
+import { DEFAULT_15, DEFAULT_60, renderFinal, renderTrailer, type TrailerReport } from './audio-trailer';
 
 /**
  * Audition page for the procedural audio engine: every sound the game can make, on a button, with the score's controls and
@@ -460,16 +460,25 @@ async function verify(
       });
     } else if (mode === 'trailer') {
       // the edit's cue sheet if it exists (press/trailer/cuesheet.json for the 60 s cut, cuesheet-15.json for the 15 s one)
-      const cut = q.get('cut') === '15' ? '15' : '60';
-      const res = await fetch(`/press/trailer/${cut === '15' ? 'cuesheet-15' : 'cuesheet'}.json`).catch(
-        () => null,
-      );
-      const raw: unknown = res?.ok ? await res.json().catch(() => null) : null;
-      out = window.__trailer = await renderTrailer(
-        raw,
-        cut === '15' ? DEFAULT_15 : DEFAULT_60,
-        q.get('stems') === '1',
-      );
+      const cut = q.get('cut') ?? '60';
+      if (cut === 'final' || cut === 'final-15') {
+        // trailer-final: WJ's teaser score around the gameplay montage (press/trailer/cuesheet-final[-15].json)
+        const res = await fetch(`/press/trailer/cuesheet-${cut}.json`);
+        out = window.__trailer = (await renderFinal(
+          await res.json(),
+          '/press/teaser/score.wav',
+        )) as TrailerReport;
+      } else {
+        const res = await fetch(`/press/trailer/${cut === '15' ? 'cuesheet-15' : 'cuesheet'}.json`).catch(
+          () => null,
+        );
+        const raw: unknown = res?.ok ? await res.json().catch(() => null) : null;
+        out = window.__trailer = await renderTrailer(
+          raw,
+          cut === '15' ? DEFAULT_15 : DEFAULT_60,
+          q.get('stems') === '1',
+        );
+      }
     } else if (mode === 'audit') {
       const only = new URLSearchParams(location.search).get('only');
       out = window.__audit = await runAudit(only ? only.split(',') : undefined);

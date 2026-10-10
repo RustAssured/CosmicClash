@@ -44,8 +44,12 @@ export type ShotSource =
        */
       times?: number[];
       offset?: number;
+      /** Key moments of the edit: the sim tick and where it is on the picture (trailer time), checked against the render. */
+      events?: { tick: number; at: number; what?: string }[];
     }
-  | { kind: 'oracle' | 'edge' | 'black' | 'logo' | 'card' };
+  | { kind: 'oracle' | 'edge' | 'black' | 'logo' | 'card' }
+  /** WJ's teaser: its finished score (press/teaser/score.wav) from `from` to `to` (teaser seconds), laid sample-accurate. */
+  | { kind: 'teaser'; from: number; to?: number };
 
 export interface CueShot {
   id: string;
@@ -216,6 +220,9 @@ export function normaliseSheet(raw: unknown, fallback: CueSheet): CueSheet {
         slowmo: src.slowmo === undefined ? undefined : Number(src.slowmo),
         times: Array.isArray(src.times) ? (src.times as number[]) : undefined,
         offset: src.offset === undefined ? undefined : Number(src.offset),
+        events: Array.isArray(src.events)
+          ? (src.events as { tick: number; at: number; what?: string }[])
+          : undefined,
       };
     if (typeof src.kind === 'string') return src as unknown as ShotSource;
     return { kind: 'black' };
@@ -228,13 +235,63 @@ export function normaliseSheet(raw: unknown, fallback: CueSheet): CueSheet {
     gain: s.gain === undefined ? undefined : Number(s.gain),
     sound: s.sound === undefined ? undefined : String(s.sound),
   }));
+  const duration = Number(r.duration ?? Math.max(...shots.map((s) => s.out)));
+  const raw2 = (r.beats ?? {}) as Record<string, unknown>;
+  // the edit's own beat sheet (tools/press: picture times of flash, firstImpact, snap, wet, lunge, logo) → the designed beats
+  const beats: TrailerBeats =
+    typeof raw2.wet === 'number' || typeof raw2.lunge === 'number' || typeof raw2.firstImpact === 'number'
+      ? editBeats(raw2 as Record<string, number>, shots, duration)
+      : { ...fallback.beats, ...(raw2 as TrailerBeats) };
   return {
-    name: String(r.name ?? fallback.name),
-    duration: Number(r.duration ?? Math.max(...shots.map((s) => s.out))),
+    name: String(r.name || fallback.name),
+    duration,
     stage: (r.stage ?? fallback.stage) as StageId,
     shots,
-    beats: { ...fallback.beats, ...(r.beats ?? {}) },
+    beats,
   };
+}
+
+/**
+ * Designed beats from the edit's picture beats. The flash's sound arrives late but before the hard cut; the roster's
+ * downbeats sit on its cuts (the game shots between the first impact and 우리 / the turn); the score cuts out where the shot
+ * holding the wet sound begins; the lunge's impact lands ON the cut to black and is followed by silence until the logo.
+ */
+function editBeats(e: Record<string, number>, shots: CueShot[], duration: number): TrailerBeats {
+  const game = shots.filter((s) => s.source.kind === 'fight');
+  const first = e.firstImpact !== undefined ? game.find((s) => s.out > e.firstImpact!) : game[0];
+  const wetShot = e.wet !== undefined ? shots.find((s) => s.in <= e.wet! && s.out > e.wet!) : undefined;
+  const turnAt = wetShot?.in ?? e.wet;
+  const firstCut = first?.in ?? 0;
+  const rosterEnd = e.snap !== undefined ? e.snap : (turnAt ?? duration);
+  const roster = game.filter(
+    (s) =>
+      s !== first && s.in > firstCut && s.in < rosterEnd && !/uri/.test(s.id) && s.in < (turnAt ?? duration),
+  );
+  const rosterCuts = roster.map((s) => s.in);
+  const rosterLast = roster.length ? roster[roster.length - 1]!.out : firstCut + 4;
+  const b: TrailerBeats = {
+    rosterCuts,
+    scoreIn: Math.max(0, (roster[0]?.in ?? firstCut + 2) - 0.4),
+    scoreFull: rosterLast - 0.5,
+    scoreOut: turnAt,
+  };
+  if (e.flash !== undefined) {
+    b.flash = e.flash;
+    b.flashArrives = Math.min(firstCut - 0.3, e.flash + 0.6);
+  }
+  if (e.snap !== undefined) {
+    b.snap = e.snap;
+    b.scoreUnder = [rosterLast, e.snap];
+    b.scoreBack = shots.find((s) => s.source.kind === 'fight' && s.in >= e.snap! + 1)?.in ?? e.snap + 2;
+  }
+  if (e.wet !== undefined && e.lunge !== undefined) b.wet = [e.wet, e.lunge];
+  if (e.lunge !== undefined) {
+    const silence = e.lunge + 0.4;
+    b.lunge = [e.lunge - 1.4, e.lunge, silence];
+    const logo0 = Math.max((e.logo ?? e.lunge) + 0.4, silence + 0.25);
+    b.logo = [logo0, duration - 0.4];
+  }
+  return b;
 }
 
 /* ------------------------------------------------------------------------------------------------ *
@@ -247,6 +304,8 @@ export interface ShotRender {
   startTick: number;
   /** Heavy hits (energy ≥ 400) in shot time (s from the in-point). */
   hits: number[];
+  /** The edit's key moments: picture time vs. where the render plays that tick (trailer time). */
+  events: { what: string; at: number; audioAt: number; errMs: number }[];
 }
 
 /** The first heavy hit by `slot` at or after tick `after` (a silent sim run; deterministic). */
@@ -313,12 +372,23 @@ async function renderShot(shot: CueShot, tail: number): Promise<ShotRender> {
   let tickAt = offset;
   let tick = startTick - preTicks;
   const hits: number[] = [];
+  const checks: ShotRender['events'] = [];
   const step = (now: number): void => {
     while (tickAt <= now + TICK && m.phase !== 'matchend') {
       m.step();
       const ev = m.events as readonly SimEvent[];
       fx.tick(ev, m);
       for (const e of ev) if (e.t === 'hit' && e.energy >= 150 && tick >= startTick) hits.push(tickAt - PRE);
+      for (const k of src.events ?? [])
+        if (k.tick === tick) {
+          const audioAt = shot.in + tickAt - PRE;
+          checks.push({
+            what: k.what ?? `tick ${k.tick}`,
+            at: k.at,
+            audioAt: +audioAt.toFixed(3),
+            errMs: Math.round((audioAt - k.at) * 1000),
+          });
+        }
       if (ev.length && tickAt >= 0) eng.handleAt(ev, tickAt + 0.006);
       tick++;
       tickAt = timeOf(tick) ?? tickAt + TICK / Math.max(0.05, m.timeScale || 1) / slowmo;
@@ -342,6 +412,7 @@ async function renderShot(shot: CueShot, tail: number): Promise<ShotRender> {
     right: buf.getChannelData(1).slice(from),
     startTick,
     hits: hits.filter((h) => h >= -0.05 && h <= dur + 0.05).map((h) => +h.toFixed(3)),
+    events: checks,
   };
 }
 
@@ -668,7 +739,15 @@ export interface TrailerReport {
   momentary: number[];
   /** Silence at the end (s, below −60 dBFS). */
   endSilence: number;
-  shots: { id: string; in: number; out: number; startTick?: number; hits: number[]; nearestCutMs?: number }[];
+  shots: {
+    id: string;
+    in: number;
+    out: number;
+    startTick?: number;
+    hits: number[];
+    nearestCutMs?: number;
+    events?: ShotRender['events'];
+  }[];
   wav: string;
   stems?: { game: string; score: string; design: string };
 }
@@ -816,6 +895,7 @@ export async function renderTrailer(
       startTick: r.startTick,
       hits: r.hits,
       nearestCutMs: near === undefined ? undefined : Math.round(near),
+      events: r.events,
     });
   }
   // 2. the score
@@ -844,7 +924,8 @@ export async function renderTrailer(
     const s = ctx.createBufferSource();
     s.buffer = buf;
     const g = ctx.createGain();
-    const lvl = shot.gain ?? 1;
+    // under "SOMETHING FELT IT" the fight goes on far away: the game sits low under the wet sound
+    const lvl = shot.gain ?? (b.scoreOut !== undefined && b.wet && shot.in >= b.scoreOut - 0.01 ? 0.4 : 1);
     // a hard cut in, and the tail rings under the next shot for a moment — except into a silence the plan asks for
     const next = sheet.shots.find((x) => Math.abs(x.in - shot.out) < 0.01);
     const intoSilence =
@@ -929,5 +1010,220 @@ export async function renderTrailer(
     stems: stems
       ? { game: stem(ch[0]!, ch[1]!), score: stem(ch[2]!, ch[3]!), design: stem(ch[4]!, ch[5]!) }
       : undefined,
+  };
+}
+
+/* ------------------------------------------------------------------------------------------------ *
+ *  trailer-final: WJ's teaser (its finished score, a fixed master) around a gameplay montage
+ * ------------------------------------------------------------------------------------------------ */
+export interface FinalReport extends Omit<TrailerReport, 'stems'> {
+  /** Gains applied (dB): to WJ's score (uniform), to the montage before the master, and the master's own. */
+  gains: { score: number; montage: number; master: number };
+  /** Integrated loudness (LUFS) of the montage and of WJ's score sections, after the master. */
+  montageLufs: number;
+  teaserLufs: number;
+}
+
+/**
+ * press/trailer/cuesheet-final*.json: `teaser` shots take press/teaser/score.wav's own samples (from → from + length,
+ * sample-accurate: the welds and the cards stay on their frames); game shots take the game's audio (renderShot); the montage is
+ * glued by the game's own score (dark, full intensity) and the designed hand-offs:
+ *  - IN: the teaser's last seconds ring on under the first game shot while a pressure swell rolls from the cut into the first
+ *    blow (beats.uriFist / the first shot's first event), which lands with a drop;
+ *  - the snap (beats.snap): everything drops out, the cable lets go, silence, the debris of two worlds, until the next cut;
+ *  - OUT: the last game shot is cut dead (a 0.1 s ring) into the teaser's own near-silence (the hunt).
+ * WJ's score only ever gets one uniform gain; the montage is matched to its loud sections; one master gain and the game's
+ * true-peak limiter make about −16 LUFS, ≤ −1 dBTP.
+ */
+export async function renderFinal(raw: unknown, scoreUrl: string): Promise<FinalReport> {
+  await loadUriAsset(uriBinUrl);
+  const empty: CueSheet = { name: 'mix-final', duration: 0, shots: [], beats: {} };
+  const sheet = normaliseSheet(raw, empty);
+  const e = ((raw as { beats?: Record<string, number> }).beats ?? {}) as Record<string, number>;
+  const N = Math.ceil(SR * sheet.duration);
+  const games = sheet.shots.filter((s) => s.source.kind === 'fight');
+  const mIn = e.montageIn ?? games[0]?.in ?? 0;
+  const mOut = e.montageOut ?? games[games.length - 1]?.out ?? sheet.duration;
+  // 1. WJ's score
+  const decodeCtx = new OfflineAudioContext(2, SR, SR);
+  const score = await decodeCtx.decodeAudioData(await (await fetch(scoreUrl)).arrayBuffer());
+  // 2. the game shots
+  const shots: TrailerReport['shots'] = [];
+  const renders: { shot: CueShot; r: ShotRender }[] = [];
+  for (const shot of games) {
+    const r = await renderShot(shot, 0.6);
+    renders.push({ shot, r });
+    shots.push({
+      id: shot.id,
+      in: shot.in,
+      out: shot.out,
+      startTick: r.startTick,
+      hits: r.hits,
+      events: r.events,
+    });
+  }
+  const firstBlow =
+    e.uriFist ?? (games[0]?.source as { events?: { at: number }[] } | undefined)?.events?.[0]?.at ?? mIn + 1;
+  const after = (t: number): number => games.find((s) => s.in > t + 0.2)?.in ?? mOut;
+  // 3. the montage's score: the game's own, dark and full
+  const span: CueSheet = { name: 'm', duration: sheet.duration, stage: 'redgiant', shots: [], beats: {} };
+  const mscore = await renderScore(span, (t) => (t < mIn ? 0.6 : 1));
+  // 4. the mix: teaser bus (0/1) and montage bus (2/3)
+  const ctx = new OfflineAudioContext(4, N, SR);
+  ctx.destination.channelCountMode = 'explicit';
+  ctx.destination.channelInterpretation = 'discrete';
+  const merge = ctx.createChannelMerger(4);
+  merge.connect(ctx.destination);
+  const bus = (ch: number): GainNode => {
+    const g = ctx.createGain();
+    const sp = ctx.createChannelSplitter(2);
+    g.connect(sp);
+    sp.connect(merge, 0, ch);
+    sp.connect(merge, 1, ch + 1);
+    return g;
+  };
+  const teaserBus = bus(0);
+  const montage = bus(2);
+  const game = ctx.createGain();
+  game.connect(montage);
+  for (const shot of sheet.shots) {
+    if (shot.source.kind !== 'teaser') continue;
+    const from = shot.source.from;
+    const len = shot.out - shot.in;
+    const next = sheet.shots.find((x) => Math.abs(x.in - shot.out) < 0.01);
+    // into the montage the teaser rings on under the first shot (its own reverb, the clench's tail)
+    const ring = next && next.source.kind === 'fight' ? 1.2 : 0.012;
+    const s = ctx.createBufferSource();
+    s.buffer = score;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(shot.in === 0 ? 1 : 0, shot.in);
+    if (shot.in > 0) g.gain.linearRampToValueAtTime(1, shot.in + 0.008);
+    g.gain.setValueAtTime(1, shot.out);
+    g.gain.linearRampToValueAtTime(0, shot.out + ring);
+    s.connect(g);
+    g.connect(teaserBus);
+    s.start(shot.in, from, Math.min(len + ring, score.duration - from));
+  }
+  for (const { shot, r } of renders) {
+    const buf = ctx.createBuffer(2, r.left.length, SR);
+    buf.copyToChannel(r.left as Float32Array<ArrayBuffer>, 0);
+    buf.copyToChannel(r.right as Float32Array<ArrayBuffer>, 1);
+    const s = ctx.createBufferSource();
+    s.buffer = buf;
+    const g = ctx.createGain();
+    const next = sheet.shots.find((x) => Math.abs(x.in - shot.out) < 0.01);
+    const ring = !next || next.source.kind !== 'fight' ? 0.1 : 0.25;
+    g.gain.setValueAtTime(0, shot.in);
+    g.gain.linearRampToValueAtTime(shot.gain ?? 1, shot.in + 0.004);
+    g.gain.setValueAtTime(shot.gain ?? 1, shot.out);
+    g.gain.linearRampToValueAtTime(0, shot.out + ring);
+    s.connect(g);
+    g.connect(game);
+    s.start(shot.in);
+    s.stop(Math.min(sheet.duration, shot.out + ring + 0.05));
+  }
+  // the montage's score: in under the swell, out for the snap, cut dead with the montage
+  const ss = ctx.createBufferSource();
+  ss.buffer = mscore;
+  const sg = ctx.createGain();
+  sg.gain.value = 0;
+  sg.gain.setValueAtTime(0, mIn);
+  sg.gain.linearRampToValueAtTime(0.35, firstBlow);
+  sg.gain.linearRampToValueAtTime(0.6, firstBlow + 2);
+  if (e.snap !== undefined && e.snap > mIn && e.snap < mOut) {
+    sg.gain.setValueAtTime(0.6, e.snap - 0.08);
+    sg.gain.linearRampToValueAtTime(0, e.snap);
+    sg.gain.setValueAtTime(0, after(e.snap) - 0.01);
+    sg.gain.linearRampToValueAtTime(0.7, after(e.snap));
+    game.gain.setValueAtTime(1, e.snap - 0.08);
+    game.gain.linearRampToValueAtTime(0, e.snap + 0.02);
+    game.gain.setValueAtTime(0, after(e.snap) - 0.01);
+    game.gain.linearRampToValueAtTime(1, after(e.snap));
+  }
+  sg.gain.setValueAtTime(0.7, mOut - 0.02);
+  sg.gain.linearRampToValueAtTime(0, mOut);
+  ss.connect(sg);
+  sg.connect(montage);
+  ss.start(0);
+  // the designed hand-offs
+  const c = designCtx(ctx, montage, 9);
+  swell(c, makeOut(c, 0, 0.3), mIn, {
+    dur: Math.max(0.3, firstBlow - mIn),
+    gain: 0.3,
+    f0: 60,
+    f1: 900,
+    sub: 0.2,
+    subHz: 36,
+  });
+  boom(c, makeOut(c, 0, 0.2), firstBlow, { f0: 96, f1: 30, dur: 1.6, gain: 0.7, drive: 3.4, crunch: 2.4 });
+  rumble(c, makeOut(c, 0, 0.8), firstBlow, { dur: 2.5, gain: 0.12, f0: 450, f1: 90 });
+  if (e.snap !== undefined && e.snap > mIn && e.snap < mOut) {
+    const o = makeOut(c, 0, 0.5);
+    filamentSnap(c, o, e.snap, 55, 1, resonance(0.2, 1));
+    boom(c, makeOut(c, 0, 0.15), e.snap, { f0: 120, f1: 34, dur: 0.5, gain: 0.5, drive: 3.4 });
+    const d = e.snap + 0.85;
+    const wide = makeOut(c, 0, 0.8);
+    const until = after(e.snap);
+    if (until - d > 0.3) {
+      crackle(c, wide, d, { dur: until - d + 0.6, count: 24, gain: 0.16, f: 800 });
+      gravel(c, wide, d, { dur: until - d + 0.5, grains: 40, f: 420, spread: 2.6, gain: 0.2, lowpass: 1400 });
+    }
+  }
+  // the montage ends on the cut: nothing of it (score, design, tails) passes into the teaser's silence
+  montage.gain.setValueAtTime(1, mOut + 0.06);
+  montage.gain.linearRampToValueAtTime(0, mOut + 0.1);
+  const out = await ctx.startRendering();
+  const tL = out.getChannelData(0);
+  const tR = out.getChannelData(1);
+  const mL = out.getChannelData(2);
+  const mR = out.getChannelData(3);
+  // 5. loudness: WJ's score gets one gain (true peak under the ceiling); the montage matches its loud sections
+  const span2 = (a: Float32Array, from: number, to: number): Float32Array =>
+    a.subarray(Math.floor(from * SR), Math.min(a.length, Math.floor(to * SR)));
+  const tMeas = measure(tL, tR);
+  const scoreDb = Math.min(0, -1.3 - tMeas.truePeak);
+  // the reference: the teaser's own loudest sections (its brace and its edge), about 3 s short-term at their peak
+  const tSeries = tMeas.momentary.filter((v) => v > -70).sort((a, b) => b - a);
+  const teaserLoud = tSeries[Math.floor(tSeries.length * 0.1)] ?? -12;
+  const mMeas = measure(span2(mL, mIn, mOut), span2(mR, mIn, mOut));
+  const mSeries = mMeas.momentary.filter((v) => v > -70).sort((a, b) => b - a);
+  const montageLoud = mSeries[Math.floor(mSeries.length * 0.1)] ?? mMeas.integrated;
+  const montageDb = teaserLoud + scoreDb - montageLoud;
+  const L = new Float32Array(N);
+  const R = new Float32Array(N);
+  const gs = lin(scoreDb);
+  const gm = lin(montageDb);
+  for (let i = 0; i < N; i++) {
+    L[i] = tL[i]! * gs + mL[i]! * gm;
+    R[i] = tR[i]! * gs + mR[i]! * gm;
+  }
+  const fade = Math.floor(SR * 0.6);
+  for (let i = N - fade; i < N; i++) {
+    const k = Math.max(0, Math.min(1, (N - 0.2 * SR - i) / (0.4 * SR)));
+    L[i] = L[i]! * k;
+    R[i] = R[i]! * k;
+  }
+  const pre = measure(L, R).integrated;
+  const mm = master(L, R);
+  const masterDb = TARGET_LUFS - pre;
+  const m = measure(mm.l, mm.r);
+  let endSilence = 0;
+  for (let i = N - 1; i >= 0 && Math.max(Math.abs(mm.l[i]!), Math.abs(mm.r[i]!)) < 0.001; i--) endSilence++;
+  const tm = (a: number, b2: number): number => measure(span2(mm.l, a, b2), span2(mm.r, a, b2)).integrated;
+  const teaserParts = sheet.shots.filter((s) => s.source.kind === 'teaser');
+  return {
+    name: sheet.name,
+    duration: sheet.duration,
+    integrated: +m.integrated.toFixed(1),
+    truePeak: +m.truePeak.toFixed(2),
+    range: +m.range.toFixed(1),
+    limiterDb: +mm.gr.toFixed(1),
+    momentary: m.momentary,
+    endSilence: +(endSilence / SR).toFixed(2),
+    shots,
+    wav: toWav(mm.l, mm.r),
+    gains: { score: +scoreDb.toFixed(1), montage: +montageDb.toFixed(1), master: +masterDb.toFixed(1) },
+    montageLufs: +tm(mIn, mOut).toFixed(1),
+    teaserLufs: +(teaserParts.length ? tm(teaserParts[0]!.in, teaserParts[0]!.out) : -70).toFixed(1),
   };
 }
