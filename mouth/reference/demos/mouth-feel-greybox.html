@@ -1,0 +1,162 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>The Mouth — feel prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--void:#050306;--ink:#efe2d6;--muted:#a08c86;--rule:#2a1820;--seam:#d46a5a}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--void:#050306}}
+:root[data-theme="light"]{--void:#050306}
+*{box-sizing:border-box}html{background:var(--void);scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--void);color:var(--ink);font-family:"Nanum Myeongjo","AppleMyungjo","Batang",Georgia,serif;line-height:1.6}
+main{max-width:1300px;margin:0 auto;padding:clamp(20px,4vw,48px) clamp(14px,3vw,40px) 80px}
+h1{font-size:clamp(30px,5vw,60px);margin:0;font-weight:800;letter-spacing:.12em;line-height:1}
+.sub{color:var(--seam);margin:.4em 0 1em;letter-spacing:.12em}
+p{color:var(--muted);max-width:78ch;margin:0 0 1em}
+canvas{display:block;width:100%;height:auto;image-rendering:pixelated;background:#000;touch-action:none}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:.8em 0 0;align-items:center}
+button{font:inherit;font-size:14px;color:var(--seam);background:transparent;border:1px solid var(--rule);padding:.42em .95em;min-height:44px;min-width:44px;cursor:pointer;touch-action:none;user-select:none}
+button[aria-pressed="true"]{background:#1a0c12;color:var(--ink)}button:focus-visible{outline:2px solid var(--seam);outline-offset:2px}
+.grp{display:flex;gap:4px;border-left:1px solid var(--rule);padding-left:10px;margin-left:4px}
+kbd{font-family:inherit;border:1px solid var(--rule);padding:0 .35em;color:var(--ink)}
+details{margin-top:1em;color:var(--muted)}summary{cursor:pointer;color:var(--ink)}
+label{display:grid;grid-template-columns:10em minmax(0,1fr) 3em;gap:8px;align-items:center;font-size:14px;max-width:520px}
+input[type=range]{accent-color:var(--seam);min-height:28px}output{color:var(--ink);text-align:right}
+</style></head><body><main>
+<h1>MOUTH</h1><p class="sub">FEEL PROTOTYPE · 60 FPS · GREYBOX</p>
+<p>Same creature, drawn plainly so it runs smoothly — this is for judging how it <em>feels</em>, not how it looks. You only slide the body along the edge; the head never stops watching its prey. Choose high, straight or low, then strike. The neck's shape is authored for every beat — coiled in the wind-up, an arc in the strike — and the rope only adds weight and lag on top.</p>
+<canvas id="cv" width="640" height="360" tabindex="0" aria-label="Greybox of the Mouth: dark coils along the arena edge, a neck and a ringed head tracking a drifting opponent, striking when commanded."></canvas>
+<div class="row">
+<button type="button" id="bL" aria-label="Slide along the edge, anticlockwise">◀ slide</button><button type="button" id="bR" aria-label="Slide along the edge, clockwise">slide ▶</button>
+<div class="grp" role="group" aria-label="Strike height"><button type="button" class="v" data-v="-1" aria-pressed="false">high</button><button type="button" class="v" data-v="0" aria-pressed="true">straight</button><button type="button" class="v" data-v="1" aria-pressed="false">low</button></div>
+<div class="grp"><button type="button" id="sBite">Bite</button><button type="button" id="sSweep">Sweep</button><button type="button" id="sCoil">Coil &amp; crush</button></div>
+</div>
+<div class="row"><button type="button" id="bOpp" aria-pressed="true">Opponent moves</button><button type="button" id="bDbg" aria-pressed="false">Show beats</button><span id="st" style="color:var(--muted);font-size:14px"></span></div>
+<p style="margin-top:1em">Keyboard (click the canvas): <kbd>A</kbd>/<kbd>D</kbd> slide · <kbd>W</kbd>/<kbd>S</kbd> high / low (release for straight) · <kbd>J</kbd> bite · <kbd>K</kbd> sweep · <kbd>L</kbd> coil &amp; crush. A gamepad works too: left stick slides, up/down chooses height, A / X / B strike. Drag the opponent to place it.</p>
+<details><summary>Tuning</summary>
+<label>slide speed<input type="range" id="tSlide" min="60" max="400" value="243"><output>243</output></label>
+<label>strike speed<input type="range" id="tStrike" min="50" max="200" value="118"><output>1.18</output></label>
+<label>neck weight (lag)<input type="range" id="tLag" min="20" max="250" value="100"><output>1.00</output></label>
+<label>reach<input type="range" id="tReach" min="60" max="140" value="90"><output>0.90</output></label>
+<label>tracking speed<input type="range" id="tTrack" min="20" max="250" value="139"><output>1.39</output></label>
+</details>
+</main><script>
+'use strict';
+const W=640,H=360,TAU=Math.PI*2;const cv=document.getElementById('cv'),g=cv.getContext('2d');
+const TUNE={slide:243,strike:1.18,lag:1,reach:.9,track:1.39};
+// ---------- perimeter ----------
+const PER=2*(W+H);
+function edgeAt(s){s=((s%PER)+PER)%PER;const pts=[[0,0],[W,0],[W,H],[0,H]],N=[[0,1],[-1,0],[0,-1],[1,0]],L=[W,H,W,H];let e=0,a=0;while(s>a+L[e]){a+=L[e];e=(e+1)%4;}const f=(s-a)/L[e];const A=pts[e],B=pts[(e+1)%4];const p=[A[0]+(B[0]-A[0])*f,A[1]+(B[1]-A[1])*f];let n=N[e].slice();
+  const dA=f*L[e],dB=(1-f)*L[e],RC=110;if(dB<RC){const k=.5*(1-dB/RC);const n2=N[(e+1)%4];n=[n[0]*(1-k)+n2[0]*k,n[1]*(1-k)+n2[1]*k];}if(dA<RC){const k=.5*(1-dA/RC);const n0=N[(e+3)%4];n=[n[0]*(1-k)+n0[0]*k,n[1]*(1-k)+n0[1]*k];}const l=Math.hypot(n[0],n[1]);return{p,n:[n[0]/l,n[1]/l]};}
+// ---------- state ----------
+let s=PER-H*.5,sv=0,slideIn=0,variant=0,move=null,t=0,hitstop=0,shake=0,oppMoves=true,dbg=false,hits=0;
+let opp={x:470,y:170,vx:0,vy:0,flash:0,dragged:false};
+const NS=24;// neck samples: authored shape + spring offsets
+const neck=[];for(let i=0;i<NS;i++)neck.push({x:0,y:0,vx:0,vy:0,init:false});
+let head={x:300,y:180,vx:0,vy:0},trail=[];let ringSpin=0,ringRate=1,open=1,clampV=0;
+const ease={io:u=>u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2,out4:u=>1-Math.pow(1-u,4),in2:u=>u*u,out2:u=>1-(1-u)*(1-u)};
+// ---------- the beats of each strike: durations, and what the head and neck intend ----------
+const MOVES={bite:[['load',.42],['strike',.18],['bite',.16],['hold',.12],['recover',.7]],sweep:[['load',.38],['sweep',.5],['bite',.14],['recover',.75]],coil:[['reach',.36],['coil',.7],['crush',.4],['release',.8]]};
+function begin(n){if(move)return;const ex=exitPt();move={n,ph:0,t0:t,v:variant,from:[head.x,head.y],tg:[opp.x,opp.y],ex};}
+function exitPt(){const E=edgeAt(s);return{E,X:[E.p[0]+E.n[0]*62,E.p[1]+E.n[1]*62]};}
+const ARC=1.35;
+function clampArc(E,X,P){const d=[P[0]-X[0],P[1]-X[1]];let a=Math.atan2(E.n[0]*d[1]-E.n[1]*d[0],E.n[0]*d[0]+E.n[1]*d[1]);a=Math.max(-ARC,Math.min(ARC,a));const c=Math.cos(a),si=Math.sin(a);return[E.n[0]*c-E.n[1]*si,E.n[0]*si+E.n[1]*c];}
+// the head's intended position and the neck's intended shape for this instant
+function intent(){const{E,X}=exitPt();const D=clampArc(E,X,[opp.x,opp.y]);const perp=[-D[1],D[0]];const dOpp=Math.hypot(opp.x-X[0],opp.y-X[1]);
+  const idleL=Math.min(230,dOpp*.55);let H_=[X[0]+D[0]*idleL+Math.sin(t*.8)*8,X[1]+D[1]*idleL+Math.cos(t*.7)*8];let bend=Math.sin(t*.9)*.35+.25,coilAmp=0,label='watching',spin=1,op=1,cl=0,stiff=1;
+  if(move){const seq=MOVES[move.n];let[ph,du]=seq[move.ph];du/=(ph==='strike'||ph==='sweep'?TUNE.strike*(move.v===1?1.3:move.v===-1?.85:1):1);let u=(t-move.t0)/du;
+    while(u>=1){move.ph++;move.t0+=du;if(move.ph>=seq.length){move=null;break;}[ph,du]=seq[move.ph];du/=(ph==='strike'||ph==='sweep'?TUNE.strike*(move.v===1?1.3:move.v===-1?.85:1):1);u=(t-move.t0)/du;if(ph==='bite'||ph==='crush'){hitstop=.07;shake=7;const d=Math.hypot(head.x-opp.x,head.y-opp.y);if(d<70){opp.flash=1;hits++;shake=10;}}}
+    if(move){const tg=move.tg;const dT=Math.hypot(tg[0]-X[0],tg[1]-X[1]);const Dt=clampArc(E,X,tg);const reach=Math.max(80,Math.min(dT,520*TUNE.reach*(move.v===-1?1.12:move.v===1?.88:1)));const strikeP=[X[0]+Dt[0]*reach,X[1]+Dt[1]*reach];const v=move.v;const pp=[-Dt[1],Dt[0]];label=ph;
+      if(move.n==='bite'){
+        if(ph==='load'){// coil back into the body, low and to the side — the tell
+          const e=ease.io(u);const back=[X[0]+Dt[0]*90+pp[0]*(v*-60+40),X[1]+Dt[1]*90+pp[1]*(v*-60+40)];const midP=[(back[0]+strikeP[0])/2+pp[0]*v*-200,(back[1]+strikeP[1])/2+pp[1]*v*-200];move.path=[back,midP,strikeP];H_=[H_[0]+(back[0]-H_[0])*e,H_[1]+(back[1]-H_[1])*e];coilAmp=26*e;bend=.9*e*(v||1);spin=1+3*e;op=1+.4*e;stiff=1.4;}
+        if(ph==='strike'){// out along an arc: high goes over, low comes under
+          const e=ease.out4(u);const back=[X[0]+Dt[0]*90+pp[0]*(v*-60+40),X[1]+Dt[1]*90+pp[1]*(v*-60+40)];const mid=[(back[0]+strikeP[0])/2+pp[0]*v*-200,(back[1]+strikeP[1])/2+pp[1]*v*-200];move.path=[back,mid,strikeP];
+          const q=1-e;H_=[q*q*back[0]+2*q*e*mid[0]+e*e*strikeP[0],q*q*back[1]+2*q*e*mid[1]+e*e*strikeP[1]];bend=-.3*v;spin=4;op=1.5;stiff=2.2;}
+        if(ph==='bite'||ph==='hold'){H_=strikeP;spin=.3;op=.5;cl=1;stiff=2.2;bend=0;}
+        if(ph==='recover'){const e=ease.io(u);H_=[strikeP[0]+(H_[0]-strikeP[0])*e,strikeP[1]+(H_[1]-strikeP[1])*e];spin=1;op=.8;stiff=.8;}}
+      if(move.n==='sweep'){const side=v===0?1:v;const R_=Math.min(reach,420);const a0=Math.atan2(Dt[1],Dt[0])-1.1*side,a1=Math.atan2(Dt[1],Dt[0])+1.1*side;
+        if(ph==='load'){const e=ease.io(u);const P0=[X[0]+Math.cos(a0)*150,X[1]+Math.sin(a0)*150];H_=[H_[0]+(P0[0]-H_[0])*e,H_[1]+(P0[1]-H_[1])*e];coilAmp=18*e;bend=.8*side*e;spin=1+3*e;op=1.3;stiff=1.3;}
+        if(ph==='sweep'){const e=ease.io(u);const a=a0+(a1-a0)*e;const r=150+(R_-150)*Math.sin(Math.min(1,e*1.3)*Math.PI*.5);H_=[X[0]+Math.cos(a)*r,X[1]+Math.sin(a)*r];spin=4;op=1.5;stiff=2;bend=-.5*side;}
+        if(ph==='bite'){H_=[X[0]+Math.cos(a1)*R_,X[1]+Math.sin(a1)*R_];cl=1;op=.5;spin=.3;stiff=2;}
+        if(ph==='recover'){const e=ease.io(u);const P1=[X[0]+Math.cos(a1)*R_,X[1]+Math.sin(a1)*R_];H_=[P1[0]+(H_[0]-P1[0])*e,P1[1]+(H_[1]-P1[1])*e];stiff=.8;}}
+      if(move.n==='coil'){const side=v===0?1:v;
+        if(ph==='reach'){const e=ease.out2(u);const past=[tg[0]+Dt[0]*70+pp[0]*side*50,tg[1]+Dt[1]*70+pp[1]*side*50];H_=[move.from[0]+(past[0]-move.from[0])*e,move.from[1]+(past[1]-move.from[1])*e];stiff=1.8;spin=2;bend=.6*side;}
+        if(ph==='coil'||ph==='crush'){const r=ph==='coil'?75-35*u:40;const ang=Math.atan2(Dt[1],Dt[0])+side*(Math.PI*.4+(ph==='coil'?u:1)*Math.PI*1.7);H_=[tg[0]+Math.cos(ang)*r,tg[1]+Math.sin(ang)*r];stiff=1.6;spin=ph==='crush'?.3:2;cl=ph==='crush'?1:0;op=ph==='crush'?.5:1.1;
+          move.wrap=[tg[0],tg[1],r,ang,side];}
+        if(ph==='release'){const e=ease.io(u);H_=[head.x+(H_[0]-head.x)*e*.2,head.y+(H_[1]-head.y)*e*.2];stiff=.7;move.wrap=null;}}}}
+  H_=[Math.max(50,Math.min(W-50,H_[0])),Math.max(50,Math.min(H-50,H_[1]))];// the head stays in the arena
+  return{E,X,H_,bend,coilAmp,label,spin,op,cl,stiff};}
+// ---------- step ----------
+function step(dt){t+=dt;
+  // sliding: heavy — it takes a moment to get going and a moment to stop; corners are slower
+  const E0=edgeAt(s);const corner=Math.abs(Math.abs(E0.n[0])-Math.abs(E0.n[1]))<.9?.55:1;const want=slideIn*TUNE.slide*corner*(move?.25:1);sv+=(want-sv)*Math.min(1,dt*2.2);s=((s+sv*dt)%PER+PER)%PER;
+  // the opponent drifts about the arena
+  if(oppMoves&&!opp.dragged){opp.vx+=(Math.sin(t*.37)*60-opp.vx)*dt*.5;opp.vy+=(Math.cos(t*.29)*45-opp.vy)*dt*.5;opp.x+=opp.vx*dt;opp.y+=opp.vy*dt;opp.x=Math.max(130,Math.min(W-130,opp.x));opp.y=Math.max(80,Math.min(H-80,opp.y));}
+  opp.flash*=Math.pow(.05,dt);
+  const I=intent();
+  // the head follows its intent with weight: fast when striking, slow and heavy otherwise
+  const k=(move?28*I.stiff:7*TUNE.track)/TUNE.lag;const c=2*.9*Math.sqrt(k);head.vx+=(k*(I.H_[0]-head.x)-c*head.vx)*dt;head.vy+=(k*(I.H_[1]-head.y)-c*head.vy)*dt;head.x+=head.vx*dt;head.y+=head.vy*dt;
+  const sp=Math.hypot(head.vx,head.vy);if(sp>420)trail.push({x:head.x,y:head.y,a:1});for(const q of trail)q.a-=dt*4;trail=trail.filter(q=>q.a>0);
+  ringSpin+=dt*ringRate;ringRate+=(I.spin-ringRate)*Math.min(1,dt*6);open+=(I.op-open)*Math.min(1,dt*10);clampV+=(I.cl-clampV)*Math.min(1,dt*(I.cl>clampV?18:5));
+  // the neck: an authored curve from the coils to the head, plus heavy lag per sample
+  const{E,X}=I;const n=E.n;const hx=head.x,hy=head.y;const L=Math.hypot(hx-X[0],hy-X[1])||1;const dir=[(hx-X[0])/L,(hy-X[1])/L];const pp=[-dir[1],dir[0]];
+  const c1=[X[0]+n[0]*L*.42+pp[0]*I.bend*L*.35,X[1]+n[1]*L*.42+pp[1]*I.bend*L*.35],c2=[hx-dir[0]*L*.35-pp[0]*I.bend*L*.2,hy-dir[1]*L*.35-pp[1]*I.bend*L*.2];
+  for(let i=0;i<NS;i++){const f=i/(NS-1),q=1-f;let tx=q*q*q*X[0]+3*q*q*f*c1[0]+3*q*f*f*c2[0]+f*f*f*hx,ty=q*q*q*X[1]+3*q*q*f*c1[1]+3*q*f*f*c2[1]+f*f*f*hy;
+    // bunching in the wind-up: the neck folds into tight waves
+    const wv=Math.sin(f*Math.PI*3-t*2)*I.coilAmp*Math.sin(f*Math.PI)+Math.sin(f*7-t*1.7)*5*Math.sin(f*Math.PI);tx+=pp[0]*wv;ty+=pp[1]*wv;
+    // wrapping: the last third of the neck follows the circle round the opponent
+    if(move&&move.wrap&&f>.55){const[wx,wy,r,ang,side]=move.wrap;const a=ang-side*(1-(f-.55)/.45)*Math.PI*1.4;const k2=Math.min(1,(f-.55)/.2);tx=tx+(wx+Math.cos(a)*r-tx)*k2;ty=ty+(wy+Math.sin(a)*r-ty)*k2;}
+    const N=neck[i];if(!N.init){N.x=tx;N.y=ty;N.init=true;}const ks=(i<2?400:(150*(1-.72*Math.sin(f*Math.PI)))*(move?1.5:1))/TUNE.lag;const cs=2*.95*Math.sqrt(ks);N.vx+=(ks*(tx-N.x)-cs*N.vx)*dt;N.vy+=(ks*(ty-N.y)-cs*N.vy)*dt;N.x+=N.vx*dt;N.y+=N.vy*dt;}
+  neck[NS-1].x=hx;neck[NS-1].y=hy;neck[0].x=X[0];neck[0].y=X[1];
+  hitstop=Math.max(0,hitstop);shake*=Math.pow(.02,dt);
+  step.I=I;}
+// ---------- draw (greybox, but with the same hierarchy: coils darkest, neck mid, head brightest) ----------
+function draw(){const I=step.I;const{E,X}=I;g.save();const sh=shake;if(sh>.4)g.translate((Math.random()-.5)*sh,(Math.random()-.5)*sh);
+  g.fillStyle='#07040a';g.fillRect(-20,-20,W+40,H+40);for(let k=0;k<70;k++){const x=(k*97.3)%W,y=(k*53.7)%H;g.fillStyle=k%7?'#3a3448':'#8a80a0';g.fillRect(x,y,1,1);}
+  // the opponent: a stand-in titan
+  g.fillStyle=opp.flash>.1?`rgba(255,240,220,${opp.flash})`:'#2a3a48';g.beginPath();g.ellipse(opp.x,opp.y,46,58,0,0,TAU);g.fill();g.strokeStyle='#6a8aa8';g.lineWidth=2;g.stroke();g.fillStyle='#9fc2e0';g.beginPath();g.arc(opp.x,opp.y-6,6,0,TAU);g.fill();
+  // the neck (mid value): strands as thick strokes with a highlight
+  const pts=neck.map(q=>[q.x,q.y]);const L=pts.length;
+  for(let pass=0;pass<3;pass++){for(let i=1;i<L;i++){const f=i/(L-1);const w=(46-20*f);g.lineCap='round';g.strokeStyle=pass===0?'#1a0a10':pass===1?'#6a2430':'#c86a6a';g.lineWidth=pass===0?w+4:pass===1?w:Math.max(1.5,w*.18);g.beginPath();const a=pts[i-1],b=pts[i];
+    const off=pass===2?[(b[1]-a[1])*.0,0]:[0,0];g.moveTo(a[0]-(pass===2?w*.2:0),a[1]-(pass===2?w*.25:0));g.lineTo(b[0]-(pass===2?w*.2:0),b[1]-(pass===2?w*.25:0));g.stroke();}}
+  // the coils (darkest, nearest): loops along the edge around the anchor, tightening as the neck pays out
+  const pay=Math.min(1,Math.max(0,(Math.hypot(head.x-X[0],head.y-X[1])-200)/300));
+  for(let strand=0;strand<3;strand++){g.beginPath();for(let k=-420;k<=420;k+=8){const e=edgeAt(s+k*(1-pay*.15));const dd=-40+Math.sin(k*.018+strand*2.1+t*.6)*(55-pay*22)+strand*8;const x=e.p[0]+e.n[0]*dd,y=e.p[1]+e.n[1]*dd;k===-420?g.moveTo(x,y):g.lineTo(x,y);}
+    g.lineCap='round';g.lineJoin='round';g.strokeStyle='#05020a';g.lineWidth=78;g.stroke();g.strokeStyle=['#2a0c16','#3a1420','#22101c'][strand];g.lineWidth=70;g.stroke();g.strokeStyle='rgba(200,110,120,.35)';g.lineWidth=4;g.stroke();}
+  // the neck emerging from the coils
+  g.fillStyle='#2a0c16';g.beginPath();g.arc(X[0]-E.n[0]*10,X[1]-E.n[1]*10,26,0,TAU);g.fill();
+  // speed trail of the head
+  for(const q of trail){g.strokeStyle=`rgba(255,220,210,${q.a*.5})`;g.lineWidth=2;g.beginPath();g.arc(q.x,q.y,22,0,TAU);g.stroke();}
+  // the head (brightest): funnel, mouth, jaw-rings
+  const dir=Math.atan2(head.y-neck[L-3].y,head.x-neck[L-3].x);g.save();g.translate(head.x,head.y);g.rotate(dir);g.scale(1.3,1.3);
+  g.fillStyle='#8a3038';g.beginPath();g.moveTo(-60,-14);g.lineTo(0,-34*open);g.lineTo(0,34*open);g.lineTo(-60,14);g.closePath();g.fill();
+  g.fillStyle='#e05a3a';g.beginPath();g.ellipse(0,0,12,30*open*(1-clampV*.45),0,0,TAU);g.fill();g.fillStyle='#ffd0a0';g.beginPath();g.ellipse(-2,0,4,10*open*(1-clampV*.5),0,0,TAU);g.fill();
+  const rs=1-clampV*.3;for(let r=0;r<3;r++){const a=ringSpin*(r%2?-1:1)*(1+r*.3)+r*2;g.strokeStyle=['#f0e2cc','#d8c4a8','#c8b090'][r];g.lineWidth=3;g.beginPath();g.ellipse(4+r*3,0,(10+Math.abs(Math.sin(a))*16)*rs,(38+r*5)*rs,0,0,TAU);g.stroke();
+    for(let k=0;k<10;k++){const th=k/10*TAU+a;const yy=Math.sin(th)*(38+r*5)*rs,xx=4+r*3+Math.cos(th)*(10+Math.abs(Math.sin(a))*16)*rs;g.fillStyle='#fff4e0';g.fillRect(xx-1,yy-1,2,2);}}
+  g.restore();
+  // readability: the tell before a strike, the beat label
+  if(move&&step.I.label==='load'||move&&step.I.label==='reach'){g.strokeStyle=`rgba(255,120,90,${.4+.4*Math.sin(t*30)})`;g.lineWidth=2;g.beginPath();g.arc(head.x,head.y,52,0,TAU);g.stroke();}
+  if(move&&move.path&&step.I.label==='load'){const[a,m,b]=move.path;g.setLineDash([4,5]);g.strokeStyle='rgba(255,140,110,.6)';g.lineWidth=2;g.beginPath();g.moveTo(a[0],a[1]);g.quadraticCurveTo(m[0],m[1],b[0],b[1]);g.stroke();g.setLineDash([]);}
+  if(dbg){g.fillStyle='#efe2d6';g.font='10px monospace';g.fillText((move?move.n+' · ':'')+step.I.label,head.x-30,head.y-60);g.strokeStyle='rgba(239,226,214,.35)';g.beginPath();g.moveTo(X[0],X[1]);const a0=Math.atan2(E.n[1],E.n[0]);g.arc(X[0],X[1],90,a0-ARC,a0+ARC);g.closePath();g.stroke();}
+  g.restore();}
+// ---------- input ----------
+const keys={};const $=id=>document.getElementById(id);
+document.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(document.activeElement===cv&&['a','d','w','s','j','k','l',' ','arrowleft','arrowright','arrowup','arrowdown'].includes(k))e.preventDefault();if(keys[k])return;keys[k]=true;
+  if(k==='j'||k===' ')begin('bite');if(k==='k')begin('sweep');if(k==='l')begin('coil');});
+document.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+const hold=(id,v)=>{const el=$(id);el.addEventListener('pointerdown',e=>{e.preventDefault();btnSlide=v;});['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,()=>{if(btnSlide===v)btnSlide=0;}));};let btnSlide=0;hold('bL',-1);hold('bR',1);
+let btnVariant=0;document.querySelectorAll('.v').forEach(b=>b.onclick=()=>{btnVariant=+b.dataset.v;document.querySelectorAll('.v').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
+$('sBite').onclick=()=>begin('bite');$('sSweep').onclick=()=>begin('sweep');$('sCoil').onclick=()=>begin('coil');
+$('bOpp').onclick=()=>{oppMoves=!oppMoves;$('bOpp').setAttribute('aria-pressed',String(oppMoves));};$('bDbg').onclick=()=>{dbg=!dbg;$('bDbg').setAttribute('aria-pressed',String(dbg));};
+for(const[id,key,sc] of[['tSlide','slide',1],['tStrike','strike',100],['tLag','lag',100],['tReach','reach',100],['tTrack','track',100]]){const el=$(id),o=el.nextElementSibling;el.addEventListener('input',()=>{TUNE[key]=el.value/sc;o.textContent=sc===1?el.value:(el.value/sc).toFixed(2);});}
+const toC=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.width*W,(e.clientY-r.top)/r.height*H];};
+cv.addEventListener('pointerdown',e=>{const p=toC(e);if(Math.hypot(p[0]-opp.x,p[1]-opp.y)<60){opp.dragged=true;cv.setPointerCapture(e.pointerId);}cv.focus();});cv.addEventListener('pointermove',e=>{if(opp.dragged){const p=toC(e);opp.x=p[0];opp.y=p[1];}});cv.addEventListener('pointerup',()=>{opp.dragged=false;});
+let padPrev={};function readPad(){const gp=navigator.getGamepads?navigator.getGamepads()[0]:null;if(!gp)return null;const ax=gp.axes[0]||0;const b=i=>gp.buttons[i]&&gp.buttons[i].pressed;const r={slide:Math.abs(ax)>.2?ax:(b(14)?-1:b(15)?1:0),v:b(12)?-1:b(13)?1:((gp.axes[1]||0)<-.5?-1:(gp.axes[1]||0)>.5?1:0)};
+  for(const[i,m] of[[0,'bite'],[2,'sweep'],[1,'coil']]){if(b(i)&&!padPrev[i])begin(m);padPrev[i]=b(i);}return r;}
+// ---------- loop ----------
+let last=0;function loop(now){requestAnimationFrame(loop);let dt=Math.min(.04,last?(now-last)/1000:0);last=now;
+  const pad=readPad();slideIn=(keys.a||keys.arrowleft?-1:0)+(keys.d||keys.arrowright?1:0)+btnSlide+(pad?pad.slide:0);slideIn=Math.max(-1,Math.min(1,slideIn));
+  variant=(keys.w||keys.arrowup)?-1:(keys.s||keys.arrowdown)?1:(pad&&pad.v)?pad.v:btnVariant;
+  if(hitstop>0){hitstop-=dt;dt*=.05;}step(dt);draw();$('st').textContent=hits+' bites landed';}
+window.__F={step,draw,begin,set s(v){s=v;},opp,get head(){return head;}};
+for(let k=0;k<30;k++)step(1/60);draw();requestAnimationFrame(loop);
+</script></body></html>

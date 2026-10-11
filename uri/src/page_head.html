@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>우리 — the kinetic pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--void:#05060c;--ink:#ece4d0;--muted:#9d9483;--rule:#24263a;--seam:#d9a15a}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--void:#05060c}}
+:root[data-theme="light"]{--void:#05060c}
+*{box-sizing:border-box}html{background:var(--void);scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--void);color:var(--ink);font-family:"Nanum Myeongjo","AppleMyungjo","Batang",Georgia,serif;line-height:1.6}
+main{max-width:1240px;margin:0 auto;padding:clamp(20px,4vw,52px) clamp(14px,3vw,40px) 80px}
+h1{font-size:clamp(30px,5vw,60px);margin:0;font-weight:800;line-height:1.05}h2{font-size:clamp(19px,2.2vw,26px);margin:1.6em 0 .5em}
+.sub{color:var(--seam);margin:.2em 0 .8em;letter-spacing:.08em}
+p{color:var(--muted);max-width:76ch;margin:0 0 1.1em}
+.px{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;background:#000}
+#cvM{cursor:crosshair}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;margin:.8em 0 0}
+button{font:inherit;font-size:14px;color:var(--seam);background:transparent;border:1px solid var(--rule);padding:.42em .95em;min-height:40px;cursor:pointer}
+button[aria-pressed="true"]{background:#141626;color:var(--ink)}
+button.big{border-color:#5a2a18;color:#ffb070}
+button:focus-visible{outline:2px solid var(--seam);outline-offset:2px}
+#st{color:var(--muted);font-size:14px;align-self:center}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(10px,2vw,20px)}
+figure{margin:0}figcaption{margin-top:.5em;color:var(--muted);font-size:14px}figcaption b{color:var(--ink)}
+@media (max-width:820px){.two{grid-template-columns:minmax(0,1fr)}}
+</style></head><body><main>
+<h1>우리</h1><p class="sub">THE REFUSAL · TWO WORLDS · ONE BODY · ALL OF US · STILL HERE</p>
+<p>The kinetic pass, refined: authored motion defines the gesture, physics defines the consequence. The solver only corrects the aim; the body hardly lets itself be thrown around — the force is suppressed inside it and shows in the pylons, the loop, the cores and the fists; every strike tapers out in layers.  Moves are no longer poses but intentions: a target, an arm, a commitment. Force enters at the centre of mass and travels outward — the root shifts, the pylons counter-thrust, the torso turns, the shoulder ark rolls, the arm unfolds, the fist arrives last. Every link has mass, stiffness, damping and limits; the arm's momentum pushes the rest of the body the other way, the pylons fire to solve it, the loop stretches and shears under the load, the command moon holds its own position. The fists draw their pieces together as they commit. Damage changes how it settles; break a connection and what hangs from it drifts away.</p>
+<canvas class="px" id="cvM" tabindex="0" width="640" height="360" aria-label="우리 attacking a draggable opponent marker anywhere around it with physically driven strikes: the whole body loads, commits and recovers, pylons fire, the loop deforms, pieces tear away under hits."></canvas>
+<div class="ctl"><button type="button" id="mSlam">Double slam</button><button type="button" id="mPunch">Straight punch</button><button type="button" id="mCross">Cross-body smash</button><button type="button" id="mUpper">Uppercut</button><button type="button" id="mAuto">Best move for the target</button></div>
+<div class="ctl"><button type="button" id="bHit">Heavy hit</button><button type="button" class="big" id="bBreak">Break apart</button><button type="button" id="bR">Restore</button><button type="button" id="bA" aria-pressed="true">Demo</button><button type="button" id="bD" aria-pressed="false">Diagnostics</button><button type="button" id="bP" aria-pressed="false">Pause</button><span id="st" aria-live="polite"></span></div>
+<p style="margin-top:.8em">Drag the gold marker anywhere — left, right, above, below; the strikes aim at it within each move's reach and the arm on its side leads. Click the body to hit it. With the canvas focused, the arrow keys move the marker.</p>
+<details style="margin-top:1em"><summary style="cursor:pointer;color:var(--ink)">Tuning</summary>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 24px;margin-top:.6em;font-size:14px;color:var(--muted)">
+<label style="display:grid;grid-template-columns:8.5em minmax(0,1fr) 3em;gap:8px;align-items:center">stiffness<input type="range" id="t_stiff" min="30" max="250" value="100" style="accent-color:var(--seam);min-height:28px"><output id="o_stiff" style="color:var(--ink);text-align:right">1.00</output></label><label style="display:grid;grid-template-columns:8.5em minmax(0,1fr) 3em;gap:8px;align-items:center">damping<input type="range" id="t_damp" min="30" max="250" value="100" style="accent-color:var(--seam);min-height:28px"><output id="o_damp" style="color:var(--ink);text-align:right">1.00</output></label><label style="display:grid;grid-template-columns:8.5em minmax(0,1fr) 3em;gap:8px;align-items:center">mass<input type="range" id="t_mass" min="40" max="250" value="100" style="accent-color:var(--seam);min-height:28px"><output id="o_mass" style="color:var(--ink);text-align:right">1.00</output></label><label style="display:grid;grid-template-columns:8.5em minmax(0,1fr) 3em;gap:8px;align-items:center">counter-torque<input type="range" id="t_react" min="0" max="250" value="100" style="accent-color:var(--seam);min-height:28px"><output id="o_react" style="color:var(--ink);text-align:right">1.00</output></label><label style="display:grid;grid-template-columns:8.5em minmax(0,1fr) 3em;gap:8px;align-items:center">pylon compensation<input type="range" id="t_thrust" min="0" max="250" value="100" style="accent-color:var(--seam);min-height:28px"><output id="o_thrust" style="color:var(--ink);text-align:right">1.00</output></label><label style="display:grid;grid-template-columns:8.5em minmax(0,1fr) 3em;gap:8px;align-items:center">loop deformation<input type="range" id="t_loop" min="0" max="300" value="100" style="accent-color:var(--seam);min-height:28px"><output id="o_loop" style="color:var(--ink);text-align:right">1.00</output></label><label style="display:grid;grid-template-columns:8.5em minmax(0,1fr) 3em;gap:8px;align-items:center">hitstop<input type="range" id="t_hitstop" min="0" max="300" value="100" style="accent-color:var(--seam);min-height:28px"><output id="o_hitstop" style="color:var(--ink);text-align:right">1.00</output></label>
+</div></details>
+</main><script>
