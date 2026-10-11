@@ -41,6 +41,11 @@ export interface StageMetrics {
   hotLayers: number;
   /** Distance in cents from the calm score's dominant low pitch (30-200 Hz) to the nearest of the stage's root and fifth (its drone). */
   calmBassFitCents: number;
+  /**
+   * The same low pitch against every degree of the stage's scale. On a stage whose pad is voiced an octave down (`padOct` 12)
+   * a chord tone of the pad can be the loudest low pitch rather than the drone: still in key, which this measures.
+   */
+  calmBassScaleFitCents: number;
   /** Frequency and distance in cents from the calm pad's dominant pitch (150-1500 Hz) to the nearest degree of the scale. */
   padPeakHz: number;
   padFitCents: number;
@@ -125,6 +130,7 @@ async function measure(stage: StageId): Promise<StageMetrics> {
   const scaleClasses = MODES[music.mode] as readonly number[];
   const droneClasses = [0, (fifthOf(music) - music.root) % 12];
   const padPeak = peakFrequency(calm.mono, SR, 150, 1500, FROM, 131072);
+  const bassPeak = peakFrequency(calm.mono, SR, 30, 200, FROM, 131072);
   const calmPlan = planned(stage, 'menu', 0);
   const hotPlan = planned(stage, 'fight', 1);
   return {
@@ -144,11 +150,8 @@ async function measure(stage: StageId): Promise<StageMetrics> {
     hotMotesPerMin: hotPlan.motesPerMin,
     calmLayers: calmPlan.layers,
     hotLayers: hotPlan.layers,
-    calmBassFitCents: centsToClasses(
-      peakFrequency(calm.mono, SR, 30, 200, FROM, 131072),
-      rootHz,
-      droneClasses,
-    ),
+    calmBassFitCents: centsToClasses(bassPeak, rootHz, droneClasses),
+    calmBassScaleFitCents: centsToClasses(bassPeak, rootHz, scaleClasses),
     padPeakHz: padPeak,
     padFitCents: centsToClasses(padPeak, rootHz, scaleClasses),
     hotFitCents: centsToClasses(peakFrequency(hot.mono, SR, 100, 800, FROM, 131072), rootHz, scaleClasses),

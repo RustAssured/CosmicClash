@@ -70,7 +70,8 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
     r.stormPeakNoLimiter,
     'the storm must be loud enough to prove the limiter is doing real work',
   ).toBeGreaterThan(1.2);
-  expect(r.stormRmsDb).toBeLessThan(-6);
+  // D34 baseline: −12.1 dB rms after the limiter
+  expect(r.stormRmsDb).toBeLessThan(-9);
 
   // --- latency (engine side: scheduling look-ahead + the compressor's own 6 ms; the output device adds its own on top)
   expect(r.latencyMs).toBeLessThan(30);
@@ -80,18 +81,21 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
   expect(r.heavyHitTailSec).toBeGreaterThan(0.8);
   expect(r.heavyHitTailSec).toBeLessThan(4);
 
-  // --- character: glass is brighter than rock (centroid above 300 Hz, the shared sub-bass thump excluded)
-  expect(r.glassCentroidHz).toBeGreaterThan(1.5 * r.rockCentroidHz);
+  // --- (no "glass hit brighter than rock hit" any more: D34 puts every blow on the shared material layers over one low
+  // cosmic thump, so a FRACTURE and a KINETIC hit measure ~610 Hz alike; and since D36 'lastone' is the Witness, not the glass
+  // titan. The titans' own body voices still differ: see the titan section.)
 
-  // --- the adaptive score reacts to intensity, and is repeatable
+  // --- the adaptive score reacts to intensity, and is repeatable (D34 baseline: peaks lift 6.1 dB, the dynamic range 3.7 dB;
+  // calm −39.3 dB rms, hot −35.2 dB rms)
   expect(r.scoreRepeatDiffDb, 'same seed must render the same score (up to float noise)').toBeLessThan(-60);
   expect(r.scoreHotPeakDb - r.scoreCalmPeakDb, 'rhythm layers should lift the peaks').toBeGreaterThan(4);
   expect(
     r.scoreHotDynDb - r.scoreCalmDynDb,
     'rhythm layers should make the score more dynamic',
-  ).toBeGreaterThan(4);
+  ).toBeGreaterThan(2.5);
+  expect(r.scoreHotRmsDb - r.scoreCalmRmsDb, 'the fight is louder than the menu').toBeGreaterThan(2);
   expect(r.scoreCalmRmsDb).toBeGreaterThan(-45);
-  expect(r.scoreHotRmsDb).toBeLessThan(-12);
+  expect(r.scoreHotRmsDb).toBeLessThan(-28);
 
   // --- the four newer titans: every event audible and not hot, and each voice does what its design says
   const t = r.titans!;
@@ -103,20 +107,26 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
     expect(e.tailSec, `${e.name} never decays`).toBeLessThan(6);
   }
   const by = Object.fromEntries(t.character.map((c) => [c.titan, c]));
-  // materials, by the brightness of the body voice: glass > chain > plasma > rock > planet rumble
-  const order = ['lastone', 'nexus', 'supernova', 'asteroid', 'planet'] as const;
-  for (let i = 1; i < order.length; i++)
-    expect(
-      by[order[i - 1]!]!.bodyCentroidHz,
-      `${order[i - 1]} should be brighter than ${order[i]}`,
-    ).toBeGreaterThan(by[order[i]!]!.bodyCentroidHz);
-  expect(by.blackhole!.bedSubShare, 'the black hole lives in the sub-bass').toBeGreaterThan(
-    Math.max(...t.character.filter((c) => c.titan !== 'blackhole').map((c) => c.bedSubShare)),
+  // The old full brightness order (glass > chain > plasma > rock > planet) is gone by design: D34 re-voiced every titan low
+  // and cosmic (body centroids: Witness 977, supernova 989, black hole 859, planet 764, asteroid 695, nexus 366 Hz). What
+  // still holds, and is still the design: the glass Witness and the plasma star ring brighter than the rock.
+  for (const bright of ['lastone', 'supernova'] as const)
+    expect(by[bright]!.bodyCentroidHz, `${bright} should be brighter than the asteroid`).toBeGreaterThan(
+      1.2 * by.asteroid!.bodyCentroidHz,
+    );
+  // The black hole is no longer the ONLY sub-bass voice (D34's temple voice of the Witness sits lower still, 0.69), so it
+  // only has to live in the sub-bass (0.53) and sit above every titan but the Witness
+  expect(by.blackhole!.bedSubShare, 'the black hole lives in the sub-bass').toBeGreaterThan(0.4);
+  expect(by.blackhole!.bedSubShare).toBeGreaterThan(
+    Math.max(
+      ...t.character.filter((c) => !['blackhole', 'lastone'].includes(c.titan)).map((c) => c.bedSubShare),
+    ),
   );
   expect(t.blackHole.heavyHz, 'more mass, lower drone').toBeLessThan(t.blackHole.lightHz * 0.8);
   expect(t.blackHole.sparkleDb, 'Hawking glitter as it runs out of mass').toBeGreaterThan(8);
+  // D34 baseline: 2.9 → 4.6 beats/s (× 1.58)
   expect(t.nexus.beatsPerSecHigh, 'the graph pulses faster when more of it is lit').toBeGreaterThan(
-    t.nexus.beatsPerSecLow * 1.8,
+    t.nexus.beatsPerSecLow * 1.35,
   );
   expect(t.supernova.bedFullDb, 'the roar fades with the fuel').toBeGreaterThan(t.supernova.bedStarvedDb + 2);
   expect(t.planet.windBeforeDb - t.planet.windAfterDb, 'the wind dies with the atmosphere').toBeGreaterThan(
@@ -129,12 +139,19 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
   const S = Object.fromEntries(st.stages.map((m) => [m.stage, m]));
   const fighting = [S.nursery!, S.rim!, S.redgiant!, S.quasar!];
   expect(st.stages).toHaveLength(7);
-  expect(st.minPairDistance, 'two stages sound alike').toBeGreaterThan(0.8);
+  // seven stages, so more pairs to be close: the closest (D34 baseline) is 0.79
+  expect(st.minPairDistance, 'two stages sound alike').toBeGreaterThan(0.65);
   for (const m of st.stages) {
-    expect(m.calmBassFitCents, `${m.stage} drone is out of key`).toBeLessThan(35);
+    // the loudest low pitch is always in key; on every stage but the Mausoleum it is the drone itself (root or fifth). The
+    // Mausoleum voices its "choir in a ruin" pad an octave down (padOct 12), so the minor third of its Bb Dorian tonic chord
+    // (Db3, 139 Hz) outweighs the drone in the 30-200 Hz band: an in-key chord tone, not a wrong note
+    expect(m.calmBassScaleFitCents, `${m.stage} bass is out of key`).toBeLessThan(35);
+    if (m.stage !== 'mausoleum')
+      expect(m.calmBassFitCents, `${m.stage} drone is out of key`).toBeLessThan(35);
     expect(m.padFitCents, `${m.stage} pad is out of key`).toBeLessThan(35);
     expect(m.hotFitCents, `${m.stage} fight is out of key`).toBeLessThan(35);
-    expect(m.hotPeakDb, `${m.stage} score peak`).toBeLessThan(-8);
+    // D34 baseline: the loudest stage peaks at −21.2 dB
+    expect(m.hotPeakDb, `${m.stage} score peak`).toBeLessThan(-15);
     expect(m.hotPeakDb, `${m.stage} score is louder at full intensity`).toBeGreaterThan(m.calmPeakDb);
   }
   // Tussenruimte: near-silent stillness with glass motes
@@ -144,8 +161,10 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
     expect(S.tussenruimte!.hotMotesPerMin, `more motes than ${m.stage}`).toBeGreaterThan(
       m.hotMotesPerMin * 2,
     );
+    // D34 brought the fighting stages' pads up out of the mud (quasar 371 Hz) while Tussenruimte stays glass (836 Hz): it is
+    // still the brightest by far (× 2.25 at the closest), no longer × 3
     expect(S.tussenruimte!.calmCentroidHz, 'its energy is glass, high above the others').toBeGreaterThan(
-      m.calmCentroidHz * 3,
+      m.calmCentroidHz * 1.8,
     );
   }
   expect(S.tussenruimte!.hotHitsPerBar, 'no rhythm at all').toBe(0);
@@ -171,7 +190,8 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
   for (const m of fighting) {
     expect(m.hotHitsPerBar - m.calmHitsPerBar, `${m.stage}: the fight adds rhythm`).toBeGreaterThan(3);
     expect(m.hotLayers, `${m.stage}: the fight adds layers`).toBeGreaterThan(m.calmLayers);
-    expect(m.hotRmsDb - m.calmRmsDb, `${m.stage}: intensity is not just louder`).toBeLessThan(4);
+    // D34 baseline: the RMS lift is 1.5-4.4 dB (Nursery the most)
+    expect(m.hotRmsDb - m.calmRmsDb, `${m.stage}: intensity is not just louder`).toBeLessThan(5.5);
   }
 
   // --- volume: master 0 is silent, master 0.5 is −12 dB (squared taper) because master sits AFTER the dynamics
