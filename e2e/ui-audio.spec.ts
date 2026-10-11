@@ -24,14 +24,16 @@ test.afterAll(async () => {
 const SILENT_BY_DESIGN = new Set(['move lastone.gaze']);
 
 test('audio engine: numeric verification in a real browser', async ({ page }) => {
-  test.setTimeout(420_000);
+  // the full verification renders a few hundred seconds of audio through the real graph, true-peak limiter worklet included
+  // (D6), plus the newer titans' and the stages' sections: about 7 minutes on a laptop CPU, so the budget is 15
+  test.setTimeout(960_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
   await page.goto(`${base}/dev/ui/audio.html?verify=1`);
-  await page.waitForFunction(() => window.__report !== undefined, null, { timeout: 400_000 });
+  await page.waitForFunction(() => window.__report !== undefined, null, { timeout: 900_000 });
   const r = (await page.evaluate(() => window.__report)) as VerifyReport;
   await page.screenshot({ path: '.scratch/e2e/audio-page.png' });
   expect(errors).toEqual([]);

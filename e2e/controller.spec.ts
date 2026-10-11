@@ -293,8 +293,8 @@ test.describe('Switch Pro Controller, legacy DirectInput-style mapping (no mappi
     await plug(page, PRO_LEGACY);
     await frames(page, 4);
     await tap(page, 0, 12); // Home: reveals the pad without navigating anywhere
-    // title: VERSUS, VS AI, TRAINING, HOW TO PLAY, CONTROLLER CHECK, OPTIONS: four hat-downs land on CONTROLLER CHECK
-    for (let i = 0; i < 4; i++) {
+    // title: VERSUS, VS AI, TOURNAMENT, TRAINING, HOW TO PLAY, CONTROLLER CHECK, OPTIONS: five hat-downs land on CONTROLLER CHECK
+    for (let i = 0; i < 5; i++) {
       await setAxis(page, 0, 9, HAT.d);
       await frames(page, 4);
       await setAxis(page, 0, 9, HAT.neutral);

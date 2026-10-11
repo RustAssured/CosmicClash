@@ -42,7 +42,8 @@ jobs:
   e2e:
     name: Browser tests (Playwright, Chromium)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # the suite runs serially in software GL; with the audio verification and the live-UI matches it is ~45 min on a laptop
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

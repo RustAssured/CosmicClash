@@ -112,7 +112,11 @@ test('results with real fighter views: winner called over the fight, then REMATC
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
-  await page.addInitScript(() => localStorage.setItem('adeuk.ui.v1', '{"seenHowTo":true,"matches":3}'));
+  // ROUND LENGTH Short (D34's pace): this spec is about the results screen, and two Normal-length matches (S11) in software
+  // GL would spend most of the job's time budget on the fights before it
+  await page.addInitScript(() =>
+    localStorage.setItem('adeuk.ui.v1', '{"seenHowTo":true,"matches":3,"roundLength":"short"}'),
+  );
   await page.goto(
     '/?mode=aivai&state=10&ai=6&stage=nursery&a=lastone&b=asteroid&seed=11&t=0&hud=1&q=0&aftermath=0',
   );

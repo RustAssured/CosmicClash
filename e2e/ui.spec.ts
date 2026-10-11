@@ -140,8 +140,8 @@ test.describe('menus with a Switch Pro Controller', () => {
     await plug(page, PRO_STANDARD);
     await frames(page, 4);
     await tap(page, 0, CANON.HOME);
-    // VERSUS, VS AI, TRAINING, HOW TO PLAY, CONTROLLER CHECK, OPTIONS
-    for (let i = 0; i < 5; i++) await tap(page, 0, CANON.DOWN);
+    // VERSUS, VS AI, TOURNAMENT, TRAINING, HOW TO PLAY, CONTROLLER CHECK, OPTIONS
+    for (let i = 0; i < 6; i++) await tap(page, 0, CANON.DOWN);
     await tap(page, 0, CANON.EAST);
     await waitScreen(page, 'options');
     await frames(page, 40);
@@ -171,6 +171,8 @@ test.describe('keyboard', () => {
     await page.keyboard.press('ArrowDown');
     await frames(page, 4);
     await page.keyboard.press('ArrowDown');
+    await frames(page, 4);
+    await page.keyboard.press('ArrowDown'); // VERSUS, VS AI, TOURNAMENT, TRAINING
     await frames(page, 4);
     await page.keyboard.press('Space'); // TRAINING
     await waitScreen(page, 'assign');
