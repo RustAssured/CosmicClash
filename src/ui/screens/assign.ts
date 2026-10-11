@@ -1,6 +1,8 @@
 import { LOGICAL_W } from '@/contracts';
 import type { DeviceInfo } from '@/input';
 import { DIFFICULTY_LABELS } from '../labels';
+import { loadLadder } from '../ladder';
+import { resolveStore } from '../settings';
 import { deviceIconSprite } from '../pixel/controller-art';
 import { C, alpha } from '../pixel/palette';
 import { chip, drawIcon, panel } from '../pixel/shapes';
@@ -77,7 +79,9 @@ export function createAssignScreen(): Screen {
       const ready = humans(ctx) === 2 ? claimed[0] !== null && claimed[1] !== null : claimed[0] !== null;
       if (n.confirm && !joined && ready) {
         ctx.sound('confirm');
-        ctx.push('select');
+        // the tournament resumes a stored run at its rung; otherwise (and every other mode) pick titans
+        if (ctx.setup.mode === 'ladder' && loadLadder(resolveStore(ctx.deps.storage)).run) ctx.push('ladder');
+        else ctx.push('select');
       }
     },
     draw(ctx) {
@@ -91,7 +95,13 @@ export function createAssignScreen(): Screen {
         ctx,
         'PLAYERS',
         '플레이어',
-        mode === 'versus' ? 'VERSUS' : mode === 'vsai' ? 'VS AI' : 'TRAINING',
+        mode === 'versus'
+          ? 'VERSUS'
+          : mode === 'vsai'
+            ? 'VS AI'
+            : mode === 'ladder'
+              ? 'TOURNAMENT'
+              : 'TRAINING',
       );
       const W = 268;
       for (const s of [0, 1] as const) {
@@ -152,6 +162,14 @@ export function createAssignScreen(): Screen {
             tracking: 1,
           });
           drawText(cv, lab.nameKo, x + W / 2, y + 98, { color: C.celadonDeep, align: 'center' });
+        } else if (mode === 'ladder') {
+          drawText(cv, 'EIGHT RUNGS', x + W / 2, y + 60, { color: C.text, align: 'center', tracking: 2 });
+          drawText(cv, 'SOMETHING WAITS AT THE TOP', x + W / 2, y + 80, {
+            color: C.danger,
+            align: 'center',
+            tracking: 1,
+          });
+          drawText(cv, '토너먼트', x + W / 2, y + 98, { color: C.celadonDeep, align: 'center' });
         } else {
           drawText(cv, 'TRAINING DUMMY', x + W / 2, y + 64, { color: C.text, align: 'center', tracking: 2 });
           drawText(cv, '연습 상대', x + W / 2, y + 84, { color: C.celadonDeep, align: 'center' });

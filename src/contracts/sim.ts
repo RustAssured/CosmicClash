@@ -272,6 +272,8 @@ export interface FighterOptions {
   zdepth?: boolean;
   /** From MatchConfig. Obsolete since D36 (ignored): the colossus is its own titan, 'colossus'. */
   witness?: boolean;
+  /** From MatchConfig: the match's pace (matter damage taken ×). Absent: the fighter's global default (combat PACE). */
+  pace?: number;
 }
 
 export interface FighterTickCtx {
@@ -357,6 +359,8 @@ export interface SlotConfig {
   controller: SlotController;
   /** For 'ai' controllers. */
   aiLevel?: Difficulty;
+  /** The tournament ladder's final boss: the Mouth plays its boss variant (`mouthBossDef`, D35). Ignored for other titans. */
+  boss?: boolean;
 }
 
 export interface MatchConfig {
@@ -379,6 +383,14 @@ export interface MatchConfig {
    * original tendril titan is 'lastone' (displayed as The Witness). Kept so old configs still type-check.
    */
   witness?: boolean;
+  /**
+   * The pace (D34, S11): every blow taken does this much more to the MATTER (`ROUND_LENGTH_PACE`: the Options row ROUND
+   * LENGTH picks it). Fixed for the whole match, so a replay of the config replays the match. Absent: the default
+   * (combat's `PACE.damageTaken`, which is `ROUND_LENGTH_PACE.normal` unless a test or the debug overlay moved it).
+   */
+  pace?: number;
+  /** The round clock in seconds (`ROUND_LENGTH_SECONDS`, with the pace). Absent: ROUND_TIME_TICKS (90 s). */
+  roundSeconds?: number;
 }
 
 export type RoundPhase = 'intro' | 'fight' | 'ko' | 'timeover' | 'roundend' | 'matchend';

@@ -18,6 +18,7 @@ describe('UI settings', () => {
       lastP1: 'planet' as const,
       aiLevel: 6 as const,
       fill: true,
+      roundLength: 'long' as const,
     };
     saveUISettings(store, s);
     expect(loadUISettings(store)).toEqual(s);
@@ -46,6 +47,10 @@ describe('UI settings', () => {
     });
     expect(defaultUISettings().fill).toBe(false); // fill screen is opt-in: crisp whole-number scale by default
     expect(parseUISettings(JSON.stringify({ fill: 'yes' })).fill).toBe(false);
+    // ROUND LENGTH (S11): Normal unless a known length is stored
+    expect(defaultUISettings().roundLength).toBe('normal');
+    expect(parseUISettings(JSON.stringify({ roundLength: 'short' })).roundLength).toBe('short');
+    expect(parseUISettings(JSON.stringify({ roundLength: 'epic' })).roundLength).toBe('normal');
     expect(parseUISettings('not json')).toEqual(defaultUISettings());
     expect(parseUISettings(null)).toEqual(defaultUISettings());
   });

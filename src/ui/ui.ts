@@ -21,6 +21,7 @@ import { createBootScreen } from './screens/boot';
 import { createControllerScreen } from './screens/controller';
 import { createHudScreen } from './screens/hudscreen';
 import { type MatchSetup, type Screen, type TrainingState, type UICtx } from './screens/kit';
+import { createLadderScreen } from './screens/ladder';
 import { createModeScreen } from './screens/mode';
 import { createOptionsScreen } from './screens/options';
 import { createPauseScreen } from './screens/pause';
@@ -75,10 +76,13 @@ class UIRuntime implements GameUI, UICtx {
   private attractAfter: number;
 
   constructor(deps: UIDeps) {
-    this.deps = deps;
+    // the roster is our own copy: an unlock (the tournament's final boss) joins it at runtime
+    this.deps = { ...deps, titans: [...deps.titans] };
     this.input = deps.input;
     this.store = resolveStore(deps.storage);
     this.settings = loadUISettings(this.store);
+    // locked titans are known by name (the tower shows them) but not offered until unlocked
+    for (const t of deps.lockedTitans ?? []) this.titanMap.set(t.id, t);
     for (const t of deps.titans) this.titanMap.set(t.id, t);
     this.readyTitans = new Set(deps.implementedTitans);
     this.readyStages = new Set(deps.implementedStages);
@@ -193,6 +197,12 @@ class UIRuntime implements GameUI, UICtx {
       return;
     }
     this.pendingResults = null;
+    if (this.setup.mode === 'ladder') {
+      // a tournament fight: back to the tower (P1 is always the player), which records the rung and climbs or offers CONTINUE
+      this.stack = ['ladder'];
+      this.enterTop({ result: winner === 0 ? 'win' : 'lose' });
+      return;
+    }
     this.stack = ['results'];
     this.enterTop(winner);
   }
@@ -297,12 +307,12 @@ class UIRuntime implements GameUI, UICtx {
     const config: MatchConfig = {
       seed: seed || 1,
       stage: s.stage,
-      mode: s.mode,
+      mode: s.mode === 'ladder' ? 'vsai' : s.mode,
       slots: [
         { titan: s.p1, controller: 'human' },
         s.mode === 'versus'
           ? { titan: s.p2, controller: 'human' }
-          : s.mode === 'vsai'
+          : s.mode === 'vsai' || s.mode === 'ladder'
             ? { titan: s.p2, controller: 'ai', aiLevel: s.aiLevel }
             : { titan: s.p2, controller: 'dummy' },
       ],
@@ -310,6 +320,17 @@ class UIRuntime implements GameUI, UICtx {
     };
     this.sound('start');
     this.emit({ type: 'startMatch', config });
+  }
+
+  unlockTitan(id: TitanId): boolean {
+    if (this.readyTitans.has(id)) return false;
+    const info = this.deps.lockedTitans?.find((t) => t.id === id) ?? this.titanMap.get(id);
+    if (!info) return false;
+    (this.deps.titans as TitanInfo[]).push(info);
+    this.titanMap.set(id, info);
+    this.readyTitans.add(id);
+    this.deps.onUnlock?.(id);
+    return true;
   }
 
   /* ------------------------------------------------------------------------------------------------ *
@@ -351,6 +372,8 @@ class UIRuntime implements GameUI, UICtx {
         return createResultsScreen();
       case 'hud':
         return createHudScreen();
+      case 'ladder':
+        return createLadderScreen();
     }
   }
 
@@ -387,5 +410,14 @@ export function ditherFade(cv: PixelCanvas, level: number): void {
  * the shipped flow reaches screens only through the menus and the `show*` calls. `params` are the screen's enter params.
  */
 export function showScreen(ui: GameUI, id: UIScreenId, params?: unknown): void {
+  (ui as UIRuntime).stackReset(id, params);
+}
+
+/**
+ * Open a tournament screen in ladder mode (the `?ladder=` dev flag, screenshots, tests): `id` 'ladder' takes the ladder
+ * screen's params (`LadderParams`), 'select' is the ladder's titan pick.
+ */
+export function showLadder(ui: GameUI, id: 'ladder' | 'select', params?: unknown): void {
+  (ui as UIRuntime).setup.mode = 'ladder';
   (ui as UIRuntime).stackReset(id, params);
 }

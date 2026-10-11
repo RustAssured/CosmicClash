@@ -1,5 +1,7 @@
-import { LOGICAL_W } from '@/contracts';
+import { LOGICAL_W, type TitanId } from '@/contracts';
 import { ATTRIBUTE_LABELS, DAMAGE_BLURB } from '../labels';
+import { CLEARED, LADDER_HUNTER, LADDER_RUNGS, ladderFor, loadLadder } from '../ladder';
+import { resolveStore } from '../settings';
 import { C, accentRamp, alpha, greyed } from '../pixel/palette';
 import { chip, drawIcon, panel, segBar } from '../pixel/shapes';
 import { drawText, measureText, wrapClamp } from '../pixel/text';
@@ -35,8 +37,12 @@ export function createSelectScreen(): Screen {
   let locked: [boolean, boolean] = [false, false];
   let phase: 0 | 1 = 0;
   let advanceAt = -1;
+  /** Tournament: the best rung reached per titan (shown on the tiles). */
+  let best: Partial<Record<TitanId, number>> = {};
 
   const two = (ctx: UICtx): boolean => ctx.setup.mode === 'versus';
+  /** Tournament: one pick (yours); the right panel previews that titan's ladder. */
+  const ladder = (ctx: UICtx): boolean => ctx.setup.mode === 'ladder';
   const idx = (ctx: UICtx, id: string): number =>
     Math.max(
       0,
@@ -74,13 +80,23 @@ export function createSelectScreen(): Screen {
       locked = [false, false];
       phase = 0;
       advanceAt = -1;
+      best = {};
+      if (ladder(ctx)) {
+        // 우리 is the tournament's default highlight ("our Liu Kang"); any titan can be picked
+        if (ctx.isTitanReady(LADDER_HUNTER)) cur[0] = idx(ctx, LADDER_HUNTER);
+        best = loadLadder(resolveStore(ctx.deps.storage)).best;
+      }
     },
     update(ctx) {
       if (advanceAt >= 0) {
         if (ctx.t >= advanceAt) {
           ctx.setup.p1 = ctx.deps.titans[cur[0]]!.id;
-          ctx.setup.p2 = ctx.deps.titans[cur[1]]!.id;
           advanceAt = -1;
+          if (ladder(ctx)) {
+            ctx.push('ladder', { start: ctx.setup.p1 });
+            return;
+          }
+          ctx.setup.p2 = ctx.deps.titans[cur[1]]!.id;
           ctx.push('stage');
         }
         return;
@@ -126,7 +142,7 @@ export function createSelectScreen(): Screen {
         return;
       }
       if (n.confirm && tryLock(ctx, s)) {
-        if (phase === 0) phase = 1;
+        if (phase === 0 && !ladder(ctx)) phase = 1;
         else advanceAt = ctx.t + 0.5;
       }
     },
@@ -137,11 +153,18 @@ export function createSelectScreen(): Screen {
         vignette(bg);
       });
       const titans = ctx.deps.titans;
-      const modeText = two(ctx) ? 'VERSUS' : ctx.setup.mode === 'vsai' ? 'VS AI' : 'TRAINING';
+      const modeText = two(ctx)
+        ? 'VERSUS'
+        : ctx.setup.mode === 'vsai'
+          ? 'VS AI'
+          : ladder(ctx)
+            ? 'TOURNAMENT'
+            : 'TRAINING';
       header(ctx, 'SELECT TITAN', '타이탄 선택', modeText);
 
       drawSide(ctx, 0, cur[0], locked[0]);
-      drawSide(ctx, 1, cur[1], locked[1]);
+      if (ladder(ctx)) drawLadderPreview(ctx, cur[0]);
+      else drawSide(ctx, 1, cur[1], locked[1]);
 
       // roster grid
       titans.forEach((t, i) => {
@@ -154,7 +177,16 @@ export function createSelectScreen(): Screen {
         if (spr) cv.blit(spr, x + 4, y + 4);
         if (!ready) drawIcon(cv, 'lock', x + TILE - 10, y + TILE - 9, C.dim);
         const hovered0 = cur[0] === i;
-        const hovered1 = cur[1] === i;
+        const hovered1 = cur[1] === i && !ladder(ctx);
+        const b = best[t.id];
+        if (b !== undefined) {
+          // the best rung this titan reached in the tournament (a star once it cleared it)
+          const label = b >= CLEARED ? '' : `${b}/${LADDER_RUNGS}`;
+          const bw = b >= CLEARED ? 9 : measureText(label, { font: 'micro' }) + 4;
+          cv.rect(x + 2, y + 2, bw, 9, alpha(C.void, 0.85));
+          if (b >= CLEARED) drawIcon(cv, 'star', x + 4, y + 4, C.gold);
+          else drawText(cv, label, x + 4, y + 4, { color: C.soft, font: 'micro' });
+        }
         if (hovered0 || hovered1) {
           const pulse = Math.floor(ctx.t * 4) % 2;
           if (hovered0) cursor(ctx, x, y, TILE, SLOT_COL[0], locked[0], pulse, hovered1 ? 0 : 0);
@@ -177,15 +209,25 @@ export function createSelectScreen(): Screen {
         : locked[0] && locked[1]
           ? 'BOTH READY'
           : 'CHOOSE YOUR TITANS';
-      drawText(cv, who, LOGICAL_W / 2, 268, {
+      // a third row of tiles (eight or nine titans) pushes the line below the grid, without its Korean gloss
+      const rows = Math.ceil(titans.length / 3);
+      const wy = rows > 2 ? GRID_Y + (rows - 1) * (TILE + GAP + 14) + TILE + 14 : 268;
+      drawText(cv, who, LOGICAL_W / 2, wy, {
         color: single && phase === 1 ? C.p2 : C.soft,
         align: 'center',
         tracking: 2,
       });
-      drawText(cv, single ? (phase === 0 ? '타이탄 선택' : '상대 선택') : '타이탄 선택', LOGICAL_W / 2, 284, {
-        color: C.celadonDeep,
-        align: 'center',
-      });
+      if (rows <= 2)
+        drawText(
+          cv,
+          single ? (phase === 0 ? '타이탄 선택' : '상대 선택') : '타이탄 선택',
+          LOGICAL_W / 2,
+          284,
+          {
+            color: C.celadonDeep,
+            align: 'center',
+          },
+        );
       footer(ctx, confirmBack(ctx, 'LOCK IN', 'BACK'));
     },
   };
@@ -214,6 +256,41 @@ export function createSelectScreen(): Screen {
       cv.frame(x - 1, y - 1, s + 2, s + 2, color);
       drawIcon(cv, 'check', x + s - 8, y + 3, color);
     }
+  }
+
+  /** Tournament: the eight rungs the hovered titan would climb (top = the final boss), in the P2 panel's place. */
+  function drawLadderPreview(ctx: UICtx, i: number): void {
+    const cv = ctx.cv;
+    const t = ctx.deps.titans[i]!;
+    const x = LOGICAL_W - 8 - PANEL_W;
+    panel(cv, x, PANEL_Y, PANEL_W, PANEL_H, { accent: C.gold, border: C.line1, fill: alpha(C.ink1, 0.9) });
+    drawText(cv, 'THE LADDER', x + 10, PANEL_Y + 9, { color: C.gold, tracking: 2 });
+    drawText(cv, '사다리', x + PANEL_W - 10, PANEL_Y + 9, { color: C.dim, align: 'right' });
+    const rungs = ladderFor(t.id);
+    const b = best[t.id] ?? 0;
+    const rowH = 28;
+    rungs
+      .slice()
+      .reverse()
+      .forEach((r, k) => {
+        const y = PANEL_Y + 28 + k * rowH;
+        const info = ctx.titan(r.foe);
+        const veiled = r.foe === 'mouth' && !ctx.isTitanReady('mouth');
+        const reached = b >= r.n;
+        const roleCol = r.role === 'final' ? C.danger : r.role === 'subboss' ? C.gold : C.line1;
+        cv.rect(x + 8, y, PANEL_W - 16, rowH - 3, alpha(C.ink0, 0.7));
+        cv.frame(x + 8, y, PANEL_W - 16, rowH - 3, r.role === 'fight' ? C.line0 : alpha(roleCol, 0.6));
+        const spr = portraitSprite(ctx, r.foe, 21, false, veiled ? 1 : reached ? 0 : 0.5);
+        if (spr) cv.blit(spr, x + 10, y + 2);
+        drawText(cv, String(r.n), x + 40, y + 7, { color: C.line2, font: 'micro' });
+        drawText(cv, veiled ? '???' : info.name.replace(/^The /, '').toUpperCase(), x + 50, y + 3, {
+          color: reached ? C.text : C.mid,
+          tracking: 1,
+        });
+        const tag = r.role === 'final' ? 'FINAL BOSS' : r.role === 'subboss' ? 'SUB-BOSS' : '';
+        if (tag) drawText(cv, tag, x + 50, y + 16, { color: roleCol, font: 'micro', tracking: 1 });
+        if (b > r.n) drawIcon(cv, 'check', x + PANEL_W - 18, y + 9, C.celadonDeep);
+      });
   }
 
   function drawSide(ctx: UICtx, s: 0 | 1, i: number, lock: boolean): void {

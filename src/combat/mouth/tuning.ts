@@ -100,13 +100,21 @@ export const MOUTH_GAME = {
   coilR: 40,
   /**
    * to tune (§2 / §7): energy of a blow that counts as power 1. Gate 3A proposed ~600 (a heavy blow ≈ power 2); the first
-   * AI-vs-AI pass across the roster (tools/mouth/duel.ts) lowered it so the roster's blows tell against the jaw-rings.
+   * AI-vs-AI pass across the roster (tools/mouth/duel.ts) lowered it to 360 so the roster's blows tell against the
+   * jaw-rings. S11 (WJ: "the Mouth is too weak"; ROUND LENGTH Normal): 380.
    */
-  eRef: 360,
-  /** to tune (Phase 4): multiplier on all health damage taken (1 = the oracle's numbers; the first AI pass: 1.2). */
-  damageMul: 1.2,
-  /** power clamp per blow (the prototype's clicks are 1–2) */
-  powerMax: 3,
+  eRef: 380,
+  /**
+   * to tune (Phase 4): multiplier on all health damage taken (1 = the oracle's numbers; the first AI pass: 1.2). S11: 0.9 at
+   * the Normal pace (the jaw-rings also take × core.paceMul, so at Short — D34's pace — this is the old 1.2 again; the
+   * bites are what got stronger there).
+   */
+  damageMul: 0.9,
+  /**
+   * power clamp per blow (the prototype's clicks are 1–2). S11: 3 → 2.5, so no single catastrophic blow (the Black Hole's
+   * 6000-energy tide, the colossus's opening fracture) takes more than about half a jaw-ring.
+   */
+  powerMax: 2.5,
   /**
    * to tune (§2: "CONTINUOUS beams apply per tick with power × duration share"): a beam's per-tick energy, summed over its
    * life, is several heavy blows' worth on matter; on the jaw-rings it counts this share (a held gaze ≈ one heavy blow).
@@ -114,14 +122,25 @@ export const MOUTH_GAME = {
   continuousMul: 0.3,
   /** to tune (§2, D30): debris impacts on the capsules count this share of their energy (they still bounce in full). */
   debrisMul: 0.4,
-  /** Bite / sweep bite: a point CRUSH at the mouth centre, r = lip ring (VFX heavy). Energy: to tune (§7 D30 parity). */
+  /**
+   * S11: for this many ticks after a blow it landed, debris that was not thrown does not wound it — the spray of its own bite
+   * (against 우리, whose parts tear out whole round the head, it took more from its own bites than from the foe).
+   */
+  ownSprayTicks: 45,
+  /**
+   * Bite / sweep bite: a point CRUSH at the mouth centre, r = lip ring (VFX heavy). Energy: to tune (§7 D30 parity).
+   * S11: 620 / 520 → 760 / 640 (the foe's matter takes it × its pace, like any blow).
+   */
   biteR: 58,
-  biteEnergy: 620,
-  sweepEnergy: 520,
-  /** Coil: a light CRUSH ring every `coilEvery` ticks; crush: one heavy ring (energy to tune). */
-  coilEnergy: 50,
+  biteEnergy: 760,
+  sweepEnergy: 640,
+  /**
+   * Coil: a light CRUSH ring every `coilEvery` ticks; crush: one heavy ring (energy to tune). Both go through Guard (a grab;
+   * S11). S11: coil 50 → 90 (a grab the foe escapes still costs it), crush 700 → 950.
+   */
+  coilEnergy: 90,
   coilEvery: 12,
-  crushEnergy: 700,
+  crushEnergy: 950,
   /** Grab (§3). */
   grabR: 75,
   /** Held foe: root pulled to the coil centre at this rate (1/s; ≈ 2 Hz, inside the ≤ 4 Hz scale spec). */

@@ -78,6 +78,13 @@ export interface UIDeps {
   now?: () => number;
   /** Idle seconds on the title before attract mode starts (default 60). */
   attractAfterSec?: number;
+  /**
+   * Titans hidden from the select until unlocked (the Mouth, D37): named on the tournament tower, joined to the roster by
+   * `UICtx.unlockTitan` (the ladder, when the final boss falls).
+   */
+  lockedTitans?: readonly TitanInfo[];
+  /** The app persists an unlock (`setMouthUnlocked(true)`) and adds the titan to its own roster. */
+  onUnlock?: (id: TitanId) => void;
 }
 
 export type ImplementedSet = ReadonlySet<string>;

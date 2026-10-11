@@ -42,6 +42,31 @@ export const ROUND_TIME_TICKS = 90 * TICK_HZ;
 export const ROUND_INTRO_TICKS = 2 * TICK_HZ;
 export const ROUND_OUTRO_TICKS = 3 * TICK_HZ;
 
+/** The Options row ROUND LENGTH (S11): it picks the match config's pace (`MatchConfig.pace`). */
+export type RoundLength = 'short' | 'normal' | 'long';
+/**
+ * Pace per round length: every blow taken does this much more to the MATTER (D34's global pace; knock-back, stun, meter and
+ * guard keep their weight). Short is D34's 2.1; WJ (S11): "the rounds perhaps are too quickly over". AI vs AI at the top
+ * level over seven pairings (tools/lead/roundlen.ts), median round: Short 43 s, Normal 65 s (× 1.5), Long 93 s (× 2.2).
+ * Matter does not follow the pace in proportion (a crater saturates; the colossus sheds whole limbs), hence the uneven steps.
+ */
+export const ROUND_LENGTH_PACE: Readonly<Record<RoundLength, number>> = {
+  short: 2.1,
+  normal: 1.3,
+  long: 0.65,
+};
+/**
+ * The titans whose health is not matter (우리's loop, the Mouth's jaw-rings) take blows × (pace ratio) ^ this: matter does not
+ * follow the pace in proportion (a blow's crater saturates), and 0.7 keeps their rounds stretching like everyone else's.
+ */
+export const ANALYTIC_PACE_EXP = 0.7;
+/** The round clock per round length (s): longer rounds need a longer clock, or the long pairings end on time. */
+export const ROUND_LENGTH_SECONDS: Readonly<Record<RoundLength, number>> = {
+  short: 90,
+  normal: 120,
+  long: 180,
+};
+
 /**
  * Hit-stop clamp in ticks: 60–135 ms (4–8 ticks). D27 rebudget: hit-stop is a beat, not the carrier of weight (that is the
  * blow's momentum and torque), so the heavy cap dropped from 220 ms (13 ticks) to 8 ticks. D31-5 / VFX_SPEC item 6: the beat

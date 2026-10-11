@@ -1,6 +1,8 @@
 import {
   ROUND_INTRO_TICKS,
+  TITAN_IDS,
   parseScript,
+  type TitanId,
   type AdeukHarnessApi,
   type HarnessParams,
   type HarnessPerf,
@@ -10,7 +12,7 @@ import {
 } from '@/contracts';
 import { createScriptSource } from '@/sim';
 import { StripRecorder, type StripRequest } from '@/telemetry/strips';
-import { showScreen } from '@/ui';
+import { showLadder, showScreen } from '@/ui';
 import type { App } from './app';
 
 const pct = (a: number[], p: number): number => {
@@ -246,12 +248,38 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
       showScreen(app.ui, screen as Parameters<typeof showScreen>[1]);
     }
   }
+  openLadderFlag(app, location.search);
   // let the scenery finish preparing and draw at least once before declaring ready
   await app.renderer.prepareStage(app.session?.config.stage ?? 'nursery');
   await nextFrame();
   await nextFrame();
   ready = true;
   void ROUND_INTRO_TICKS;
+}
+
+/**
+ * Tournament dev flag (testing and screenshots):
+ *   ?ladder=7                 the tower at rung 7 for 우리 (`&as=planet` picks the player); the run is stored like a real one
+ *   ?ladder=7&view=card       that rung's story card (view=lose: the defeat menu)
+ *   ?ladder=end               the ending with the unlock message (`&as=mouth`: the Mouth's own ending); nothing is unlocked
+ *   ?ladder=select            the tournament's titan select (best rung per titan on the tiles)
+ */
+export function openLadderFlag(app: App, search: string): void {
+  const q = new URLSearchParams(search);
+  const flag = q.get('ladder');
+  if (flag === null) return;
+  // `as`, not the harness's `a` (which would boot a fight)
+  const a = q.get('as');
+  const player = ((TITAN_IDS as readonly string[]).includes(a ?? '') ? a : 'uri') as TitanId;
+  if (flag === 'select') showLadder(app.ui, 'select');
+  else if (flag === 'end') showLadder(app.ui, 'ladder', { ending: { player, unlocked: player !== 'mouth' } });
+  else {
+    const view = q.get('view');
+    showLadder(app.ui, 'ladder', {
+      dev: { player, rung: parseInt(flag, 10) || 1 },
+      view: view === 'card' || view === 'lose' ? view : 'tower',
+    });
+  }
 }
 
 function toBase64(bytes: Uint8ClampedArray): string {

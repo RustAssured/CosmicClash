@@ -3,6 +3,8 @@ import {
   LOGICAL_W,
   ROUNDS_TO_WIN,
   ROUND_INTRO_TICKS,
+  ROUND_LENGTH_PACE,
+  ROUND_LENGTH_SECONDS,
   SLICE,
   emptyInput,
   STAGE_IDS,
@@ -41,7 +43,7 @@ import { TITAN_SKY, createRenderer, type DebuggableRenderer } from '@/render';
 import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
 import { STAGES, isStageImplemented } from '@/stages';
 import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, renderPortrait } from '@/titans';
-import { isMouthUnlocked, mouthDef } from '@/titans';
+import { isMouthUnlocked, mouthBossDef, mouthDef, setMouthUnlocked } from '@/titans';
 import { mouthPortrait } from '@/titans/mouth/portrait';
 import { arenaForMatch } from '@/combat/mouth/arena';
 import { PixelCanvas, createUI, drawText, titanInfoFromDef, type TitanInfo } from '@/ui';
@@ -259,6 +261,13 @@ export class App {
       stages: (opts.full ? STAGE_IDS : this.stageRoster).map((id) => STAGES[id]),
       implementedTitans: this.roster,
       implementedStages: this.stageRoster,
+      // the tournament names the locked Mouth on its tower and unlocks it when the final boss falls
+      lockedTitans: mouthOn ? [] : [titanInfoFromDef(mouthDef())],
+      onUnlock: (id) => {
+        if (id !== 'mouth') return;
+        setMouthUnlocked(true);
+        if (!this.roster.includes('mouth')) this.roster.push('mouth');
+      },
       sound: (id) => this.audio.handle([{ t: 'ui', id }]),
       version: 'v0.1',
     });
@@ -436,22 +445,27 @@ export class App {
 
   /** Synchronous core of startMatch (the stage must already be prepared). Also used by the benchmark to chain fights. */
   buildSession(cfg: MatchConfig, opts: MatchOpts = {}): Session {
+    // the stored Options › ROUND LENGTH (the UI saves it as it changes)
+    const length = loadUISettings(resolveStore(undefined)).roundLength;
     const config: MatchConfig = {
       ...cfg,
       footwork: cfg.footwork ?? this.footwork,
       zdepth: cfg.zdepth ?? this.zdepth,
       witness: cfg.witness ?? this.witness,
+      // the Options row ROUND LENGTH, fixed into the config when the match starts (a config that names its pace keeps it)
+      pace: cfg.pace ?? ROUND_LENGTH_PACE[length],
+      roundSeconds: cfg.roundSeconds ?? ROUND_LENGTH_SECONDS[length],
     };
+    // the tournament's final boss: the Mouth's boss variant (D35) for a slot flagged `boss`
+    const bossMouth = config.slots.some((s) => s.titan === 'mouth' && s.boss);
+    const defOf = (id: TitanId): TitanDef => (id === 'mouth' && bossMouth ? mouthBossDef() : getTitanDef(id));
     // the AI reads the definition the fighter really plays (D36: the colossus is its own titan, so that is getTitanDef)
-    const defs: [TitanDef, TitanDef] = [
-      getTitanDef(config.slots[0].titan),
-      getTitanDef(config.slots[1].titan),
-    ];
+    const defs: [TitanDef, TitanDef] = [defOf(config.slots[0].titan), defOf(config.slots[1].titan)];
     const stage = STAGES[config.stage];
     const match = createMatch(config, {
       createWorld: createMatterWorld,
       createFighter,
-      getTitanDef,
+      getTitanDef: defOf,
       // arena B when the Mouth plays (Gate 3A §1, D37): the stage's width, 360 px tall
       arena: arenaForMatch(stage.arena, [config.slots[0].titan, config.slots[1].titan]),
       // one sky for every titan (D31 / proposal 172 §1): stages keep their own light for their scenery only
@@ -521,11 +535,22 @@ export class App {
 
   /** The debug overlay's knobs and diagnostics for this match (they only read until a player moves a slider). */
   private registerKnobs(s: Session): void {
+    // the PACE knob moves this match's pace on both fighters (each keeps its own copy from the config; the next match takes
+    // the Options row's value again)
+    const fs = s.match.fighters as unknown as { pace?: number }[];
+    const pace = {
+      get damageTaken(): number {
+        return fs.find((f) => typeof f.pace === 'number')?.pace ?? PACE.damageTaken;
+      },
+      set damageTaken(v: number) {
+        for (const f of fs) if (typeof f.pace === 'number') f.pace = v;
+      },
+    };
     registerMatchKnobs(
       s.match.fighters as unknown as KnobFighter[],
       [s.config.slots[0].titan, s.config.slots[1].titan],
       s.ais,
-      PACE,
+      pace,
     );
   }
 

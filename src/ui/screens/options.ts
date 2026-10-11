@@ -1,4 +1,4 @@
-import { LOGICAL_W } from '@/contracts';
+import { LOGICAL_W, type RoundLength } from '@/contracts';
 import type { ConfirmMode, LabelMode } from '@/input';
 import { C, accentRamp, alpha } from '../pixel/palette';
 import { drawIcon, panel } from '../pixel/shapes';
@@ -22,12 +22,16 @@ const ACCENT = accentRamp('#a8bdb2');
 const LABEL_MODES: LabelMode[] = ['auto', 'nintendo', 'xbox', 'playstation'];
 const CONFIRM_MODES: ConfirmMode[] = ['label', 'positional'];
 const QUALITY = ['LOW', 'MEDIUM', 'HIGH'];
+const ROUND_LENGTHS: RoundLength[] = ['short', 'normal', 'long'];
 
 interface Row extends MenuItem {
   kind: 'volume' | 'deadzone' | 'enum' | 'rumble' | 'link' | 'comfort' | 'preset';
 }
 
-/** Options: volumes, deadzone, label mode, confirm mode, rumble, quality, comfort, display fill, and the key/button remap. */
+/**
+ * Options: volumes, deadzone, label mode, confirm mode, rumble, quality, comfort, display fill, round length (the next match's
+ * pace), and the key/button remap.
+ */
 export function createOptionsScreen(): Screen {
   const rows: Row[] = [
     { id: 'master', en: 'MASTER VOLUME', ko: '전체 음량', kind: 'volume' },
@@ -42,6 +46,7 @@ export function createOptionsScreen(): Screen {
     { id: 'flash', en: 'FLASH EFFECTS', ko: '번쩍임', kind: 'comfort' },
     { id: 'reduced', en: 'REDUCED MOTION', ko: '움직임 줄이기', kind: 'preset' },
     { id: 'fill', en: 'FILL SCREEN', ko: '화면 채우기', kind: 'enum' },
+    { id: 'roundLength', en: 'ROUND LENGTH', ko: '라운드 길이', kind: 'enum' },
     { id: 'keys', en: 'CONTROLS & REMAP', ko: '조작 설정', kind: 'link' },
   ];
   const menu = new Menu(rows);
@@ -118,6 +123,14 @@ export function createOptionsScreen(): Screen {
         ctx.sound('tick');
         break;
       }
+      case 'roundLength': {
+        // read when the next match starts (the match config's pace), never during one
+        const i = ROUND_LENGTHS.indexOf(s.roundLength);
+        s.roundLength = ROUND_LENGTHS[(i + dir + ROUND_LENGTHS.length) % ROUND_LENGTHS.length]!;
+        ctx.saveSettings();
+        ctx.sound('tick');
+        break;
+      }
     }
   };
 
@@ -148,6 +161,8 @@ export function createOptionsScreen(): Screen {
         return QUALITY[ctx.settings.quality]!;
       case 'fill':
         return ctx.settings.fill ? 'ON (STRETCHED)' : 'OFF (SHARP)';
+      case 'roundLength':
+        return ctx.settings.roundLength.toUpperCase();
       default:
         return '';
     }
@@ -212,11 +227,11 @@ export function createOptionsScreen(): Screen {
       const w = LOGICAL_W - 220;
       panel(cv, x0 - 16, 44, w + 32, 284, { accent: ACCENT.dim });
       rows.forEach((row, i) => {
-        const y = 54 + i * 21;
+        const y = 54 + i * 19;
         const focus = i === menu.index;
         if (focus) {
-          cv.rect(x0 - 10, y - 5, w + 20, 19, alpha(C.ink3, 0.9));
-          cv.frame(x0 - 10, y - 5, w + 20, 19, ACCENT.dim);
+          cv.rect(x0 - 10, y - 5, w + 20, 18, alpha(C.ink3, 0.9));
+          cv.frame(x0 - 10, y - 5, w + 20, 18, ACCENT.dim);
           drawIcon(cv, 'chevron', x0 - 3, y + 2, ACCENT.base);
         }
         drawText(cv, row.en, x0 + 8, y, { color: focus ? C.white : C.soft, tracking: 1 });

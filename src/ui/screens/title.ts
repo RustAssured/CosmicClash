@@ -23,6 +23,7 @@ export function createTitleScreen(): Screen {
   const menu = new Menu([
     { id: 'versus', en: 'VERSUS', ko: '대전' },
     { id: 'vsai', en: 'VS AI', ko: '인공지능' },
+    { id: 'ladder', en: 'TOURNAMENT', ko: '토너먼트' },
     { id: 'training', en: 'TRAINING', ko: '연습' },
     { id: 'howto', en: 'HOW TO PLAY', ko: '설명' },
     { id: 'controller', en: 'CONTROLLER CHECK', ko: '조작 확인' },
@@ -60,6 +61,11 @@ export function createTitleScreen(): Screen {
           break;
         case 'training':
           ctx.setup.mode = 'training';
+          ctx.push('assign');
+          break;
+        case 'ladder':
+          // the tournament: claim a device, then resume the stored run or pick a titan (src/ui/screens/ladder.ts)
+          ctx.setup.mode = 'ladder';
           ctx.push('assign');
           break;
         case 'howto':

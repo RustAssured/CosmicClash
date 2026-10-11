@@ -3,6 +3,8 @@ import {
   DamageFlag,
   makeLayer,
   rgba,
+  ANALYTIC_PACE_EXP,
+  ROUND_LENGTH_PACE,
   type BlowWeight,
   type DamageEvent,
   type FighterTickCtx,
@@ -873,13 +875,18 @@ export class UriBehaviour extends Behaviour {
     // loop as one blow (at the heaviest volume's power). A hit without a move (debris, a hazard) is a blow of its own.
     const mid = (f as unknown as { incomingMoveId?: string }).incomingMoveId ?? '';
     const same = mid !== '' && mid === this.blowInst && f.tickNo - this.blowAt <= this.blowTicks;
+    // the loop counts blows, not matter, so the match's pace (ROUND LENGTH, S11) scales what a blow costs it: 1 at D34's
+    // pace (Short, where 우리 was balanced), less for the longer rounds. Matter does not take blows in proportion to the pace
+    // (a blow's crater saturates), so the loop follows it at the power 0.7 that keeps 우리's rounds as long as the others'
+    // (AI vs AI, tools/lead/roundlen.ts): × 0.71 at Normal, × 0.57 at Long
+    const paceK = Math.pow(f.pace / ROUND_LENGTH_PACE.short, ANALYTIC_PACE_EXP);
     if (!same) {
       this.blowInst = mid === '' ? null : mid;
       this.blowAt = f.tickNo;
       this.blowPower = power;
-      this.kin.hp = Math.max(0, this.kin.hp - 3 * power);
+      this.kin.hp = Math.max(0, this.kin.hp - 3 * power * paceK);
     } else if (power > this.blowPower) {
-      this.kin.hp = Math.max(0, this.kin.hp - 3 * (power - this.blowPower));
+      this.kin.hp = Math.max(0, this.kin.hp - 3 * (power - this.blowPower) * paceK);
       this.blowPower = power;
     }
     if (key !== URI_PRIMARY) {

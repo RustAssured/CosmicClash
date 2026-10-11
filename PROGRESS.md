@@ -51,6 +51,23 @@ Playable in Training and vs AI, as the player or the AI; locked out of the norma
   14 / 16; rounds mostly 20–60 s. No crashes.
 - **Open (for WJ):** see the S10 report — the safe strip vs foe width, the light rig, balance, the UtilityAI's play against it.
 
+## Round length and the Mouth's threat (S11)
+- **ROUND LENGTH** (Options, under FILL SCREEN): Short / Normal / Long = pace 2.1 / 1.3 / 0.65 and a 90 / 120 / 180 s clock
+  (`ROUND_LENGTH_PACE`, `ROUND_LENGTH_SECONDS` in contracts). The app writes the stored choice into the match config
+  (`MatchConfig.pace`, `roundSeconds`); each fighter keeps its pace for the match. Short = the D34 feel; the cinema pins it.
+  우리's loop and the Mouth's jaw-rings follow the pace at the power 0.7 (`ANALYTIC_PACE_EXP`).
+  AI L6 vs L6, seven pairings, median round: Short 43 s, Normal 65 s (×1.5), Long 93 s (×2.2). `tools/lead/roundlen.ts`.
+- **The Mouth:** eRef 380, damage taken ×0.9 (at Normal; ×1.4 at Short), power cap 2.5, bite / sweep / crush 760 / 640 / 950,
+  coil 90 a tick through Guard (a grab), no wound from its own bite's spray; AI L4–6 space, punish committed foes and grab
+  guarding ones. HUD: no ULT strip for a titan without an Ultimate. L6 vs every titan's L6 at Normal: 59 % (0 % vs the Black
+  Hole); the boss 85 %.
+
+## Tournament ladder (S12)
+Title › TOURNAMENT / 토너먼트: one player climbs eight AI rungs to the boss Mouth (src/ui/ladder.ts order + progress,
+src/ui/screens/ladder.ts tower / cards / ending, story lines in src/ui/ladderStory.ts). Beating the Mouth unlocks it
+(`setMouthUnlocked(true)`); its own ladder ends at 우리. Progress in localStorage `adeuk.ladder.v1`. Dev flag `?ladder=7`
+(`&as=planet`, `&view=card|lose`, `?ladder=end`, `?ladder=select`); stills in docs/gallery/ladder/ (tools/ladder/shots.ts).
+
 ## Next
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.
 - Then a full balance pass.

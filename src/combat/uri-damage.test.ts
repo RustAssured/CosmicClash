@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ANALYTIC_PACE_EXP,
   ANGLE_STEPS,
   DEFAULT_ARENA,
+  ROUND_LENGTH_PACE,
   DEFAULT_LIGHTING,
   parseScript,
   type BlowWeight,
@@ -35,6 +37,9 @@ function uriMatch(dx = 260, seed = 7): { m: Match; u: FighterImpl; beh: UriBehav
       { titan: URI_ID, controller: 'human' },
       { titan: 'planet', controller: 'human' },
     ],
+    // the oracle's numbers (the loop loses 3 × power a blow) hold at D34's pace, ROUND LENGTH Short (S11); the longer
+    // lengths scale them (the first test below)
+    pace: ROUND_LENGTH_PACE.short,
   };
   const m = createMatch(cfg, {
     createWorld: (s) => createMatterWorld(s),
@@ -111,6 +116,18 @@ const front = (
   u.renderLayers({ x0: 0, y0: 0, w: 640, h: 360 }, 1).find((L) => L.id.startsWith('uri-front'))!;
 
 describe('우리 damage and breaking (Gate 2C)', () => {
+  it('the loop pays less a blow at the longer ROUND LENGTHs: × (pace / Short pace) ^ 0.7 (S11)', () => {
+    for (const pace of [ROUND_LENGTH_PACE.normal, ROUND_LENGTH_PACE.long]) {
+      const { u, beh } = uriMatch();
+      u.pace = pace;
+      const b = beh.bodyOf('chamber');
+      const [x, y] = cellWorld(b, liveCells(b)[0]!);
+      blow(beh, x, y, 'heavy');
+      const k = Math.pow(pace / ROUND_LENGTH_PACE.short, ANALYTIC_PACE_EXP);
+      expect(beh.loop).toBeCloseTo(100 - 3 * URI_HIT_POWER.heavy * k, 9);
+    }
+  });
+
   it('20 random hits tear chunks off and leave glowing wounds that ride the moving parts; the loop loses 3 × power each', () => {
     const { m, u, beh, w } = uriMatch();
     const rnd = mulberry(2024);

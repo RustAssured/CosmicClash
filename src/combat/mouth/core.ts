@@ -193,6 +193,11 @@ export class MouthCore {
   prevLabel: MouthBeat = 'watching';
   /** Coil & crush: the fighter decides whether the reach caught the foe (null = always a whiff). */
   grabCheck: ((x: number, y: number, r: number) => boolean) | null = null;
+  /**
+   * The match's pace over the Normal pace (S11, ROUND LENGTH): the health a blow takes scales with it, as the titans' matter
+   * does, so the Mouth's rounds stretch with everyone else's. 1 at Normal (the tuned numbers); the fighter sets it.
+   */
+  paceMul = 1;
   /** The coil spine (9 perimeter control points with depth, world px) for hurtboxes and the keep-out band. */
   readonly coilSpine = new Float64Array(9 * 2);
   private readonly edgeTmp = makeEdge();
@@ -957,7 +962,7 @@ export class MouthCore {
       this.addWound({ part: 'coil', k: Math.floor(R() * 16), u: coilU, len: 9 + power * 4 });
       dmg = 2 * power;
     }
-    dmg *= MOUTH_LIVE.damageMul;
+    dmg *= MOUTH_LIVE.damageMul * this.paceMul;
     // the HUD reads health as four jaw-rings of 25 % each: the ring of the current quarter takes the chip
     const before = D.hp;
     D.hp = Math.max(0, D.hp - dmg);

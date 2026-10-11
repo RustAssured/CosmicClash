@@ -11,6 +11,7 @@ import {
   KO_MASS_FRAC,
   MAX_FIGHTER_DX,
   MAX_FIGHTER_DY,
+  ROUND_LENGTH_PACE,
   LOGICAL_H,
   LOGICAL_W,
   TICK_DT,
@@ -110,10 +111,13 @@ const DEFAULT_SHELL: ShellProfile = { absorb: {} };
  * params), for every titan alike (the ratios between titans stay with each one's `balance` knobs). Only the matter: the
  * knock-back (the world's impulse is divided back out), hit-stun, shudder, meter and guard keep the weight they had, and the
  * hit event keeps the attacker's energy, so sound, lights and hit-stop do not move either.
- * Mutable for the debug overlay (`match.pace`; a global, so a value WJ sets there stays for the following matches too).
- * 2.1 with the AI's 330-tick engagement gap: rounds ≈ 40 s at ≈ 15–16 contacts/min across the roster (D34).
+ * This global is only the DEFAULT: a match passes its own (`MatchConfig.pace`, from the Options row ROUND LENGTH) and each
+ * fighter keeps its value for the whole match (`FighterImpl.pace`); a fighter built without one takes this. Tests that want the
+ * matter's own scale set it to 1.
+ * D34: 2.1 with the AI's 330-tick engagement gap (rounds ≈ 40 s); S11: the default is `ROUND_LENGTH_PACE.normal` (≈ 1.6×
+ * longer rounds); 2.1 is now ROUND LENGTH Short.
  */
-export const PACE = { damageTaken: 2.1 };
+export const PACE = { damageTaken: ROUND_LENGTH_PACE.normal };
 
 const makeStats = (): EffectiveStats => ({ speedMul: 1, damageMul: 1, mass: 5, reachMul: 1, tempoMul: 1 });
 
@@ -280,6 +284,11 @@ export class FighterImpl implements Fighter {
   tickNo = 0;
   /** Per-titan body-weight tuning (defaults from mass; the JSON `feel` block overrides). */
   readonly feel: Feel;
+  /**
+   * This match's pace (matter damage taken ×): the match config's (`MatchConfig.pace`, the Options row ROUND LENGTH), else
+   * the global `PACE` as the fighter was built. Fixed per match (the debug overlay's PACE knob writes it on both fighters).
+   */
+  pace: number;
   /** Locomotion model and the depth-offset prototype (MatchConfig.footwork / zdepth). */
   readonly footwork: 'classic' | 'orbit';
   readonly zdepth: boolean;
@@ -500,6 +509,7 @@ export class FighterImpl implements Fighter {
     const acc2 = hex(opts.def.ui.accent2);
     this.sparkRamp = [0xffffffff, acc2, acc, (acc & 0x00ffffff) | 0x99000000];
     this.feel = resolveFeel(opts.def);
+    this.pace = opts.pace ?? PACE.damageTaken;
     this.particleSpawn = {
       kind: 'spark',
       x: 0,
@@ -2865,7 +2875,7 @@ export class FighterImpl implements Fighter {
     // the move the incoming blow belongs to, for a behaviour that counts blows rather than volumes (우리's loop)
     this.incomingMoveId = info.moveId;
     // the global pace scales what the blow does to the matter only: knock-back, stun, shudder, meter and guard keep the weight
-    const pace = PACE.damageTaken;
+    const pace = this.pace;
     if (e.energy >= 0.5) {
       if (pace === 1) dr = this.applyWorldDamage(e);
       else {

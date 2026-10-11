@@ -27,7 +27,8 @@ export interface TrainingState {
 }
 
 export interface MatchSetup {
-  mode: 'versus' | 'vsai' | 'training';
+  /** 'ladder' = the single-player tournament (its matches are VS AI matches the ladder screen starts itself). */
+  mode: 'versus' | 'vsai' | 'training' | 'ladder';
   aiLevel: Difficulty;
   p1: TitanId;
   p2: TitanId;
@@ -70,6 +71,8 @@ export interface UICtx {
   /** The device the player last touched (for prompt glyphs). */
   promptDevice(): DeviceInfo | null;
   startMatch(): void;
+  /** Join a locked titan (`UIDeps.lockedTitans`) to the select for good; true if it was locked until now. */
+  unlockTitan(id: TitanId): boolean;
 }
 
 export interface Screen {

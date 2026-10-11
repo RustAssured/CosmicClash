@@ -38,6 +38,10 @@ export function buildShotMatch(m: ShotMatch, stage: StageId): Match {
     footwork: 'orbit',
     zdepth: false,
     witness: true,
+    // pinned to the D34 pace and clock the press scans were found at (S11 made ROUND LENGTH Normal the default), so every
+    // shot still replays tick for tick
+    pace: 2.1,
+    roundSeconds: 90,
   };
   // D36: the colossus is its own titan ('colossus'), so every fighter plays getTitanDef's definition
   const defOf = (id: TitanId): TitanDef => getTitanDef(id);

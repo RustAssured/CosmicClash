@@ -174,7 +174,7 @@ describe('comfort options', () => {
     r.step(3);
     r.tap(pad, Pad.EAST);
     r.step(20);
-    for (let i = 0; i < 5; i++) r.tap(pad, Pad.DOWN); // → OPTIONS
+    for (let i = 0; i < 6; i++) r.tap(pad, Pad.DOWN); // → OPTIONS
     r.tap(pad, Pad.EAST);
     expect(r.ui.screen).toBe('options');
     r.drain();
@@ -258,7 +258,8 @@ describe('onboarding', () => {
     r.step(10);
     r.tap(pad, Pad.DOWN);
     r.tap(pad, Pad.DOWN);
-    r.tap(pad, Pad.DOWN); // → HOW TO PLAY
+    r.tap(pad, Pad.DOWN);
+    r.tap(pad, Pad.DOWN); // → HOW TO PLAY (after TOURNAMENT)
     r.tap(pad, Pad.EAST);
     r.draw();
     expect(inkCount(r.ui, 0, 0, LOGICAL_W, LOGICAL_H)).toBeGreaterThan(2000);
@@ -373,7 +374,8 @@ describe('match setup flow', () => {
     const pad = r.pads.plug(proStandard());
     toTitle(r, pad);
     r.tap(pad, Pad.DOWN);
-    r.tap(pad, Pad.DOWN); // TRAINING
+    r.tap(pad, Pad.DOWN);
+    r.tap(pad, Pad.DOWN); // TRAINING (after TOURNAMENT)
     r.tap(pad, Pad.EAST);
     expect(r.ui.screen).toBe('assign');
     r.tap(pad, Pad.SOUTH);
@@ -736,6 +738,25 @@ describe('options', () => {
     expect(JSON.parse(r.store.data.get(UI_STORAGE_KEY)!).fill).toBe(true);
     r.tap(pad, Pad.EAST);
     expect(r.drain().filter((a) => a.type === 'setDisplay')).toEqual([{ type: 'setDisplay', fill: false }]);
+  });
+  it('ROUND LENGTH is Normal by default, cycles Short / Normal / Long and persists (read at the next match start)', () => {
+    const r = rig();
+    const pad = r.pads.plug(proStandard());
+    showScreen(r.ui, 'options');
+    r.step(20);
+    r.drain();
+    for (let i = 0; i < 12; i++) r.tap(pad, Pad.DOWN); // … FILL SCREEN, then ROUND LENGTH
+    const stored = (): unknown => JSON.parse(r.store.data.get(UI_STORAGE_KEY)!).roundLength;
+    r.tap(pad, Pad.RIGHT);
+    expect(stored()).toBe('long');
+    r.tap(pad, Pad.RIGHT);
+    expect(stored()).toBe('short');
+    r.tap(pad, Pad.LEFT);
+    expect(stored()).toBe('long');
+    r.tap(pad, Pad.EAST);
+    expect(stored()).toBe('short');
+    // nothing is emitted: the app reads the stored value into the next match's config (pace and clock)
+    expect(r.drain()).toEqual([]);
   });
 });
 

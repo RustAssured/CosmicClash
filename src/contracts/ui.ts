@@ -37,7 +37,9 @@ export type UIScreenId =
   | 'hud'
   | 'pause'
   | 'results'
-  | 'attract';
+  | 'attract'
+  /** The tournament ladder (src/ui/screens/ladder.ts): the tower, the story cards, the ending. */
+  | 'ladder';
 
 /** Pixel-art UI/HUD. Renders into ONE screen-space layer at logical resolution (crisp, composited last). */
 export interface GameUI {

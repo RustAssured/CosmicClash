@@ -1,4 +1,11 @@
-import { STAGE_IDS, TITAN_IDS, type Difficulty, type StageId, type TitanId } from '@/contracts';
+import {
+  STAGE_IDS,
+  TITAN_IDS,
+  type Difficulty,
+  type RoundLength,
+  type StageId,
+  type TitanId,
+} from '@/contracts';
 import { browserStore, type KeyValueStore } from '@/input';
 
 /** UI preferences. Volumes are integer steps 0..10. Stored under one versioned key; garbage and blocked storage are tolerated. */
@@ -20,7 +27,11 @@ export interface UISettings {
   matches: number;
   /** Display: stretch the frame to fill the screen (non-integer nearest fit). Off = crisp whole-number scale. */
   fill: boolean;
+  /** Gameplay: ROUND LENGTH (S11) — the match config's pace (`ROUND_LENGTH_PACE`), fixed when a match starts. */
+  roundLength: RoundLength;
 }
+
+const ROUND_LENGTHS: readonly RoundLength[] = ['short', 'normal', 'long'];
 
 export const UI_STORAGE_KEY = 'adeuk.ui.v1';
 
@@ -38,6 +49,7 @@ export const defaultUISettings = (): UISettings => ({
   seenHowTo: false,
   matches: 0,
   fill: false,
+  roundLength: 'normal',
 });
 
 const int = (v: unknown, lo: number, hi: number, d: number): number =>
@@ -70,6 +82,9 @@ export function parseUISettings(raw: string | null): UISettings {
     seenHowTo: o.seenHowTo === true,
     matches: int(o.matches, 0, 100000, d.matches),
     fill: o.fill === true,
+    roundLength: ROUND_LENGTHS.includes(o.roundLength as RoundLength)
+      ? (o.roundLength as RoundLength)
+      : d.roundLength,
   };
 }
 

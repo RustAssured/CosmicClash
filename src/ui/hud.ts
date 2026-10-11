@@ -159,8 +159,8 @@ function drawSide(ctx: UICtx, hud: HudState, slot: 0 | 1, view: FighterView): vo
   if (mh) drawStrands(cv, tx, 33, mh, right);
   else drawResource(ctx, def.resource.name.toUpperCase(), def.resource.display, view, ramp, tx, 33, right);
 
-  // ultimate meter + guard on the bottom strip
-  drawStrip(ctx, view, ramp, right ? LOGICAL_W - 8 : 8, right);
+  // ultimate meter + guard on the bottom strip (none for a titan with no Ultimate: the Mouth)
+  if (!def.unboundSlots?.includes('ultimate')) drawStrip(ctx, view, ramp, right ? LOGICAL_W - 8 : 8, right);
 }
 
 function drawResource(

@@ -41,6 +41,8 @@ function duel(
       { titan: 'uri', controller: 'human' },
       { titan: 'planet', controller: 'human' },
     ],
+    // D34's pace (ROUND LENGTH Short, S11), where the oracle's "3 × power a blow" holds
+    pace: 2.1,
   };
   const m = createMatch(cfg, {
     createWorld: (s) => createMatterWorld(s),

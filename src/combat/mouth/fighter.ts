@@ -3,6 +3,8 @@ import {
   BLOW_SHAKE_PX,
   Btn,
   DamageFlag,
+  ANALYTIC_PACE_EXP,
+  ROUND_LENGTH_PACE,
   Rng,
   TICK_DT,
   clamp,
@@ -36,6 +38,7 @@ import { resolveMaterials } from '@/titans/materialTable';
 import { isMouthBossDef } from '@/titans/mouth/def';
 import type { RenderLayerMouth } from '@/render/mouthPass';
 import type { HitInfo } from '../behaviour';
+import { PACE } from '../fighter';
 import { MouthCore, type MouthStepOut } from './core';
 import { MouthGeom } from './geom';
 import { MouthHurt } from './hurt';
@@ -115,6 +118,19 @@ export class MouthFighter implements Fighter {
   /** The match knobs' balance handles (src/debug/matchKnobs.ts). */
   readonly feel = { power: 1, durability: 1, knockMul: 1 };
   readonly behaviour = null;
+  /**
+   * This match's pace (MatchConfig.pace, the Options row ROUND LENGTH; S11). The titans' pace scales the matter a blow takes;
+   * the Mouth is not matter, so its jaw-ring health takes blows × pace / the Normal pace (core.paceMul) instead. Its own
+   * blows go through the foe's `receive`, which applies the foe's pace.
+   */
+  get pace(): number {
+    return this.paceV;
+  }
+  set pace(v: number) {
+    this.paceV = v;
+    this.core.paceMul = Math.pow(v / ROUND_LENGTH_PACE.normal, ANALYTIC_PACE_EXP);
+  }
+  private paceV = ROUND_LENGTH_PACE.normal;
   private readonly rng: Rng;
   private readonly out: MouthStepOut = { impact: null, coiling: false, ended: false };
 
@@ -202,6 +218,7 @@ export class MouthFighter implements Fighter {
       rand: () => this.rng.next(),
     });
     this.core.grabCheck = (x, y, r) => this.grabCheck(x, y, r);
+    this.pace = opts.pace ?? PACE.damageTaken;
     // the stand-in body: one cell, parked far outside the arena, no debris impacts (the Mouth is analytic)
     const map = createMatterMap(4, 4);
     const i = 2 * 4 + 2;
@@ -409,8 +426,13 @@ export class MouthFighter implements Fighter {
     const n = w.drainCapsuleHits(this.slot, this.debrisHits);
     if (n === 0 || this.ko) return;
     const H = this.debrisHits;
+    // the spray of its own blow (the chunks a bite or crush just tore out of the foe, all round the head) does not wound it on
+    // the way out (S11: against 우리, whose parts tear out whole, it took more from its own bites than from the foe); a
+    // thrown chunk always counts
+    const ownSpray = this.tickNo - this.lastDealtTick <= MOUTH_LIVE.ownSprayTicks;
     for (let i = 0; i < n; i++) {
       const o = i * 6;
+      if (ownSpray && H[o + 4] === 0) continue;
       const part = H[o + 3] === 0 ? 'head' : H[o + 3] === 1 ? 'neck' : 'coil';
       const power = Math.min(MOUTH_LIVE.powerMax, (H[o + 2]! / MOUTH_LIVE.eRef) * MOUTH_LIVE.debrisMul);
       if (power < 0.02) continue;
@@ -427,6 +449,8 @@ export class MouthFighter implements Fighter {
     if (this.core.dmg.ko && !this.ko) this.enterKo();
   }
   private knobsOn = false;
+  /** Tick of the last blow it landed (its own spray, `takeDebris`). */
+  private lastDealtTick = -1e9;
   private readonly capBuf = new Float64Array(48 * 6);
   private readonly debrisHits: number[] = [];
 
@@ -583,11 +607,19 @@ export class MouthFighter implements Fighter {
     r.y = m.tgY;
     r.r0 = Math.max(4, fr - 14);
     r.r1 = fr + 14;
-    this.deliver(r, MOUTH_LIVE.crushEnergy * this.rageMul(), 0, -1, 0, 'heavy', 'mouth.coil', {
-      crater: 12,
-      compress: 14,
-      scatter: 1.1,
-    });
+    // a grab: the coils close round the core, so Guard does not stop the crush (the escapes are a Surge early in the coil or
+    // cutting the wrapped neck, S11)
+    this.deliver(
+      r,
+      MOUTH_LIVE.crushEnergy * this.rageMul(),
+      0,
+      -1,
+      0,
+      'heavy',
+      'mouth.coil',
+      { crater: 12, compress: 14, scatter: 1.1 },
+      DamageFlag.UNBLOCKABLE,
+    );
   }
 
   private coilStrike(): void {
@@ -598,10 +630,17 @@ export class MouthFighter implements Fighter {
     r.y = m.tgY;
     r.r0 = Math.max(4, fr - 10);
     r.r1 = fr + 10;
-    this.deliver(r, MOUTH_LIVE.coilEnergy * this.rageMul(), 0, -1, 0, 'light', 'mouth.coil', {
-      crater: 4,
-      compress: 5,
-    });
+    this.deliver(
+      r,
+      MOUTH_LIVE.coilEnergy * this.rageMul(),
+      0,
+      -1,
+      0,
+      'light',
+      'mouth.coil',
+      { crater: 4, compress: 5 },
+      DamageFlag.UNBLOCKABLE,
+    );
   }
 
   /** Probe the foe and hand it the blow (the FighterImpl.strike / afterHit path, minus the matter body). */
@@ -614,6 +653,7 @@ export class MouthFighter implements Fighter {
     weight: BlowWeight,
     moveId: string,
     params: DamageEvent['params'],
+    flags = 0,
   ): boolean {
     const foe = this.foe;
     if (!foe || !this.live) return false;
@@ -632,7 +672,7 @@ export class MouthFighter implements Fighter {
     e.sourceBodyId = -1;
     e.originX = this.core.hdX;
     e.originY = this.core.hdY;
-    e.flags = fv.integrityPct < 24 ? DamageFlag.FINISHER : 0;
+    e.flags = (fv.integrityPct < 24 ? DamageFlag.FINISHER : 0) | flags;
     e.params = params;
     e.weight = weight;
     const info = this.hitInfo;
@@ -646,6 +686,7 @@ export class MouthFighter implements Fighter {
     info.moveId = moveId;
     const res = foe.receive(e, this, this.events);
     if (!res.connected) return false;
+    this.lastDealtTick = this.tickNo;
     this.afterHit(res, e, info, weight);
     return true;
   }

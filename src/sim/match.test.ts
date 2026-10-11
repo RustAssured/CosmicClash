@@ -102,6 +102,23 @@ describe('Match phases', () => {
     expect(m.wins).toEqual([0, 1]);
   });
 
+  it('the config sets the round clock and hands its pace to both fighters (Options › ROUND LENGTH)', () => {
+    const paces: (number | undefined)[] = [];
+    const deps = fakeDeps();
+    const make = deps.createFighter;
+    deps.createFighter = (o) => (paces.push(o.pace), make(o));
+    const m = createMatch(cfg({ pace: 1.3, roundSeconds: 120 }), deps);
+    expect(paces).toEqual([1.3, 1.3]);
+    expect(m.roundTicksLeft).toBe(120 * 60);
+    fighter(m, 0).view.integrityPct = 40;
+    run(m, ROUND_INTRO_TICKS + ROUND_TIME_TICKS + 5);
+    expect(m.phase).toBe('fight'); // 90 s is not the clock any more
+    run(m, 30 * 60);
+    expect(m.phase === 'timeover' || m.phase === 'roundend').toBe(true);
+    // without them: the default clock, and the fighters take their own default pace
+    expect(createMatch(cfg(), fakeDeps()).roundTicksLeft).toBe(ROUND_TIME_TICKS);
+  });
+
   it('training (infinite) never ends the round and rebuilds a KO’d fighter', () => {
     const m = createMatch(cfg({ mode: 'training', infinite: true }), fakeDeps());
     run(m, ROUND_INTRO_TICKS + 1);

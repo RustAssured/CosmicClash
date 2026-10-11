@@ -8,6 +8,7 @@ import {
   ROUND_OUTRO_TICKS,
   ROUND_TIME_TICKS,
   Rng,
+  TICK_HZ,
   clamp,
   emptyInput,
   hash32,
@@ -97,6 +98,7 @@ export class Match implements MatchApi {
     this.arena = deps.arena;
     this.lighting = deps.lighting;
     this.stage = config.stage;
+    this.roundTicksLeft = this.roundTicks();
     this.rng = new Rng(config.seed);
     this.fighterRng = [this.rng.fork('f0'), this.rng.fork('f1')];
     this.world = deps.createWorld(this.rng.fork('world').nextU32());
@@ -117,6 +119,7 @@ export class Match implements MatchApi {
         footwork: config.footwork ?? 'classic',
         zdepth: !!config.zdepth,
         witness: !!config.witness,
+        pace: config.pace,
       });
     this.fighters = [mk(0), mk(1)];
 
@@ -151,6 +154,12 @@ export class Match implements MatchApi {
       comets: this.hazards ? this.hazards.comets : NO_COMETS,
     };
     this.emit({ t: 'round', phase: 'intro', round: 1, winner: -1 });
+  }
+
+  /** The round clock (MatchConfig.roundSeconds, the Options row ROUND LENGTH; else ROUND_TIME_TICKS). */
+  private roundTicks(): number {
+    const s = this.config.roundSeconds;
+    return s && s > 0 ? Math.round(s * TICK_HZ) : ROUND_TIME_TICKS;
   }
 
   /** Ticks since the current round went live. */
@@ -360,7 +369,7 @@ export class Match implements MatchApi {
       return;
     }
     this.round++;
-    this.roundTicksLeft = ROUND_TIME_TICKS;
+    this.roundTicksLeft = this.roundTicks();
     this._roundTick = 0;
     this.roundWinner = -1;
     this.resetFighters(ROUND_HEAL_FRACTION);
