@@ -48,15 +48,19 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
       expect(e.peakDb, e.name).toBeLessThan(-80);
       continue;
     }
-    expect(e.peakDb, `${e.name} is inaudible`).toBeGreaterThan(-30);
+    // (menu sounds are held against the menu score below instead)
+    if (!e.name.startsWith('ui ')) expect(e.peakDb, `${e.name} is inaudible`).toBeGreaterThan(-30);
     // D6 re-stage (slice Phase 1): impacts no longer pass a compressor; the lookahead true-peak limiter owns the
     // ceiling and takes 2–5 dB off the heaviest blows by design, so pre-limiter peaks up to ~+2 dB are expected
     expect(e.peakDb, `${e.name} is far too hot before the limiter`).toBeLessThan(4);
     expect(e.tailSec, `${e.name} never decays`).toBeLessThan(6);
   }
-  // menu sounds sit above the menu score (calm score ≈ −28 dB rms): audible, but the biggest ones are not louder than a KO
+  // menu sounds sit above the menu score: audible, but the biggest ones are not louder than a KO. Held against the measured
+  // calm score rather than a fixed level: the D6 / D34 calibrations brought the whole mix down (calm score ≈ −28 dB rms when
+  // this was −26 dB, ≈ −39 dB now, with the UI bus at −6 dB), and the menu is heard over the score, not against full scale.
+  // The margin is 6 dB (it was 2 dB against the old fixed floor).
   for (const e of r.events.filter((x) => x.name.startsWith('ui ')))
-    expect(e.peakDb, e.name).toBeGreaterThan(-26);
+    expect(e.peakDb, `${e.name} is lost under the menu score`).toBeGreaterThan(r.scoreCalmRmsDb + 6);
   expect(r.uiPeakDb).toBeLessThan(-3);
 
   // --- the safety net
@@ -119,11 +123,12 @@ test('audio engine: numeric verification in a real browser', async ({ page }) =>
     4,
   );
 
-  // --- the five stage scores: five characters, in key, and intensity adds music rather than gain
+  // --- the stage scores (seven since Mausoleum and Shearfield joined in Phase 2): distinct characters, in key, and intensity
+  // adds music rather than gain
   const st = r.stages!;
   const S = Object.fromEntries(st.stages.map((m) => [m.stage, m]));
   const fighting = [S.nursery!, S.rim!, S.redgiant!, S.quasar!];
-  expect(st.stages).toHaveLength(5);
+  expect(st.stages).toHaveLength(7);
   expect(st.minPairDistance, 'two stages sound alike').toBeGreaterThan(0.8);
   for (const m of st.stages) {
     expect(m.calmBassFitCents, `${m.stage} drone is out of key`).toBeLessThan(35);

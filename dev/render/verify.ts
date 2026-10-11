@@ -55,6 +55,16 @@ const log = (r: Result): void => {
 };
 const check = (name: string, ok: boolean, detail = ''): void => log({ name, ok, detail });
 
+/**
+ * A software rasteriser (SwiftShader in headless CI, llvmpipe, Microsoft Basic Render) rather than a GPU. A timer query is NOT
+ * a GPU tell: current Chromium exposes EXT_disjoint_timer_query_webgl2 on SwiftShader too, timing the CPU rasteriser.
+ */
+const softwareGl = (gl: WebGL2RenderingContext): boolean => {
+  const info = gl.getExtension('WEBGL_debug_renderer_info');
+  const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+  return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
+};
+
 const view: ViewRect = { x0: 300, y0: 100, w: LOGICAL_W, h: LOGICAL_H };
 const cam = (over: Partial<CameraState> = {}): CameraState => ({
   x: 620,
@@ -705,10 +715,15 @@ async function sliceChecks(r: DebuggableRenderer, canvas: HTMLCanvasElement): Pr
     const c0 = performance.now();
     for (let i = 0; i < 24; i++) rotRasterAt({ ...bigPart, step: (i * 11) % ANGLE_STEPS });
     const msCpu = (performance.now() - c0) / 24;
+    // the 4 ms budget is a GPU budget (proposal 151 measured 1.70 ms on a real GPU); in software GL the "GPU" time is
+    // SwiftShader rasterising on the CPU (~30 ms on a laptop), which says nothing about it, so there the cost is only reported
+    const software = softwareGl(gl);
     check(
-      'rotation spike: cost of 24 rotated 64×96 parts per frame (GPU) and of one CPU-twin mask (64×96)',
-      (msGpu ?? msWall) < 4,
-      `GPU ${msGpu === null ? 'n/a' : msGpu.toFixed(3)} ms per frame of 24 parts (timer query), wall ${msWall.toFixed(2)} ms incl. read-back sync; CPU twin ${msCpu.toFixed(2)} ms per mask`,
+      software
+        ? 'rotation spike: cost of 24 rotated 64×96 parts per frame and of one CPU-twin mask (64×96), reported only (software GL, no GPU budget)'
+        : 'rotation spike: cost of 24 rotated 64×96 parts per frame (GPU) and of one CPU-twin mask (64×96)',
+      software || (msGpu ?? msWall) < 4,
+      `GPU ${msGpu === null ? 'n/a' : msGpu.toFixed(3)} ms per frame of 24 parts (timer query${software ? ', software GL' : ''}), wall ${msWall.toFixed(2)} ms incl. read-back sync; CPU twin ${msCpu.toFixed(2)} ms per mask`,
     );
     pass.dispose();
     big.dispose();
@@ -1628,8 +1643,10 @@ async function main(): Promise<void> {
         await new Promise((res) => requestAnimationFrame(() => res(null)));
       }
       // in software GL every frame misses, so it must walk down to 0 and stay; on a real GPU (a timer query exists) the frames
-      // are fast, so it may hold or step UP — what is checked there is only that it is wired (auto, starts at 1, reports)
-      const realGpu = ra.stats.gpuMs !== null;
+      // are fast, so it may hold or step UP — what is checked there is only that it is wired (auto, starts at 1, reports).
+      // SwiftShader has a timer query too, so the timer alone does not make a real GPU.
+      const gl2 = c2.getContext('webgl2');
+      const realGpu = ra.stats.gpuMs !== null && !(gl2 && softwareGl(gl2));
       check(
         realGpu
           ? 'adaptive quality (auto) starts at tier 1 and adapts on the real GPU (timer query wired)'

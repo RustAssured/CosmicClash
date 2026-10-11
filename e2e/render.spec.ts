@@ -26,12 +26,19 @@ test.afterAll(async () => {
 const SHOTS = '.scratch/e2e';
 const STAGES = ['nursery', 'rim', 'redgiant', 'quasar', 'tussenruimte'] as const;
 
-/** Console problems are collected, not thrown, so the test can report them with the check that provoked them. */
-function watchConsole(page: Page): string[] {
+/**
+ * Console problems are collected, not thrown, so the test can report them with the check that provoked them. `ignore` lists
+ * notes a page provokes on purpose.
+ */
+function watchConsole(page: Page, ignore?: RegExp): string[] {
   const problems: string[] = [];
   page.on('console', (m) => {
     const t = m.text();
-    if ((m.type() === 'error' || m.type() === 'warning') && !/Failed to load resource|context lost/i.test(t))
+    if (
+      (m.type() === 'error' || m.type() === 'warning') &&
+      !/Failed to load resource|context lost/i.test(t) &&
+      !ignore?.test(t)
+    )
       problems.push(`console.${m.type()}: ${t}`);
   });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
@@ -46,7 +53,9 @@ interface VerifyResult {
 
 test('GPU conformance: every check of dev/render/verify.ts passes', async ({ page }) => {
   test.setTimeout(20 * 60_000);
-  const problems = watchConsole(page);
+  // the suite reads pixels back synchronously on purpose (pixel-exact comparisons, timing that waits for the GPU), and ANGLE
+  // reports each such wait as a performance note ("GPU stall due to ReadPixels"): expected here, not a renderer problem
+  const problems = watchConsole(page, /GPU stall due to ReadPixels/);
   await page.goto(`${base}/dev/render/verify.html`, { waitUntil: 'commit' });
   await page.waitForFunction('window.__VERIFY__ && window.__VERIFY__.done', null, { timeout: 18 * 60_000 });
   const v = (await page.evaluate('window.__VERIFY__')) as {
