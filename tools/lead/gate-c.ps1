@@ -14,6 +14,6 @@ npx tsx tools/lead/rtcapture.ts latency-lastone --record=0 --overlay=0 @o
 npx tsx tools/lead/rtcapture.ts latency-planet --record=0 --overlay=0 @o
 # 4. deterministic 60 fps reference clips (what the game draws; no capture artefacts)
 foreach ($st in 'mausoleum','shearfield') {
-  npx tsx tools/lead/refrender.ts --params="mode=aivai&a=lastone&b=planet&stage=$st&seed=21&ai=4" --seconds=60 --name=witness-planet-$st --out=evidence/gate-c
+  npx tsx tools/lead/refrender.ts --params="mode=aivai&a=colossus&b=planet&stage=$st&seed=21&ai=4" --seconds=60 --name=witness-planet-$st --out=evidence/gate-c
 }
-npx tsx tools/lead/refrender.ts --params="mode=training&a=lastone&b=planet&stage=mausoleum&p1=dummy&p2=dummy&seed=3&script0=0:up*200,200:down*240,440:up*200" --seconds=8 --skip=1 --name=passover --out=evidence/gate-c
+npx tsx tools/lead/refrender.ts --params="mode=training&a=colossus&b=planet&stage=mausoleum&p1=dummy&p2=dummy&seed=3&script0=0:up*200,200:down*240,440:up*200" --seconds=8 --skip=1 --name=passover --out=evidence/gate-c

@@ -16,6 +16,8 @@ import { drawText, measureText } from './pixel/text';
 import { band, type UICtx } from './screens/kit';
 import { drawHint } from './hint';
 import { drawTraining } from './training';
+import { drawJawEmblem, drawStrands, mouthHudOf } from './mouthHud';
+import { portraitSprite } from './screens/kit';
 
 /**
  * In-fight HUD. Minimal and never over the fight: portraits + integrity at the top corners, the round clock top-centre,
@@ -117,9 +119,15 @@ function drawSide(ctx: UICtx, hud: HudState, slot: 0 | 1, view: FighterView): vo
   cv.rect(px0, py0, PORTRAIT_PX, PORTRAIT_PX, alpha(C.ink0, 0.82));
   cv.frame(px0, py0, PORTRAIT_PX, PORTRAIT_PX, view.ko ? C.dangerDeep : C.line1);
   cv.corners(px0, py0, PORTRAIT_PX, PORTRAIT_PX, ramp.base, 4);
-  cv.blit(c.ghost, px0 + 1, py0 + 1);
   const shake = view.freezeTicks > 0 ? view.freezeTicks & 1 : 0;
-  cv.blit(c.live, px0 + 1 + shake, py0 + 1);
+  // the Mouth (D37) is not matter: its portrait is its head, its health the jaw-ring emblem below
+  const mh = mouthHudOf(view);
+  const mp = mh ? portraitSprite(ctx, view.titan, PORTRAIT_PX - 2, right) : null;
+  if (mp) cv.blit(mp, px0 + 1 + shake, py0 + 1);
+  else {
+    cv.blit(c.ghost, px0 + 1, py0 + 1);
+    cv.blit(c.live, px0 + 1 + shake, py0 + 1);
+  }
   if (frac < 0.25 && !view.ko && Math.sin(ctx.t * 12) > 0)
     cv.frame(px0 + 1, py0 + 1, PORTRAIT_PX - 2, PORTRAIT_PX - 2, alpha(C.danger, 0.7));
 
@@ -138,7 +146,8 @@ function drawSide(ctx: UICtx, hud: HudState, slot: 0 | 1, view: FighterView): vo
     low && Math.sin(ctx.t * 10) > 0
       ? { ...ramp, base: C.danger, light: mixRgb(C.danger, C.white, 0.4), dim: C.dangerDeep }
       : ramp;
-  meterBar(cv, bx, 21, INTEGRITY_W, 7, frac, barRamp, { ticks: true, ghost: c.trail, rtl: right });
+  if (mh) drawJawEmblem(cv, bx, 17, INTEGRITY_W, mh, barRamp, right, ctx.t);
+  else meterBar(cv, bx, 21, INTEGRITY_W, 7, frac, barRamp, { ticks: true, ghost: c.trail, rtl: right });
   const pct = `${Math.round(view.integrityPct)}%`;
   drawText(cv, pct, right ? bx - 5 : bx + INTEGRITY_W + 5, 22, {
     color: low ? C.danger : C.soft,
@@ -146,8 +155,9 @@ function drawSide(ctx: UICtx, hud: HudState, slot: 0 | 1, view: FighterView): vo
     align: right ? 'right' : 'left',
   });
 
-  // unique resource
-  drawResource(ctx, def.resource.name.toUpperCase(), def.resource.display, view, ramp, tx, 33, right);
+  // unique resource (the Mouth: its neck strands, cut or whole)
+  if (mh) drawStrands(cv, tx, 33, mh, right);
+  else drawResource(ctx, def.resource.name.toUpperCase(), def.resource.display, view, ramp, tx, 33, right);
 
   // ultimate meter + guard on the bottom strip
   drawStrip(ctx, view, ramp, right ? LOGICAL_W - 8 : 8, right);

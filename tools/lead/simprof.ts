@@ -11,7 +11,7 @@ import { createFighter } from '@/combat';
 import { createMatterWorld } from '@/matter';
 import { createAiSource, createMatch } from '@/sim';
 import { STAGE_INFO } from '@/stages/info';
-import { getTitanDef, witnessDef } from '@/titans';
+import { getTitanDef } from '@/titans';
 
 const args = process.argv.slice(2);
 const opt = (k: string, d: string): string =>
@@ -20,10 +20,10 @@ const TICKS = +opt('ticks', '3600');
 const SEED = +opt('seed', '21');
 const REPS = +opt('reps', '3');
 const FOOT: 'classic' | 'orbit' = args.includes('--classic') ? 'classic' : 'orbit';
-/** `--witness`: the Last One plays as the Witness (the slice default in the app); `--stage=shearfield` uses that arena (comets). */
+/** `--witness`: the colossus ('colossus', The Last One since D36) instead of the tendril Witness ('lastone'); `--stage=shearfield` uses that arena (comets). */
 const WITNESS = args.includes('--witness');
 const STAGE = opt('stage', 'nursery') as MatchConfig['stage'];
-const lastOneDef = WITNESS ? witnessDef(getTitanDef('lastone')) : getTitanDef('lastone');
+const lastOneDef = WITNESS ? getTitanDef('colossus') : getTitanDef('lastone');
 
 type Sec = 'f0' | 'f0.beh' | 'f1' | 'f1.beh' | 'pair' | 'world' | 'step';
 const SECS: Sec[] = ['step', 'f0', 'f0.beh', 'f1', 'f1.beh', 'pair', 'world'];
@@ -36,7 +36,7 @@ function run(): Record<Sec, Float64Array> {
     footwork: FOOT,
     witness: WITNESS,
     slots: [
-      { titan: 'lastone', controller: 'ai', aiLevel: 4 },
+      { titan: WITNESS ? 'colossus' : 'lastone', controller: 'ai', aiLevel: 4 },
       { titan: 'planet', controller: 'ai', aiLevel: 4 },
     ],
   };

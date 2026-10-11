@@ -27,7 +27,7 @@
       "end": 7,
       "stage": "tussenruimte",
       "match": {
-        "a": "lastone",
+        "a": "colossus",
         "b": "planet",
         "seed": 3,
         "ai": 0,

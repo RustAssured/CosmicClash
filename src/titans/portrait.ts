@@ -18,17 +18,12 @@ const cache = new Map<string, Portrait>();
  * Render a titan's pristine sprite cropped to its live cells (packed RGBA, transparent outside). Results are cached per
  * (titan, seed, light) since generation costs a few hundred ms. Facing right.
  */
-export function renderPortrait(
-  id: TitanId,
-  seed = 1,
-  lighting: StageLighting = DEFAULT_LIGHTING,
-  witness = false,
-): Portrait {
-  const asWitness = witness && id === 'lastone';
-  const key = `${asWitness ? 'witness' : id}:${seed}:${lighting.color}:${lighting.rim}`;
+export function renderPortrait(id: TitanId, seed = 1, lighting: StageLighting = DEFAULT_LIGHTING): Portrait {
+  const key = `${id}:${seed}:${lighting.color}:${lighting.rim}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  if (asWitness) {
+  // the colossus (D36: 'colossus', The Last One) is every painted region composited, not only its eye cradle
+  if (id === 'colossus') {
     const p = witnessPortrait(seed, lighting);
     cache.set(key, p);
     return p;

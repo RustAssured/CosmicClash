@@ -132,7 +132,54 @@ game (6728a3e) with now.
 - **The Mouth:** comes later as **a final boss** rather than a roster fighter. Gate 3A (docs/integration/GATE_3A.md) is the starting point for that design.
 - **Next:** footage and shots for a website, and promotion.
 
+**D36 — Two titans from one: the colossus is The Last One, the original returns as The Witness (WJ, 2026-10-11).** The
+rebuilt big-eye colossus had taken over the original Last One's id (`witness=1`), so only one of them could exist.
+- **Two roster titans, two ids.** `colossus` is the big-eye colossus (gold rim, celadon iris, tentacle arms), displayed as
+  **The Last One / 마지막 하나** (already its Korean name). `lastone` is the returning original tendril titan, displayed as
+  **The Witness / 목격자**. Ids are internal: the colossus's code keeps its historical Witness names (`witnessDef`,
+  `WitnessBehaviour`, `witnessKit`, `WITNESS_*`); the tendril titan's keeps the LastOne names (`paintLastOne`,
+  `LastOneBehaviour`, tendrils). The colossus's moves are `colossus.*`; its template is `src/titans/colossus.json` (the Last
+  One's D34 JSON, frozen), so tuning the Witness never moves it. The `witness` URL flag is ignored.
+- **The Witness has five eyes** (a lead eye, the gaze's source, and four smaller ones, each in its own socket, blinking out
+  of step) and **its own palette**: violet glaze, rose-magenta eyes, a magenta heart, a silver-lilac halo ("amethyst";
+  options in docs/gallery/roster/witness-palettes.png). Its original size (176 px map, about 114×149 px body) is kept.
+- **The Witness on the D34 engine:** orbit footwork, PACE, blow weights (`lastone.*` in combat/weight.ts), its tendril shield
+  and bared eyes, its own audio tuning (the temple voice in C♯ minor), AI coverage, and a first balance pass: `balance`
+  power 0.98 (was 1.082), durability 1.1. AI L3 v L3, 10 fights per pair, sides alternated: 35 of 70 (50 %). By pair: Asteroid
+  8–2, Supernova 10–0, 우리 6–4, the Last One 7–3, Planet 3–7, Nexus 1–9, Black Hole 0–10 (the Black Hole also beats the
+  Last One 6–0: a family matchup for a later pass).
+- Supersedes D34's "the Witness replaces the Last One".
+
 **D33 — FRACTURE bites solids (Lead, 2026-10-06).** On the 180 px Planet, FRACTURE blows took their contact and slab sizing from
 the outer atmosphere and ocean. They shed only fluid (1 solid mass in 1.5 s), which failed D1. FRACTURE now sizes its slabs from
 the first solid cells; the fluid it crosses vents as spray. Hashes change by design. The approved sampler for 우리 is proposal
 174 (4-sample majority).
+
+**D37 — Gate 3A, the Mouth (아귀): "go with the recommendations" (WJ, 2026-10-11; docs/integration/GATE_3A.md).** All seven
+answers are the proposal's recommendations. Built by S10 (Phases 3B–3E, see PROGRESS.md):
+- **(1) Arena B.** A Mouth match plays in a rim arena: the stage's width (1600), 360 px tall (restY ± 180), so both long edges
+  are always on screen; the camera's y is locked by the arena and its x keeps the anchored edge in view (the Mouth's live
+  bounds are head + neck + the anchor's edge and exit). `arenaForMatch` (src/combat/mouth/arena.ts).
+- **(2) Hurtboxes.** The capsule set (head along the funnel axis r 58; 23 neck capsules r ≈ 21–28; coil capsules r 40 only
+  where they reach into the arena) and the analytic-fighter contract: `MouthFighter` implements `Fighter` directly (probe →
+  synthetic overlap, receive → the prototype's damage model, power = energy / E_REF). Debris: the matter world's additive
+  `setCapsules` / `drainCapsuleHits` (src/matter/capsules.ts): chunks bounce off the capsules by the D30 rules and their
+  impacts queue for the fighter (coil −2·power).
+- **(3) Coil & crush.** Grab circle r 75 at the locked target, checked as the reach beat ends (a miss goes straight to the
+  release); the held foe's root is drawn to the coil centre (≈ 2 Hz) and its footwork damped; escapes by a Surge in the first
+  0.35 s of the coil beat or 1.5 sever units of damage on the wrapped neck; the crush beat cannot be escaped. The wrap circles
+  the foe's core (carapace / torso of the big titans: a radius from its live bounds) and its back half is drawn behind the foe.
+- **(4) Corners.** The head's intent keeps 98 px from the coil spine (keep-out band); fixed draw order coils → [foe] → neck →
+  head (the Mouth is two layers: back z −1.5, front z 9).
+- **(5) Health readout.** The four jaw-ring emblem in the HUD (each ring 25 %; arc lost as its quarter goes, broken when it is
+  gone; every hit chips the ring of the current quarter); the six neck strands below it (cut = red). `integrityPct` stays the
+  number the rounds read.
+- **(6) Input.** Bite = Strike, Sweep = Crush, Coil & crush = Signature; Surge / Guard / Ultimate unbound; slide = stick X,
+  oracle literal (right = clockwise along the perimeter); height = stick Y held at the strike.
+- **(7) Safe strip.** From a side wall the bite's centre stays out of the view's far 170 px (`safeStrip`, debug knob).
+- **Boss and unlock (D35):** `mouthBossDef()` (health ×2, an enraged last ring: faster slide and strikes, shorter recovery,
+  sharper tracking, ×1.2 power) for the ladder; the Mouth is not in `IMPLEMENTED_TITANS` and appears in the menus only when
+  `isMouthUnlocked()` (`?mouth=1`, or `setMouthUnlocked(true)` which the ladder calls; persisted on the device).
+- **Look:** the LOCKED renderer ported to the GPU (src/render/mouthPass.ts: instanced capsule impostors with the flesh shading,
+  annuli, stamps; a depth stage then a shade stage), lit by the one titan sky (the oracle's rig turned 180°; the oracle's own
+  light for parity stills, a debug knob). Its own impact visuals are replaced by the shared VFX (hit events).

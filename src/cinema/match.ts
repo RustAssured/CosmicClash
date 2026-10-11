@@ -13,7 +13,7 @@ import { createMatterWorld } from '@/matter';
 import { TITAN_SKY } from '@/render/unified';
 import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
 import { STAGES } from '@/stages';
-import { getTitanDef, witnessDef } from '@/titans';
+import { getTitanDef } from '@/titans';
 import type { ShotMatch } from './timeline';
 import type { StageId } from '@/contracts';
 
@@ -39,7 +39,8 @@ export function buildShotMatch(m: ShotMatch, stage: StageId): Match {
     zdepth: false,
     witness: true,
   };
-  const defOf = (id: TitanId): TitanDef => (id === 'lastone' ? witnessDef(getTitanDef(id)) : getTitanDef(id));
+  // D36: the colossus is its own titan ('colossus'), so every fighter plays getTitanDef's definition
+  const defOf = (id: TitanId): TitanDef => getTitanDef(id);
   const match = createMatch(config, {
     createWorld: createMatterWorld,
     createFighter,

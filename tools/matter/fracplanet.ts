@@ -6,9 +6,9 @@
 import { DEFAULT_LIGHTING, type TitanId } from '@/contracts';
 import { createMatterWorld } from '@/matter';
 import { measureBlow, type BlowSpec } from '@/matter/testing/woundbench';
-import { generateTitanBody, getTitanDef, witnessDef } from '@/titans';
+import { generateTitanBody, getTitanDef } from '@/titans';
 
-const witness = witnessDef(getTitanDef('lastone'));
+const witness = getTitanDef('colossus');
 // the Witness's move ids are 'witness.*' (its def is the Last One's, re-skinned: witnessDef)
 const def = (id: TitanId) => (id === 'lastone' || (id as string) === 'witness' ? witness : getTitanDef(id));
 const deps = {

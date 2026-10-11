@@ -10,7 +10,7 @@ import { createFighter } from '@/combat';
 import { createMatterWorld, type MatterWorldEx } from '@/matter';
 import { createAiSource, createMatch } from '@/sim';
 import { STAGE_INFO } from '@/stages/info';
-import { getTitanDef, witnessDef } from '@/titans';
+import { getTitanDef } from '@/titans';
 
 const args = process.argv.slice(2);
 const opt = (k: string, d: string): string =>
@@ -33,7 +33,7 @@ function run(): { sec: Float64Array; world: Float64Array; bodies: number } {
     footwork: 'orbit',
     witness: WITNESS,
     slots: [
-      { titan: 'lastone', controller: 'ai', aiLevel: 4 },
+      { titan: WITNESS ? 'colossus' : 'lastone', controller: 'ai', aiLevel: 4 },
       { titan: 'planet', controller: 'ai', aiLevel: 4 },
     ],
   };
@@ -44,7 +44,7 @@ function run(): { sec: Float64Array; world: Float64Array; bodies: number } {
     arena: STAGE_INFO[STAGE]?.arena ?? DEFAULT_ARENA,
     lighting: STAGE_INFO[STAGE]?.lighting ?? DEFAULT_LIGHTING,
   });
-  const l1 = WITNESS ? witnessDef(getTitanDef('lastone')) : getTitanDef('lastone');
+  const l1 = WITNESS ? getTitanDef('colossus') : getTitanDef('lastone');
   m.setSources(
     createAiSource(m, 0, createAI(4, l1, SEED * 7 + 1, { footwork: 'orbit' })),
     createAiSource(m, 1, createAI(4, getTitanDef('planet'), SEED * 7 + 2, { footwork: 'orbit' })),

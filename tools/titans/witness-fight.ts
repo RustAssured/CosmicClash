@@ -34,7 +34,7 @@ const cfg: MatchConfig = {
   stage: 'nursery',
   mode: 'versus',
   slots: [
-    { titan: 'lastone', controller: 'human' },
+    { titan: 'colossus', controller: 'human' },
     { titan: opt('b', 'planet') as TitanId, controller: 'human' },
   ],
   witness: true,

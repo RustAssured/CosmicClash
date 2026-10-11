@@ -34,3 +34,5 @@ export { blend } from './art/color';
 export { hash01 } from './art/noise';
 export { uriDef, isUriDef, URI_ID, URI_PRIMARY, type UriTitanRig } from './uri/def';
 export { URI_MATERIALS, uriPartMatter, cloneUriMap, type UriPartMatter } from './uri/maps';
+export { MOUTH_ID, mouthDef, mouthBossDef, isMouthDef, isMouthBossDef } from './mouth/def';
+export { isMouthUnlocked, setMouthUnlocked, MOUTH_UNLOCK_KEY } from './mouth/unlock';

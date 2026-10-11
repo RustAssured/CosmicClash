@@ -27,7 +27,7 @@ interface Row extends MenuItem {
   kind: 'volume' | 'deadzone' | 'enum' | 'rumble' | 'link' | 'comfort' | 'preset';
 }
 
-/** Options: volumes, deadzone, label mode, confirm mode, rumble, quality, and a way into the key/button remap. */
+/** Options: volumes, deadzone, label mode, confirm mode, rumble, quality, comfort, display fill, and the key/button remap. */
 export function createOptionsScreen(): Screen {
   const rows: Row[] = [
     { id: 'master', en: 'MASTER VOLUME', ko: '전체 음량', kind: 'volume' },
@@ -41,6 +41,7 @@ export function createOptionsScreen(): Screen {
     { id: 'shake', en: 'SCREEN SHAKE', ko: '화면 흔들림', kind: 'comfort' },
     { id: 'flash', en: 'FLASH EFFECTS', ko: '번쩍임', kind: 'comfort' },
     { id: 'reduced', en: 'REDUCED MOTION', ko: '움직임 줄이기', kind: 'preset' },
+    { id: 'fill', en: 'FILL SCREEN', ko: '화면 채우기', kind: 'enum' },
     { id: 'keys', en: 'CONTROLS & REMAP', ko: '조작 설정', kind: 'link' },
   ];
   const menu = new Menu(rows);
@@ -110,6 +111,13 @@ export function createOptionsScreen(): Screen {
         ctx.sound('tick');
         break;
       }
+      case 'fill': {
+        s.fill = !s.fill;
+        ctx.emit({ type: 'setDisplay', fill: s.fill });
+        ctx.saveSettings();
+        ctx.sound('tick');
+        break;
+      }
     }
   };
 
@@ -138,6 +146,8 @@ export function createOptionsScreen(): Screen {
         return ctx.settings.shake === 1 && ctx.settings.flash === 1 ? 'ON' : 'PRESS';
       case 'quality':
         return QUALITY[ctx.settings.quality]!;
+      case 'fill':
+        return ctx.settings.fill ? 'ON (STRETCHED)' : 'OFF (SHARP)';
       default:
         return '';
     }
@@ -202,7 +212,7 @@ export function createOptionsScreen(): Screen {
       const w = LOGICAL_W - 220;
       panel(cv, x0 - 16, 44, w + 32, 284, { accent: ACCENT.dim });
       rows.forEach((row, i) => {
-        const y = 54 + i * 22;
+        const y = 54 + i * 21;
         const focus = i === menu.index;
         if (focus) {
           cv.rect(x0 - 10, y - 5, w + 20, 19, alpha(C.ink3, 0.9));

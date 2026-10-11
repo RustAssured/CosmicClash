@@ -89,7 +89,9 @@ interface ImpactLight {
 const TITAN_LIGHT: Partial<Record<TitanId, { c: [number, number, number]; radius: number; base: number }>> = {
   supernova: { c: [1, 0.72, 0.38], radius: 280, base: 0.95 },
   blackhole: { c: [1, 0.6, 0.32], radius: 210, base: 0.5 },
-  lastone: { c: [0.62, 0.95, 0.88], radius: 120, base: 0.28 },
+  // D36: the colossus (The Last One) keeps the celadon light; the Witness (id 'lastone') glows in its five eyes' violet
+  colossus: { c: [0.62, 0.95, 0.88], radius: 120, base: 0.28 },
+  lastone: { c: [0.82, 0.5, 1], radius: 110, base: 0.26 },
   nexus: { c: [1, 0.3, 0.42], radius: 130, base: 0.3 },
   planet: { c: [0.55, 0.72, 1], radius: 150, base: 0.16 },
   asteroid: { c: [0.75, 0.9, 1], radius: 70, base: 0.08 },
@@ -109,7 +111,7 @@ const TYPE_LIGHT: Record<DamageType, [number, number, number]> = {
   TIDAL: [0.72, 0.64, 1],
   ASSIMILATION: [1, 0.42, 0.52],
 };
-/** The Witness's wounds glow white-gold at the core of a heavy blow and cyan otherwise (D27). */
+/** The colossus's (The Last One's, D36) wounds glow white-gold at the core of a heavy blow and cyan otherwise (D27). */
 const WITNESS_HEAVY: [number, number, number] = [1, 0.93, 0.72];
 const WITNESS_LIGHT: [number, number, number] = [0.74, 0.95, 1];
 const FLASH_LIGHT: [number, number, number] = [1, 0.93, 0.82];
@@ -381,7 +383,7 @@ export class FxState {
           if (e.heavy || en >= LIGHT_MIN_ENERGY) {
             const k = clamp((en - 600) / 3000, 0, 1);
             const open = 1 - 0.6 * clamp(e.blocked, 0, 1);
-            const c = e.titan === 'lastone' ? (e.heavy ? WITNESS_HEAVY : WITNESS_LIGHT) : TYPE_LIGHT[e.type];
+            const c = e.titan === 'colossus' ? (e.heavy ? WITNESS_HEAVY : WITNESS_LIGHT) : TYPE_LIGHT[e.type];
             this.impact(
               e.x,
               e.y,
@@ -552,7 +554,7 @@ export class FxState {
     const weight = (['light', 'medium', 'heavy', 'catastrophic'] as const).indexOf(w) as VfxWeight;
     // heavy and catastrophic blows go screen-wide (D34), in the blow's own light
     if (weight >= 2) {
-      const c = e.titan === 'lastone' ? WITNESS_HEAVY : (TYPE_LIGHT[e.type] ?? WASH_WHITE);
+      const c = e.titan === 'colossus' ? WITNESS_HEAVY : (TYPE_LIGHT[e.type] ?? WASH_WHITE);
       this.washAt(e.x, e.y, c, WASH_PEAK[weight]! * (1 - 0.5 * clamp(e.blocked, 0, 1)));
     }
     if (weight === 0) {
@@ -561,7 +563,7 @@ export class FxState {
     }
     const titan = match.fighters[e.target].view.titan;
     const matter: VfxMatter =
-      titan === 'lastone'
+      titan === 'colossus'
         ? 'witness'
         : titan === 'planet'
           ? 'planet'

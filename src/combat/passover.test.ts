@@ -8,8 +8,14 @@ import { makeLab } from './testing/feelLab';
  * tethers snapped them back, and the flung regions met debris at absurd speeds and were severed. Fifteen seconds of over /
  * under passes (straight, then on the diagonal) must stay smooth, inside the arena, and cost no matter.
  */
-const passes = (witness: boolean): void => {
-  const lab = makeLab({ a: 'lastone', b: 'planet', witness, real: true, footwork: 'orbit', gap: 220 });
+const passes = (colossus: boolean): void => {
+  const lab = makeLab({
+    a: colossus ? 'colossus' : 'lastone',
+    b: 'planet',
+    real: true,
+    footwork: 'orbit',
+    gap: 220,
+  });
   const { a, f0, f1, m } = lab;
   const ar = m.arena;
   const mass0 = f0.view.bodyStats.massFrac;
@@ -56,6 +62,7 @@ const passes = (witness: boolean): void => {
 };
 
 describe('passing over and under an idle foe (orbit footwork)', () => {
-  it('the Witness: no teleports, stays in the arena, loses no matter', () => passes(true), 120_000);
-  it('the Last One: no teleports, stays in the arena, loses no matter', () => passes(false), 120_000);
+  // D36: 'colossus' is The Last One (the big-eye colossus); 'lastone' is The Witness (the tendril titan)
+  it('the colossus: no teleports, stays in the arena, loses no matter', () => passes(true), 120_000);
+  it('the tendril Witness: no teleports, stays in the arena, loses no matter', () => passes(false), 120_000);
 });

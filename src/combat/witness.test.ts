@@ -9,13 +9,13 @@ import {
 } from '@/contracts';
 import { createMatterWorld } from '@/matter';
 import { createMatch, createScriptSource, type Match } from '@/sim';
-import { getTitanDef, WITNESS_SCALE, witnessDef } from '@/titans';
+import { getTitanDef, WITNESS_SCALE } from '@/titans';
 import { createFighter } from './index';
 import { PACE, type FighterImpl } from './fighter';
 import type { WitnessBehaviour } from './behaviours/witness';
 import { makeMatch, skipIntro } from './testing/harness';
 
-/** A real match where the Last One is played as the Witness (what `witness=1` selects). */
+/** A real match with the colossus (id 'colossus', displayed as The Last One since D36; its code keeps the Witness names). */
 function witnessMatch(
   seed = 7,
   foe: TitanId = 'planet',
@@ -25,14 +25,14 @@ function witnessMatch(
     stage: 'nursery',
     mode: 'versus',
     slots: [
-      { titan: 'lastone', controller: 'human' },
+      { titan: 'colossus', controller: 'human' },
       { titan: foe, controller: 'human' },
     ],
   };
   const m = createMatch(cfg, {
     createWorld: (s) => createMatterWorld(s),
     createFighter,
-    getTitanDef: (id) => (id === 'lastone' ? witnessDef(getTitanDef('lastone')) : getTitanDef(id)),
+    getTitanDef,
     arena: DEFAULT_ARENA,
     lighting: DEFAULT_LIGHTING,
   });
@@ -41,10 +41,11 @@ function witnessMatch(
   return { m, w, beh: w.behaviour as unknown as WitnessBehaviour };
 }
 
-describe('the Witness in game (witness=1)', () => {
+describe('the colossus in game (The Last One, D36)', () => {
   it('its primary body is the eye cradle; every other region is a registered region body placed by the rig', () => {
     const { m, w, beh } = witnessMatch();
-    expect(w.def.name).toBe('The Witness');
+    expect(w.def.name).toBe('The Last One');
+    expect(w.def.id).toBe('colossus');
     expect(beh.regionBodies.length).toBeGreaterThanOrEqual(20);
     expect(w.regions.length).toBe(beh.regionBodies.length);
     // regions sit around the eye, not at the world origin
@@ -328,7 +329,7 @@ describe('the Witness in game (witness=1)', () => {
   });
 
   it('a harness wound state stages the reference: the eye whole, one arm and two halo arcs gone, the carapace opened, eyes awake', () => {
-    const m = makeMatch({ witness: true, b: 'planet', startState: '50' });
+    const m = makeMatch({ a: 'colossus', b: 'planet', startState: '50' });
     skipIntro(m);
     m.step();
     const w = m.fighters[0] as FighterImpl;

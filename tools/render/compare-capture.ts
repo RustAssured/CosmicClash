@@ -17,11 +17,11 @@ const extra = arg('extra', '');
 mkdirSync(outDir, { recursive: true });
 
 const SCENES: Record<string, string> = {
-  'witness-planet-nursery': 'a=lastone&b=planet&stage=nursery',
+  'witness-planet-nursery': 'a=colossus&b=planet&stage=nursery',
   'blackhole-nexus-nursery': 'a=blackhole&b=nexus&stage=nursery',
   'supernova-planet-nursery': 'a=supernova&b=planet&stage=nursery',
-  'witness-asteroid-rim': 'a=lastone&b=asteroid&stage=rim',
-  'witness-planet-mausoleum': 'a=lastone&b=planet&stage=mausoleum',
+  'witness-asteroid-rim': 'a=colossus&b=asteroid&stage=rim',
+  'witness-planet-mausoleum': 'a=colossus&b=planet&stage=mausoleum',
   'supernova-blackhole-shearfield': 'a=supernova&b=blackhole&stage=shearfield',
   'nexus-asteroid-redgiant': 'a=nexus&b=asteroid&stage=redgiant',
   'planet-supernova-quasar': 'a=planet&b=supernova&stage=quasar',

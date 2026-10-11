@@ -17,6 +17,7 @@ describe('UI settings', () => {
       quality: 1 as const,
       lastP1: 'planet' as const,
       aiLevel: 6 as const,
+      fill: true,
     };
     saveUISettings(store, s);
     expect(loadUISettings(store)).toEqual(s);
@@ -41,7 +42,10 @@ describe('UI settings', () => {
       lastP1: 'lastone',
       lastStage: 'rim',
       aiLevel: 1,
+      fill: false,
     });
+    expect(defaultUISettings().fill).toBe(false); // fill screen is opt-in: crisp whole-number scale by default
+    expect(parseUISettings(JSON.stringify({ fill: 'yes' })).fill).toBe(false);
     expect(parseUISettings('not json')).toEqual(defaultUISettings());
     expect(parseUISettings(null)).toEqual(defaultUISettings());
   });

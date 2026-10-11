@@ -270,7 +270,7 @@ export interface FighterOptions {
   /** From MatchConfig: locomotion model and depth-offset prototype. */
   footwork?: 'classic' | 'orbit';
   zdepth?: boolean;
-  /** From MatchConfig: build the Last One as the Witness. */
+  /** From MatchConfig. Obsolete since D36 (ignored): the colossus is its own titan, 'colossus'. */
   witness?: boolean;
 }
 
@@ -375,8 +375,8 @@ export interface MatchConfig {
   /** Shallow depth offset prototype (draw order, ±12 % scale, parallax; collision suppressed while |Δz| is large). */
   zdepth?: boolean;
   /**
-   * The Last One is played as the rebuilt Witness (rig regions, new kit). The app turns it on by default since Phase 2
-   * (`witness=0` in the URL for the old Last One); sim configs, tests and tools leave it off unless they ask for it.
+   * Obsolete since D36 and ignored: the rebuilt colossus is its own titan ('colossus', displayed as The Last One) and the
+   * original tendril titan is 'lastone' (displayed as The Witness). Kept so old configs still type-check.
    */
   witness?: boolean;
 }

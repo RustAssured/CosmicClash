@@ -272,7 +272,7 @@ export class WitnessKit {
           0.2,
           5,
           'strike',
-          'witness.halo',
+          'colossus.halo',
         )
       ) {
         this.hitMask |= bit;
@@ -512,7 +512,7 @@ export class WitnessKit {
         0.2,
         6,
         MARK_SLOTS[this.mSlot[k]!]!,
-        'witness.fracture',
+        'colossus.fracture',
         DamageFlag.PIERCE | DamageFlag.SEED_CRACK,
       );
       this.drawBeam(x0, y0, x1, y1, 1.2, 3);

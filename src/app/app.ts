@@ -40,9 +40,13 @@ import { createMatterWorld, warmUp } from '@/matter';
 import { TITAN_SKY, createRenderer, type DebuggableRenderer } from '@/render';
 import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
 import { STAGES, isStageImplemented } from '@/stages';
-import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, renderPortrait, witnessDef } from '@/titans';
+import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, renderPortrait } from '@/titans';
+import { isMouthUnlocked, mouthDef } from '@/titans';
+import { mouthPortrait } from '@/titans/mouth/portrait';
+import { arenaForMatch } from '@/combat/mouth/arena';
 import { PixelCanvas, createUI, drawText, titanInfoFromDef, type TitanInfo } from '@/ui';
 import { FIXTURE_TITANS, fixturePortraitProvider } from '@/ui/fixtures';
+import { loadUISettings, resolveStore } from '@/ui/settings';
 import { AudioMeter } from '@/telemetry/audioMeter';
 import type { StripRecorder } from '@/telemetry/strips';
 import { Telemetry } from '@/telemetry/telemetry';
@@ -224,6 +228,9 @@ export class App {
     this.roster = opts.full
       ? IMPLEMENTED_TITANS.slice()
       : IMPLEMENTED_TITANS.filter((id) => (SLICE.titans as readonly TitanId[]).includes(id));
+    // the Mouth (D37) is the final boss: offered only once unlocked (`?mouth=1` or the ladder's unlock)
+    const mouthOn = isMouthUnlocked();
+    if (mouthOn) this.roster.push('mouth');
     this.stageRoster = STAGE_IDS.filter(
       (id) => isStageImplemented(id) && (opts.full || (SLICE.stages as readonly StageId[]).includes(id)),
     );
@@ -238,13 +245,15 @@ export class App {
     this.audio.autoUnlock(document);
     this.ui = createUI({
       input: this.input,
-      titans: (opts.full ? TITAN_IDS : this.roster).map((id): TitanInfo => {
-        const d = TITAN_DEFS[id];
-        if (d && this.witness && id === 'lastone') return titanInfoFromDef(witnessDef(d));
-        return d ? titanInfoFromDef(d) : FIXTURE_TITANS.find((t) => t.id === id)!;
-      }),
+      titans: (opts.full ? TITAN_IDS.filter((id) => id !== 'mouth' || mouthOn) : this.roster).map(
+        (id): TitanInfo => {
+          const d = id === 'mouth' ? mouthDef() : TITAN_DEFS[id];
+          return d ? titanInfoFromDef(d) : FIXTURE_TITANS.find((t) => t.id === id)!;
+        },
+      ),
       portrait: (id) => {
-        if (TITAN_DEFS[id]) return renderPortrait(id, 1, TITAN_SKY, this.witness);
+        if (id === 'mouth') return mouthPortrait();
+        if (TITAN_DEFS[id]) return renderPortrait(id, 1, TITAN_SKY);
         return fixturePortraitProvider(id);
       },
       stages: (opts.full ? STAGE_IDS : this.stageRoster).map((id) => STAGES[id]),
@@ -257,6 +266,8 @@ export class App {
       tick: () => this.tick(),
       frame: (alpha, dt) => this.render(alpha, dt),
     });
+    // the stored display choice (Options › FILL SCREEN) applies from the very first frame
+    this.renderer.setIntegerScale(!loadUISettings(resolveStore(undefined)).fill);
     window.addEventListener('resize', this.onResize);
     this.onResize();
     void this.renderer.prepareStage(this.menuStage);
@@ -270,7 +281,8 @@ export class App {
     warmUp();
     for (const id of this.roster) {
       await sleep0();
-      renderPortrait(id, 1, TITAN_SKY, this.witness);
+      if (id === 'mouth') mouthPortrait();
+      else renderPortrait(id, 1, TITAN_SKY);
     }
     this.ready = true;
   }
@@ -430,16 +442,18 @@ export class App {
       zdepth: cfg.zdepth ?? this.zdepth,
       witness: cfg.witness ?? this.witness,
     };
-    // the AI reads the definition the fighter really plays (the Witness's moves with witness=1, not the old Last One's)
-    const defOf = (id: TitanId): TitanDef =>
-      config.witness && id === 'lastone' ? witnessDef(getTitanDef(id)) : getTitanDef(id);
-    const defs: [TitanDef, TitanDef] = [defOf(config.slots[0].titan), defOf(config.slots[1].titan)];
+    // the AI reads the definition the fighter really plays (D36: the colossus is its own titan, so that is getTitanDef)
+    const defs: [TitanDef, TitanDef] = [
+      getTitanDef(config.slots[0].titan),
+      getTitanDef(config.slots[1].titan),
+    ];
     const stage = STAGES[config.stage];
     const match = createMatch(config, {
       createWorld: createMatterWorld,
       createFighter,
       getTitanDef,
-      arena: stage.arena,
+      // arena B when the Mouth plays (Gate 3A §1, D37): the stage's width, 360 px tall
+      arena: arenaForMatch(stage.arena, [config.slots[0].titan, config.slots[1].titan]),
       // one sky for every titan (D31 / proposal 172 §1): stages keep their own light for their scenery only
       lighting: TITAN_SKY,
     });
@@ -896,6 +910,9 @@ export class App {
         break;
       case 'setQuality':
         this.renderer.debugSetTier(a.quality);
+        break;
+      case 'setDisplay':
+        this.renderer.setIntegerScale(!a.fill);
         break;
       case 'startMatch':
         void this.startMatch(a.config);

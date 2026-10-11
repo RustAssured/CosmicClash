@@ -14,6 +14,8 @@ export type UIAction =
   | { type: 'setQuality'; quality: 0 | 1 | 2 }
   /** Comfort options, each 0..1 (1 = full effect): camera shake/zoom/roll, and screen flashes/aberration. */
   | { type: 'setAccessibility'; shake: number; flash: number }
+  /** Display: fill = stretch to the screen (non-integer nearest fit); false = crisp whole-number scale (default). */
+  | { type: 'setDisplay'; fill: boolean }
   /** Training: what the dummy does. */
   | { type: 'setDummy'; mode: 'idle' | 'guard' | 'ai' }
   | { type: 'resetPositions' }

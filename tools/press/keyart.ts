@@ -93,7 +93,7 @@ for (let y = 0; y < H; y++) {
   }
 }
 const scaled = (id: TitanId, k: number): Portrait => {
-  const p = renderPortrait(id, 1, DEFAULT_LIGHTING, id === 'lastone');
+  const p = renderPortrait(id, 1, DEFAULT_LIGHTING);
   if (k === 1) return p;
   return samplePortrait(p, Math.round(p.w * k), Math.round(p.h * k));
 };
@@ -102,7 +102,7 @@ const row: { p: Portrait }[] = [
   { p: scaled('nexus', 1) },
   { p: scaled('supernova', 1) },
   { p: scaled('uri', 2 / 3) },
-  { p: scaled('lastone', 2 / 3) },
+  { p: scaled('colossus', 2 / 3) },
   { p: scaled('blackhole', 1) },
   { p: scaled('planet', 1) },
 ];

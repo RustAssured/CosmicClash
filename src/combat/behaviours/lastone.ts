@@ -32,10 +32,7 @@ import {
 
 const ALPHA_EYE = 0.75;
 const ease = (cur: number, target: number, rate: number): number => cur + (target - cur) * rate;
-const C_PUPIL_D = hex('#02070b');
-const C_PUPIL_M = hex('#0b232b');
-const C_IRIS_GOLD = hex('#f0c860');
-const C_IRIS_TEAL = hex('#2f9a86');
+const rgbOf = (c: number): [number, number, number] => [c & 255, (c >>> 8) & 255, (c >>> 16) & 255];
 /** Ticks without being hit before a tendril starts to regrow, and between regrowth steps. */
 const REGROW_QUIET = 150;
 const REGROW_EVERY = 7;
@@ -47,9 +44,10 @@ const SOAK_MAX = 0.35;
 const EXPOSURE_GAIN = 0.9;
 
 /**
- * THE LAST ONE. Tendrils (verlet chains) are the eye's shield: blows sweep through them first, they sever one by one, and as
- * they fall the eye is exposed and takes extra damage. A quiet tendril regrows (Patient Regrowth). Also owns the secondary
- * animation: eye tracking + blink overlay, halo glow, beam and eye-flare FX, tendril afterimages.
+ * THE WITNESS (id 'lastone'; the Last One until D36). Tendrils (verlet chains) are the eyes' shield: blows sweep through them
+ * first, they sever one by one, and as they fall its five eyes are exposed and take extra damage. A quiet tendril regrows
+ * (Patient Regrowth). Also owns the secondary animation: eye tracking + out-of-step blinks on all five eyes, halo glow, beam
+ * and eye-flare FX, tendril afterimages. Every colour comes from the definition's materials (its own palette, D36).
  */
 export class LastOneBehaviour extends Behaviour {
   private rig!: LastOneRig;
@@ -84,6 +82,16 @@ export class LastOneBehaviour extends Behaviour {
   private prevAlive = 0;
   private shardRamp: number[] = [];
   private moteRamp: number[] = [];
+  /** Live eye and light colours, read from the definition's materials (D36: the Witness's own palette). */
+  private cPupilD = 0;
+  private cPupilM = 0;
+  private cIrisHot = 0;
+  private cIrisMid = 0;
+  /** [r,g,b] 0..255: the flare, the beam's body and edge, and the halo's light. */
+  private lFlare: [number, number, number] = [255, 230, 150];
+  private lBeam: [number, number, number] = [255, 226, 165];
+  private lBeamEdge: [number, number, number] = [150, 84, 34];
+  private lHalo: [number, number, number] = [255, 214, 120];
 
   constructor(f: FighterImpl) {
     super(f);
@@ -114,11 +122,25 @@ export class LastOneBehaviour extends Behaviour {
     this.style = makeTendrilStyle(this.pal);
     this.shardRamp = this.pal.body.slice(3, 7);
     this.moteRamp = this.pal.tip.slice(2);
+    const ramp = (key: string): number[] => f.def.materials.find((m) => m.key === key)!.visual.ramp.map(hex);
+    const pupil = ramp('pupil');
+    const iris = ramp('iris');
+    const top = iris.length - 1;
+    this.cPupilD = pupil[0]!;
+    this.cPupilM = pupil[Math.min(2, pupil.length - 1)]!;
+    this.cIrisHot = iris[Math.max(0, top - 1)]!;
+    this.cIrisMid = iris[Math.max(0, top - 3)]!;
+    this.lFlare = rgbOf(iris[Math.max(0, top - 1)]!);
+    this.lBeam = rgbOf(iris[Math.max(0, top - 2)]!);
+    this.lBeamEdge = rgbOf(iris[Math.max(0, top - 4)]!);
+    const g = gilt.map(hex);
+    this.lHalo = rgbOf(g[Math.max(0, g.length - 2)]!);
     this.back = new Overlay('lastone-tendrils-back', -1, 320, 300, 'normal', true);
     this.front = new Overlay('lastone-tendrils-front', 1, 320, 300, 'normal', true);
     this.pen = new SplinePen(320, 300);
     this.pen.setLight(f.lighting.dir);
-    this.eye = new Overlay('lastone-eye', 0.5, 64, 64, 'normal');
+    // the five eyes (D36) all fit around the lead eye in 96 px
+    this.eye = new Overlay('lastone-eye', 0.5, 96, 96, 'normal');
     this.fx = new Overlay('lastone-fx', 20, 768, 560, 'add', true);
     f.resourceMax = this.sys.n;
     f.resource = this.sys.n;
@@ -235,13 +257,20 @@ export class LastOneBehaviour extends Behaviour {
         if (s.damage(i, k, perTendril, this.cut)) this.onSever(info);
       }
     }
-    // the exposed eye: tendrils lost ⇒ extra damage when the blow reaches the eye
+    // the exposed eyes: tendrils lost ⇒ extra damage when the blow reaches an eye (D36: any of the five; the first one it
+    // reaches, lead eye first, takes it)
     const exposure = 1 - s.aliveCount() / s.n;
     if (exposure > 0.04) {
       const t = f.body.transform;
-      localToWorld(t, this.rig.eye.x + 0.5, this.rig.eye.y + 0.5, this.xy);
-      const er = this.rig.eye.r * ALPHA_EYE;
-      if (shapeIntersectsDisc(ev.shape, this.xy.x, this.xy.y, er)) {
+      let er = 0;
+      for (const eye of this.rig.eyes) {
+        localToWorld(t, eye.x + 0.5, eye.y + 0.5, this.xy);
+        if (shapeIntersectsDisc(ev.shape, this.xy.x, this.xy.y, eye.r * ALPHA_EYE)) {
+          er = eye.r * ALPHA_EYE;
+          break;
+        }
+      }
+      if (er > 0) {
         const extra = ev.energy * (1 - res.absorbed) * exposure * EXPOSURE_GAIN;
         if (extra >= 1) {
           const e2 = this.extraEv;
@@ -554,67 +583,75 @@ export class LastOneBehaviour extends Behaviour {
     const map = f.body.map;
     const ids = this.rig.ids;
     const ov = this.eye;
-    const R = this.rig.eye.r;
-    const ex = this.rig.eye.x;
-    const ey = this.rig.eye.y;
     if (f.ko && f.stateTicks > 30) {
       ov.hide();
       return;
     }
-    // gaze: toward the foe, a few px, smoothed (the eye leads the body)
+    // gaze: toward the foe, a few px, smoothed (the eyes lead the body); in units of the eye's radius
     const fv = f.foe.view;
     let gx = fv.x - f.px;
     let gy = fv.y - f.py - 20;
     const gl = Math.hypot(gx, gy) || 1;
-    const reach = 3.2;
+    const reach = 0.16;
     gx = (gx / gl) * reach * clamp01(gl / 60);
     gy = (gy / gl) * reach * clamp01(gl / 60) * 0.8;
     const lx = gx * t.facing;
     this.gazeX += (lx - this.gazeX) * 0.2;
     this.gazeY += (gy - this.gazeY) * 0.2;
-    // blink: a quick lid sweep every ~5.5 s (never in the middle of a Gaze)
-    const bt = (tick + f.slot * 97) % 330;
-    let lid = 0;
-    if (bt < 8 && id !== 'lastone.gaze' && !f.ko) lid = 1 - Math.abs((bt - 4) / 4);
-    if (f.ko) lid = clamp01(f.stateTicks / 20) * 0.7;
-    if (f.state === 'hitstun') lid = Math.max(lid, 0.5);
 
-    localToWorld(t, ex + 0.5, ey + 0.5, this.xy);
+    localToWorld(t, this.rig.eye.x + 0.5, this.rig.eye.y + 0.5, this.xy);
     ov.begin(this.xy.x, this.xy.y);
-    const pupilD = C_PUPIL_D;
-    const pupilM = C_PUPIL_M;
-    const irisGold = C_IRIS_GOLD;
-    const irisTeal = C_IRIS_TEAL;
     const lidHi = this.pal.body[5]!;
     const lidMid = this.pal.body[3]!;
     const lidLo = this.pal.body[1]!;
     const wpos = this.wp;
-    const Ri = Math.ceil(R);
-    for (let dy = -Ri; dy <= Ri; dy++) {
-      for (let dx = -Ri; dx <= Ri; dx++) {
-        const lx0 = Math.round(ex) + dx;
-        const ly0 = Math.round(ey) + dy;
-        if (lx0 < 0 || ly0 < 0 || lx0 >= map.w || ly0 >= map.h) continue;
-        const idx = ly0 * map.w + lx0;
-        const mat = map.material[idx]!;
-        if (mat !== ids.pupil && mat !== ids.iris && mat !== ids.eye) continue;
-        if (map.integrity[idx]! === 0) continue;
-        const q = Math.hypot(dx, dy);
-        let c = 0;
-        // the map's pupil disc is re-painted as iris centre; the moving pupil is drawn on top
-        const pr = Math.hypot(dx - this.gazeX, dy - this.gazeY);
-        if (mat === ids.pupil || (mat === ids.iris && q < 8)) {
-          if (pr < 5.4) c = pr < 3.4 ? pupilD : pupilM;
-          else if (mat === ids.pupil) c = q < 4.5 ? blend(irisGold, irisTeal, 0.3) : irisGold;
-        }
-        if (lid > 0.02) {
-          const lidEdge = -R + lid * 2 * R * 0.95;
-          if (dy < lidEdge && q < R + 0.5)
-            c = dy > lidEdge - 1.6 ? lidLo : dy > lidEdge - 3.5 ? lidMid : lidHi;
-        }
-        if (c !== 0) {
-          localToWorld(t, lx0 + 0.5, ly0 + 0.5, wpos);
-          ov.set(Math.floor(wpos.x), Math.floor(wpos.y), c, mat === ids.pupil ? 0 : 60);
+    const eyes = this.rig.eyes;
+    for (let e = 0; e < eyes.length; e++) {
+      const E = eyes[e]!;
+      const R = E.r;
+      const ex = E.x;
+      const ey = E.y;
+      // blink: a quick lid sweep every ~5.5 s (never in the middle of a Gaze); the five eyes blink out of step, one at a time
+      const bt = (tick + f.slot * 97 + e * 61 + (e & 1) * 23) % (330 + e * 17);
+      let lid = 0;
+      if (bt < 8 && id !== 'lastone.gaze' && !f.ko) lid = 1 - Math.abs((bt - 4) / 4);
+      if (f.ko) lid = clamp01((f.stateTicks - e * 3) / 20) * 0.7;
+      if (f.state === 'hitstun') lid = Math.max(lid, 0.5);
+      // the moving pupil and the hot ring around it, scaled to this eye (at least a pixel and a half on the smallest)
+      const pOut = Math.max(1.5, R * 0.27);
+      const pIn = Math.max(0.9, R * 0.17);
+      const ringR = Math.max(1.6, R * 0.4);
+      const px = this.gazeX * R;
+      const py = this.gazeY * R;
+      const Ri = Math.ceil(R);
+      for (let dy = -Ri; dy <= Ri; dy++) {
+        for (let dx = -Ri; dx <= Ri; dx++) {
+          const q = Math.hypot(dx, dy);
+          if (q > R + 0.5) continue;
+          const lx0 = Math.round(ex) + dx;
+          const ly0 = Math.round(ey) + dy;
+          if (lx0 < 0 || ly0 < 0 || lx0 >= map.w || ly0 >= map.h) continue;
+          const idx = ly0 * map.w + lx0;
+          const mat = map.material[idx]!;
+          if (mat !== ids.pupil && mat !== ids.iris && mat !== ids.eye) continue;
+          if (map.integrity[idx]! === 0) continue;
+          let c = 0;
+          // the map's pupil disc is re-painted as iris centre; the moving pupil is drawn on top
+          const pr = Math.hypot(dx - px, dy - py);
+          if (mat === ids.pupil || (mat === ids.iris && q < ringR)) {
+            if (pr < pOut) c = pr < pIn ? this.cPupilD : this.cPupilM;
+            else if (mat === ids.pupil)
+              c = q < R * 0.22 ? blend(this.cIrisHot, this.cIrisMid, 0.3) : this.cIrisHot;
+          }
+          if (lid > 0.02) {
+            const lidEdge = -R + lid * 2 * R * 0.95;
+            if (dy < lidEdge)
+              c = dy > lidEdge - 1.6 ? lidLo : dy > lidEdge - Math.max(2, R * 0.17) ? lidMid : lidHi;
+          }
+          if (c !== 0) {
+            localToWorld(t, lx0 + 0.5, ly0 + 0.5, wpos);
+            ov.set(Math.floor(wpos.x), Math.floor(wpos.y), c, mat === ids.pupil ? 0 : 60);
+          }
         }
       }
     }
@@ -642,18 +679,19 @@ export class LastOneBehaviour extends Behaviour {
     }
     if (slot === 'ultimate') flare = Math.max(flare, this.post.rise * 0.9);
     this.flare += (flare - this.flare) * 0.35;
+    const [fr, fg, fb] = this.lFlare;
     if (this.flare > 0.02) {
       const pulse = 1 + 0.12 * Math.sin(tick * 0.6);
-      fx.glow(
-        this.post.eyeX,
-        this.post.eyeY,
-        (10 + 26 * this.flare) * pulse,
-        255,
-        230,
-        150,
-        0.55 * this.flare,
-      );
+      fx.glow(this.post.eyeX, this.post.eyeY, (10 + 26 * this.flare) * pulse, fr, fg, fb, 0.55 * this.flare);
       if (this.flare > 0.6) fx.glow(this.post.eyeX, this.post.eyeY, 8 * this.flare, 255, 255, 240, 0.9);
+      // the four lesser eyes kindle too, each a beat behind the lead eye
+      const eyes = this.rig.eyes;
+      for (let e = 1; e < eyes.length; e++) {
+        const E = eyes[e]!;
+        localToWorld(t, E.x + 0.5, E.y + 0.5, this.wp);
+        const k = this.flare * (0.6 + 0.4 * Math.sin(tick * 0.45 - e * 1.3));
+        fx.glow(this.wp.x, this.wp.y, (3 + 12 * k) * (E.r / 6), fr, fg, fb, 0.5 * k);
+      }
     }
     // ---- converging sparks while charging the Gaze ----
     if (id === 'lastone.gaze' && m.phase === 'charge') {
@@ -665,9 +703,9 @@ export class LastOneBehaviour extends Behaviour {
           this.post.eyeX + Math.cos(a) * r,
           this.post.eyeY + Math.sin(a) * r,
           2.6,
-          255,
-          225,
-          140,
+          fr,
+          fg,
+          fb,
           0.9 * (0.4 + c),
         );
       }
@@ -735,6 +773,10 @@ export class LastOneBehaviour extends Behaviour {
     const by0 = Math.max(fx.oy, Math.floor(Math.min(y0, y1) - reach));
     const by1 = Math.min(fx.oy + fx.h - 1, Math.ceil(Math.max(y0, y1) + reach));
     const phase = tick * 0.9;
+    // the beam is the eyes' own light (D36): a near-white core, the iris's bright body deepening to its edge, a dark halo
+    const [br, bg, bb] = this.lBeam;
+    const [er, eg, eb] = this.lBeamEdge;
+    const [fr, fg, fb] = this.lFlare;
     for (let y = by0; y <= by1; y++) {
       const py = y + 0.5 - y0;
       for (let x = bx0; x <= bx1; x++) {
@@ -755,26 +797,26 @@ export class LastOneBehaviour extends Behaviour {
         let b: number;
         const core = 0.26 + 0.08 * shimmer;
         if (u < core) {
-          r = 255;
-          g = 250;
-          b = 232;
+          r = 255 * 0.65 + fr * 0.35;
+          g = 250 * 0.65 + fg * 0.35;
+          b = 240 * 0.65 + fb * 0.35;
         } else if (u < 1) {
           const q = (u - core) / (1 - core);
-          r = 255;
-          g = 226 - 96 * q;
-          b = 165 - 118 * q;
+          r = br + (er - br) * q;
+          g = bg + (eg - bg) * q;
+          b = bb + (eb - bb) * q;
         } else {
           const q = Math.max(0, 1 - (u - 1) / (reach / w - 1));
-          const k = q * q;
-          r = 150 * k;
-          g = 84 * k;
-          b = 34 * k;
+          const k = q * q * 0.6;
+          r = er * k;
+          g = eg * k;
+          b = eb * k;
         }
         fx.add(x, y, r * cap, g * cap, b * cap);
       }
     }
     // source flare
-    fx.glow(x0, y0, halfW * 1.8, 255, 236, 170, 0.8);
+    fx.glow(x0, y0, halfW * 1.8, fr, fg, fb, 0.8);
   }
 
   private drawHalo(fx: Overlay, tick: number): void {
@@ -801,8 +843,9 @@ export class LastOneBehaviour extends Behaviour {
       localToWorld(t, lx, ly, wpos);
       const tw = 0.6 + 0.4 * Math.sin(a * 6 - tick * 0.12);
       const k = strength * tw;
-      fx.add(Math.floor(wpos.x), Math.floor(wpos.y), 255 * k, 214 * k, 120 * k);
-      if (strength > 0.5) fx.glow(wpos.x, wpos.y, 3, 255, 214, 130, 0.25 * strength * tw);
+      const [hr, hg, hb] = this.lHalo;
+      fx.add(Math.floor(wpos.x), Math.floor(wpos.y), hr * k, hg * k, hb * k);
+      if (strength > 0.5) fx.glow(wpos.x, wpos.y, 3, hr, hg, hb, 0.25 * strength * tw);
     }
   }
 
@@ -825,11 +868,14 @@ export class LastOneBehaviour extends Behaviour {
   }
 
   override debugShapes(out: DebugShape[]): void {
-    const sh = makeFatShape();
-    sh.kind = 'point';
-    sh.x = this.post.eyeX;
-    sh.y = this.post.eyeY;
-    sh.r = this.rig.eye.r * ALPHA_EYE;
-    out.push({ shape: asShape(sh), color: 0xff40ffff, label: 'eye (exposed as tendrils fall)' });
+    for (const eye of this.rig.eyes) {
+      const sh = makeFatShape();
+      sh.kind = 'point';
+      localToWorld(this.f.body.transform, eye.x + 0.5, eye.y + 0.5, this.wp);
+      sh.x = this.wp.x;
+      sh.y = this.wp.y;
+      sh.r = eye.r * ALPHA_EYE;
+      out.push({ shape: asShape(sh), color: 0xff40ffff, label: 'eye (exposed as tendrils fall)' });
+    }
   }
 }

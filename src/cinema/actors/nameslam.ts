@@ -8,7 +8,8 @@ import { blit, textSprite, type Sprite } from '../p6/text';
  * opponent's accent colour with a one-pixel recoil; then it is gone (a cut, no fade). The Korean and English names are the
  * site's (the roster cards), the accents the titans' own (src/titans/*.json ui.accent).
  *
- * params: titan ('planet' | 'blackhole' | 'supernova' | 'nexus' | 'asteroid' | 'witness' | 'uri'), or name + ko + accent;
+ * params: titan ('planet' | 'blackhole' | 'supernova' | 'nexus' | 'asteroid' | 'lastone' | 'witness' | 'uri'), or name + ko +
+ * accent ('lastone' and 'colossus' are the big-eye colossus, The Last One; 'witness' is the five-eyed tendril titan: D36);
  * at (shot seconds of the first frame, default 0), x (centre, default 320), y (top, default 150).
  */
 export const NAMES: Record<string, { ko: string; name: string; accent: string }> = {
@@ -17,7 +18,10 @@ export const NAMES: Record<string, { ko: string; name: string; accent: string }>
   supernova: { ko: '초신성', name: 'SUPERNOVA', accent: '#ff9a3c' },
   nexus: { ko: '넥서스', name: 'THE NEXUS', accent: '#d63a4e' },
   asteroid: { ko: '소행성', name: 'THE ASTEROID', accent: '#c9b399' },
-  witness: { ko: '마지막 하나', name: 'THE WITNESS', accent: '#a8bdb2' },
+  // D36: the colossus is The Last One; the returning tendril titan is The Witness
+  lastone: { ko: '마지막 하나', name: 'THE LAST ONE', accent: '#a8bdb2' },
+  colossus: { ko: '마지막 하나', name: 'THE LAST ONE', accent: '#a8bdb2' },
+  witness: { ko: '목격자', name: 'THE WITNESS', accent: '#c27ae0' },
   uri: { ko: '우리', name: 'URI', accent: '#ffb060' },
 };
 export const SLAM_FRAMES = 6;

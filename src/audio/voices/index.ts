@@ -1,7 +1,7 @@
 import type { TitanId } from '@/contracts';
 import { createAsteroidVoice } from './asteroid';
 import { createBlackHoleVoice } from './blackhole';
-import { createLastOneVoice } from './lastone';
+import { createColossusVoice, createLastOneVoice } from './lastone';
 import { createNexusVoice } from './nexus';
 import { createPlanetVoice } from './planet';
 import { createSupernovaVoice } from './supernova';
@@ -10,6 +10,8 @@ import { createUriVoice } from './uri';
 
 /** One voice file per titan (see `types.ts`). */
 export const VOICES: Readonly<Partial<Record<TitanId, () => TitanVoice>>> = {
+  // D36: the colossus (The Last One) and the Witness (id 'lastone') share the temple voice in two tunings
+  colossus: createColossusVoice,
   lastone: createLastOneVoice,
   nexus: createNexusVoice,
   blackhole: createBlackHoleVoice,

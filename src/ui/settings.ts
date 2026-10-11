@@ -18,6 +18,8 @@ export interface UISettings {
   seenHowTo: boolean;
   /** Matches started on this device: the in-match hint strip shows during the very first one. */
   matches: number;
+  /** Display: stretch the frame to fill the screen (non-integer nearest fit). Off = crisp whole-number scale. */
+  fill: boolean;
 }
 
 export const UI_STORAGE_KEY = 'adeuk.ui.v1';
@@ -35,6 +37,7 @@ export const defaultUISettings = (): UISettings => ({
   flash: 4,
   seenHowTo: false,
   matches: 0,
+  fill: false,
 });
 
 const int = (v: unknown, lo: number, hi: number, d: number): number =>
@@ -66,6 +69,7 @@ export function parseUISettings(raw: string | null): UISettings {
     flash: int(o.flash, 0, 4, d.flash),
     seenHowTo: o.seenHowTo === true,
     matches: int(o.matches, 0, 100000, d.matches),
+    fill: o.fill === true,
   };
 }
 

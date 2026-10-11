@@ -724,6 +724,19 @@ describe('options', () => {
     expect(r.drain().filter((a) => a.type === 'setQuality')).toEqual([{ type: 'setQuality', quality: 0 }]);
     expect(r.sounds).toContain('tick');
   });
+  it('FILL SCREEN is off by default, toggles, emits setDisplay and persists', () => {
+    const r = rig();
+    const pad = r.pads.plug(proStandard());
+    showScreen(r.ui, 'options');
+    r.step(20);
+    r.drain();
+    for (let i = 0; i < 11; i++) r.tap(pad, Pad.DOWN); // MASTER … REDUCED MOTION, then FILL SCREEN
+    r.tap(pad, Pad.RIGHT);
+    expect(r.drain().filter((a) => a.type === 'setDisplay')).toEqual([{ type: 'setDisplay', fill: true }]);
+    expect(JSON.parse(r.store.data.get(UI_STORAGE_KEY)!).fill).toBe(true);
+    r.tap(pad, Pad.EAST);
+    expect(r.drain().filter((a) => a.type === 'setDisplay')).toEqual([{ type: 'setDisplay', fill: false }]);
+  });
 });
 
 describe('Controller Check screen', () => {

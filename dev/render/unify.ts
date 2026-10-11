@@ -22,7 +22,7 @@ import { TITAN_SKY } from '@/render/unified';
 import { VFX_WEIGHT_NAMES, type FrameFxVfx, type VfxImpact, type VfxWeight } from '@/render/vfx';
 import { createAiSource, createMatch } from '@/sim';
 import { STAGES } from '@/stages';
-import { URI_ID, getTitanDef, uriDef, witnessDef } from '@/titans';
+import { URI_ID, getTitanDef, uriDef } from '@/titans';
 import { loadUriAsset } from '@/titans/uri/asset';
 import uriBinUrl from '@/titans/uri/uri_rig.bin?url';
 
@@ -165,8 +165,8 @@ export type Pair = 'witness-planet' | 'uri-witness' | 'uri-planet';
 const defOf = (id: TitanId): TitanDef => (id === URI_ID ? uriDef() : getTitanDef(id));
 
 function newMatch(stage: StageId, sky: boolean, seed: number, pair: Pair = 'witness-planet'): MatchApi {
-  const a: TitanId = pair === 'witness-planet' ? 'lastone' : URI_ID;
-  const b: TitanId = pair === 'uri-witness' ? 'lastone' : 'planet';
+  const a: TitanId = pair === 'witness-planet' ? 'colossus' : URI_ID;
+  const b: TitanId = pair === 'uri-witness' ? 'colossus' : 'planet';
   const cfg: MatchConfig = {
     seed,
     stage,
@@ -187,15 +187,11 @@ function newMatch(stage: StageId, sky: boolean, seed: number, pair: Pair = 'witn
     lighting: sky ? TITAN_SKY : st.lighting,
   });
   m.setSources(
-    createAiSource(
-      m,
-      0,
-      createAI(4, a === 'lastone' ? witnessDef(getTitanDef(a)) : defOf(a), seed * 7, { footwork: 'orbit' }),
-    ),
+    createAiSource(m, 0, createAI(4, defOf(a), seed * 7, { footwork: 'orbit' })),
     createAiSource(
       m,
       1,
-      createAI(4, b === 'lastone' ? witnessDef(getTitanDef(b)) : defOf(b), seed * 7 + 1, {
+      createAI(4, defOf(b), seed * 7 + 1, {
         footwork: 'orbit',
       }),
     ),

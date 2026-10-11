@@ -1,3 +1,4 @@
+import type { TitanId } from '@/contracts';
 import { clamp, clamp01 } from '../dsp/math';
 import { BELL, gravel, makeOut, pick, tone } from './synth';
 import { subOut } from './kit';
@@ -13,17 +14,56 @@ import {
 } from './materials';
 
 /**
- * THE WITNESS (id `lastone`): a cathedral-sized colossus of sacred ceramic, stone and bronze around a single eye of white-gold
- * light. D34 rebuilt it from struck glass (587–1480 Hz bells, 2–7 kHz tinks and shards) into a temple bell struck by a mountain:
+ * The temple voice, shared by the two titans that grew from the Last One (D36):
+ *
+ * THE LAST ONE (id `colossus`): a cathedral-sized colossus of sacred ceramic, stone and bronze around a single eye of
+ * white-gold light. D34 rebuilt it from struck glass (587–1480 Hz bells, 2–7 kHz tinks and shards) into a temple bell struck
+ * by a mountain:
  *  - its body rings as colossal BRONZE (`BELL` partials on D1–D3, none above ~1.4 kHz), slowly beating, wronger when hollowed;
  *  - it breaks as fired clay and stone (dark cracks, low clay plates, grinding slabs);
- *  - its tendrils are cables the size of ridges (a LOW plucked snap), its sacred frame strains like bowed metal;
+ *  - its sacred frame strains like bowed metal;
  *  - the Gaze is not a whine but a pressure: a low choir on D whose filter opens as the eye fills, and a beam that ROARS;
  *  - its bed is a low choir (D2 A2 D3) that breathes with its motion.
- * Tuning: everything sits on D (D F♯ A), so any two bells that overlap are consonant.
+ *  Tuning: everything sits on D (D F♯ A), so any two bells that overlap are consonant.
+ *
+ * THE WITNESS (id `lastone`, the returning tendril titan with five eyes): the same temple, a semitone lower and in MINOR (C♯
+ * E G♯): its choir and its gaze lean on the minor third, its bronze always rings a little out of its series (five eyes, one
+ * voice that is not quite one), and its tendrils (cables the size of ridges, a LOW plucked snap) are the loudest part of it.
  */
-const BELLS = [73.42, 92.5, 110, 146.83];
-const LOW = [73.42, 110, 146.83];
+interface Tune {
+  titan: TitanId;
+  /** Pitch factor on every authored frequency (1 = D). */
+  k: number;
+  bells: readonly number[];
+  low: readonly number[];
+  /** The gaze choir's ratios over the root (first is the sine root). */
+  choir: readonly number[];
+  /** A floor of wrongness on every struck bell (0 = pure). */
+  wrong: number;
+  /** Gain on the tendril snaps. */
+  snap: number;
+}
+
+const COLOSSUS: Tune = {
+  titan: 'colossus',
+  k: 1,
+  bells: [73.42, 92.5, 110, 146.83],
+  low: [73.42, 110, 146.83],
+  choir: [1, 1.5, 2, 3],
+  wrong: 0,
+  snap: 1,
+};
+const K_WITNESS = 69.3 / 73.42;
+const WITNESS: Tune = {
+  titan: 'lastone',
+  k: K_WITNESS,
+  // C♯2 E2 G♯2 C♯3: the minor third is the Witness's colour
+  bells: [69.3, 82.41, 103.83, 138.59],
+  low: [69.3, 103.83, 138.59],
+  choir: [1, 1.2, 1.5, 2],
+  wrong: 0.35,
+  snap: 1.25,
+};
 
 interface Charging {
   gain: GainNode;
@@ -41,10 +81,16 @@ interface Pad {
   pan: StereoPannerNode;
 }
 
-export function createLastOneVoice(): TitanVoice {
+/** The Last One (the colossus, D36). */
+export const createColossusVoice = (): TitanVoice => createTempleVoice(COLOSSUS);
+/** The Witness (the returning tendril titan, D36). */
+export const createLastOneVoice = (): TitanVoice => createTempleVoice(WITNESS);
+
+function createTempleVoice(tune: Tune): TitanVoice {
+  const { k, bells: BELLS, low: LOW, choir: CHOIR } = tune;
   const charging = new Map<number, Charging>();
   const pads = new Map<number, Pad>();
-  /** Remaining mass per slot: a hollowed Witness rings lower, longer and further out of tune. */
+  /** Remaining mass per slot: a hollowed titan rings lower, longer and further out of tune. */
   const massBy: [number, number] = [1, 1];
 
   const startGaze = (c: VoiceCtx, t: number, slot: number, pan: number): void => {
@@ -74,8 +120,8 @@ export function createLastOneVoice(): TitanVoice {
     sh.connect(filter);
     filter.connect(gain);
     const oscs: OscillatorNode[] = [];
-    // a low choir on D: root, fifth, octave, twelfth; saws and a sine, slowly beating
-    for (const [i, ratio] of [1, 1.5, 2, 3].entries()) {
+    // a low choir on the root: root and its chord; saws and a sine, slowly beating
+    for (const [i, ratio] of CHOIR.entries()) {
       const o = ac.createOscillator();
       o.type = i === 0 ? 'sine' : 'sawtooth';
       o.frequency.setValueAtTime(LOW[0]! * ratio, t);
@@ -142,11 +188,12 @@ export function createLastOneVoice(): TitanVoice {
       shimmer: 0.4,
       maxHz: 1400,
     });
-    if (res.spread > 0.4) wrongHarmonics(c, o, t + 0.02, f, 0.05 * res.spread * ring, res);
+    const wrong = Math.max(res.spread, tune.wrong);
+    if (wrong > 0.3) wrongHarmonics(c, o, t + 0.02, f, 0.05 * wrong * ring, res);
   };
 
   return {
-    titan: 'lastone',
+    titan: tune.titan,
 
     onMove(c, t, ev) {
       const pan = c.panOf(ev.x);
@@ -159,9 +206,9 @@ export function createLastOneVoice(): TitanVoice {
       } else if (id.endsWith('shatter')) {
         // the heavy blow gathers: a reversed swell into the blow, the choir leaning in, the sacred frame straining
         const o = makeOut(c, pan, 0.5);
-        swell(c, o, t, { dur: 0.6, gain: 0.14, f0: 90, f1: 800, sub: 0.1, subHz: 37 });
-        roar(c, o, t, { f: 73.42, dur: 0.6, gain: 0.05, attack: 0.45, lp0: 200, lp1: 600, noise: 0 });
-        strainedMetal(c, o, t, 0.6, 98, 0.03, resonance(massBy[ev.slot]));
+        swell(c, o, t, { dur: 0.6, gain: 0.14, f0: 90, f1: 800, sub: 0.1, subHz: 37 * k });
+        roar(c, o, t, { f: 73.42 * k, dur: 0.6, gain: 0.05, attack: 0.45, lp0: 200, lp1: 600, noise: 0 });
+        strainedMetal(c, o, t, 0.6, 98 * k, 0.03, resonance(massBy[ev.slot]));
       } else if (!id.endsWith('gaze') && !id.endsWith('lastlight') && !id.endsWith('sidestep')) {
         swell(c, makeOut(c, pan, 0.2), t, { dur: 0.18, gain: 0.07, f0: 120, f1: 600 });
       }
@@ -176,12 +223,12 @@ export function createLastOneVoice(): TitanVoice {
       if (ev.phase === 'hold' || ev.phase === 'start') {
         const f = clamp01(ev.frac);
         ch.frac = f;
-        // the eye fills: the choir rises only a fourth (D2 → G2) while its filter OPENS (260 Hz → 1.3 kHz) and it swells: the
+        // the eye fills: the choir rises only a fourth while its filter OPENS (260 Hz → 1.3 kHz) and it swells: the
         // pressure of light gathering, not a whine. The gain stays modest: it is held for seconds.
         const base = LOW[0]! * Math.pow(2, (5 * f) / 12);
         ch.oscs
-          .slice(0, 4)
-          .forEach((o, i) => o.frequency.setTargetAtTime(base * [1, 1.5, 2, 3][i]!, t, 0.08));
+          .slice(0, CHOIR.length)
+          .forEach((o, i) => o.frequency.setTargetAtTime(base * CHOIR[i]!, t, 0.08));
         ch.filter.frequency.setTargetAtTime(260 + 1040 * f, t, 0.08);
         ch.gain.gain.setTargetAtTime(0.07 + 0.09 * f, t, 0.1);
       } else if (ev.phase === 'release') {
@@ -198,8 +245,8 @@ export function createLastOneVoice(): TitanVoice {
         // the beam: a roar of light — the choir at full voice through an opening filter, a pressure drop, a bronze bloom
         const o = makeOut(c, pan, 0.6);
         roar(c, o, t, {
-          f: 73.42,
-          f1: 69.3,
+          f: 73.42 * k,
+          f1: 69.3 * k,
           dur: 0.8 + 0.5 * p,
           gain: 0.13 + 0.06 * p,
           attack: 0.02,
@@ -207,12 +254,12 @@ export function createLastOneVoice(): TitanVoice {
           lp1: 320,
           detune: 12,
         });
-        boom(c, subOut(c, pan), t, { f0: 92, f1: 36, dur: 0.8, gain: 0.35 + 0.2 * p, drive: 2.8 });
-        lowBell(c, o, t, 146.83, BELL, { decay: 1.4, gain: 0.07, shimmer: 0.4 });
+        boom(c, subOut(c, pan), t, { f0: 92 * k, f1: 36 * k, dur: 0.8, gain: 0.35 + 0.2 * p, drive: 2.8 });
+        lowBell(c, o, t, 146.83 * k, BELL, { decay: 1.4, gain: 0.07, shimmer: 0.4 });
       } else if (id.endsWith('lash')) {
         // a cable the size of a ridge cracks like a whip: a low snap and a dark crack
         const o = makeOut(c, pan, 0.35);
-        filamentSnap(c, o, t, 110, 0.5 + 0.5 * p, res);
+        filamentSnap(c, o, t, 110 * k, (0.5 + 0.5 * p) * tune.snap, res);
         whoosh(c, t, {
           dur: 0.22,
           gain: 0.12,
@@ -224,9 +271,9 @@ export function createLastOneVoice(): TitanVoice {
         });
       } else if (id.endsWith('shatter')) {
         const o = makeOut(c, pan, 0.55);
-        boom(c, subOut(c, pan), t, { f0: 88, f1: 28, dur: 1.1, gain: 0.6, drive: 3 });
+        boom(c, subOut(c, pan), t, { f0: 88 * k, f1: 28 * k, dur: 1.1, gain: 0.6, drive: 3 });
         gravel(c, o, t, { dur: 0.8, grains: 30, f: 900, spread: 1.6, gain: 0.14, q: 1.6, lowpass: 2000 });
-        lowBell(c, o, t, 73.42, BELL, { decay: 1.8, gain: 0.08, shimmer: 0.35 });
+        lowBell(c, o, t, 73.42 * k, BELL, { decay: 1.8, gain: 0.08, shimmer: 0.35 });
         stoneShear(c, o, t + 0.02, p, res);
       } else if (id.endsWith('lunge')) {
         whoosh(c, t, {
@@ -283,8 +330,8 @@ export function createLastOneVoice(): TitanVoice {
         shimmer: 0.3,
       });
       boom(c, subOut(c, pan), t, {
-        f0: 104,
-        f1: 44,
+        f0: 104 * k,
+        f1: 44 * k,
         dur: ev.broke ? 0.9 : 0.35,
         gain: ev.broke ? 0.55 : 0.3,
       });
@@ -296,7 +343,7 @@ export function createLastOneVoice(): TitanVoice {
       // the colossus falls: the hush, the drop, its bronze tolling down out of tune, a landslide of clay and stone
       const pan = c.panOf(ev.x);
       const o = makeOut(c, pan, 0.9);
-      const at = catastrophe(c, subOut(c, pan), o, t, { size: 1, f0: 58 });
+      const at = catastrophe(c, subOut(c, pan), o, t, { size: 1, f0: 58 * k });
       gravel(c, o, at, {
         dur: 2.2,
         grains: 70,
@@ -308,9 +355,9 @@ export function createLastOneVoice(): TitanVoice {
         lowpass: 1800,
       });
       // its last sound is wrong: a sacred chord with its overtones slipping out of their series
-      wrongHarmonics(c, o, at + 0.3, 73.42, 0.07, resonance(0.2, 1));
+      wrongHarmonics(c, o, at + 0.3, 73.42 * k, 0.07, resonance(0.2, 1));
       for (const [i, f] of [146.83, 110, 92.5, 73.42, 55].entries())
-        lowBell(c, o, at + 0.18 * i, f, BELL, { decay: 3, gain: 0.07, shimmer: 0.4 });
+        lowBell(c, o, at + 0.18 * i, f * k, BELL, { decay: 3, gain: 0.07, shimmer: 0.4 });
     },
 
     onUltimate(c, t, ev) {
@@ -321,20 +368,20 @@ export function createLastOneVoice(): TitanVoice {
         for (const [i, f] of [36.71, 73.42, 110, 146.83, 185, 220].entries())
           tone(c, o, t, {
             type: i < 2 ? 'triangle' : 'sine',
-            f0: f,
-            f1: f * 1.01,
+            f0: f * k,
+            f1: f * k * 1.01,
             dur: 2.6,
             gain: 0.06 - 0.005 * i,
             attack: 2.2,
             detune: (i - 2.5) * 5,
           });
-        swell(c, o, t, { dur: 2.4, gain: 0.18, f0: 70, f1: 1000, sub: 0.14, subHz: 36.71 });
-        catastrophe(c, subOut(c, 0), o, t + 2.4, { pre: 0, size: 0.7, gain: 0.9, f0: 55 });
-        lowBell(c, o, t + 2.4, 73.42, BELL, { decay: 3.2, gain: 0.12, shimmer: 0.5 });
+        swell(c, o, t, { dur: 2.4, gain: 0.18, f0: 70, f1: 1000, sub: 0.14, subHz: 36.71 * k });
+        catastrophe(c, subOut(c, 0), o, t + 2.4, { pre: 0, size: 0.7, gain: 0.9, f0: 55 * k });
+        lowBell(c, o, t + 2.4, 73.42 * k, BELL, { decay: 3.2, gain: 0.12, shimmer: 0.5 });
       } else {
         for (const [i, f] of [220, 146.83, 110, 73.42].entries())
-          lowBell(c, o, t + i * 0.14, f, BELL, { decay: 2.2, gain: 0.06 });
-        rumble(c, o, t, { dur: 2, gain: 0.08, f0: 220, f1: 60 });
+          lowBell(c, o, t + i * 0.14, f * k, BELL, { decay: 2.2, gain: 0.06 });
+        rumble(c, o, t, { dur: 2, gain: 0.08, f0: 220 * k, f1: 60 * k });
       }
     },
 
@@ -344,14 +391,14 @@ export function createLastOneVoice(): TitanVoice {
       if (ev.id.includes('sever')) {
         // a tendril the size of a ridge is severed: the cable snaps low, the stump grinds, the ground takes its weight
         const o = makeOut(c, pan, 0.45);
-        filamentSnap(c, o, t, 70 + 50 * a, a, resonance(massBy[ev.slot]));
-        boom(c, subOut(c, pan), t + 0.02, { f0: 80, f1: 32, dur: 0.6, gain: 0.25 + 0.15 * a });
+        filamentSnap(c, o, t, (70 + 50 * a) * k, a * tune.snap, resonance(massBy[ev.slot]));
+        boom(c, subOut(c, pan), t + 0.02, { f0: 80 * k, f1: 32 * k, dur: 0.6, gain: 0.25 + 0.15 * a });
         crackle(c, o, t + 0.01, { dur: 0.5, count: 8, gain: 0.08, f: 900 });
       } else if (ev.id === 'eye-exposed') {
-        // the eye laid bare: the choir draws a breath and a great bell tolls
+        // an eye laid bare: the choir draws a breath and a great bell tolls
         const o = makeOut(c, pan, 0.7);
         swell(c, o, t, { dur: 0.8, gain: 0.08 + 0.05 * a, f0: 90, f1: 700, sub: 0.06 });
-        lowBell(c, o, t + 0.8, 110, BELL, { decay: 2.2, gain: 0.1, shimmer: 0.5 });
+        lowBell(c, o, t + 0.8, 110 * k, BELL, { decay: 2.2, gain: 0.1, shimmer: 0.5 });
       }
     },
 
@@ -375,7 +422,7 @@ export function createLastOneVoice(): TitanVoice {
         wet.gain.value = 0.6;
         pan.connect(wet);
         wet.connect(c.wet);
-        // a low choir: D2 (triangle), A2 and D3 (saws through the filter), beating against each other
+        // a low choir: the root (triangle), the fifth and the octave (saws through the filter), beating against each other
         const oscs = LOW.map((f, i) => {
           const o = ac.createOscillator();
           o.type = i === 0 ? 'triangle' : 'sawtooth';

@@ -18,7 +18,7 @@ import { createMatterWorld } from '@/matter';
 import { TITAN_SKY } from '@/render';
 import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
 import { STAGES } from '@/stages';
-import { getTitanDef, witnessDef } from '@/titans';
+import { getTitanDef } from '@/titans';
 import { loadUriAsset } from '@/titans/uri/asset';
 import uriBinUrl from '@/titans/uri/uri_rig.bin?url';
 
@@ -88,8 +88,8 @@ function buildMatch(c: PressCfg): Match {
     zdepth: false,
     witness: true,
   };
-  const defOf = (id: TitanId): TitanDef =>
-    config.witness && id === 'lastone' ? witnessDef(getTitanDef(id)) : getTitanDef(id);
+  // D36: the colossus is its own titan ('colossus'); every fighter plays getTitanDef's definition
+  const defOf = (id: TitanId): TitanDef => getTitanDef(id);
   const m = createMatch(config, {
     createWorld: createMatterWorld,
     createFighter,

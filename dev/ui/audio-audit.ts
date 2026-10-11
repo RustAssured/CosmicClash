@@ -153,6 +153,10 @@ const hitEv = (titan: TitanId, over: Partial<HitEvent> = {}): HitEvent => ({
 
 /** The exact cue ids each titan emits (src/combat/behaviours). */
 const CUES: Readonly<Record<TitanId, readonly string[]>> = {
+  // the colossus (The Last One, D36) emits no cues of its own
+  colossus: [],
+  // the Mouth (D37): its cues (src/combat/mouth/fighter.ts)
+  mouth: ['ring-break', 'strand-sever', 'grab', 'escape'],
   lastone: ['tendril-sever', 'eye-exposed'],
   asteroid: ['rubble-pile', 'momentum', 'fragment-lost'],
   nexus: ['node-dark', 'harvest', 'chain-latch', 'chain-snap'],

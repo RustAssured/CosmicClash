@@ -28,6 +28,10 @@ describe('computeViewport', () => {
   it('supports fractional fit when integer scaling is disabled', () => {
     const v = computeViewport(1000, 720, false);
     expect(v.scale).toBeCloseTo(1000 / 640, 6);
+    // the frame still covers whole canvas pixels, centred
+    expect(v).toMatchObject({ w: 1000, h: 563, x: 0, y: 78 });
+    const f = computeViewport(1920, 928, false); // 1536×742 CSS at 125 %: fills the height, not the ×2 of integer mode
+    expect(f).toMatchObject({ w: 1650, h: 928, y: 0 });
   });
 
   it('maps physical to logical coordinates', () => {

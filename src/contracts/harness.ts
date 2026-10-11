@@ -52,7 +52,10 @@ export interface HarnessParams {
   /** Planar orbital footwork (default since D28; `orbit=0` = classic); `zdepth=1`: the depth-offset prototype. */
   orbit: boolean;
   zdepth: boolean;
-  /** The Last One plays as the rebuilt Witness (the slice's default since Phase 2); `witness=0` brings back the old Last One. */
+  /**
+   * Obsolete since D36 (ignored): the colossus is its own titan (`a=colossus`, The Last One) and the original tendril titan is
+   * `a=lastone` (The Witness). Kept so old URLs still parse.
+   */
   witness: boolean;
   /** `aftermath=0`: skip the aftermath screen after the deciding KO (automated captures and tests run straight to results). */
   aftermath: boolean;

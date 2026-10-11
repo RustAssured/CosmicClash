@@ -10,7 +10,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { DEFAULT_LIGHTING, type MatterMap, type TitanId } from '@/contracts';
-import { generateTitanBody, getTitanDef, witnessDef, type UriTitanRig, type WitnessTitanRig } from '@/titans';
+import { generateTitanBody, getTitanDef, type UriTitanRig, type WitnessTitanRig } from '@/titans';
 
 const cells = (m: MatterMap): number => {
   let n = 0;
@@ -18,8 +18,10 @@ const cells = (m: MatterMap): number => {
   return n;
 };
 
+// D36: card 'lastone' is the colossus ('colossus', every region counted); card 'witness' is the tendril titan ('lastone')
 const ROSTER: { card: string; id: TitanId; witness?: boolean }[] = [
-  { card: 'witness', id: 'lastone', witness: true },
+  { card: 'lastone', id: 'colossus', witness: true },
+  { card: 'witness', id: 'lastone' },
   { card: 'planet', id: 'planet' },
   { card: 'asteroid', id: 'asteroid' },
   { card: 'nexus', id: 'nexus' },
@@ -30,7 +32,7 @@ const ROSTER: { card: string; id: TitanId; witness?: boolean }[] = [
 
 const counts: Record<string, number> = {};
 for (const t of ROSTER) {
-  const def = t.witness ? witnessDef(getTitanDef(t.id)) : getTitanDef(t.id);
+  const def = getTitanDef(t.id);
   const body = generateTitanBody(def, 1, DEFAULT_LIGHTING);
   let n: number;
   if (t.witness) n = (body.rig as WitnessTitanRig).body.regions.reduce((s, r) => s + cells(r.map), 0);

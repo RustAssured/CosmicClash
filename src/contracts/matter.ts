@@ -505,6 +505,13 @@ export interface MatterWorld {
    * Lead request to S4 (arena hazards); false if the id no longer exists.
    */
   retireChunk?(id: number): boolean;
+  /**
+   * Analytic hurt capsules (the Mouth, D37: Gate 3A §2): `n` capsules of 6 floats (x0, y0, x1, y1, r, part 0 head / 1 neck /
+   * 2 coil) for `slot`, set every tick. Debris bounces off them by the bodies' rules (D30); impacts are queued for the fighter.
+   */
+  setCapsules?(slot: 0 | 1, data: ArrayLike<number>, n: number): void;
+  /** Debris impacts on `slot`'s capsules since the last drain, flat (x, y, energy, part, launched, mass); returns the count. */
+  drainCapsuleHits?(slot: 0 | 1, out: number[]): number;
   /** The gravity source currently set for `slot` (null if none): read by presentation to bend scenery (FrameFx.wells). */
   gravitySourceOf?(slot: 0 | 1): GravitySource | null;
   /** CRUSH fissure light of a body (packed RGBA; null = dark; undefined = default). */

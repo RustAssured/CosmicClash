@@ -10,12 +10,14 @@ async function main(): Promise<void> {
   // cinema mode (docs/cinema/TRAILER_V3.md): the trailer's own renderer loop, no menus or input; loaded only when asked for
   const q = new URLSearchParams(location.search);
   const cinema = q.get('cinema');
+  const params = parseHarnessParams(location.search);
+  // capture tooling (cinema, harness scenarios) films the bare canvas: no loading screen, no full screen button
+  if (cinema || params.active) for (const id of ['boot', 'fs']) document.getElementById(id)?.remove();
   if (cinema) {
     const { startCinema } = await import('@/cinema/cinema');
     await startCinema(canvas, cinema, q.get('render') === '1');
     return;
   }
-  const params = parseHarnessParams(location.search);
   // 우리's packed part grids (src/titans/uri/asset.ts): fetched once at boot, decoded in place before any match
   const uriAsset = loadUriAsset(uriBinUrl);
   const app = new App();
@@ -36,4 +38,6 @@ async function main(): Promise<void> {
 
 main().catch((e: unknown) => {
   console.error('ADEUK failed to start:', e);
+  // the loading screen (index.html) turns into a short explanation instead of loading forever
+  document.documentElement.dataset.boot = 'failed';
 });

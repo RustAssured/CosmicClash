@@ -1,8 +1,8 @@
 {
   "id": "lastone",
-  "name": "The Last One",
-  "nameKo": "마지막 하나",
-  "epithet": "De Laatste",
+  "name": "The Witness",
+  "nameKo": "목격자",
+  "epithet": "De Getuige",
   "attributes": {
     "mass": 5,
     "cohesion": 8,
@@ -25,19 +25,19 @@
     "text": "A severed tendril regrows after a few quiet seconds without taking damage."
   },
   "failureMode": {
-    "name": "Bared Eye",
-    "text": "Tendrils sever one by one. As they fall the eye is left exposed and takes heavy damage."
+    "name": "Bared Eyes",
+    "text": "Tendrils sever one by one. As they fall its five eyes are left exposed and take heavy damage."
   },
   "materials": [
     {
       "key": "shell",
       "base": "celadon",
       "visual": {
-        "ramp": ["#16242c", "#254541", "#37665a", "#548672", "#7ca88f", "#a8bdb2", "#c9dfc8", "#edf5d8"],
+        "ramp": ["#160f24", "#261a3d", "#3a2758", "#523873", "#6d4c8e", "#8d6aa8", "#b294c6", "#d9c3e6"],
         "emissive": 0,
-        "char": "#1c2a2a",
-        "crack": "#0d1a22",
-        "debris": "#8fae9f"
+        "char": "#1a1222",
+        "crack": "#0c0716",
+        "debris": "#8d6aa8"
       },
       "physics": {
         "resist": {
@@ -66,22 +66,22 @@
         }
       },
       "visual": {
-        "ramp": ["#0e1a24", "#1a3340", "#2b5057", "#436e69", "#5f8c83", "#86a99b"],
+        "ramp": ["#0b0716", "#170f2a", "#261a40", "#3a2858", "#523b70", "#6d5288"],
         "emissive": 0,
-        "char": "#141f24",
-        "crack": "#070f16",
-        "debris": "#5f8c83"
+        "char": "#120c1c",
+        "crack": "#06030e",
+        "debris": "#523b70"
       }
     },
     {
       "key": "inner",
       "base": "crystal",
       "visual": {
-        "ramp": ["#25404f", "#3d6470", "#5f8c94", "#8fb8b8", "#bcd9d0", "#e0efe2", "#f6fbea"],
+        "ramp": ["#2a1d3f", "#45306a", "#6a4d92", "#9479b8", "#bda5d6", "#ddcbea", "#f6eefb"],
         "emissive": 10,
-        "char": "#2a3c40",
-        "crack": "#16303a",
-        "debris": "#a9cfc6"
+        "char": "#2a2034",
+        "crack": "#160e26",
+        "debris": "#bda5d6"
       },
       "physics": {
         "resist": {
@@ -98,55 +98,55 @@
       "key": "core",
       "base": "core",
       "visual": {
-        "ramp": ["#7a2f3d", "#c2523c", "#f08a3a", "#ffc65a", "#ffe9a3", "#fffbe6"],
+        "ramp": ["#4a0f3a", "#8a1f5e", "#d23a86", "#ff6fb0", "#ffb6d8", "#fff0f8"],
         "emissive": 200,
-        "char": "#5a2a2a",
-        "crack": "#3a1018",
-        "debris": "#ffc65a"
+        "char": "#3a1030",
+        "crack": "#24061c",
+        "debris": "#ff6fb0"
       }
     },
     {
       "key": "eye",
       "base": "eye",
       "visual": {
-        "ramp": ["#2c4448", "#4d6d6c", "#7d9f96", "#a9c5b6", "#d2e3cf", "#f2f6e2"],
+        "ramp": ["#3a2a3a", "#5e4458", "#8a6a80", "#b596aa", "#dcc4d2", "#f6ecf2"],
         "emissive": 26,
-        "char": "#243436",
-        "crack": "#12262c",
-        "debris": "#c5dcc9"
+        "char": "#2a1e2a",
+        "crack": "#160c16",
+        "debris": "#dcc4d2"
       }
     },
     {
       "key": "iris",
       "base": "eye",
       "visual": {
-        "ramp": ["#0b1f2a", "#12404a", "#1b6666", "#2f9a86", "#66c9a2", "#b7ecc0", "#f1ffd8"],
+        "ramp": ["#1a0614", "#4a0d2e", "#86164a", "#c8306a", "#f0609a", "#ffa8c8", "#ffe6f0"],
         "emissive": 90,
-        "char": "#0c2022",
-        "crack": "#061319",
-        "debris": "#66c9a2"
+        "char": "#1a0614",
+        "crack": "#0c020a",
+        "debris": "#f0609a"
       }
     },
     {
       "key": "pupil",
       "base": "eye",
       "visual": {
-        "ramp": ["#02070b", "#06131a", "#0b232b", "#123640"],
+        "ramp": ["#05020a", "#0e0718", "#1a0f2a", "#281a3c"],
         "emissive": 0,
-        "char": "#02070b",
+        "char": "#05020a",
         "crack": "#000000",
-        "debris": "#0b232b"
+        "debris": "#1a0f2a"
       }
     },
     {
       "key": "gilt",
       "base": "glass",
       "visual": {
-        "ramp": ["#2b2a22", "#5a5232", "#8e8046", "#c7b565", "#e8dc96", "#fff6c8"],
+        "ramp": ["#1f1a2a", "#3d3550", "#655b7c", "#9a90b0", "#c9c2da", "#f1edf8"],
         "emissive": 46,
-        "char": "#2a2418",
-        "crack": "#1a160c",
-        "debris": "#c7b565"
+        "char": "#1a1622",
+        "crack": "#0e0a16",
+        "debris": "#9a90b0"
       }
     }
   ],
@@ -176,6 +176,13 @@
         "hemScallops": 6
       },
       "eye": { "x": 17, "y": -14, "r": 20, "socketR": 27 },
+      "eyes": [
+        { "x": 18, "y": -12, "r": 10.5, "socketR": 14, "tilt": 0.12 },
+        { "x": -4, "y": -28, "r": 6.5, "socketR": 9, "tilt": -0.35 },
+        { "x": 26, "y": -36, "r": 5.5, "socketR": 8, "tilt": 0.3 },
+        { "x": 38, "y": 2, "r": 4.5, "socketR": 6.5, "tilt": 0.5 },
+        { "x": 4, "y": 6, "r": 6, "socketR": 8.5, "tilt": -0.2 }
+      ],
       "core": { "x": -7, "y": 25, "r": 10 },
       "halo": {
         "cx": -9,
@@ -204,9 +211,9 @@
     }
   },
   "ui": {
-    "accent": "#a8bdb2",
-    "accent2": "#e8dc96",
-    "tagline": "Charge, and sidestep."
+    "accent": "#c27ae0",
+    "accent2": "#ff8ac0",
+    "tagline": "Five eyes. One verdict."
   },
   "moves": [
     {
@@ -1340,7 +1347,7 @@
     "sway": { "amp": 1.2, "period": 5 },
     "fx": {
       "kind": "glint",
-      "ramp": ["#ffffff", "#bfe8e0", "#6fb0a8"],
+      "ramp": ["#ffffff", "#f0c8ff", "#b07ad0"],
       "perHundredPx": 8,
       "size": 1,
       "life": [14, 30],
@@ -1351,5 +1358,5 @@
       "idleRate": 2
     }
   },
-  "balance": { "power": 1.082, "durability": 1.1 }
+  "balance": { "power": 0.98, "durability": 1.1 }
 }

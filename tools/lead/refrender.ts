@@ -9,13 +9,13 @@ import { launch, openGame } from './browser';
  * really does), nothing here can drop or double a frame: it shows what the game DRAWS, so motion can be judged without
  * capture artefacts. Never use it for performance numbers. Video only (the audio of a real-time capture is the reference).
  *
- *   npx tsx tools/lead/refrender.ts [--params="mode=aivai&a=lastone&b=planet&stage=shearfield&seed=21&ai=4&witness=1"]
+ *   npx tsx tools/lead/refrender.ts [--params="mode=aivai&a=colossus&b=planet&stage=shearfield&seed=21&ai=4"]
  *                                   [--seconds=30] [--skip=0] [--name=ref] [--out=evidence/ref] [--crf=10] [--build=1]
  * `--skip` steps that many seconds without drawing first (jump to the moment you want). Needs ffmpeg on PATH.
  */
 const opt = (k: string, d: string): string =>
   process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
-const params = opt('params', 'mode=aivai&a=lastone&b=planet&stage=shearfield&seed=21&ai=4&witness=1');
+const params = opt('params', 'mode=aivai&a=colossus&b=planet&stage=shearfield&seed=21&ai=4');
 const seconds = Number(opt('seconds', '30'));
 const skip = Number(opt('skip', '0'));
 const name = opt('name', 'ref');

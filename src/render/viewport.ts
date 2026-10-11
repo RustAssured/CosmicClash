@@ -21,8 +21,9 @@ export interface ViewportLayout {
 export function computeViewport(physW: number, physH: number, integer = true): ViewportLayout {
   const fit = Math.min(physW / LOGICAL_W, physH / LOGICAL_H);
   const scale = integer ? Math.max(1, Math.floor(fit + 1e-9)) : Math.max(0.01, fit);
-  const w = LOGICAL_W * scale;
-  const h = LOGICAL_H * scale;
+  // a fractional fit still lands on whole canvas pixels (GL viewports are integers)
+  const w = integer ? LOGICAL_W * scale : Math.max(1, Math.min(physW, Math.round(LOGICAL_W * scale)));
+  const h = integer ? LOGICAL_H * scale : Math.max(1, Math.min(physH, Math.round(LOGICAL_H * scale)));
   return {
     scale,
     x: Math.floor((physW - w) / 2),

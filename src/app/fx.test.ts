@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import type { FrameFx, GravitySource, MatchApi, SimEvent } from '@/contracts';
+import type { FrameFx, GravitySource, MatchApi, SimEvent, TitanId } from '@/contracts';
 import type { FrameFxVfx } from '@/render/vfx';
 import { createMatch } from '@/sim';
 import { fakeDeps } from '@/sim/testing/fakes';
 import { FxState, IMPACT_SLOTS, ONSET_GAP, buildAudioScene } from './fx';
 
-const mkMatch = (): MatchApi =>
+const mkMatch = (a: TitanId = 'lastone'): MatchApi =>
   createMatch(
     {
       seed: 1,
       stage: 'nursery',
       mode: 'versus',
       slots: [
-        { titan: 'lastone', controller: 'dummy' },
+        { titan: a, controller: 'dummy' },
         { titan: 'asteroid', controller: 'dummy' },
       ],
     },
@@ -287,12 +287,13 @@ describe('FxState shared impact VFX (VFX_SPEC, keyed on hit.weight)', () => {
 
   it("one impact per blow at the sim's weight, with the struck titan's debris matter, aging in wall time", () => {
     const fx = new FxState();
-    const m = mkMatch();
+    // D36: the colossus ('colossus', The Last One) keeps the ceramic-and-gold debris ('witness' VFX matter)
+    const m = mkMatch('colossus');
     fx.tick([hit('heavy'), hit('catastrophic', 1)], m);
     const v = vfx(fx);
     expect(v.map((x) => x.weight)).toEqual([2, 3]);
     expect(v[0]!.matter).toBe('rock'); // the asteroid
-    expect(v[1]!.matter).toBe('witness'); // the Last One / Witness took the second blow
+    expect(v[1]!.matter).toBe('witness'); // the colossus took the second blow
     expect(v[0]!.age).toBeCloseTo(1 / 60, 6);
     for (let i = 0; i < 240; i++) fx.tick([], m);
     expect(vfx(fx)).toHaveLength(0);

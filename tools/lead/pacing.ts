@@ -25,14 +25,17 @@ import { createAI } from '@/ai';
 import { createFighter } from '@/combat';
 import { createMatterWorld } from '@/matter';
 import { createAiSource, createMatch } from '@/sim';
-import { getTitanDef, witnessDef } from '@/titans';
+import { getTitanDef } from '@/titans';
 
 const args = process.argv.slice(2);
 const opt = (k: string, d: string): string =>
   (args.find((x) => x.startsWith(`--${k}=`)) ?? `--${k}=${d}`).split('=').slice(1).join('=');
 
-const A = opt('a', 'lastone') as TitanId;
-const B = opt('b', 'planet') as TitanId;
+/** `--witness` (old flag): play the colossus ('colossus', The Last One since D36) wherever 'lastone' is asked for. */
+const WITNESS = args.includes('--witness');
+const asked = (id: TitanId): TitanId => (WITNESS && id === 'lastone' ? 'colossus' : id);
+const A = asked(opt('a', 'lastone') as TitanId);
+const B = asked(opt('b', 'planet') as TitanId);
 const N = +opt('n', '20');
 const SEED = +opt('seed', '1');
 const LA = +opt('la', '3') as Difficulty;
@@ -41,10 +44,7 @@ const OUT = opt('out', '');
 /** Orbit is the slice's footwork (D28); `--classic` for comparison; `--zdepth` adds the depth-offset prototype. */
 const FOOTWORK: 'classic' | 'orbit' = args.includes('--classic') ? 'classic' : 'orbit';
 const ZDEPTH = args.includes('--zdepth');
-/** `--witness`: the Last One plays as the rebuilt Witness (and its AI reads the Witness's definition). */
-const WITNESS = args.includes('--witness');
-const defOf = (id: TitanId): TitanDef =>
-  WITNESS && id === 'lastone' ? witnessDef(getTitanDef(id)) : getTitanDef(id);
+const defOf = (id: TitanId): TitanDef => getTitanDef(id);
 
 interface RoundRec {
   fight: number;
@@ -87,7 +87,6 @@ for (let i = 0; i < N; i++) {
     mode: 'aivai',
     footwork: FOOTWORK,
     zdepth: ZDEPTH,
-    witness: WITNESS,
     slots: [
       { titan: ta, controller: 'ai', aiLevel: swapped ? LB : LA },
       { titan: tb, controller: 'ai', aiLevel: swapped ? LA : LB },

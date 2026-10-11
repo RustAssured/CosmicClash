@@ -92,10 +92,11 @@ export const SIM_BUDGET_MS_PER_TICK = 5;
 
 /**
  * The roster and arenas the menus, attract mode and random pairings use (`?full=1` shows every implemented one). D34: all six
- * original titans are back (the Witness replaces the Last One, witness=1 by default), with 우리.
+ * original titans are back, with 우리. D36: the colossus ('colossus', The Last One) and the returning tendril titan ('lastone',
+ * The Witness) are two titans.
  */
 export const SLICE = {
-  titans: ['lastone', 'asteroid', 'nexus', 'blackhole', 'supernova', 'planet', 'uri'] as const,
+  titans: ['colossus', 'lastone', 'asteroid', 'nexus', 'blackhole', 'supernova', 'planet', 'uri'] as const,
   // D34: every original stage is back, beside the slice's two arenas
   stages: ['nursery', 'rim', 'redgiant', 'quasar', 'tussenruimte', 'mausoleum', 'shearfield'] as const,
 } as const;

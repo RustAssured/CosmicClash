@@ -1,8 +1,22 @@
 import type { DamageParams, DamageType } from './damage';
 import type { MaterialSpec } from './matter';
 
-/** Proposal 173: 'uri' (우리, D31) joined after its Gate 2D. */
-export const TITAN_IDS = ['lastone', 'nexus', 'blackhole', 'supernova', 'planet', 'asteroid', 'uri'] as const;
+/**
+ * Proposal 173: 'uri' (우리, D31) joined after its Gate 2D. D36: 'colossus' is the big-eye colossus, displayed as The Last One;
+ * 'lastone' is the returning tendril titan, displayed as The Witness (ids are internal; names live in the definitions).
+ */
+export const TITAN_IDS = [
+  'colossus',
+  'lastone',
+  'nexus',
+  'blackhole',
+  'supernova',
+  'planet',
+  'asteroid',
+  'uri',
+  // D37: the Mouth (아귀), the final boss; locked out of the menus until unlocked (src/titans/mouth/unlock.ts)
+  'mouth',
+] as const;
 export type TitanId = (typeof TITAN_IDS)[number];
 
 /** Shared attributes, integers 1–10 (data-driven, /src/titans/*.json). Effective values update live from remaining mass. */
@@ -22,7 +36,7 @@ export interface TitanAttributes {
 }
 
 /** 'loop': 우리's loop integrity, which is also its health (proposal 173, D31-3). */
-export type ResourceId = 'tendrils' | 'nodes' | 'accreted' | 'fuel' | 'moons' | 'fragments' | 'loop';
+export type ResourceId = 'tendrils' | 'nodes' | 'accreted' | 'fuel' | 'moons' | 'fragments' | 'loop' | 'jaws';
 
 export interface ResourceDef {
   id: ResourceId;

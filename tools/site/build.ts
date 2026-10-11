@@ -33,22 +33,23 @@ await build({ logLevel: 'warn', build: { outDir: PLAY, emptyOutDir: true } });
 cpSync('site', DIST, { recursive: true });
 writeFileSync(join(DIST, '.nojekyll'), '');
 
-// 3. the link back to the site, shown only on the boot ("press any button") and title screens
+// 3. the link back to the site, shown only while loading and on the boot ("press any button") and title screens
 const BACK = `
-    <a id="adeuk-home" href="../" tabindex="-1" aria-label="Back to the ADEUK: TITANS site" hidden>&larr; ADEUK: TITANS</a>
+    <a id="adeuk-home" href="../" tabindex="-1" aria-label="Back to the ADEUK: TITANS site">&larr; ADEUK: TITANS</a>
     <style>
-      #adeuk-home{position:fixed;left:12px;top:10px;z-index:10;padding:4px 8px;border-radius:3px;
-        font:12px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.06em;color:#a8bdb2;text-decoration:none;
-        background:rgba(4,5,10,.55);opacity:.55;transition:opacity .2s}
-      #adeuk-home:hover{opacity:1;color:#fff}
+      #adeuk-home{position:fixed;left:14px;top:12px;z-index:10;padding:6px 10px;border-radius:3px;
+        border:1px solid rgba(168,189,178,.28);font:400 12px/1 var(--label,'Silkscreen',ui-monospace,monospace);
+        letter-spacing:.06em;color:#a8bdb2;text-decoration:none;background:rgba(7,4,15,.7);opacity:.85;transition:opacity .2s}
+      #adeuk-home:hover{opacity:1;color:#fff;border-color:#ffd27a}
     </style>
     <script>
       (function () {
+        // shown while the game loads and on its boot / title screens; hidden in menus and play
         var a = document.getElementById('adeuk-home');
         setInterval(function () {
           var h = window.__ADEUK__;
           var s = h && h.ready && h.uiScreen ? h.uiScreen() : '';
-          a.hidden = s !== 'boot' && s !== 'title';
+          a.hidden = s !== '' && s !== 'boot' && s !== 'title';
         }, 400);
       })();
     </script>

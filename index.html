@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#05060a" />
+    <meta name="theme-color" content="#07040f" />
     <meta
       name="description"
       content="ADEUK: TITANS — colossal cosmic entities physically wear each other down. A 2.5D pixel-art fighting game."
@@ -13,12 +13,30 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%2305060a'/%3E%3Crect x='6' y='6' width='4' height='4' fill='%23a8bdb2'/%3E%3C/svg%3E"
     />
+    <!-- the landing page's pixel faces (site/index.html), for the loading screen and the overlay controls -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Silkscreen:wght@400;700&display=swap"
+    />
     <style>
+      :root {
+        --void: #07040f;
+        --text: #efe7f5;
+        --dim: #b7a9c8;
+        --mute: #8a7d9e;
+        --celadon: #a8bdb2;
+        --ember: #ff9a3c;
+        --gold: #ffd27a;
+        --label: 'Silkscreen', 'DotGothic16', ui-monospace, monospace;
+        --ko: 'DotGothic16', sans-serif;
+      }
       html,
       body {
         margin: 0;
         height: 100%;
-        background: #05060a;
+        background: var(--void);
         overflow: hidden;
       }
       #stage {
@@ -33,10 +51,219 @@
         image-rendering: crisp-edges;
         outline: none;
       }
+
+      /* ---- loading screen: the site's look until the game draws its own boot screen ---- */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        color: var(--text);
+        font: 400 13px/1.4 var(--label);
+        background:
+          radial-gradient(1200px 700px at 85% -10%, rgba(255, 77, 141, 0.16), transparent 60%),
+          radial-gradient(900px 600px at -10% 30%, rgba(138, 92, 255, 0.14), transparent 60%),
+          radial-gradient(1000px 800px at 100% 70%, rgba(255, 154, 60, 0.1), transparent 60%), var(--void);
+        transition: opacity 0.5s;
+      }
+      #boot.done {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #boot .px {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        filter: drop-shadow(0 0 18px rgba(168, 189, 178, 0.35)) drop-shadow(0 6px 30px rgba(0, 0, 0, 0.8));
+      }
+      /* integer scales of the 285×35 logotype and the 30×14 hangeul mark */
+      #boot .logo-en {
+        width: 570px;
+        height: auto;
+      }
+      #boot .logo-ko {
+        width: 90px;
+        height: auto;
+      }
+      @media (max-width: 640px) {
+        #boot .logo-en {
+          width: 285px;
+        }
+        #boot .logo-ko {
+          width: 60px;
+        }
+      }
+      #boot .bar {
+        width: 180px;
+        height: 4px;
+        margin-top: 18px;
+        background: rgba(168, 189, 178, 0.14);
+        overflow: hidden;
+      }
+      #boot .bar i {
+        display: block;
+        width: 40%;
+        height: 100%;
+        background: linear-gradient(90deg, var(--gold), var(--ember));
+        animation: boot-slide 1.2s steps(24) infinite;
+      }
+      @keyframes boot-slide {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(250%);
+        }
+      }
+      #boot .status {
+        letter-spacing: 0.12em;
+        color: var(--dim);
+      }
+      #boot .status [lang='ko'] {
+        font-family: var(--ko);
+        color: var(--mute);
+        margin-left: 10px;
+        letter-spacing: 0;
+      }
+      #boot .fail {
+        display: none;
+        max-width: 34em;
+        text-align: center;
+        color: var(--gold);
+      }
+      [data-boot='failed'] #boot .fail {
+        display: block;
+      }
+      [data-boot='failed'] #boot .bar,
+      [data-boot='failed'] #boot .status {
+        display: none;
+      }
+      #boot .tip {
+        position: absolute;
+        bottom: 22px;
+        color: var(--mute);
+        letter-spacing: 0.08em;
+      }
+
+      /* ---- full screen button: shown on the boot and title screens, and whenever the mouse moves ---- */
+      #fs {
+        position: fixed;
+        left: 14px;
+        bottom: 12px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid rgba(168, 189, 178, 0.28);
+        border-radius: 3px;
+        background: rgba(7, 4, 15, 0.7);
+        color: var(--celadon);
+        font: 400 12px/1 var(--label);
+        letter-spacing: 0.06em;
+        cursor: pointer;
+        opacity: 0.85;
+        transition: opacity 0.3s;
+      }
+      #fs:hover,
+      #fs:focus-visible {
+        opacity: 1;
+        color: #fff;
+        border-color: var(--gold);
+        outline: none;
+      }
+      #fs.idle {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #fs kbd {
+        padding: 1px 5px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-bottom-width: 2px;
+        border-radius: 2px;
+        font: inherit;
+        color: var(--text);
+      }
+      #fs svg {
+        width: 14px;
+        height: 14px;
+        fill: currentColor;
+        shape-rendering: crispEdges;
+      }
+      :fullscreen #fs,
+      #fs[hidden] {
+        display: none;
+      }
     </style>
   </head>
   <body>
     <div id="stage"><canvas id="game" width="640" height="360" tabindex="0"></canvas></div>
+    <div id="boot" role="status" aria-live="polite">
+      <img class="px logo-en" src="/site/media/type/logo.png" width="285" height="35" alt="ADEUK: TITANS" />
+      <img class="px logo-ko" src="/site/media/type/ko-adeuk.png" width="30" height="14" alt="아득" lang="ko" />
+      <div class="bar"><i></i></div>
+      <div class="status">LOADING<span lang="ko">불러오는 중</span></div>
+      <p class="fail">
+        The game could not start in this browser. It needs WebGL2: try an up-to-date Chrome, Edge or Firefox.
+      </p>
+      <div class="tip">Best in full screen: press F</div>
+    </div>
+    <button id="fs" type="button" title="Full screen (F)" aria-label="Full screen (F)" hidden>
+      <svg viewBox="0 0 14 14" aria-hidden="true">
+        <path d="M0 0h5v2H2v3H0zM9 0h5v5h-2V2H9zM0 9h2v3h3v2H0zM12 9h2v5H9v-2h3z" />
+      </svg>
+      FULL SCREEN <kbd>F</kbd>
+    </button>
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var boot = document.getElementById('boot');
+        var fs = document.getElementById('fs');
+        var canFs = !!(root.requestFullscreen && document.fullscreenEnabled);
+        var screen = function () {
+          var h = window.__ADEUK__;
+          return h && h.ready && h.uiScreen ? h.uiScreen() : '';
+        };
+        var toggle = function () {
+          if (!canFs) return;
+          if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+          else root.requestFullscreen({ navigationUI: 'hide' }).catch(function () {});
+          // the game keeps the keyboard focus: a click on the button must not leave it focused (Space would press it)
+          var c = document.getElementById('game');
+          if (c) c.focus();
+        };
+        fs.hidden = !canFs;
+        fs.addEventListener('click', toggle);
+        // F toggles full screen (a key press is a user gesture); never while a key is being remapped (Controller screen)
+        window.addEventListener('keydown', function (e) {
+          if (e.code !== 'KeyF' || e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+          if (screen() === 'controller') return;
+          toggle();
+        });
+        // the button stays out of the way in play: it shows on the boot/title screens, and for a moment after the mouse moves
+        var moved = 0;
+        window.addEventListener('mousemove', function () {
+          moved = Date.now();
+        }, { passive: true });
+        setInterval(function () {
+          if (!fs.isConnected) return;
+          var s = screen();
+          if (boot && window.__ADEUK__ && window.__ADEUK__.ready) {
+            boot.classList.add('done');
+            var b = boot;
+            boot = null;
+            setTimeout(function () {
+              b.remove();
+            }, 600);
+          }
+          var show = s === '' || s === 'boot' || s === 'title' || Date.now() - moved < 2500;
+          fs.classList.toggle('idle', !show);
+        }, 200);
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -15,7 +15,7 @@ const out = opt('out', 'docs/gallery/compare/sizes.png');
 const stage = opt('stage', 'shearfield');
 const ticks = Number(opt('ticks', '40'));
 const MATCHUPS: readonly string[] = (
-  opt('matchups', 'lastone:planet:witness,uri:planet,blackhole:nexus,supernova:asteroid') as string
+  opt('matchups', 'colossus:planet,uri:planet,blackhole:nexus,supernova:asteroid') as string
 ).split(',');
 
 const VITE = 'node_modules/vite/bin/vite.js';

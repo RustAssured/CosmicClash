@@ -9,13 +9,13 @@ import { BLOW_WEIGHTS, type BlowWeight, type MoveDef, type MoveSlot } from '@/co
  * other titan. A guarded blow lands one step lighter; the blow that KOs is catastrophic (fighter.ts).
  */
 export const MOVE_WEIGHTS: Readonly<Record<string, BlowWeight>> = {
-  // the Witness
-  'witness.halo': 'light', // each arc / shard is a separate small cut
-  'witness.gaze': 'light', // the beam marks (continuous: no hit-stop either way)
-  'witness.fracture': 'medium', // a gaze / shear mark shearing 0.3–0.8 s later
-  'witness.charge': 'medium', // the lunge out of the sidestep
-  'witness.sweep': 'heavy', // Sweeping Architecture's blades and Structural Shear's cone
-  'witness.revelation': 'heavy',
+  // the colossus (id 'colossus', displayed as The Last One: D36)
+  'colossus.halo': 'light', // each arc / shard is a separate small cut
+  'colossus.gaze': 'light', // the beam marks (continuous: no hit-stop either way)
+  'colossus.fracture': 'medium', // a gaze / shear mark shearing 0.3–0.8 s later
+  'colossus.charge': 'medium', // the lunge out of the sidestep
+  'colossus.sweep': 'heavy', // Sweeping Architecture's blades and Structural Shear's cone
+  'colossus.revelation': 'heavy',
   // the Planet
   'planet.shift': 'light', // Orbital Drift's shove
   'planet.moonslam': 'medium',
@@ -26,6 +26,12 @@ export const MOVE_WEIGHTS: Readonly<Record<string, BlowWeight>> = {
   'planet.corepulse': 'heavy',
   'planet.cataclysm': 'heavy',
   // the returning originals (D34): their own mechanics, read on the same ladder
+  // the Witness (id 'lastone', the returning tendril titan: D36)
+  'lastone.lash': 'medium', // the tendril whips (each lash line)
+  'lastone.lunge': 'medium', // the charging thrust out of the sidestep
+  'lastone.shatter': 'heavy', // the whole veil fanned through the cone
+  'lastone.gaze': 'light', // the held beam (continuous)
+  'lastone.lastlight': 'heavy', // the five eyes' sweep and shear
   'asteroid.shoulder': 'medium', // a hop-check
   'asteroid.meteor': 'heavy', // the ram
   'asteroid.swarm': 'light', // each fragment

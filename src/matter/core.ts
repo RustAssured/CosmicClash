@@ -10,6 +10,7 @@ import {
 } from '@/contracts';
 import type { Body } from './body';
 import { ChunkPool, type Chunk, type OrbitState } from './chunks';
+import { CapsuleSet } from './capsules';
 import { CutFinder } from './cuts';
 import { ParticlePool } from './particles';
 import { ShapeQ } from './shape';
@@ -193,6 +194,9 @@ export class WorldCore {
     { active: false, x: 0, y: 0, radius: 0, omega: 0, flatten: 1 },
     { active: false, x: 0, y: 0, radius: 0, omega: 0, flatten: 1 },
   ];
+
+  /** Analytic hurt capsules by slot (the Mouth, D37): debris bounces off them; impacts queue for the fighter. */
+  readonly capsules: [CapsuleSet, CapsuleSet] = [new CapsuleSet(), new CapsuleSet()];
 
   /** Hook: a launched chunk hit a body (set by the world; applies an UNCAPPED KINETIC event credited to the thrower). */
   launchImpact: (

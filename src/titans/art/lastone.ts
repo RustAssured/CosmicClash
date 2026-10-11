@@ -22,11 +22,22 @@ import { bayer8, fbm, hash01, makeWorley, ridged, worley } from './noise';
 import { sdCircle, sdEllipse, sdEllipseRot, sdSegment, smax, smin, ssub } from './sdf';
 
 /**
- * THE LAST ONE — an ancient celadon idol: a weathered glazed pod-head with one great eye set in a bevelled socket, a tilted
- * gilt halo on fine spokes, a bell-shaped mantle with a scalloped hem. Under the glaze: a paler crystalline lattice, dark
- * fault ribs, and a golden lantern-core that glows warmly through the porcelain. Tendrils are NOT in this map — they are
- * verlet chains (src/combat), rooted at the `roots` returned in the rig.
+ * THE WITNESS (id 'lastone'; it was the Last One until D36) — an ancient glazed idol: a weathered pod-head with FIVE eyes
+ * (D36: a lead eye and four smaller ones, each in its own bevelled socket, tilted its own way), a tilted metal halo on fine
+ * spokes, a bell-shaped mantle with a scalloped hem. Under the glaze: a paler crystalline lattice, dark fault ribs, and a
+ * lantern-core that glows through the porcelain. Every colour comes from the definition's materials (its own palette).
+ * Tendrils are NOT in this map — they are verlet chains (src/combat), rooted at the `roots` returned in the rig.
+ * (The colossus, displayed as The Last One since D36, is painted further down: paintWitness.)
  */
+
+/** One eye: map-local centre (cells), iris radius, socket radius and the tilt of its lids (rad). */
+export interface LastOneEye {
+  x: number;
+  y: number;
+  r: number;
+  socketR: number;
+  tilt: number;
+}
 
 export interface TendrilRoot {
   /** Map-local root position (cells) and outward unit normal. */
@@ -49,7 +60,10 @@ export interface TendrilRoot {
 }
 
 export interface LastOneRig {
+  /** The lead eye (the gaze leaves from it): `eyes[0]`. */
   eye: { x: number; y: number; r: number; socketR: number };
+  /** Every eye, the lead eye first (D36: five). */
+  eyes: LastOneEye[];
   core: { x: number; y: number; r: number };
   halo: { cx: number; cy: number; a: number; b: number; tilt: number };
   roots: TendrilRoot[];
@@ -71,6 +85,8 @@ interface P {
   head: { cx: number; cy: number; rx: number; ry: number; bulgeX: number; bulgeRx: number; bulgeRy: number };
   mantle: { top: number; bottom: number; topR: number; bottomR: number; belly: number; hemScallops: number };
   eye: { x: number; y: number; r: number; socketR: number };
+  /** D36: the eyes (relative to the centre, the lead eye first); without it, the single `eye`. */
+  eyes?: { x: number; y: number; r: number; socketR: number; tilt?: number }[];
   core: { x: number; y: number; r: number };
   halo: {
     cx: number;
@@ -104,9 +120,28 @@ interface Layout {
   sdHalo(x: number, y: number): number;
   eyeX: number;
   eyeY: number;
+  /** Every eye in map cells, the lead eye (eyeX, eyeY) first. */
+  eyes: LastOneEye[];
   coreX: number;
   coreY: number;
   haloPts: { x: number; y: number }[];
+}
+
+/** The nearest eye to a point, measured in socket radii (< 1 inside its socket). */
+function nearestEye(eyes: readonly LastOneEye[], x: number, y: number): { e: LastOneEye; rho: number } {
+  let best = eyes[0]!;
+  let bestK = Infinity;
+  let bestRho = 0;
+  for (const e of eyes) {
+    const rho = Math.hypot(x - e.x, y - e.y);
+    const k = rho / e.socketR;
+    if (k < bestK) {
+      bestK = k;
+      best = e;
+      bestRho = rho;
+    }
+  }
+  return { e: best, rho: bestRho };
 }
 
 function makeLayout(def: TitanDef, seed: number): Layout {
@@ -182,6 +217,13 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   const sdHalo = (x: number, y: number): number =>
     Math.abs(sdEllipseRot(x, y, hx, hy, hp.a, hp.b, -hp.tilt)) - hp.thickness * 0.5;
 
+  const eyes: LastOneEye[] = (p.eyes ?? [p.eye]).map((e) => ({
+    x: cx + e.x,
+    y: cy + e.y,
+    r: e.r,
+    socketR: e.socketR,
+    tilt: (e as { tilt?: number }).tilt ?? 0,
+  }));
   return {
     p,
     cx,
@@ -189,8 +231,9 @@ function makeLayout(def: TitanDef, seed: number): Layout {
     seed,
     sdBody,
     sdHalo,
-    eyeX: cx + p.eye.x,
-    eyeY: cy + p.eye.y,
+    eyeX: eyes[0]!.x,
+    eyeY: eyes[0]!.y,
+    eyes,
     coreX: cx + p.core.x,
     coreY: cy + p.core.y,
     haloPts,
@@ -247,7 +290,8 @@ export function buildLastOneRig(def: TitanDef, seed: number): LastOneRig {
   const L = makeLayout(def, seed);
   const p = L.p;
   return {
-    eye: { x: L.eyeX, y: L.eyeY, r: p.eye.r, socketR: p.eye.socketR },
+    eye: { x: L.eyeX, y: L.eyeY, r: L.eyes[0]!.r, socketR: L.eyes[0]!.socketR },
+    eyes: L.eyes.map((e) => ({ ...e })),
     core: { x: L.coreX, y: L.coreY, r: p.core.r },
     halo: { cx: L.cx + p.halo.cx, cy: L.cy + p.halo.cy, a: p.halo.a, b: p.halo.b, tilt: p.halo.tilt },
     roots: makeRoots(L),
@@ -339,8 +383,6 @@ export function paintLastOne(
   const worleyOut = makeWorley();
   const ex0 = L.eyeX;
   const ey0 = L.eyeY;
-  const eyeR = p.eye.r;
-  const sockR = p.eye.socketR;
 
   // ---------- 2. materials, relief, tone ----------
   for (let y = 0; y < H; y++) {
@@ -363,10 +405,15 @@ export function paintLastOne(
       }
 
       const d = dBody[i]!;
-      const dx = fx - ex0;
-      const dy = fy - ey0;
-      const rho = Math.hypot(dx, dy);
+      // the seams and plate arcs radiate from the lead eye; the sockets are each eye's own (the nearest one)
+      const rhoL = Math.hypot(fx - ex0, fy - ey0);
+      const thL = Math.atan2(fy - ey0, fx - ex0);
+      const { e: E, rho } = nearestEye(L.eyes, fx, fy);
+      const dx = fx - E.x;
+      const dy = fy - E.y;
       const th = Math.atan2(dy, dx);
+      const eyeR = E.r;
+      const sockR = E.socketR;
 
       // layer depth: glaze shell over crystalline lattice
       const isMantle = fy > L.cy + p.mantle.top - 6 && fy > ey0 + 24;
@@ -391,16 +438,16 @@ export function paintLastOne(
       if (m === ids.shell && rho > sockR + 1.5) {
         const step = (Math.PI * 2) / p.seams;
         const warpA =
-          0.28 * Math.sin(rho / 15 + (L.seed & 255) * 0.05) + 0.16 * fbm(fx * 0.04, fy * 0.04, sA + 9, 2);
-        const k = Math.round((th - warpA) / step);
-        const perp = Math.abs(angDiff(th - warpA, k * step)) * rho;
-        if (perp < 0.62 && hash01(k + 40, Math.floor(rho / 9), sA) > 0.12) {
+          0.28 * Math.sin(rhoL / 15 + (L.seed & 255) * 0.05) + 0.16 * fbm(fx * 0.04, fy * 0.04, sA + 9, 2);
+        const k = Math.round((thL - warpA) / step);
+        const perp = Math.abs(angDiff(thL - warpA, k * step)) * rhoL;
+        if (perp < 0.62 && hash01(k + 40, Math.floor(rhoL / 9), sA) > 0.12) {
           m = ids.seam;
           rel -= 1.4;
         }
         for (const rr of [39, 54, 70]) {
-          const dr = Math.abs(rho - (rr + 2.5 * Math.sin(th * 3 + rr)));
-          if (dr < 0.6 && hash01(Math.floor(th * 6 + rr), rr, sB) > 0.35) {
+          const dr = Math.abs(rhoL - (rr + 2.5 * Math.sin(thL * 3 + rr)));
+          if (dr < 0.6 && hash01(Math.floor(thL * 6 + rr), rr, sB) > 0.35) {
             m = ids.seam;
             rel -= 1.1;
           }
@@ -436,10 +483,11 @@ export function paintLastOne(
         if ((worleyOut.f2 - worleyOut.f1) * 6.5 < 0.7) tone -= 1.1;
       }
 
-      // ---- socket: bevelled lip, gilt inlay ring, the eye ----
-      if (rho < sockR + 4) {
-        const lip = smoothstep(sockR + 4, sockR - 1, rho);
-        rel += 5.5 * lip * (rho > eyeR - 1 ? 1 : 0.4);
+      // ---- socket: bevelled lip, metal inlay ring, the eye (each eye its own; the small ones are almost all iris) ----
+      const lipW = clamp(sockR * 0.3, 2, 4);
+      if (rho < sockR + lipW) {
+        const lip = smoothstep(sockR + lipW, sockR - 1, rho);
+        rel += 5.5 * Math.min(1, sockR / 14) * lip * (rho > eyeR - 1 ? 1 : 0.4);
         if (
           rho > eyeR + 0.5 &&
           rho < sockR + 0.5 &&
@@ -449,16 +497,23 @@ export function paintLastOne(
           m = ids.gilt;
         if (rho <= eyeR + 0.5) {
           const q = rho / eyeR;
-          const upper = sdCircle(fx, fy, ex0, ey0 + 9.5, eyeR * 1.075);
-          const lower = sdCircle(fx, fy, ex0, ey0 - 10.5, eyeR * 1.075);
+          // almond lids, turned by the eye's own tilt
+          const ct = Math.cos(E.tilt);
+          const st = Math.sin(E.tilt);
+          const ux = dx * ct + dy * st;
+          const uy = -dx * st + dy * ct;
+          const upper = sdCircle(ux, uy, 0, eyeR * 0.475, eyeR * 1.075);
+          const lower = sdCircle(ux, uy, 0, -eyeR * 0.525, eyeR * 1.075);
+          const sclera = eyeR >= 9 ? 0.66 : 0.76;
+          const pupil = eyeR >= 9 ? 0.29 : 0.34;
           if (upper > 0 || lower > 0) {
             m = ids.shell;
             rel = 12 + 3 * (1 - q) + (upper > 0 ? 2.2 : 0);
             tone += 0.2;
           } else {
             rel = 9 + 7.5 * (1 - q * q);
-            m = q > 0.66 ? ids.eye : q > 0.29 ? ids.iris : ids.pupil;
-            if (m === ids.eye) tone = 0.6 - (q - 0.66) * 3;
+            m = q > sclera ? ids.eye : q > pupil ? ids.iris : ids.pupil;
+            if (m === ids.eye) tone = 0.6 - (q - sclera) * 3;
           }
         }
       }
@@ -517,7 +572,7 @@ export function paintLastOne(
   const colors = cv.render({ ramps, params: shade, lighting });
 
   // ---------- 4. hand-painted parts ----------
-  bleedCoreLight(cv, colors, L, ids);
+  bleedCoreLight(cv, colors, L, def, ids);
   paintEye(cv, colors, L, def, lighting, ids);
   paintCore(cv, colors, L, def, ids);
   paintHaloDetail(cv, colors, L, def, ids, seed);
@@ -533,9 +588,16 @@ export function paintLastOne(
 }
 
 /** Warm light leaking from the core through the glaze: quantised to three tints so the palette stays clean. */
-function bleedCoreLight(cv: ArtCanvas, colors: Uint32Array, L: Layout, ids: LastOneRig['ids']): void {
+function bleedCoreLight(
+  cv: ArtCanvas,
+  colors: Uint32Array,
+  L: Layout,
+  def: TitanDef,
+  ids: LastOneRig['ids'],
+): void {
   const W = cv.w;
-  const warm = hex('#ffd98a');
+  // the core's own light (its ramp's second-brightest step), not a fixed warm gold
+  const warm = hex(def.materials[ids.core - 1]!.visual.ramp[4] ?? '#ffd98a');
   const R = L.p.core.r;
   for (let y = Math.floor(L.coreY - R - 26); y <= Math.ceil(L.coreY + R + 26); y++) {
     for (let x = Math.floor(L.coreX - R - 26); x <= Math.ceil(L.coreX + R + 26); x++) {
@@ -562,17 +624,36 @@ function paintEye(
   lighting: StageLighting,
   ids: LastOneRig['ids'],
 ): void {
-  const { p } = L;
-  const W = cv.w;
-  const ex = L.eyeX;
-  const ey = L.eyeY;
-  const R = p.eye.r;
   const key = hex(lighting.color);
   const iris = def.materials[ids.iris - 1]!.visual.ramp.map(hex);
   const eyeRamp = def.materials[ids.eye - 1]!.visual.ramp.map(hex);
   const pupilRamp = def.materials[ids.pupil - 1]!.visual.ramp.map(hex);
-  const gold = hex('#e8c15a');
-  const goldHi = hex('#fff0a8');
+  // the hot ring around the pupil and the flecks: the iris ramp's own brightest steps (each titan's palette, D36)
+  const gold = iris[Math.min(5, iris.length - 1)]!;
+  const goldHi = iris[iris.length - 1]!;
+  for (const e of L.eyes) paintOneEye(cv, colors, e, key, iris, eyeRamp, pupilRamp, gold, goldHi, ids);
+}
+
+function paintOneEye(
+  cv: ArtCanvas,
+  colors: Uint32Array,
+  E: LastOneEye,
+  key: number,
+  iris: number[],
+  eyeRamp: number[],
+  pupilRamp: number[],
+  gold: number,
+  goldHi: number,
+  ids: LastOneRig['ids'],
+): void {
+  const W = cv.w;
+  const ex = E.x;
+  const ey = E.y;
+  const R = E.r;
+  const big = R >= 9;
+  const sclera = big ? 0.66 : 0.76;
+  const pupil = big ? 0.29 : 0.34;
+  const limbal = big ? 0.6 : 0.68;
   for (let y = Math.floor(ey - R - 2); y <= Math.ceil(ey + R + 2); y++) {
     for (let x = Math.floor(ex - R - 2); x <= Math.ceil(ex + R + 2); x++) {
       const i = y * W + x;
@@ -581,26 +662,27 @@ function paintEye(
       const dx = x + 0.5 - ex;
       const dy = y + 0.5 - ey;
       const q = Math.hypot(dx, dy) / R;
+      if (q * R > R + 0.75) continue; // a neighbouring eye's pixel
       const th = Math.atan2(dy, dx);
       let c: number;
       if (m === ids.eye) {
-        // sclera: pale bone-jade, shaded toward the lids
-        const shade = clamp01(0.7 - (q - 0.66) * 1.1 - (dy < 0 ? (-dy / R) * 0.3 : 0));
+        // sclera: pale, shaded toward the lids
+        const shade = clamp01(0.7 - (q - sclera) * 1.1 - (dy < 0 ? (-dy / R) * 0.3 : 0));
         const k = clamp(Math.round(2.2 + shade * 3.4), 2, 5);
         c = eyeRamp[hash01(Math.floor(x / 2), Math.floor(y / 2), 77) > 0.9 ? Math.max(0, k - 1) : k]!;
       } else if (m === ids.pupil) {
-        c = pupilRamp[q < 0.16 ? 0 : q < 0.24 ? 1 : 2]!;
-      } else if (q > 0.6) {
-        c = iris[1]!; // limbal ring, deep teal
+        c = pupilRamp[q < pupil * 0.55 ? 0 : q < pupil * 0.83 ? 1 : 2]!;
+      } else if (q > limbal) {
+        c = iris[1]!; // limbal ring
       } else {
-        // iris: radial fibres, teal → jade → gold near the pupil, lit from within on the lower half
-        const t = (q - 0.29) / (0.6 - 0.29);
+        // iris: radial fibres, dark at the rim → bright near the pupil, lit from within on the lower half
+        const t = (q - pupil) / (limbal - pupil);
         const fibre = ridged(th * 4.2 + 3, q * 6, 991, 2);
         const fleck = hash01(Math.floor(th * 9), Math.floor(q * 12), 313) > 0.86;
         const k = clamp(5 - t * 3.6 + (fibre - 0.5) * 1.6 + (dy > 0 ? 0.6 : -0.5), 1, 6);
-        c = iris[Math.round(k)]!;
+        c = iris[Math.min(iris.length - 1, Math.round(k))]!;
         if (t < 0.28) c = blend(c, gold, 0.75 - t * 1.5);
-        if (fleck && t < 0.75 && t > 0.15) c = blend(c, goldHi, 0.65);
+        if (big && fleck && t < 0.75 && t > 0.15) c = blend(c, goldHi, 0.65);
       }
       if (dx + dy < -R * 0.5 && q < 0.9) c = blend(c, key, 0.1);
       colors[i] = c;
@@ -613,17 +695,22 @@ function paintEye(
         if (cv.mat[i] === ids.iris || cv.mat[i] === ids.pupil || cv.mat[i] === ids.eye) colors[i] = col;
       }
   };
+  // the catch-lights, scaled to the eye (one pixel on the smallest: they must still read as wet at native size)
   const white = rgba(255, 252, 236);
-  hl(-8, -8, 3, 2, white);
-  hl(-9, -6, 1, 1, white);
-  hl(-6, -9, 2, 1, white);
-  hl(6, 6, 2, 1, blend(white, iris[5]!, 0.45));
-  hl(5, 7, 1, 1, blend(white, iris[5]!, 0.45));
+  const s = R / 20;
+  if (big) {
+    hl(Math.round(-8 * s), Math.round(-8 * s), 2, 2, white);
+    hl(Math.round(-9 * s) - 1, Math.round(-6 * s), 1, 1, white);
+    hl(Math.round(6 * s), Math.round(6 * s), 1, 1, blend(white, iris[5]!, 0.45));
+  } else {
+    hl(Math.round(-0.42 * R), Math.round(-0.42 * R), 1, 1, white);
+  }
   // the upper lid throws a shadow line onto the eyeball
   for (let x = Math.floor(ex - R); x <= Math.ceil(ex + R); x++) {
     for (let y = Math.floor(ey - R); y <= ey; y++) {
       const i = y * W + x;
       if (cv.mat[i] !== ids.eye && cv.mat[i] !== ids.iris) continue;
+      if (Math.hypot(x + 0.5 - ex, y + 0.5 - ey) > R + 0.75) continue;
       if (cv.mat[(y - 1) * W + x] === ids.shell) colors[i] = blend(colors[i]!, iris[0]!, 0.7);
     }
   }
@@ -665,9 +752,11 @@ function paintHaloDetail(
   const W = cv.w;
   const hp = p.halo;
   const gilt = def.materials[ids.gilt - 1]!.visual.ramp.map(hex);
-  const jade = hex('#66c9a2');
-  const jadeHi = hex('#d8ffe4');
-  const jadeDk = hex('#12404a');
+  // the gems are set in the eyes' own colour (the iris ramp)
+  const irisRamp = def.materials[ids.iris - 1]!.visual.ramp.map(hex);
+  const jade = irisRamp[4]!;
+  const jadeHi = irisRamp[Math.min(6, irisRamp.length - 1)]!;
+  const jadeDk = irisRamp[1]!;
   // tick marks: notches along the ring (an astrolabe rim); every 4th is a raised stud
   const n = hp.ticks;
   for (let k = 0; k < n; k++) {
@@ -2230,7 +2319,7 @@ function paintArmSegment(
   });
 }
 
-/* ---------------------------------------------------------------- the Witness as a titan (behind `witness=1`) */
+/* ------------------------------------------- the colossus as a titan (id 'colossus', displayed as The Last One: D36) */
 
 /** The rig a Witness fighter is generated with: every painted region (the eye cradle is the fighter's primary body). */
 export interface WitnessTitanRig {
@@ -2259,17 +2348,21 @@ export function paintWitnessTitan(
 const WITNESS_DEFS = new WeakMap<TitanDef, TitanDef>();
 
 /**
- * The Last One's definition rebuilt as the Witness (the `witness=1` flag; SLICE_PHASE2): the Witness's materials, its eye
- * cradle as the art recipe (the KO core is the pupil), its halo arcs as the resource, and the Witness's six moves (witnessMoves).
- * Cached per source definition.
+ * The colossus's definition built from its template (src/titans/colossus.json; SLICE_PHASE2): the colossus's materials, its eye
+ * cradle as the art recipe (the KO core is the pupil), its halo arcs as the resource, and its six moves (witnessMoves). The id
+ * stays the template's ('colossus'). Cached per source definition; a colossus definition is returned as is.
  */
 export function witnessDef(def: TitanDef): TitanDef {
+  if (isWitnessDef(def)) return def;
   const hit = WITNESS_DEFS.get(def);
   if (hit) return hit;
   const eye = paintWitness(1, DEFAULT_LIGHTING).regions[0]!.map;
   const w: TitanDef = {
     ...def,
-    name: 'The Witness',
+    // D36: the colossus is displayed as The Last One (마지막 하나, its template's Korean name); the tendril titan is the Witness
+    name: 'The Last One',
+    nameKo: '마지막 하나',
+    epithet: 'De Laatste',
     materials: WITNESS_MATERIALS.map((m) => ({ ...m })),
     // the pips count the halo arcs still bound to it (the id stays the contract's 'tendrils': ResourceId is a contract union)
     resource: {
@@ -2339,13 +2432,14 @@ const emptyVariant = (
 export function witnessMoves(base: readonly MoveDef[]): MoveDef[] {
   const by = (id: string): MoveDef | undefined => base.find((m) => m.id === id);
   // Strike — HALO SHARDS: the broken halo's arcs swing forward through a lane, one after another
-  const halo = cloneMove(by('lastone.lash'), 'witness.halo', 'Halo Shards', '후광 파편');
+  const halo = cloneMove(by('lastone.lash'), 'colossus.halo', 'Halo Shards', '후광 파편');
   halo.frame = { startup: 10, active: 24, recovery: 14, cancelWindow: 0.4, chargeMax: 0, hitstop: 6 };
   for (const a of AIM_DIRS) halo.variants[a] = emptyVariant([{ at: 0, ix: -20, iy: 0, damp: 0.3 }]);
   halo.tags = ['multi'];
   // the AI's model (proposal 167): S1's stand-in (src/ai/moves.ts KIT_REACH) with the arcs' spread at WITNESS_SCALE (D34)
   halo.extra = {
     witness: 'halo',
+    bodyHits: true,
     pose: { startup: { lean: -2 }, active: { lean: 3 } },
     aiReach: {
       x0: -20,
@@ -2360,12 +2454,13 @@ export function witnessMoves(base: readonly MoveDef[]): MoveDef[] {
   };
   // Crush — SWEEPING ARCHITECTURE (up/forward) / STRUCTURAL SHEAR (down, close range): the whole body turns through a scythe
   // arc on S1's load → commit → re-balance choreography; the arm blades are the hit volumes
-  const sweep = cloneMove(by('lastone.shatter'), 'witness.sweep', 'Sweeping Architecture', '휩쓰는 구조');
+  const sweep = cloneMove(by('lastone.shatter'), 'colossus.sweep', 'Sweeping Architecture', '휩쓰는 구조');
   sweep.variants.up = emptyVariant(sweep.variants.up.movement);
   sweep.variants.forward = emptyVariant(sweep.variants.forward.movement);
   sweep.extra = {
     ...(sweep.extra ?? {}),
     witness: 'sweep',
+    bodyHits: true,
     eyeFlare: false,
     // the AI's model for the up / forward blades: S1's stand-in (KIT_REACH: tips about 185 px from the eye) at WITNESS_SCALE;
     // the down aim keeps its JSON cone
@@ -2379,11 +2474,11 @@ export function witnessMoves(base: readonly MoveDef[]): MoveDef[] {
     h.id = 'shear';
   });
   // Surge — CHARGE, AND SIDESTEP
-  const side = cloneMove(by('lastone.sidestep'), 'witness.sidestep', 'Sidestep', '옆걸음');
-  const charge = cloneMove(by('lastone.lunge'), 'witness.charge', 'Charge', '돌진');
+  const side = cloneMove(by('lastone.sidestep'), 'colossus.sidestep', 'Sidestep', '옆걸음');
+  const charge = cloneMove(by('lastone.lunge'), 'colossus.charge', 'Charge', '돌진');
   side.extra = {
     ...(side.extra ?? {}),
-    followUp: { button: 'strike', from: 6, to: 20, move: 'witness.charge' },
+    followUp: { button: 'strike', from: 6, to: 20, move: 'colossus.charge' },
   };
   // a colossus does not dart: the sidestep carries 70% of the Last One's speed (scale spec on the hanging arms)
   for (const a of AIM_DIRS)
@@ -2393,7 +2488,7 @@ export function witnessMoves(base: readonly MoveDef[]): MoveDef[] {
       iy: k.iy * 0.7,
     }));
   // Signature — FRACTURE GAZE: the held beam marks the foe; each mark shears 0.3–0.8 s later
-  const gaze = cloneMove(by('lastone.gaze'), 'witness.gaze', 'Fracture Gaze', '균열의 시선');
+  const gaze = cloneMove(by('lastone.gaze'), 'colossus.gaze', 'Fracture Gaze', '균열의 시선');
   gaze.extra = { ...(gaze.extra ?? {}), witness: 'gaze' };
   // the gaze leaves from the eye itself (the Last One's beam started at a crown above its root): keep each line's direction
   // and length, move its start onto the eye centre (2 px left of and 1 px above the anchor)
@@ -2409,12 +2504,12 @@ export function witnessMoves(base: readonly MoveDef[]): MoveDef[] {
       hb.damage = { ...hb.damage, energy: hb.damage.energy * 0.15 };
     }
   // Ultimate — REVELATION: the inner eyes open and a lattice of gazes fans out
-  const rev = cloneMove(by('lastone.lastlight'), 'witness.revelation', 'Revelation', '계시');
+  const rev = cloneMove(by('lastone.lastlight'), 'colossus.revelation', 'Revelation', '계시');
   for (const a of AIM_DIRS) rev.variants[a] = emptyVariant(rev.variants[a].movement);
   rev.tags = ['ultimate', 'armor'];
-  rev.extra = { ...(rev.extra ?? {}), witness: 'revelation', halo: false };
+  rev.extra = { ...(rev.extra ?? {}), witness: 'revelation', halo: false, bodyHits: true };
   // Guard — HALO CLOSE: the arcs close into a shield in front; every broken arc weakens it
-  const close = cloneMove(by('lastone.guard'), 'witness.close', 'Halo Close', '후광 닫기');
+  const close = cloneMove(by('lastone.guard'), 'colossus.close', 'Halo Close', '후광 닫기');
   close.extra = { ...(close.extra ?? {}), witness: 'close' };
   return [halo, sweep, side, charge, gaze, rev, close];
 }

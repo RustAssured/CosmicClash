@@ -14,8 +14,8 @@ describe('blow weight (VFX_SPEC item 6, proposal 171)', () => {
   });
 
   it('the Witness and the Planet are mapped; others fall back by slot and energy; authored weights win', () => {
-    expect(blowWeight('witness.sweep', null, 'crush', 100, false)).toBe('heavy');
-    expect(blowWeight('witness.halo', null, 'strike', 900, false)).toBe('light');
+    expect(blowWeight('colossus.sweep', null, 'crush', 100, false)).toBe('heavy');
+    expect(blowWeight('colossus.halo', null, 'strike', 900, false)).toBe('light');
     expect(blowWeight('planet.moonslam', null, 'strike', 900, false)).toBe('medium');
     expect(MOVE_WEIGHTS['planet.impact']).toBe('heavy');
     expect(blowWeight('x', null, 'strike', 100, false)).toBe('light');

@@ -47,7 +47,9 @@ const SOURCES = {
    * The site's trailer, with sound (lightbox): S5's converged trailer (WJ's story teaser 0–40 s, the gameplay montage,
    * the teaser 40–61.2 s; tools/press/trailer/edit.ts final). `poster`: the poster frame's time (우리 braced).
    */
-  trailer: { src: 'press/trailer/trailer-final.mp4', ss: 0, t: 80.9, poster: 37 } as Cut & { poster?: number },
+  trailer: { src: 'press/trailer/trailer-final.mp4', ss: 0, t: 80.9, poster: 37 } as Cut & {
+    poster?: number;
+  },
   features: {
     orbit: { src: WP, ss: 3, t: 6 },
     matter: { src: WP, ss: 9, t: 6 },
@@ -57,7 +59,8 @@ const SOURCES = {
   } as Record<string, Cut>,
   /** hover loops on the roster cards */
   titans: {
-    witness: { src: WP, ss: 0.5, t: 4 },
+    // D36: the colossus's card is The Last One's ('lastone'); the returning Witness has no clip yet
+    lastone: { src: WP, ss: 0.5, t: 4 },
     planet: { src: WP, ss: 11, t: 4 },
     asteroid: { src: LA, ss: 4, t: 4 },
     nexus: { src: BN, ss: 5, t: 4 },

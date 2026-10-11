@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { PNG } from 'pngjs';
 import { DEFAULT_LIGHTING, type TitanDef, type TitanId } from '../../src/contracts';
-import { getTitanDef, witnessDef } from '../../src/titans';
+import { getTitanDef } from '../../src/titans';
 import { renderPortrait, type Portrait } from '../../src/titans/portrait';
 import { PixelCanvas } from '../../src/ui/pixel/canvas';
 import { drawText, lineHeight, wrapText } from '../../src/ui/pixel/text';
@@ -17,7 +17,9 @@ const S = 6;
 const OUT = `${PRESS}/cards`;
 mkdirSync(OUT, { recursive: true });
 
+// D36: the colossus ('colossus') is The Last One; the returning tendril titan ('lastone') is The Witness
 const TITANS: { file: string; id: TitanId }[] = [
+  { file: 'lastone', id: 'colossus' },
   { file: 'witness', id: 'lastone' },
   { file: 'planet', id: 'planet' },
   { file: 'asteroid', id: 'asteroid' },
@@ -91,9 +93,8 @@ function card(def: TitanDef, p: Portrait): PixelCanvas {
 }
 
 for (const t of TITANS) {
-  const base = getTitanDef(t.id);
-  const def = t.id === 'lastone' ? witnessDef(base) : base;
-  const p = renderPortrait(t.id, 1, DEFAULT_LIGHTING, t.id === 'lastone');
+  const def = getTitanDef(t.id);
+  const p = renderPortrait(t.id, 1, DEFAULT_LIGHTING);
   writeScaled(`${OUT}/${t.file}-portrait.png`, p);
   const cv = card(def, p);
   writeScaled(`${OUT}/${t.file}-card.png`, cv);

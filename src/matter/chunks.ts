@@ -1,5 +1,6 @@
 import { LOGICAL_H, LOGICAL_W, MAX_DEBRIS_CHUNKS, TICK_DT, type ViewRect } from '@/contracts';
 import type { WorldCore } from './core';
+import { collideCapsules } from './capsules';
 import { PK } from './particles';
 import { lerpPx, scalePx } from './util';
 
@@ -620,7 +621,10 @@ export function stepChunks(core: WorldCore): void {
       c.angle += c.spin * dt;
       if ((c.x < a.minX + wall && c.vx < 0) || (c.x > a.maxX - wall && c.vx > 0)) c.vx = -c.vx;
       if ((c.y < a.minY + wall && c.vy < 0) || (c.y > a.maxY - wall && c.vy > 0)) c.vy = -c.vy;
-      if (core.tick % 8 === 0) collideBodies(core, c);
+      if (core.tick % 8 === 0) {
+        collideBodies(core, c);
+        collideCapsules(core, c, CHUNK_LAUNCHED);
+      }
       continue;
     }
     const launched = c.mode === CHUNK_LAUNCHED;
@@ -702,6 +706,8 @@ export function stepChunks(core: WorldCore): void {
       c.asleep = true;
     }
     if (c.age >= c.noHitUntil) collideBodies(core, c);
+    // analytic fighters' capsules (the Mouth, D37: Gate 3A §2): debris bounces off them by the same rules
+    if (c.alive && c.age >= c.noHitUntil) collideCapsules(core, c, CHUNK_LAUNCHED);
   }
 }
 

@@ -29,6 +29,8 @@ import { ROT_LUT, rotBoundsEx } from './rotsprite';
 import { TITAN_SKY, URI_CEILING_EXEMPT, isTitanLayer, type RenderLayerLit } from './unified';
 import { sourceRamp } from './master';
 import { UriLivePass } from './uriLivePass';
+import { MouthPass, type RenderLayerMouth } from './mouthPass';
+import type { MouthDrawList } from './mouthList';
 import { URI_FIST_SPREAD_REST } from './uriLive';
 
 /** 우리's ramps for the part pass's shade mode, as linear-in-sRGB 0..1 triples (vec3 arrays). */
@@ -148,6 +150,13 @@ export class LayerCompositor {
   /** 우리's live pass (created on first use) and whether it drew this frame. */
   private live: UriLivePass | null = null;
   liveUsed = false;
+  /** The Mouth's GPU passes (one per draw list: a mirror match has two), and whether one drew this frame. */
+  private readonly mouths = new Map<MouthDrawList, MouthPass>();
+  mouthUsed = false;
+  /** The Mouth pass of a draw list (perf tools read its stats). */
+  mouthPassOf(list: MouthDrawList): MouthPass | undefined {
+    return this.mouths.get(list);
+  }
   /** Additive glow below this contribution is dropped (LAYER_FRAG uGlowFloor). */
   readonly glowFloor = { value: 0.05 };
   private readonly res = new Vector2(LOGICAL_W, LOGICAL_H);
@@ -293,8 +302,20 @@ export class LayerCompositor {
     for (let i = 0; i < MAX_PARTS; i++) this.partSlots[i]!.mesh.visible = false;
     this.live?.hide();
     this.liveUsed = false;
+    for (const mp of this.mouths.values()) mp.hide();
+    this.mouthUsed = false;
     for (let i = 0; i < n; i++) {
       const layer = this.sorted[i]!;
+      // the Mouth (D37): its own GPU pass renders the draw list once, then a compose quad per half (back / front)
+      const mfx = (layer as RenderLayerMouth).mouth;
+      if (mfx) {
+        let mp = this.mouths.get(mfx.list);
+        if (!mp) this.mouths.set(mfx.list, (mp = new MouthPass(this.scene, this.emisGain)));
+        mp.render(renderer, mfx.list, view);
+        mp.stage(mfx.back, ++order, !this.unified);
+        this.mouthUsed = true;
+        continue;
+      }
       // a rig (or 우리's live elements alone, once every part has broken away)
       if (
         layer.space === 'world' &&
@@ -427,7 +448,7 @@ export class LayerCompositor {
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, false, false);
-    if (used + usedParts > 0 || this.liveUsed) renderer.render(this.scene, this.camera);
+    if (used + usedParts > 0 || this.liveUsed || this.mouthUsed) renderer.render(this.scene, this.camera);
     return used + usedParts;
   }
 
@@ -447,6 +468,8 @@ export class LayerCompositor {
     for (const s of this.slots) s.material.dispose();
     for (const s of this.partSlots) s.material.dispose();
     this.live?.dispose();
+    for (const mp of this.mouths.values()) mp.dispose();
+    this.mouths.clear();
     for (const e of this.fistTabs.values()) e.tex.dispose();
     this.fistTabs.clear();
   }

@@ -175,7 +175,7 @@
       "end": 15,
       "stage": "tussenruimte",
       "match": {
-        "a": "lastone",
+        "a": "colossus",
         "b": "planet",
         "seed": 3,
         "ai": 0,
@@ -225,7 +225,7 @@
       "end": 16.2,
       "stage": "tussenruimte",
       "match": {
-        "a": "lastone",
+        "a": "colossus",
         "b": "planet",
         "seed": 3,
         "ai": 0,
@@ -271,7 +271,7 @@
       "end": 17.2,
       "stage": "tussenruimte",
       "match": {
-        "a": "lastone",
+        "a": "colossus",
         "b": "planet",
         "seed": 3,
         "ai": 0,
@@ -319,7 +319,7 @@
       "end": 18,
       "stage": "tussenruimte",
       "match": {
-        "a": "lastone",
+        "a": "colossus",
         "b": "planet",
         "seed": 3,
         "ai": 0,
@@ -363,7 +363,7 @@
       "end": 20,
       "stage": "tussenruimte",
       "match": {
-        "a": "lastone",
+        "a": "colossus",
         "b": "planet",
         "seed": 3,
         "ai": 0,
@@ -1772,7 +1772,7 @@
       "stage": "mausoleum",
       "match": {
         "a": "uri",
-        "b": "lastone",
+        "b": "colossus",
         "seed": 4,
         "ai": 4,
         "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
@@ -1828,7 +1828,7 @@
       "stage": "mausoleum",
       "match": {
         "a": "uri",
-        "b": "lastone",
+        "b": "colossus",
         "seed": 2,
         "ai": 4,
         "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
@@ -1863,7 +1863,7 @@
       "stage": "mausoleum",
       "match": {
         "a": "uri",
-        "b": "lastone",
+        "b": "colossus",
         "seed": 4,
         "ai": 4,
         "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
@@ -1887,7 +1887,7 @@
       "stage": "mausoleum",
       "match": {
         "a": "uri",
-        "b": "lastone",
+        "b": "colossus",
         "seed": 4,
         "ai": 4,
         "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",
@@ -1941,7 +1941,7 @@
       "stage": "mausoleum",
       "match": {
         "a": "uri",
-        "b": "lastone",
+        "b": "colossus",
         "seed": 4,
         "ai": 4,
         "script0": "10:right*25,30:strike*6,55:strike*6,80:crush*24,180:right*25,200:strike*6,225:strike*6,250:crush*24,350:right*25,370:strike*6,395:strike*6,420:crush*24,470:sig*30,520:right*25,540:strike*6,565:strike*6,590:crush*24,690:right*25,710:strike*6,735:strike*6,760:crush*24,860:right*25,880:strike*6,905:strike*6,930:crush*24,980:sig*30,1030:right*25,1050:strike*6,1075:strike*6,1100:crush*24,1200:right*25,1220:strike*6,1245:strike*6,1270:crush*24,1370:right*25,1390:strike*6,1415:strike*6,1440:crush*24,1490:sig*30,1540:right*25,1560:strike*6,1585:strike*6,1610:crush*24,1710:right*25,1730:strike*6,1755:strike*6,1780:crush*24,1880:right*25,1900:strike*6,1925:strike*6,1950:crush*24,2000:sig*30,2050:right*25,2070:strike*6,2095:strike*6,2120:crush*24,2220:right*25,2240:strike*6,2265:strike*6,2290:crush*24,2390:right*25,2410:strike*6,2435:strike*6,2460:crush*24,2510:sig*30",

@@ -1,14 +1,15 @@
 import type { Fighter, FighterFactory, FighterOptions } from '@/contracts';
-import { witnessDef } from '@/titans';
 import { FighterImpl } from './fighter';
+import { isMouthDef } from '@/titans/mouth/def';
+import { MouthFighter } from './mouth/fighter';
 
 /**
- * The Fighter factory the Match uses (`FighterFactory`). With `witness` set (URL `witness=1`, proposal 163), the Last One is
- * played as the Witness: its definition becomes `witnessDef(def)` (the eye cradle as the primary body, the region bodies,
- * the halo arcs as the resource).
+ * The Fighter factory the Match uses (`FighterFactory`). D36: the colossus is its own titan ('colossus', whose definition is
+ * already `witnessDef(...)`), so the old `witness` flag no longer swaps the Last One's definition; it is ignored.
  */
 export const createFighter: FighterFactory = (opts: FighterOptions): Fighter =>
-  new FighterImpl(opts.witness && opts.def.id === 'lastone' ? { ...opts, def: witnessDef(opts.def) } : opts);
+  // the Mouth (D37) is analytic, not matter: its own Fighter (src/combat/mouth/fighter.ts)
+  isMouthDef(opts.def) ? new MouthFighter(opts) : new FighterImpl(opts);
 
 export { FighterImpl, PACE } from './fighter';
 export { Behaviour, DefaultBehaviour, type HitInfo, type InterceptResult } from './behaviour';

@@ -11,14 +11,14 @@ import {
 import { createFighter } from '@/combat';
 import { createFakeWorld } from '@/combat/testing/harness';
 import { createAiSource, createMatch } from '@/sim';
-import { getTitanDef, witnessDef } from '@/titans';
+import { getTitanDef } from '@/titans';
 import { createAI } from './index';
 import { buildMoveInfos } from './moves';
 
 describe('AI move coverage (every move of the slice titans is in the model)', () => {
-  it('models the Witness kit moves that have no JSON hitboxes (Halo Shards, Sweeping Architecture, Revelation)', () => {
-    const infos = buildMoveInfos(witnessDef(getTitanDef('lastone')));
-    for (const id of ['witness.halo', 'witness.sweep', 'witness.revelation', 'witness.gaze']) {
+  it('models the colossus (The Last One, D36) kit moves that have no JSON hitboxes (Halo Shards, Sweeping Architecture, Revelation)', () => {
+    const infos = buildMoveInfos(getTitanDef('colossus'));
+    for (const id of ['colossus.halo', 'colossus.sweep', 'colossus.revelation', 'colossus.gaze']) {
       const mine = infos.filter((m) => m.def.id === id);
       expect(mine.length).toBe(3);
       for (const mi of mine) {
@@ -29,13 +29,32 @@ describe('AI move coverage (every move of the slice titans is in the model)', ()
       }
     }
     // the beam fan is judged along its axis
-    expect(infos.find((m) => m.def.id === 'witness.revelation')!.line).not.toBeNull();
+    expect(infos.find((m) => m.def.id === 'colossus.revelation')!.line).not.toBeNull();
+  });
+
+  it('models every blow of the returning Witness (id lastone, D36): lash, lunge, shatter, gaze and the Last Light', () => {
+    const infos = buildMoveInfos(getTitanDef('lastone'));
+    for (const id of [
+      'lastone.lash',
+      'lastone.lunge',
+      'lastone.shatter',
+      'lastone.gaze',
+      'lastone.lastlight',
+    ]) {
+      const mine = infos.filter((m) => m.def.id === id);
+      expect(mine.length, id).toBe(3);
+      for (const mi of mine) {
+        expect(mi.hasHitboxes, `${id} ${mi.aim}`).toBe(true);
+        expect(mi.energy).toBeGreaterThan(0);
+        expect(mi.hitTo).toBeGreaterThan(mi.hitFrom);
+      }
+    }
   });
 
   it("reads a move's own `extra.aiReach` before any stand-in (proposal 167)", () => {
-    const base = witnessDef(getTitanDef('lastone'));
+    const base = getTitanDef('colossus');
     const moves: MoveDef[] = base.moves.map((m) =>
-      m.id === 'witness.halo'
+      m.id === 'colossus.halo'
         ? {
             ...m,
             extra: { ...m.extra, aiReach: { x0: 0, y0: -10, x1: 333, y1: 10, from: 1, to: 5, energy: 77 } },
@@ -43,7 +62,7 @@ describe('AI move coverage (every move of the slice titans is in the model)', ()
         : m,
     );
     const def: TitanDef = { ...base, moves };
-    const halo = buildMoveInfos(def).find((m) => m.def.id === 'witness.halo')!;
+    const halo = buildMoveInfos(def).find((m) => m.def.id === 'colossus.halo')!;
     expect(halo.x1).toBe(333);
     expect(halo.energy).toBe(77);
   });

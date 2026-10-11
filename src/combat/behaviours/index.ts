@@ -14,10 +14,12 @@ import { UriBehaviour } from './uri';
 export function createBehaviour(f: FighterImpl): Behaviour {
   // 우리 (proposal 173 adds 'uri' to TitanId; its def is built in code: src/titans/uri/def.ts)
   if (isUriDef(f.def)) return new UriBehaviour(f);
+  // the colossus ('colossus', displayed as The Last One: D36) is recognised by its definition (witnessDef)
+  if (isWitnessDef(f.def)) return new WitnessBehaviour(f);
   switch (f.def.id) {
     case 'lastone':
-      // the rebuilt Witness (witness=1) is the Last One's id with the Witness's definition (witnessDef)
-      return isWitnessDef(f.def) ? new WitnessBehaviour(f) : new LastOneBehaviour(f);
+      // the tendril titan, displayed as The Witness (D36)
+      return new LastOneBehaviour(f);
     case 'asteroid':
       return new AsteroidBehaviour(f);
     case 'blackhole':

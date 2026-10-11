@@ -40,6 +40,8 @@ describe('titan definitions', () => {
   it.each(IMPLEMENTED_TITANS)('%s matches the design bible attributes', (id) => {
     const a = getTitanDef(id).attributes;
     const want = {
+      // D36: the colossus (The Last One) keeps the Last One's design-bible row; the tendril titan (The Witness) keeps it too
+      colossus: { mass: 5, cohesion: 8, heat: 5, gravity: 3, reach: 7, tempo: 7 },
       lastone: { mass: 5, cohesion: 8, heat: 5, gravity: 3, reach: 7, tempo: 7 },
       asteroid: { mass: 3, cohesion: 6, heat: 5, gravity: 1, reach: 4, tempo: 9 },
       nexus: { mass: 6, cohesion: 6, heat: 4, gravity: 4, reach: 8, tempo: 4 },
@@ -48,6 +50,8 @@ describe('titan definitions', () => {
       planet: { mass: 8, cohesion: 7, heat: 6, gravity: 7, reach: 6, tempo: 3 },
       // 우리 has no design-bible row: its pack's (src/titans/uri/def.ts; provisional until the Phase 4 balance pass)
       uri: { mass: 9, cohesion: 7, heat: 6, gravity: 5, reach: 7, tempo: 3 },
+      // the Mouth (D37) is a locked boss, not in IMPLEMENTED_TITANS (src/titans/mouth/def.ts): typed here only
+      mouth: { mass: 10, cohesion: 6, heat: 6, gravity: 3, reach: 10, tempo: 4 },
     }[id];
     expect(a).toEqual(want);
   });
@@ -115,8 +119,20 @@ describe('titan definitions', () => {
  * The procedural painters (seeded, lit for the stage, one connected body). 우리 is not painted: its matter is loaded as is
  * from its locked asset (src/titans/uri; its own tests: asset.test.ts, rig.test.ts) and lit on the GPU by the one sky, so the
  * seed and the stage light do not change it, and its pelvis is one of 13 part bodies. It has its own block below.
+ * The colossus (The Last One, D36) is a multi-body titan too: its primary body is only the eye cradle, and its regions are
+ * tested in witness.test.ts (src/titans and src/combat); its portrait has a block below.
  */
-const PAINTED = IMPLEMENTED_TITANS.filter((id) => id !== 'uri');
+const PAINTED = IMPLEMENTED_TITANS.filter((id) => id !== 'uri' && id !== 'colossus');
+
+describe('generator: colossus (every region composited for its portrait)', () => {
+  it('paints a stable portrait of the whole colossus, far bigger than its eye cradle', () => {
+    const p = renderPortrait('colossus', 5);
+    expect(p.w).toBeGreaterThan(160);
+    expect(renderPortrait('colossus', 5)).toBe(p);
+    const cradle = paintTitanMap(getTitanDef('colossus'), 5, DEFAULT_LIGHTING).map;
+    expect(p.w * p.h).toBeGreaterThan(cradle.w * cradle.h * 2);
+  });
+});
 
 describe('generator: uri (loaded as is)', () => {
   const def = getTitanDef('uri');
@@ -286,7 +302,38 @@ describe.each(PAINTED)('generator: %s', (id) => {
   });
 });
 
-describe('Last One specifics', () => {
+describe('the Witness specifics (id lastone, the tendril titan: D36)', () => {
+  it('is named the Witness (목격자); the colossus is the Last One (마지막 하나)', () => {
+    expect(getTitanDef('lastone').name).toBe('The Witness');
+    expect(getTitanDef('lastone').nameKo).toBe('목격자');
+    expect(getTitanDef('colossus').name).toBe('The Last One');
+    expect(getTitanDef('colossus').nameKo).toBe('마지막 하나');
+  });
+
+  it('has five eyes, each one open on matter in its own socket, the lead eye the biggest', () => {
+    const { map, rig } = paintTitanMap(getTitanDef('lastone'), 7, DEFAULT_LIGHTING);
+    const r = rig as LastOneRig;
+    expect(r.eyes).toHaveLength(5);
+    expect(r.eye.x).toBe(r.eyes[0]!.x);
+    for (const e of r.eyes) {
+      expect(e.r).toBeLessThanOrEqual(r.eyes[0]!.r);
+      const m = map.material[Math.round(e.y) * map.w + Math.round(e.x)]!;
+      expect([r.ids.iris, r.ids.pupil]).toContain(m);
+    }
+    for (let i = 0; i < r.eyes.length; i++)
+      for (let j = i + 1; j < r.eyes.length; j++) {
+        const a = r.eyes[i]!;
+        const b = r.eyes[j]!;
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(a.socketR + b.socketR);
+      }
+  });
+
+  it('wears its own palette: no ramp shared with the colossus', () => {
+    const mine = new Set(getTitanDef('lastone').materials.flatMap((m) => m.visual.ramp));
+    for (const m of getTitanDef('colossus').materials)
+      for (const c of m.visual.ramp) expect(mine.has(c), `${m.key} ${c}`).toBe(false);
+  });
+
   it('layers: shell over lattice over a core hidden behind the eye, halo attached by spokes, tendril roots on matter', () => {
     const def = getTitanDef('lastone');
     const { map, rig } = paintTitanMap(def, 7, DEFAULT_LIGHTING);

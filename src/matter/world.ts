@@ -527,6 +527,20 @@ class MatterWorldImpl implements MatterWorldEx {
     return true;
   }
 
+  /**
+   * An analytic fighter's hurt capsules for this tick (the Mouth, D37: Gate 3A §2): `data` holds `n` capsules of
+   * CAPSULE_STRIDE floats (x0, y0, x1, y1, r, part). Debris bounces off them by the bodies' rules (D30); impacts queue for
+   * `drainCapsuleHits`. n = 0 clears them.
+   */
+  setCapsules(slot: 0 | 1, data: ArrayLike<number>, n: number): void {
+    this.core.capsules[slot].set(data, n);
+  }
+
+  /** The debris impacts on `slot`'s capsules since the last drain (flat: x, y, energy, part, launched, mass). Returns how many. */
+  drainCapsuleHits(slot: 0 | 1, out: number[]): number {
+    return this.core.capsules[slot].drain(out);
+  }
+
   /** Remove a chunk from play (an uncaught comet leaving the arena): its mass is booked as dissipated. False if it is gone. */
   retireChunk(id: number): boolean {
     const c = this.chunkById(id);

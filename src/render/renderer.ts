@@ -74,6 +74,7 @@ import {
 } from './shaders';
 import { LumaReadback, type LumaSample } from './lumaReadback';
 import { computeViewport, type ViewportLayout } from './viewport';
+import { MarginFill } from './margin';
 import { OUTLINE_COLOR, masterPalette, unifyStagePalette } from './master';
 import { SHARED_BLOOM, SPECTACLE_GOVERNOR, UNIFIED_LOOK, spectacleOf } from './unified';
 import { registerTuning } from '@/debug/tuning';
@@ -230,6 +231,11 @@ export interface DebuggableRenderer extends Renderer {
   debugLoseContext(lose: boolean): void;
   /** The current canvas layout (physical px). */
   debugLayout(): { scale: number; x: number; y: number; w: number; h: number };
+  /**
+   * Display: true (default) = the largest whole-number scale in device pixels, with the margin filled by the frame's own
+   * light; false = "fill screen", the largest exact-aspect fit (nearest sampling, uneven pixel sizes).
+   */
+  setIntegerScale(on: boolean): void;
   /** Force a tier now (also what the adaptive controller does). Ignored when out of range. */
   debugSetTier(tier: QualityTier): void;
   /** Switch the foreground dust pass on or off (verification). */
@@ -383,6 +389,8 @@ class PixelRenderer implements DebuggableRenderer {
   private lumPass!: FullscreenPass;
   private govPass!: FullscreenPass;
   private finalPass!: FullscreenPass;
+  /** The letterbox margin: the frame's own light carried outward instead of dead black (src/render/margin.ts). */
+  private margin!: MarginFill;
   private layers!: LayerTextures;
   private compositor!: LayerCompositor;
 
@@ -634,7 +642,12 @@ class PixelRenderer implements DebuggableRenderer {
       this.govPass,
       this.finalPass,
     ];
-    await Promise.all([...passes.map((p) => p.compile(r)), this.compositor.compile(r), this.vfx.compile(r)]);
+    await Promise.all([
+      ...passes.map((p) => p.compile(r)),
+      this.compositor.compile(r),
+      this.vfx.compile(r),
+      this.margin.compile(r),
+    ]);
   }
 
   private buildTargets(): void {
@@ -868,6 +881,7 @@ class PixelRenderer implements DebuggableRenderer {
       uReset: { value: 1 },
       uOn: { value: 1 },
     });
+    this.margin = new MarginFill(this.hdrType, this.hdrType !== UnsignedByteType);
     this.finalPass = new FullscreenPass(FINAL_FRAG, {
       uRes: res,
       uPost: { value: this.postRT.texture },
@@ -1113,7 +1127,14 @@ class PixelRenderer implements DebuggableRenderer {
     this.canvas.style.width = `${this.cssW}px`;
     this.canvas.style.height = `${this.cssH}px`;
     this.layout = computeViewport(physW, physH, this.opts.integerScale !== false);
+    this.margin?.reset();
     this.controller?.disrupt(now());
+  }
+
+  setIntegerScale(on: boolean): void {
+    if ((this.opts.integerScale !== false) === on) return;
+    this.opts = { ...this.opts, integerScale: on };
+    this.resize(this.cssW, this.cssH, this.dpr);
   }
 
   /** FrameFx positions are WORLD coordinates; the shaders want logical screen px. */
@@ -1746,11 +1767,17 @@ class PixelRenderer implements DebuggableRenderer {
       fu.uHasUi!.value = 0;
     }
     const L = this.layout;
+    const margin = MarginFill.needed(L);
+    if (margin) this.margin.update(r, this.postRT.texture);
     r.setRenderTarget(null);
     r.setScissorTest(false);
     r.setViewport(0, 0, L.physW, L.physH);
-    r.setClearColor(0x000000, 1);
-    r.clear(true, false, false);
+    if (margin) {
+      this.margin.draw(r, L, now() / 1000);
+    } else {
+      r.setClearColor(0x000000, 1);
+      r.clear(true, false, false);
+    }
     // three's viewport origin is bottom-left; the letterbox is symmetric so y needs no flip.
     r.setViewport(L.x, L.y, L.w, L.h);
     this.finalPass.render(r, null);
@@ -1852,6 +1879,7 @@ class PixelRenderer implements DebuggableRenderer {
       this.finalPass,
     ])
       p.dispose();
+    this.margin.dispose();
     this.lumaRead?.dispose();
     this.lumaRead = null;
     for (const t of [
