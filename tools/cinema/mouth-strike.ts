@@ -40,7 +40,10 @@ function patch(html: string): string {
     "if(move&&(lab==='load'||lab==='reach'))ringPx(",
     "if(window.__noTell!==true&&move&&(lab==='load'||lab==='reach'))ringPx(",
   );
-  rep('for(const q of trail)if(q.a>.3)ringPx(', 'for(const q of trail)if(window.__noTell!==true&&q.a>.3)ringPx(');
+  rep(
+    'for(const q of trail)if(q.a>.3)ringPx(',
+    'for(const q of trail)if(window.__noTell!==true&&q.a>.3)ringPx(',
+  );
   // no predicted-path dashes (readability UI drawn straight on the canvas)
   rep("if(move&&move.path&&lab==='load'){", "if(window.__noTell!==true&&move&&move.path&&lab==='load'){");
   rep(
@@ -73,7 +76,9 @@ try {
     Object.assign(window, { __noOpp: true, __noRocks: true, __noShake: true, __noTell: true });
   });
   const html = patch(readFileSync(SRC, 'utf8'));
-  await page.route('**/mouth-oracle.html', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: html }));
+  await page.route('**/mouth-oracle.html', (r) =>
+    r.fulfill({ status: 200, contentType: 'text/html', body: html }),
+  );
   await page.goto(`${url}/mouth-oracle.html`);
   await page.waitForFunction('window.__F !== undefined');
   await page.evaluate(

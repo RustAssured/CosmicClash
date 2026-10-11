@@ -266,6 +266,9 @@ for (const titan of TITANS) {
 }
 if (JSON_OUT) {
   mkdirSync(dirname(JSON_OUT), { recursive: true });
-  writeFileSync(JSON_OUT, JSON.stringify({ footwork: FOOTWORK, real: REAL, witness: WITNESS, rows }, null, 1));
+  writeFileSync(
+    JSON_OUT,
+    JSON.stringify({ footwork: FOOTWORK, real: REAL, witness: WITNESS, rows }, null, 1),
+  );
   console.log(`written ${JSON_OUT}`);
 }

@@ -7,3 +7,11 @@ test-results
 .scratch
 package-lock.json
 *.md
+uri
+mouth
+shared
+assets
+tools/uri-bake
+press
+docs/concept
+tools/teaser

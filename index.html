@@ -203,7 +203,14 @@
     <div id="stage"><canvas id="game" width="640" height="360" tabindex="0"></canvas></div>
     <div id="boot" role="status" aria-live="polite">
       <img class="px logo-en" src="/site/media/type/logo.png" width="285" height="35" alt="ADEUK: TITANS" />
-      <img class="px logo-ko" src="/site/media/type/ko-adeuk.png" width="30" height="14" alt="아득" lang="ko" />
+      <img
+        class="px logo-ko"
+        src="/site/media/type/ko-adeuk.png"
+        width="30"
+        height="14"
+        alt="아득"
+        lang="ko"
+      />
       <div class="bar"><i></i></div>
       <div class="status">LOADING<span lang="ko">불러오는 중</span></div>
       <p class="fail">
@@ -245,9 +252,13 @@
         });
         // the button stays out of the way in play: it shows on the boot/title screens, and for a moment after the mouse moves
         var moved = 0;
-        window.addEventListener('mousemove', function () {
-          moved = Date.now();
-        }, { passive: true });
+        window.addEventListener(
+          'mousemove',
+          function () {
+            moved = Date.now();
+          },
+          { passive: true },
+        );
         setInterval(function () {
           if (!fs.isConnected) return;
           var s = screen();

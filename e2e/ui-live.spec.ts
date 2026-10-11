@@ -113,7 +113,9 @@ test('results with real fighter views: winner called over the fight, then REMATC
     if (m.type() === 'error') errors.push(m.text());
   });
   await page.addInitScript(() => localStorage.setItem('adeuk.ui.v1', '{"seenHowTo":true,"matches":3}'));
-  await page.goto('/?mode=aivai&state=10&ai=6&stage=nursery&a=lastone&b=asteroid&seed=11&t=0&hud=1&q=0&aftermath=0');
+  await page.goto(
+    '/?mode=aivai&state=10&ai=6&stage=nursery&a=lastone&b=asteroid&seed=11&t=0&hud=1&q=0&aftermath=0',
+  );
   await ready(page);
   const untilResults = async (): Promise<void> => {
     for (let i = 0; i < 400; i++) {

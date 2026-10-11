@@ -13,6 +13,13 @@ export default tseslint.config(
       'playwright-report/**',
       'test-results/**',
       '.scratch/**',
+      // WJ's reference bundles (prototypes and oracles), kept as delivered
+      'uri/**',
+      'mouth/**',
+      'shared/**',
+      'assets/**',
+      'tools/uri-bake/**',
+      'press/**',
     ],
   },
   js.configs.recommended,
