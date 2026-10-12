@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { PNG } from 'pngjs';
 import { DEFAULT_LIGHTING, type TitanId } from '../../src/contracts';
 import { renderPortrait, type Portrait } from '../../src/titans/portrait';
+import { ROSTER } from '../../src/titans/roster';
 import { samplePortrait } from '../../src/ui/portrait';
 import { logoSprite } from '../../src/ui/pixel/logo';
 import { launch } from '../lead/browser';
@@ -10,7 +11,7 @@ import { PRESS, WORK, arg } from './common';
 
 /**
  * Key art and title grabs (real GPU, headless Edge):
- *  - the lineup: all seven titans together (their pristine portraits from the game's own painter, at their in-game relative
+ *  - the lineup: every roster titan together (their pristine portraits from the game's own painter, at their in-game relative
  *    sizes: the Witness and 우리 at 2/3 through the game's own portrait resampler) standing over an empty stage plate (the
  *    renderer sandbox with `fighters=0`), the logotype above; 1280×720 composed, ×3 → 3840×2160;
  *  - the title screen as the game draws it (harness `mode=title`), 1920×1080 and ×2 → 3840×2160.
@@ -97,16 +98,28 @@ const scaled = (id: TitanId, k: number): Portrait => {
   if (k === 1) return p;
   return samplePortrait(p, Math.round(p.w * k), Math.round(p.h * k));
 };
-const row: { p: Portrait }[] = [
-  { p: scaled('asteroid', 1) },
-  { p: scaled('nexus', 1) },
-  { p: scaled('supernova', 1) },
-  { p: scaled('uri', 2 / 3) },
-  { p: scaled('colossus', 2 / 3) },
-  { p: scaled('blackhole', 1) },
-  { p: scaled('planet', 1) },
+// the composed order of the original lineup, then every other roster titan (the Witness, the kit's newcomers) at its game
+// size; a row wider than the frame is shrunk as a whole (the game's own resampler) so everyone fits
+const CURATED: [TitanId, number][] = [
+  ['asteroid', 1],
+  ['nexus', 1],
+  ['supernova', 1],
+  ['uri', 2 / 3],
+  ['colossus', 2 / 3],
+  ['blackhole', 1],
+  ['planet', 1],
+];
+const lineup: [TitanId, number][] = [
+  ...CURATED.filter(([id]) => ROSTER.some((r) => r.id === id)),
+  ...ROSTER.filter((r) => !CURATED.some(([id]) => id === r.id)).map((r): [TitanId, number] => [
+    r.id,
+    r.portraitScale,
+  ]),
 ];
 const gap = 6;
+const natural = lineup.reduce((a, [id, k]) => a + renderPortrait(id, 1, DEFAULT_LIGHTING).w * k, 0);
+const fit = Math.min(1, (W - 40 - gap * (lineup.length - 1)) / natural);
+const row: { p: Portrait }[] = lineup.map(([id, k]) => ({ p: scaled(id, k * fit) }));
 const total = row.reduce((a, r) => a + r.p.w, 0) + gap * (row.length - 1);
 let x0 = (W - total) >> 1;
 const base = 650;

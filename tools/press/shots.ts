@@ -113,6 +113,15 @@ export const SHOTS: Shot[] = [
     stills: around(9692, [-30, -10, 0, 8, 20, 40]),
   },
   {
+    // the site's hover loop for the Witness's card (tools/site/media.ts titans.witness): 4 s, the veil and the eyes up close
+    name: 'witness-card',
+    what: 'The Witness (the tendril titan, D36) and the Asteroid circle each other at the Rim',
+    cfg: c('lastone', 'asteroid', 'rim', 22),
+    t0: 950,
+    t1: 1190,
+    stills: [1000, 1100],
+  },
+  {
     name: 'witness-planet',
     what: 'The Witness vs the Planet in the Nursery: beams through a world',
     cfg: c('lastone', 'planet', 'nursery', 21),

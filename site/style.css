@@ -791,6 +791,64 @@ h3 {
   letter-spacing: 0.2em;
 }
 
+/*
+ * The boss card closes the grid: it spans the columns the titans leave free in the last row (`--span-N` at N columns,
+ * written by tools/site/roster.ts), so the grid never ends on a lone card. Spanning two or more columns, it becomes a
+ * wide featured banner: the jaw on the left, its words on the right.
+ */
+.roster > .mystery {
+  grid-column: span var(--span-4, 1);
+  container-type: inline-size;
+}
+
+@container (min-width: 480px) {
+  .mystery .titan-card {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .mystery .titan-media {
+    flex: 0 0 min(42%, 420px);
+    height: auto;
+    min-height: 220px;
+  }
+
+  .mystery .titan-text {
+    flex: 1;
+    justify-content: center;
+    padding: 28px clamp(20px, 4cqi, 56px);
+    border-top: 0;
+    border-left: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+
+  .mystery .titan-name {
+    font-size: 44px;
+  }
+
+  .mystery .titan-tag {
+    font-size: 18px;
+  }
+
+  .mystery .titan-mech {
+    max-width: 52ch;
+    font-size: 15px;
+  }
+}
+
+@container (min-width: 480px) and (max-width: 700px) {
+  .mystery .titan-media {
+    min-height: 180px;
+  }
+
+  .mystery .jaw {
+    width: 120px;
+  }
+
+  .mystery .titan-name {
+    font-size: 32px;
+  }
+}
+
 /* ---------------------------------------------------------------- screenshots */
 .gallery {
   display: grid;
@@ -1148,6 +1206,10 @@ tbody th {
   .roster {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .roster > .mystery {
+    grid-column: span var(--span-3, 1);
+  }
 }
 
 @media (max-width: 960px) {
@@ -1186,6 +1248,10 @@ tbody th {
   .roster {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
+  }
+
+  .roster > .mystery {
+    grid-column: span var(--span-2, 1);
   }
 
   .titan-media {
@@ -1266,6 +1332,10 @@ tbody th {
 @media (max-width: 380px) {
   .roster {
     grid-template-columns: 1fr;
+  }
+
+  .roster > .mystery {
+    grid-column: auto;
   }
 }
 

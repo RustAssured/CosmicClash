@@ -59,8 +59,10 @@ const SOURCES = {
   } as Record<string, Cut>,
   /** hover loops on the roster cards */
   titans: {
-    // D36: the colossus's card is The Last One's ('lastone'); the returning Witness has no clip yet
+    // D36: the colossus's card is The Last One's ('lastone'); the Witness's ('witness', the tendril titan) is the press
+    // shot rendered for it (tools/press/shots.ts 'witness-card': `npx tsx tools/press/clip.ts --only=witness-card`)
     lastone: { src: WP, ss: 0.5, t: 4 },
+    witness: { src: 'press/work/clips/witness-card.mov', ss: 0, t: 4 },
     planet: { src: WP, ss: 11, t: 4 },
     asteroid: { src: LA, ss: 4, t: 4 },
     nexus: { src: BN, ss: 5, t: 4 },

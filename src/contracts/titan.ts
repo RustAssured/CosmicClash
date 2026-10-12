@@ -1,19 +1,14 @@
 import type { DamageParams, DamageType } from './damage';
 import type { MaterialSpec } from './matter';
+import { ROSTER_IDS, type TitanKit } from './roster';
 
 /**
  * Proposal 173: 'uri' (우리, D31) joined after its Gate 2D. D36: 'colossus' is the big-eye colossus, displayed as The Last One;
  * 'lastone' is the returning tendril titan, displayed as The Witness (ids are internal; names live in the definitions).
  */
 export const TITAN_IDS = [
-  'colossus',
-  'lastone',
-  'nexus',
-  'blackhole',
-  'supernova',
-  'planet',
-  'asteroid',
-  'uri',
+  // the roster (src/contracts/roster.ts: the one list a new titan is added to)
+  ...ROSTER_IDS,
   // D37: the Mouth (아귀), the final boss; locked out of the menus until unlocked (src/titans/mouth/unlock.ts)
   'mouth',
 ] as const;
@@ -188,6 +183,8 @@ export interface TitanDef {
    * invented). The validator accepts exactly these as missing; the fighter ignores their buttons.
    */
   unboundSlots?: readonly MoveSlot[];
+  /** Roster data of a titan built with the titan kit (`npm run new:titan`; src/contracts/roster.ts). */
+  kit?: TitanKit;
 }
 
 /** Attributes as modified live by the body's remaining mass (see FighterView.stats). */

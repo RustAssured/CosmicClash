@@ -5,6 +5,7 @@
  *   dist/play/       the game (vite build; base './' keeps every asset path relative, so it runs under any sub-path)
  *   dist/press/      the press kit, only when press/ exists locally (it is git-ignored, so CI builds go without it)
  *
+ * The landing page's titan cards are generated from the roster on every build (tools/site/roster.ts).
  * It also adds a small "← ADEUK: TITANS" link back to the site on the game's title screen (dist/play/index.html only;
  * the dev entry is untouched), and fills the page's press-kit download list from press/ when there is one.
  */
@@ -20,6 +21,8 @@ import {
 } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { build } from 'vite';
+import { SITE_ROSTER } from '@/titans/roster';
+import { injectRoster } from './roster';
 
 const DIST = 'dist';
 const PLAY = join(DIST, 'play');
@@ -32,6 +35,16 @@ await build({ logLevel: 'warn', build: { outDir: PLAY, emptyOutDir: true } });
 // 2. the landing page
 cpSync('site', DIST, { recursive: true });
 writeFileSync(join(DIST, '.nojekyll'), '');
+// the titan cards, generated from the roster (src/titans/roster.ts + site/media/titans/{sizes,matter}.json)
+{
+  const page = join(DIST, 'index.html');
+  writeFileSync(page, await injectRoster(readFileSync(page, 'utf8')));
+  console.log(`titans: ${SITE_ROSTER.length} cards from the roster`);
+  for (const r of SITE_ROSTER)
+    for (const f of [`titans/${r.site.file}.png`, `type/ko-${r.site.file}.png`])
+      if (!existsSync(join('site', 'media', f)))
+        console.warn(`titans: site/media/${f} is missing (run \`npm run site:art -- --only=${r.id}\`)`);
+}
 
 // 3. the link back to the site, shown only while loading and on the boot ("press any button") and title screens
 const BACK = `

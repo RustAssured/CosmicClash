@@ -3,10 +3,13 @@ import {
   DEFAULT_LIGHTING,
   MAX_BODY_CELLS,
   MAX_BODY_DIM,
+  SIZE_CLASSES,
   TITAN_IDS,
   pa,
   validateTitanDef,
   type StageLighting,
+  type TitanAttributes,
+  type TitanId,
 } from '@/contracts';
 import {
   IMPLEMENTED_TITANS,
@@ -37,31 +40,43 @@ describe('titan definitions', () => {
     expect(validateTitanDef(getTitanDef(id))).toEqual([]);
   });
 
-  it.each(IMPLEMENTED_TITANS)('%s matches the design bible attributes', (id) => {
-    const a = getTitanDef(id).attributes;
-    const want = {
-      // D36: the colossus (The Last One) keeps the Last One's design-bible row; the tendril titan (The Witness) keeps it too
-      colossus: { mass: 5, cohesion: 8, heat: 5, gravity: 3, reach: 7, tempo: 7 },
-      lastone: { mass: 5, cohesion: 8, heat: 5, gravity: 3, reach: 7, tempo: 7 },
-      asteroid: { mass: 3, cohesion: 6, heat: 5, gravity: 1, reach: 4, tempo: 9 },
-      nexus: { mass: 6, cohesion: 6, heat: 4, gravity: 4, reach: 8, tempo: 4 },
-      blackhole: { mass: 8, cohesion: 9, heat: 10, gravity: 10, reach: 5, tempo: 2 },
-      supernova: { mass: 7, cohesion: 3, heat: 10, gravity: 6, reach: 6, tempo: 5 },
-      planet: { mass: 8, cohesion: 7, heat: 6, gravity: 7, reach: 6, tempo: 3 },
-      // 우리 has no design-bible row: its pack's (src/titans/uri/def.ts; provisional until the Phase 4 balance pass)
-      uri: { mass: 9, cohesion: 7, heat: 6, gravity: 5, reach: 7, tempo: 3 },
-      // the Mouth (D37) is a locked boss, not in IMPLEMENTED_TITANS (src/titans/mouth/def.ts): typed here only
-      mouth: { mass: 10, cohesion: 6, heat: 6, gravity: 3, reach: 10, tempo: 4 },
-    }[id];
-    expect(a).toEqual(want);
-  });
+  // titans made with the titan kit have no design-bible row: their attributes are theirs (the validator holds them to 1–10)
+  it.each(IMPLEMENTED_TITANS.filter((id) => !getTitanDef(id).kit))(
+    '%s matches the design bible attributes',
+    (id) => {
+      const a = getTitanDef(id).attributes;
+      const bible: Partial<Record<TitanId, TitanAttributes>> = {
+        // D36: the colossus (The Last One) keeps the Last One's design-bible row; the tendril titan (The Witness) keeps it too
+        colossus: { mass: 5, cohesion: 8, heat: 5, gravity: 3, reach: 7, tempo: 7 },
+        lastone: { mass: 5, cohesion: 8, heat: 5, gravity: 3, reach: 7, tempo: 7 },
+        asteroid: { mass: 3, cohesion: 6, heat: 5, gravity: 1, reach: 4, tempo: 9 },
+        nexus: { mass: 6, cohesion: 6, heat: 4, gravity: 4, reach: 8, tempo: 4 },
+        blackhole: { mass: 8, cohesion: 9, heat: 10, gravity: 10, reach: 5, tempo: 2 },
+        supernova: { mass: 7, cohesion: 3, heat: 10, gravity: 6, reach: 6, tempo: 5 },
+        planet: { mass: 8, cohesion: 7, heat: 6, gravity: 7, reach: 6, tempo: 3 },
+        // 우리 has no design-bible row: its pack's (src/titans/uri/def.ts; provisional until the Phase 4 balance pass)
+        uri: { mass: 9, cohesion: 7, heat: 6, gravity: 5, reach: 7, tempo: 3 },
+        // the Mouth (D37) is a locked boss, not in IMPLEMENTED_TITANS (src/titans/mouth/def.ts): typed here only
+        mouth: { mass: 10, cohesion: 6, heat: 6, gravity: 3, reach: 10, tempo: 4 },
+      };
+      expect(a).toEqual(bible[id]);
+    },
+  );
 
   it('every move id is unique and namespaced by its titan; every aim variant exists', () => {
     for (const id of IMPLEMENTED_TITANS) {
       const def = getTitanDef(id);
       const seen = new Set<string>();
+      // a kit titan made from an existing titan keeps its template's move ids (the template's behaviour keys on them)
+      const prefixes = [
+        `${id}.`,
+        ...(def.kit && def.kit.template !== 'blob' ? [`${def.kit.template}.`] : []),
+      ];
       for (const m of def.moves) {
-        expect(m.id.startsWith(`${id}.`)).toBe(true);
+        expect(
+          prefixes.some((p) => m.id.startsWith(p)),
+          m.id,
+        ).toBe(true);
         expect(seen.has(m.id)).toBe(false);
         seen.add(m.id);
         for (const aim of ['up', 'forward', 'down'] as const) expect(m.variants[aim]).toBeDefined();
@@ -172,8 +187,11 @@ describe.each(PAINTED)('generator: %s', (id) => {
 
   // D31-6: the Planet was enlarged to 220 px to read as an equal of the Witness and 우리; one body may now span up to 240 px
   // (MAX_BODY_DIM was raised to 300 for it). The other single-body titans keep their 90–180 px.
-  const maxAcross = id === 'planet' ? 240 : 180;
-  it(`fits the body budget and is 90–${maxAcross} px across`, () => {
+  // a kit titan is held to its own size class instead (src/contracts/roster.ts SIZE_CLASSES)
+  const cls = def.kit ? SIZE_CLASSES[def.kit.size] : null;
+  const maxAcross = cls ? cls[1] : id === 'planet' ? 240 : 180;
+  const minAcross = cls ? cls[0] : 90;
+  it(`fits the body budget and is ${minAcross}–${maxAcross} px across`, () => {
     let x0 = map.w,
       x1 = -1,
       y0 = map.h,
@@ -194,9 +212,9 @@ describe.each(PAINTED)('generator: %s', (id) => {
     expect(cells).toBeGreaterThan(4000);
     const w = x1 - x0 + 1;
     const h = y1 - y0 + 1;
-    expect(Math.max(w, h)).toBeGreaterThanOrEqual(90);
+    expect(Math.max(w, h)).toBeGreaterThanOrEqual(minAcross);
     expect(Math.max(w, h)).toBeLessThanOrEqual(maxAcross);
-    expect(Math.min(w, h)).toBeGreaterThanOrEqual(80);
+    expect(Math.min(w, h)).toBeGreaterThanOrEqual(cls ? cls[0] * 0.6 : 80);
     // never touches the map border (room for the renderer's edge lighting and for growth)
     expect(x0).toBeGreaterThan(1);
     expect(y0).toBeGreaterThan(1);

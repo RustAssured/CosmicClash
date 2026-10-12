@@ -9,6 +9,7 @@ import { NexusBehaviour } from './nexus';
 import { PlanetBehaviour } from './planet';
 import { SupernovaBehaviour } from './supernova';
 import { UriBehaviour } from './uri';
+import { KIT_BEHAVIOURS } from './kit';
 
 /** One behaviour per titan. Titans without bespoke parts fall back to the default (no parts, nominal guard). */
 export function createBehaviour(f: FighterImpl): Behaviour {
@@ -31,6 +32,7 @@ export function createBehaviour(f: FighterImpl): Behaviour {
     case 'planet':
       return new PlanetBehaviour(f);
     default:
-      return new DefaultBehaviour(f);
+      // the titans built with the titan kit (src/combat/behaviours/kit/)
+      return KIT_BEHAVIOURS[f.def.id]?.(f) ?? new DefaultBehaviour(f);
   }
 }

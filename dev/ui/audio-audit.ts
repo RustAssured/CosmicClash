@@ -152,7 +152,7 @@ const hitEv = (titan: TitanId, over: Partial<HitEvent> = {}): HitEvent => ({
 });
 
 /** The exact cue ids each titan emits (src/combat/behaviours). */
-const CUES: Readonly<Record<TitanId, readonly string[]>> = {
+const CUES: Readonly<Partial<Record<TitanId, readonly string[]>>> = {
   // the colossus (The Last One, D36) emits no cues of its own
   colossus: [],
   // the Mouth (D37): its cues (src/combat/mouth/fighter.ts)
@@ -296,7 +296,7 @@ export async function runAudit(only?: readonly string[]): Promise<AuditReport> {
       await one(`${T} ultimate ${phase}`, 4, (c) =>
         voice().onUltimate?.(c, 0.02, { t: 'ultimate', slot: 0, titan: T, phase, x: 800, y: 300 }),
       );
-    for (const id of CUES[T])
+    for (const id of CUES[T] ?? [])
       await one(
         `${T} cue ${id}`,
         3,

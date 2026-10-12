@@ -5,6 +5,7 @@ export * from './color';
 export * from './space';
 export * from './damage';
 export * from './matter';
+export * from './roster';
 export * from './titan';
 export * from './input';
 export * from './render';

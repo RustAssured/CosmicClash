@@ -15,6 +15,7 @@ import {
   type StageImpulseFx,
 } from '@/contracts';
 import { presentationEnergy } from '@/audio/balance';
+import { kitTitan } from '@/titans/kit';
 import { MAX_COMETS, MAX_WELLS } from '@/stages/types';
 import {
   MAX_VFX_IMPACTS,
@@ -98,10 +99,11 @@ const TITAN_LIGHT: Partial<Record<TitanId, { c: [number, number, number]; radius
 };
 /**
  * Titans outside TITAN_LIGHT (우리, and any newcomer before its own entry): 우리 carries its hot core's light (uri hot ramp
- * #f49a48) at the Witness's reach and strength, a titan of the same scale.
+ * #f49a48) at the Witness's reach and strength, a titan of the same scale. A kit titan brings its own (JSON `kit.light`).
  */
 const lightOf = (id: TitanId): { c: [number, number, number]; radius: number; base: number } =>
-  TITAN_LIGHT[id] ?? { c: [0xf4 / 255, 0x9a / 255, 0x48 / 255], radius: 120, base: 0.28 };
+  TITAN_LIGHT[id] ??
+  kitTitan(id)?.def.kit?.light ?? { c: [0xf4 / 255, 0x9a / 255, 0x48 / 255], radius: 120, base: 0.28 };
 /** Colour of the light a blow of each damage type strikes from the wound. */
 const TYPE_LIGHT: Record<DamageType, [number, number, number]> = {
   FRACTURE: [0.78, 0.95, 1],

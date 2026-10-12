@@ -4,6 +4,7 @@
  * Coordinate system (everywhere, always): world units are LOGICAL PIXELS. +x is right, +y is DOWN
  * (canvas convention). Angles are radians, 0 = +x, increasing clockwise on screen (because +y is down).
  */
+import { ROSTER_IDS } from './roster';
 
 /** Logical resolution. All game art is drawn at this size, then integer-upscaled. */
 export const LOGICAL_W = 640;
@@ -121,7 +122,8 @@ export const SIM_BUDGET_MS_PER_TICK = 5;
  * The Witness) are two titans.
  */
 export const SLICE = {
-  titans: ['colossus', 'lastone', 'asteroid', 'nexus', 'blackhole', 'supernova', 'planet', 'uri'] as const,
+  // the roster (src/contracts/roster.ts)
+  titans: ROSTER_IDS,
   // D34: every original stage is back, beside the slice's two arenas
   stages: ['nursery', 'rim', 'redgiant', 'quasar', 'tussenruimte', 'mausoleum', 'shearfield'] as const,
 } as const;

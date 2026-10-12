@@ -3,6 +3,7 @@ import { PNG } from 'pngjs';
 import { DEFAULT_LIGHTING, type TitanDef, type TitanId } from '../../src/contracts';
 import { getTitanDef } from '../../src/titans';
 import { renderPortrait, type Portrait } from '../../src/titans/portrait';
+import { SITE_ROSTER } from '../../src/titans/roster';
 import { PixelCanvas } from '../../src/ui/pixel/canvas';
 import { drawText, lineHeight, wrapText } from '../../src/ui/pixel/text';
 import { PRESS } from './common';
@@ -17,17 +18,13 @@ const S = 6;
 const OUT = `${PRESS}/cards`;
 mkdirSync(OUT, { recursive: true });
 
-// D36: the colossus ('colossus') is The Last One; the returning tendril titan ('lastone') is The Witness
-const TITANS: { file: string; id: TitanId }[] = [
-  { file: 'lastone', id: 'colossus' },
-  { file: 'witness', id: 'lastone' },
-  { file: 'planet', id: 'planet' },
-  { file: 'asteroid', id: 'asteroid' },
-  { file: 'nexus', id: 'nexus' },
-  { file: 'blackhole', id: 'blackhole' },
-  { file: 'supernova', id: 'supernova' },
-  { file: 'uri', id: 'uri' },
-];
+// every roster titan (src/titans/roster.ts), under its site file name. D36: the colossus ('colossus') is The Last One
+// (file 'lastone'); the tendril titan ('lastone') is The Witness (file 'witness')
+const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7);
+const TITANS: { file: string; id: TitanId }[] = SITE_ROSTER.filter((r) => !only || r.id === only).map((r) => ({
+  file: r.site.file,
+  id: r.id,
+}));
 
 const hex = (h: string): number => {
   const v = parseInt(h.slice(1), 16);

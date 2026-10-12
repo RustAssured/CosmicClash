@@ -36,8 +36,11 @@ export const MOUTH_LADDER_FINAL: TitanId = 'uri';
 /** AI difficulty per rung (1–6): mid-level (3, Fighter) at rung 1, the top level (6, Titan) from rung 6. */
 export const LADDER_AI: readonly Difficulty[] = [3, 3, 4, 4, 5, 6, 6, 6];
 
-/** Each opponent fights on a stage that suits it. */
-export const LADDER_STAGE: Readonly<Record<TitanId, StageId>> = {
+/**
+ * Each opponent fights on a stage that suits it. A titan added to LADDER_ORDER brings its stage here too (a titan without
+ * one fights at the Rim).
+ */
+export const LADDER_STAGE: Readonly<Partial<Record<TitanId, StageId>>> = {
   asteroid: 'shearfield', // rocks running in rivers
   planet: 'nursery', // a world among newborn suns
   lastone: 'rim', // the Witness watches from the edge of the galaxy
@@ -80,7 +83,7 @@ export function ladderFor(player: TitanId): Rung[] {
     foe,
     role,
     aiLevel: LADDER_AI[i]!,
-    stage: LADDER_STAGE[foe],
+    stage: LADDER_STAGE[foe] ?? 'rim',
     boss: role === 'final' && foe === LADDER_FINAL,
   }));
 }

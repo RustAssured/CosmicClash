@@ -1,6 +1,8 @@
 import type { Actor, CineContext, NativeBuffer } from '../types';
 import { registerActor } from './index';
 import { blit, textSprite, type Sprite } from '../p6/text';
+import type { TitanId } from '@/contracts';
+import { kitTitan } from '@/titans/kit';
 
 /**
  * NAME SLAM (P6, TRAILER_V3 0:48–1:02): every opponent gets a 6-frame name slam, e.g. `행성 PLANET`, in the game's pixel
@@ -26,13 +28,20 @@ export const NAMES: Record<string, { ko: string; name: string; accent: string }>
 };
 export const SLAM_FRAMES = 6;
 
+/** A titan built with the titan kit slams its own card's names and accent (its JSON `kit.site`). */
+function kitName(id: string): { ko: string; name: string; accent: string } | null {
+  const site = kitTitan(id as TitanId)?.def.kit?.site;
+  return site ? { ko: site.ko, name: site.name.toUpperCase(), accent: site.accent } : null;
+}
+
 const num = (p: Readonly<Record<string, unknown>>, k: string, d: number): number =>
   typeof p[k] === 'number' ? (p[k] as number) : d;
 const str = (p: Readonly<Record<string, unknown>>, k: string): string | undefined =>
   typeof p[k] === 'string' ? (p[k] as string) : undefined;
 
 export function nameslamActor(id: string, depth: number, params: Readonly<Record<string, unknown>>): Actor {
-  const d = NAMES[str(params, 'titan') ?? ''] ?? { ko: '', name: '', accent: '#ffffff' };
+  const t = str(params, 'titan') ?? '';
+  const d = NAMES[t] ?? kitName(t) ?? { ko: '', name: '', accent: '#ffffff' };
   const text = `${str(params, 'ko') ?? d.ko} ${str(params, 'name') ?? d.name}`.trim();
   const accent = str(params, 'accent') ?? d.accent;
   const at = num(params, 'at', 0);

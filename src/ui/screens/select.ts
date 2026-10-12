@@ -20,10 +20,20 @@ import {
 } from './kit';
 
 const SLOT_COL = [C.p1, C.p2] as const;
-const TILE = 56;
-const GAP = 8;
-const GRID_X = (LOGICAL_W - (3 * TILE + 2 * GAP)) / 2;
 const GRID_Y = 84;
+/** The free width between the two side panels. */
+const GRID_W = 192;
+
+/**
+ * The roster grid: three columns of 56 px tiles up to nine titans (the original layout); a bigger roster (the titan kit's
+ * newcomers) gets more, smaller tiles so it still fits between the side panels and above the footer.
+ */
+function gridOf(n: number): { cols: number; tile: number; gap: number; x: number } {
+  const cols = n <= 9 ? 3 : n <= 16 ? 4 : 5;
+  const gap = cols === 3 ? 8 : 6;
+  const tile = cols === 3 ? 56 : Math.floor((GRID_W - (cols - 1) * gap) / cols);
+  return { cols, tile, gap, x: Math.floor((LOGICAL_W - (cols * tile + (cols - 1) * gap)) / 2) };
+}
 const PANEL_W = 214;
 const PANEL_Y = 44;
 const PANEL_H = 278;
@@ -54,7 +64,7 @@ export function createSelectScreen(): Screen {
     let i = cur[s];
     if (dx) i = (i + dx + n) % n;
     if (dy) {
-      const j = i + dy * 3;
+      const j = i + dy * gridOf(n).cols;
       i = j >= 0 && j < n ? j : i;
     }
     if (i !== cur[s]) {
@@ -167,9 +177,10 @@ export function createSelectScreen(): Screen {
       else drawSide(ctx, 1, cur[1], locked[1]);
 
       // roster grid
+      const { cols, tile: TILE, gap: GAP, x: GRID_X } = gridOf(titans.length);
       titans.forEach((t, i) => {
-        const x = GRID_X + (i % 3) * (TILE + GAP);
-        const y = GRID_Y + Math.floor(i / 3) * (TILE + GAP + 14);
+        const x = GRID_X + (i % cols) * (TILE + GAP);
+        const y = GRID_Y + Math.floor(i / cols) * (TILE + GAP + 14);
         const ready = ctx.isTitanReady(t.id);
         const ramp = accentRamp(t.accent);
         panel(cv, x, y, TILE, TILE, { fill: alpha(C.ink0, 0.85), border: C.line0, shade: false });
@@ -197,7 +208,8 @@ export function createSelectScreen(): Screen {
           color: hovered0 || hovered1 ? C.white : C.dim,
           font: 'micro',
           align: 'center',
-          tracking: 1,
+          // the narrower tiles of a big roster: tighter letters so neighbouring names do not run together
+          tracking: cols === 3 ? 1 : 0,
         });
       });
       // instruction line under the grid
@@ -210,7 +222,7 @@ export function createSelectScreen(): Screen {
           ? 'BOTH READY'
           : 'CHOOSE YOUR TITANS';
       // a third row of tiles (eight or nine titans) pushes the line below the grid, without its Korean gloss
-      const rows = Math.ceil(titans.length / 3);
+      const rows = Math.ceil(titans.length / cols);
       const wy = rows > 2 ? GRID_Y + (rows - 1) * (TILE + GAP + 14) + TILE + 14 : 268;
       drawText(cv, who, LOGICAL_W / 2, wy, {
         color: single && phase === 1 ? C.p2 : C.soft,

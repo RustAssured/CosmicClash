@@ -62,7 +62,16 @@ Seams/fault lines are distinct **materials** with weaker bonds (JSON `physics.bo
 
 Frame data is validated by `validateTitanDef` (feel targets) in `titans.test.ts`; `docs/TITANS.md` is generated from the JSON by `npx tsx tools/titans/docs.ts`.
 
-## Adding a titan (Phase 2 = content)
+## Adding a titan: the titan kit
+
+Use the kit: `npm run new:titan -- <id> "<English Name>" "<Korean name>" [--from=blob|planet|…]` (WJ's guide:
+docs/TITAN_GUIDE.md). The roster is one list, `ROSTER_IDS` in src/contracts/roster.ts; `TITAN_IDS`, `SLICE.titans`,
+`IMPLEMENTED_TITANS`, the site cards, press cards and the roster checks (roster.test.ts) derive from it. A kit titan lives in
+`kit/<id>/` (JSON with a `kit` block: size class, home stage, light, voice tuning, site card; `index.ts`: painter + rig) and
+`src/combat/behaviours/kit/<id>.ts` (a `KitBehaviour` with one signature hook); the scaffold registers both. The titans
+before the kit keep their card data in roster.ts (`BUILTIN`). `--remove <id>` undoes a scaffold.
+
+### By hand (exotic titans)
 
 1. `src/titans/<id>.json` — attributes, resource, materials (physics archetype + ramp), art recipe params, moves (all frame data in ticks), AI weights.
 2. `src/titans/art/<id>.ts` — a painter using the toolkit + a rig; register it in `generate.ts` (`PAINTERS`) and `rigs.ts`; add the def to `defs.ts` and `IMPLEMENTED_TITANS`.

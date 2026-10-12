@@ -5,33 +5,32 @@
  *  - the ADEUK: TITANS logotype (src/ui/pixel/logo.ts) and 아득, and each titan's Korean name, in the game's Hangeul face;
  *  - the favicon, cut from the Last One's eye (the colossus; D36).
  *
- *   npx tsx tools/site/art.ts       # writes site/media/titans/*.png, site/media/type/*.png, site/media/favicon-180.png
+ *   npx tsx tools/site/art.ts              # every roster titan + the logotype + the favicon
+ *   npx tsx tools/site/art.ts --only=<id>  # one titan's portrait and Korean name (the titan kit uses this)
+ *
+ * Writes site/media/titans/<file>.png (+ sizes.json), site/media/type/ko-<file>.png, site/media/type/logo.png,
+ * site/media/favicon-180.png. The titans and their file names come from the roster (src/titans/roster.ts).
  *
  * Deterministic (seed 1, default lighting). Re-run when a titan's art changes. S5's press-kit character cards can replace
  * the portraits: drop a transparent PNG with the same name into site/media/titans/.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { PNG } from 'pngjs';
 import { DEFAULT_LIGHTING, type TitanId } from '@/contracts';
 import { renderPortrait, type Portrait } from '@/titans/portrait';
+import { SITE_ROSTER } from '@/titans/roster';
 import { PixelCanvas } from '@/ui/pixel/canvas';
 import { logoSprite } from '@/ui/pixel/logo';
 import { C, alpha } from '@/ui/pixel/palette';
 import { drawText, measureText } from '@/ui/pixel/text';
 
 const OUT = 'site/media/titans';
-// D36: the colossus ('colossus') is The Last One (file 'lastone'); the returning tendril titan ('lastone') is The Witness
-// (file 'witness')
-const TITANS: { file: string; id: TitanId }[] = [
-  { file: 'lastone', id: 'colossus' },
-  { file: 'witness', id: 'lastone' },
-  { file: 'planet', id: 'planet' },
-  { file: 'asteroid', id: 'asteroid' },
-  { file: 'nexus', id: 'nexus' },
-  { file: 'blackhole', id: 'blackhole' },
-  { file: 'supernova', id: 'supernova' },
-  { file: 'uri', id: 'uri' },
-];
+const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7);
+// D36: the colossus ('colossus') is The Last One (file 'lastone'); the tendril titan ('lastone') is The Witness ('witness')
+const TITANS: { file: string; id: TitanId; ko: string }[] = SITE_ROSTER.filter(
+  (r) => !only || r.id === only,
+).map((r) => ({ file: r.site.file, id: r.id, ko: r.site.ko }));
+if (only && !TITANS.length) throw new Error(`site art: '${only}' is not on the roster`);
 
 /** Packed RGBA (R in the low byte) to a transparent PNG, nearest-neighbour `scale`. */
 function write(
@@ -57,49 +56,51 @@ function write(
 }
 
 mkdirSync(OUT, { recursive: true });
-const sizes: Record<string, [number, number]> = {};
+const SIZES = `${OUT}/sizes.json`;
+const sizes: Record<string, [number, number]> =
+  only && existsSync(SIZES)
+    ? (JSON.parse(readFileSync(SIZES, 'utf8')) as Record<string, [number, number]>)
+    : {};
 for (const t of TITANS) {
   const p = renderPortrait(t.id, 1, DEFAULT_LIGHTING);
   write(`${OUT}/${t.file}.png`, p);
   sizes[t.file] = [p.w, p.h];
   console.log(`${t.file}: ${p.w}x${p.h}`);
 }
-writeFileSync(`${OUT}/sizes.json`, JSON.stringify(sizes, null, 2) + '\n');
-
-// favicon: the Last One's eye (the colossus, D36: the brightest compact disc near the body's centre), cut square
-const w = renderPortrait('colossus', 1, DEFAULT_LIGHTING);
-const eye = findEye(w);
-let pupil = findPupil(w, eye);
-// re-centre on the dark disc with a tighter radius (the carapace's dark gaps pull the first guess off-centre)
-for (let i = 0; i < 4; i++) pupil = findPupil(w, { ...pupil, r: 10 });
-// 45 px square around the pupil: ×4 is the 180 px apple-touch icon; tools/site/media.ts scales the rest
-const box = { x: pupil.x - 22, y: pupil.y - 22, w: 45, h: 45 };
-write('site/media/favicon-180.png', w, 4, box);
-write('site/media/titans/lastone-eye.png', w, 1, box);
-console.log(`favicon pupil at ${pupil.x},${pupil.y}`);
-
-// type: the logotype (no glint) and the Hangeul words, transparent, 1 px per game pixel
+writeFileSync(SIZES, JSON.stringify(sizes, null, 2) + '\n');
 mkdirSync('site/media/type', { recursive: true });
-const logo = logoSprite();
-write('site/media/type/logo.png', { pixels: logo.pixels, w: logo.w, h: logo.h });
-console.log(`logo: ${logo.w}x${logo.h}`);
-const WORDS: Record<string, string> = {
-  adeuk: '아득',
-  lastone: '마지막 하나',
-  witness: '목격자',
-  planet: '행성',
-  asteroid: '소행성',
-  nexus: '넥서스',
-  blackhole: '블랙홀',
-  supernova: '초신성',
-  uri: '우리',
-};
-for (const [file, word] of Object.entries(WORDS)) {
-  const tracking = file === 'adeuk' ? 3 : 1;
-  const w = measureText(word, { tracking }) + 2;
-  const cv = new PixelCanvas(w, 14);
-  drawText(cv, word, 0, 0, { color: C.celadon, tracking, shadow: alpha(C.void, 0.85) });
-  write(`site/media/type/ko-${file}.png`, { pixels: cv.pixels, w: cv.w, h: cv.h });
+koWords(Object.fromEntries(TITANS.map((t) => [t.file, t.ko])));
+if (!only) everythingElse();
+
+/** Each titan's Korean name in the game's Hangeul face, transparent, 1 px per game pixel: site/media/type/ko-<file>.png. */
+function koWords(words: Record<string, string>): void {
+  for (const [file, word] of Object.entries(words)) {
+    const tracking = file === 'adeuk' ? 3 : 1;
+    const w = measureText(word, { tracking }) + 2;
+    const cv = new PixelCanvas(w, 14);
+    drawText(cv, word, 0, 0, { color: C.celadon, tracking, shadow: alpha(C.void, 0.85) });
+    write(`site/media/type/ko-${file}.png`, { pixels: cv.pixels, w: cv.w, h: cv.h });
+  }
+}
+
+function everythingElse(): void {
+  // favicon: the Last One's eye (the colossus, D36: the brightest compact disc near the body's centre), cut square
+  const w = renderPortrait('colossus', 1, DEFAULT_LIGHTING);
+  const eye = findEye(w);
+  let pupil = findPupil(w, eye);
+  // re-centre on the dark disc with a tighter radius (the carapace's dark gaps pull the first guess off-centre)
+  for (let i = 0; i < 4; i++) pupil = findPupil(w, { ...pupil, r: 10 });
+  // 45 px square around the pupil: ×4 is the 180 px apple-touch icon; tools/site/media.ts scales the rest
+  const box = { x: pupil.x - 22, y: pupil.y - 22, w: 45, h: 45 };
+  write('site/media/favicon-180.png', w, 4, box);
+  write('site/media/titans/lastone-eye.png', w, 1, box);
+  console.log(`favicon pupil at ${pupil.x},${pupil.y}`);
+
+  // type: the logotype (no glint) and 아득, transparent, 1 px per game pixel
+  const logo = logoSprite();
+  write('site/media/type/logo.png', { pixels: logo.pixels, w: logo.w, h: logo.h });
+  console.log(`logo: ${logo.w}x${logo.h}`);
+  koWords({ adeuk: '아득' });
 }
 
 /** The pupil: the centroid of the darkest opaque pixels within `r` of the eye's light centroid. */

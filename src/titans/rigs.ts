@@ -7,6 +7,7 @@ import { buildPlanetRig } from './art/planet';
 import { buildSupernovaRig } from './art/supernova';
 import type { TitanRig } from './generate';
 import { isUriDef, paintUriTitan } from './uri/def';
+import { kitTitan } from './kit';
 
 /** Recompute a titan's rig from its recipe alone (no pixels). Used when a body is reused (`existingBody`). */
 export function buildRigFor(def: TitanDef, seed: number): TitanRig {
@@ -25,7 +26,10 @@ export function buildRigFor(def: TitanDef, seed: number): TitanRig {
       return buildSupernovaRig(def, seed);
     case 'planet':
       return buildPlanetRig(def, seed);
-    default:
+    default: {
+      const kit = kitTitan(def.id);
+      if (kit) return kit.rig(def, seed);
       throw new Error(`no rig for titan '${def.id}'`);
+    }
   }
 }
