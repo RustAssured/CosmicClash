@@ -18,6 +18,7 @@
     "site:roster": "tsx tools/site/roster.ts",
     "new:titan": "tsx tools/titans/new.ts",
     "titan:check": "tsx tools/titans/check.ts",
+    "titan:ship": "tsx tools/titans/ship.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",

@@ -413,6 +413,11 @@ export function showScreen(ui: GameUI, id: UIScreenId, params?: unknown): void {
   (ui as UIRuntime).stackReset(id, params);
 }
 
+/** The match mode the next select runs in (the harness's `&smode=`, screenshots). */
+export function setSetupMode(ui: GameUI, mode: 'versus' | 'vsai' | 'training'): void {
+  (ui as UIRuntime).setup.mode = mode;
+}
+
 /**
  * Open a tournament screen in ladder mode (the `?ladder=` dev flag, screenshots, tests): `id` 'ladder' takes the ladder
  * screen's params (`LadderParams`), 'select' is the ladder's titan pick.

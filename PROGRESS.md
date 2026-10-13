@@ -124,8 +124,9 @@ the blob placeholder's; not in the ladder's opponents.
   roar, muffled clicks, cartilage crackle, fluid). Balance (`npm run titan:check -- cradle`): 63 % at AI level 4, all
   checks pass; the AI never raises Enfold. Card: WJ's lore line and tagline, mechanic "Gestation."; hover clip rendered
   as a WIP shot (`npx tsx tools/press/clip.ts --wip=1 --only=cradle-card` → gate5/cradle-card-loop.webm, -clip.mp4).
-- **To ship it:** delete `kit.wip`, `npm run site:art -- --only=cradle` and the matter count, move the `cradle-card` shot
-  from WIP_SHOTS to SHOTS and add `titans.cradle` to tools/site/media.ts (`kit.site.clip: true`), decide its ladder slot.
+- **SHIPPED (S16)** with `npm run titan:ship -- cradle`: wip off, site portrait + ko-cradle, MATTER 20,975 px (the knot,
+  the disc and the cord regions), hover clip site/media/titans/cradle-loop.*, press card + key-art lineup, site cards
+  ("Nine colossi"). In every menu. **Not in the ladder's opponents: WJ decides its slot** (TITAN_GUIDE §6).
 - Tools: tools/titans/cradle-series.ts (frame sheets with sever / hurt / plant hooks), cradle-jaw.ts (jaw path and cord
   angles), cradle-duel.ts (AI duels, cuts, move use), cradle-organs.ts, author/cradle.ts (the moves).
 
@@ -157,6 +158,17 @@ the blob placeholder's; not in the ladder's opponents.
   pulsing vascular web, seven knuckled calcified ribs straining round it like meridians, a wet hem; fluid beads seep at
   the seams. The rupture (birth or escape) peels seven great veined, hemmed, ragged flaps back from the opening, with
   strands stretched between them that snap. The foe reads as trapped inside through the escape window (sac-escape-after).
+
+## S16: the Cradle shipped, select screen, MULJI, titan:ship
+- **`npm run titan:ship -- <id>`** (tools/titans/ship.ts, TITAN_GUIDE §5): quick checks → wip off → site art, matter,
+  card clip (from a press shot `<id>-card`), press card, key art, site cards → a checklist of what's left. Press shots
+  are now one list; a shot with a WIP titan in it is a WIP shot by itself (tools/press/shots.ts); media.ts picks up
+  every shipped titan's `<id>-card` clip.
+- **Titan select** (src/ui/screens/select.ts `gridOf`): the grid, its names and the prompt are one block centred
+  between the panels; ≤9 titans 3×56 px, 10–12 4×42 px, 13–20 5×32 px; a short last row is centred; every tile
+  reserves a 14 px name row (우리's Hangeul). select.test.ts checks 1–16 titans. Before / after in every mode:
+  docs/gallery/select/ (`npx tsx tools/ui/select-shots.ts --prefix=after`; `&smode=vsai|training` harness flag).
+- **MULJI Matter Engine (물질)**: credited in the site's readout, footer, press About, /play/ loading screen, README.
 
 ## Next
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.

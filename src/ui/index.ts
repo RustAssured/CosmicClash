@@ -1,4 +1,4 @@
-export { createUI, showLadder, showScreen } from './ui';
+export { createUI, setSetupMode, showLadder, showScreen } from './ui';
 export {
   titanInfoFromDef,
   type TitanInfo,

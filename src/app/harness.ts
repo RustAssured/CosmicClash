@@ -12,7 +12,7 @@ import {
 } from '@/contracts';
 import { createScriptSource } from '@/sim';
 import { StripRecorder, type StripRequest } from '@/telemetry/strips';
-import { showLadder, showScreen } from '@/ui';
+import { setSetupMode, showLadder, showScreen } from '@/ui';
 import type { App } from './app';
 
 const pct = (a: number[], p: number): number => {
@@ -245,6 +245,9 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
       const screen =
         { title: 'title', menu: 'mode', select: 'select', controller: 'controller' }[params.mode as string] ??
         'title';
+      // `&smode=vsai|training` opens the select in that mode (screenshots; the default is VERSUS)
+      const smode = new URLSearchParams(location.search).get('smode');
+      if (smode === 'vsai' || smode === 'training' || smode === 'versus') setSetupMode(app.ui, smode);
       showScreen(app.ui, screen as Parameters<typeof showScreen>[1]);
     }
   }

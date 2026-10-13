@@ -67,7 +67,13 @@ for (const t of TITANS) {
   sizes[t.file] = [p.w, p.h];
   console.log(`${t.file}: ${p.w}x${p.h}`);
 }
-writeFileSync(SIZES, JSON.stringify(sizes, null, 2) + '\n');
+// one titan per line, as prettier keeps it (`npm run lint` checks it)
+writeFileSync(
+  SIZES,
+  `{\n${Object.entries(sizes)
+    .map(([k, [w, h]]) => `  ${JSON.stringify(k)}: [${w}, ${h}]`)
+    .join(',\n')}\n}\n`,
+);
 mkdirSync('site/media/type', { recursive: true });
 koWords(Object.fromEntries(TITANS.map((t) => [t.file, t.ko])));
 if (!only) everythingElse();

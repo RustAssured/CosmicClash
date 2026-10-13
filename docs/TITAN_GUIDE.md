@@ -155,8 +155,32 @@ The scaffold does all of this:
 **A new titan starts as work in progress** (`"wip": true` in its JSON's `kit` block). It is on the roster, so every check
 covers it, but it stays out of the menus, the website cards, the press kit and the site's titan count, so an unfinished
 titan can't go live when the repo is pushed. To see it in the menus, add `?wip=<id>` to the URL (or `?wip=all`, or
-`?<id>=1`). Direct fight links (`?a=<id>…`) work as before. When WJ ships it, delete the `wip` line and run
-`npm run site:art -- --only=<id>`.
+`?<id>=1`). Direct fight links (`?a=<id>…`) work as before.
+
+**Shipping it is one command** (when WJ says so):
+
+```text
+npm run titan:ship -- <id>                 take a WIP titan public
+    options: --no-keyart   skip the key-art lineup (slow: it renders on the GPU)
+             --render-clip render its hover-clip shot first if it isn't rendered yet (a few minutes)
+             --force       ship even if a check fails
+```
+
+It does, in order:
+
+1. runs its quick checks (`titan:check -- <id> --quick`: size, palette, AI coverage, replay) and stops if one fails;
+2. deletes `"wip": true` from its JSON: from now on it's in the menus, the website, the press kit and the titan count;
+3. regenerates everything made from the roster:
+   - its website portrait and Korean name, and its MATTER count;
+   - its website hover clip, if it has a press shot named `<id>-card` in `tools/press/shots.ts` (the shot moves into the
+     press list by itself once the titan ships) and that shot is rendered: the web loop is encoded and `kit.site.clip`
+     switched on;
+   - its press card and the key-art lineup (only where the local `press/` folder exists);
+   - the website's titan cards and the "Nine colossi…" count;
+4. prints what's left by hand: usually a ladder slot (§6, WJ's call), a hover-clip shot if there is none, a look at the
+   select screen and the website, and the commit.
+
+Running it again on a shipped titan just regenerates its outputs. The Cradle was the first titan shipped this way.
 
 ---
 
@@ -221,4 +245,5 @@ A titan ships when all of these are true.
 | The kit voice | `src/audio/voices/kitVoice.ts` |
 | The checks | `src/titans/roster.test.ts`, `tools/titans/checks.ts`, `tools/titans/check.ts` |
 | The scaffold | `tools/titans/new.ts` |
+| The ship step | `tools/titans/ship.ts` (`npm run titan:ship -- <id>`) |
 | The site cards | `tools/site/roster.ts` (run on every `npm run build:site`) |

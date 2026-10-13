@@ -31,6 +31,9 @@ export function countMatter(id: TitanId): number {
   if (isWitnessDef(def))
     return (body.rig as WitnessTitanRig).body.regions.reduce((s, r) => s + cells(r.map), 0);
   if (isUriDef(def)) return (body.rig as UriTitanRig).parts.reduce((s, p) => s + cells(p.map), 0);
+  // a kit titan with a rig (the Cradle: the knot is the body map, the disc and the cord links are rig regions)
+  const regions = (body.rig as { regions?: { map: MatterMap }[] } | undefined)?.regions;
+  if (regions?.length) return regions.reduce((s, r) => s + cells(r.map), 0);
   return cells(body.map);
 }
 

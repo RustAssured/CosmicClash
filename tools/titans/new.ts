@@ -546,4 +546,5 @@ Next:
   npm run dev, then ?mode=training&a=${id}&b=planet     play it (or ?a=${id}&b=planet&p1=human&p2=ai for VS AI)
   ?wip=${id}                                            shows it in the menus (it is work in progress: kit.wip)
   edit src/titans/kit/${id}/${id}.json                  its numbers, palette, card copy (docs/TITAN_GUIDE.md)
+  npm run titan:ship -- ${id}                           when WJ ships it: wip off, site art, clip, press, cards
   npm run new:titan -- --remove ${id}                  take it out again`);

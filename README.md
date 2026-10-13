@@ -7,6 +7,8 @@ arena littered with what came off them.
 
 Nothing is downloaded at runtime. Every sprite, sound and font (including the Hangeul) is generated in code.
 
+Built on the **MULJI Matter Engine** (물질, Korean for "matter, substance"): every pixel is matter.
+
 ![Title screen](docs/gallery/ui-title.png)
 
 *The UI over a stand-in nebula backdrop (screenshot from the UI sandbox, not from a live match).*

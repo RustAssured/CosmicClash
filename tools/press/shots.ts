@@ -1,4 +1,5 @@
 import type { PressCfg } from '../../dev/press/press';
+import { WIP_IDS } from '../../src/titans/roster';
 
 /**
  * The press kit's shot list, picked from press/work/scan.json → candidates → LOOKED at in press/work/preview-*.png.
@@ -23,7 +24,8 @@ const c = (a: PressCfg['a'], b: PressCfg['b'], stage: PressCfg['stage'], seed: n
 });
 const around = (t: number, offs = [-30, -12, -4, 0, 4, 10, 20, 35]): number[] => offs.map((o) => t + o);
 
-export const SHOTS: Shot[] = [
+/** Every shot. A shot with a work-in-progress titan in it (kit.wip) is a WIP shot until that titan ships (see below). */
+const ALL_SHOTS: Shot[] = [
   {
     name: 'witness-gaze',
     what: 'The Witness opens its eyes: every broken plate a beam (vs the Asteroid, Tussenruimte)',
@@ -129,15 +131,9 @@ export const SHOTS: Shot[] = [
     t1: 5380,
     stills: around(5221, [-40, -20, 0, 10, 25, 50]),
   },
-];
-
-/**
- * Shots of work-in-progress titans (kit.wip): rendered only on request (`npx tsx tools/press/clip.ts --wip=1 --only=…`), never
- * part of the press kit until the titan ships (then move the shot into SHOTS and its loop into tools/site/media.ts).
- */
-export const WIP_SHOTS: Shot[] = [
   {
-    // the Cradle's site hover loop (4 s): the Implant's filaments take hold of the Planet, then the cord lashes
+    // the Cradle's site hover loop (4 s, tools/site/media.ts titans): the Implant's filaments take hold of the Planet, then
+    // the cord lashes. A titan's `<id>-card` shot is its site hover clip (`npm run titan:ship` encodes it).
     name: 'cradle-card',
     what: 'The Cradle implants the Planet and lashes it with its cord (Nursery)',
     cfg: c('cradle', 'planet', 'nursery', 21),
@@ -146,3 +142,17 @@ export const WIP_SHOTS: Shot[] = [
     stills: [2900, 3040],
   },
 ];
+
+const isWipShot = (s: Shot): boolean => WIP_IDS.includes(s.cfg.a) || WIP_IDS.includes(s.cfg.b);
+
+/** The press kit's shots: every shot whose titans have all shipped. */
+export const SHOTS: Shot[] = ALL_SHOTS.filter((s) => !isWipShot(s));
+
+/**
+ * Shots of work-in-progress titans (kit.wip): rendered only on request (`npx tsx tools/press/clip.ts --wip=1 --only=…`), never
+ * part of the press kit. They move into SHOTS by themselves the moment the titan ships (its `wip` flag goes).
+ */
+export const WIP_SHOTS: Shot[] = ALL_SHOTS.filter(isWipShot);
+
+/** A titan's site hover-clip shot (`<id>-card`), if it has one. */
+export const cardShot = (id: string): Shot | undefined => ALL_SHOTS.find((s) => s.name === `${id}-card`);

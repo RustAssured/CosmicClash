@@ -20,23 +20,81 @@ import {
 } from './kit';
 
 const SLOT_COL = [C.p1, C.p2] as const;
-const GRID_Y = 84;
-/** The free width between the two side panels. */
-const GRID_W = 192;
-
-/**
- * The roster grid: three columns of 56 px tiles up to nine titans (the original layout); a bigger roster (the titan kit's
- * newcomers) gets more, smaller tiles so it still fits between the side panels and above the footer.
- */
-function gridOf(n: number): { cols: number; tile: number; gap: number; x: number } {
-  const cols = n <= 9 ? 3 : n <= 16 ? 4 : 5;
-  const gap = cols === 3 ? 8 : 6;
-  const tile = cols === 3 ? 56 : Math.floor((GRID_W - (cols - 1) * gap) / cols);
-  return { cols, tile, gap, x: Math.floor((LOGICAL_W - (cols * tile + (cols - 1) * gap)) / 2) };
-}
 const PANEL_W = 214;
 const PANEL_Y = 44;
 const PANEL_H = 278;
+/** The column between the two side panels (196 px), less a few px so the cursor corners clear the panels' borders. */
+const GRID_W = 188;
+/** Room under each tile for its name: the Hangeul face (우리) is 12 px tall, the micro face 5. */
+const LABEL_H = 14;
+/** The prompt under the grid: "CHOOSE YOUR TITAN" (10 px) and its Korean gloss (12 px). */
+const PROMPT_H = 10;
+const GLOSS_H = 12;
+
+/** Where everything in the middle column goes for a roster of `n` tiles. */
+interface GridLayout {
+  cols: number;
+  rows: number;
+  tile: number;
+  /** tile i's top-left corner */
+  pos(i: number): { x: number; y: number };
+  /** the prompt line's y, and the gloss's (null: no room for it) */
+  promptY: number;
+  glossY: number | null;
+}
+
+/**
+ * The roster grid, laid out as one block (tiles, their names, then the prompt) centred in the middle column between the
+ * panels' top and bottom edges, so nothing can run into anything else:
+ *  - up to nine titans, three columns of 56 px tiles (the original look);
+ *  - 10–12, four columns of 42 px; 13–20, five of 32 px;
+ *  - a short last row is centred under the full ones (so ten titans end on a centred pair, not a lone pair at the left).
+ * Every tile reserves a full name row (LABEL_H), so a Hangeul name never reaches the next row or the prompt.
+ */
+export function gridOf(n: number): GridLayout {
+  const cols = n <= 9 ? 3 : n <= 12 ? 4 : 5;
+  const gap = cols === 3 ? 8 : 6;
+  const tile = cols === 3 ? 56 : Math.floor((GRID_W - (cols - 1) * gap) / cols);
+  const rows = Math.max(1, Math.ceil(n / cols));
+  const stride = tile + LABEL_H + (cols === 3 ? 4 : 3);
+  const gridH = (rows - 1) * stride + tile + LABEL_H;
+  const withGloss = gridH + 6 + PROMPT_H + 3 + GLOSS_H <= PANEL_H - 8;
+  const block = gridH + 6 + PROMPT_H + (withGloss ? 3 + GLOSS_H : 0);
+  const top = PANEL_Y + Math.max(2, Math.floor((PANEL_H - block) / 2));
+  const promptY = top + gridH + 6;
+  return {
+    cols,
+    rows,
+    tile,
+    pos(i) {
+      const r = Math.floor(i / cols);
+      const inRow = Math.min(cols, n - r * cols);
+      const rowW = inRow * tile + (inRow - 1) * gap;
+      const x0 = Math.floor((LOGICAL_W - rowW) / 2);
+      return { x: x0 + (i % cols) * (tile + gap), y: top + r * stride };
+    },
+    promptY,
+    glossY: withGloss ? promptY + PROMPT_H + 3 : null,
+  };
+}
+
+/** The tile reached from `i` by moving `dy` rows: the one in that row nearest `i` horizontally, or `i` at the edge. */
+export function gridStep(n: number, i: number, dy: number): number {
+  const g = gridOf(n);
+  const r = Math.floor(i / g.cols) + dy;
+  if (r < 0 || r >= g.rows) return i;
+  const cx = g.pos(i).x;
+  let best = i;
+  let bd = Infinity;
+  for (let j = r * g.cols; j < Math.min(n, (r + 1) * g.cols); j++) {
+    const d = Math.abs(g.pos(j).x - cx);
+    if (d < bd) {
+      bd = d;
+      best = j;
+    }
+  }
+  return best;
+}
 
 /**
  * Titan select. Versus: two cursors, each driven by that player's own device. VS AI / Training: one picker chooses your
@@ -63,10 +121,7 @@ export function createSelectScreen(): Screen {
     const n = ctx.deps.titans.length;
     let i = cur[s];
     if (dx) i = (i + dx + n) % n;
-    if (dy) {
-      const j = i + dy * gridOf(n).cols;
-      i = j >= 0 && j < n ? j : i;
-    }
+    if (dy) i = gridStep(n, i, dy);
     if (i !== cur[s]) {
       cur[s] = i;
       ctx.sound('move');
@@ -177,10 +232,10 @@ export function createSelectScreen(): Screen {
       else drawSide(ctx, 1, cur[1], locked[1]);
 
       // roster grid
-      const { cols, tile: TILE, gap: GAP, x: GRID_X } = gridOf(titans.length);
+      const grid = gridOf(titans.length);
+      const { cols, tile: TILE } = grid;
       titans.forEach((t, i) => {
-        const x = GRID_X + (i % cols) * (TILE + GAP);
-        const y = GRID_Y + Math.floor(i / cols) * (TILE + GAP + 14);
+        const { x, y } = grid.pos(i);
         const ready = ctx.isTitanReady(t.id);
         const ramp = accentRamp(t.accent);
         panel(cv, x, y, TILE, TILE, { fill: alpha(C.ink0, 0.85), border: C.line0, shade: false });
@@ -204,7 +259,7 @@ export function createSelectScreen(): Screen {
           if (hovered1) cursor(ctx, x, y, TILE, SLOT_COL[1], locked[1], pulse, hovered0 ? 3 : 0);
         }
         void ramp;
-        drawText(cv, t.name.replace('The ', '').toUpperCase(), x + TILE / 2, y + TILE + 4, {
+        drawText(cv, t.name.replace('The ', '').toUpperCase(), x + TILE / 2, y + TILE + 3, {
           color: hovered0 || hovered1 ? C.white : C.dim,
           font: 'micro',
           align: 'center',
@@ -221,20 +276,18 @@ export function createSelectScreen(): Screen {
         : locked[0] && locked[1]
           ? 'BOTH READY'
           : 'CHOOSE YOUR TITANS';
-      // a third row of tiles (eight or nine titans) pushes the line below the grid, without its Korean gloss
-      const rows = Math.ceil(titans.length / cols);
-      const wy = rows > 2 ? GRID_Y + (rows - 1) * (TILE + GAP + 14) + TILE + 14 : 268;
-      drawText(cv, who, LOGICAL_W / 2, wy, {
+      // the prompt closes the grid's block (gridOf keeps it clear of the names and inside the panels' height)
+      drawText(cv, who, LOGICAL_W / 2, grid.promptY, {
         color: single && phase === 1 ? C.p2 : C.soft,
         align: 'center',
         tracking: 2,
       });
-      if (rows <= 2)
+      if (grid.glossY !== null)
         drawText(
           cv,
           single ? (phase === 0 ? '타이탄 선택' : '상대 선택') : '타이탄 선택',
           LOGICAL_W / 2,
-          284,
+          grid.glossY,
           {
             color: C.celadonDeep,
             align: 'center',

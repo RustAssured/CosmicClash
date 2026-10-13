@@ -1149,10 +1149,9 @@
       "accent": "#9c3048",
       "accent2": "#e6c9a8",
       "portrait": "x1",
-      "clip": false,
+      "clip": true,
       "tag": "It does not consume worlds. It prepares them."
     },
-    "homage": "Nods: Akira (uncontrolled proliferation), Cronenberg (anatomy losing its categories), The Thing (unreliable biological identity), teratoma and placental vasculature, deep-sea filter organisms. Its own: a radial membrane disc with calcified spokes, a hanging knot and one umbilical cord; no humanoid or fetus imagery, no eyes, no giant mouth, no tentacles.",
-    "wip": true
+    "homage": "Nods: Akira (uncontrolled proliferation), Cronenberg (anatomy losing its categories), The Thing (unreliable biological identity), teratoma and placental vasculature, deep-sea filter organisms. Its own: a radial membrane disc with calcified spokes, a hanging knot and one umbilical cord; no humanoid or fetus imagery, no eyes, no giant mouth, no tentacles."
   }
 }

@@ -372,6 +372,10 @@
               <dd>three.js in a browser tab. Free, no install, keyboard or any gamepad</dd>
             </div>
           </dl>
+          <p class="readout-foot">
+            Built on the <b>MULJI Matter Engine</b> <span lang="ko">물질</span>
+            <span class="sep" aria-hidden="true">·</span> every pixel is matter
+          </p>
         </div>
       </section>
 
@@ -381,7 +385,7 @@
           <p class="kicker" lang="ko">거인들</p>
           <h2 id="titans-title">The titans</h2>
           <p class="lede">
-            Eight colossi, eight ways to destroy matter, and each one is a single idea grown to the size of a
+            Nine colossi, nine ways to destroy matter, and each one is a single idea grown to the size of a
             world. Hover or tap a titan to see it fight.
           </p>
         </header>
@@ -707,9 +711,53 @@
               </span>
             </button>
           </li>
+          <li class="titan" style="--accent: #9c3048; --accent2: #e6c9a8">
+            <button class="titan-card" type="button" aria-label="The Cradle: play its clip">
+              <span class="titan-media">
+                <img
+                  class="px portrait"
+                  src="media/titans/cradle.png"
+                  width="233"
+                  height="230"
+                  alt=""
+                  loading="lazy"
+                />
+                <video muted loop playsinline preload="none" data-titan-clip>
+                  <source data-src="media/titans/cradle-loop.webm" type="video/webm" />
+                  <source data-src="media/titans/cradle-loop.mp4" type="video/mp4" />
+                </video>
+              </span>
+              <span class="titan-text">
+                <span class="titan-essence">gestation</span>
+                <span class="titan-name">The Cradle</span>
+                <img
+                  class="px ko"
+                  src="media/type/ko-cradle.png"
+                  width="42"
+                  height="14"
+                  alt="태반체"
+                  lang="ko"
+                />
+                <span class="titan-matter" data-titan="cradle" style="--m: 0.446"
+                  ><b>MATTER</b> 20,975 px</span
+                >
+                <span class="titan-tag">It does not consume worlds. It prepares them.</span>
+                <span class="titan-lore"
+                  >Nothing has ever seen The Cradle born. Every civilization that studied it eventually
+                  reached the same conclusion: it is not the child. It is the organ preparing the universe for
+                  one.</span
+                >
+                <span class="titan-mech"
+                  ><b>Gestation.</b> It does not crush what it hits; it develops it. Capillaries, cartilage
+                  ridges and swollen organ-masses grow into the foe in its own colours, and its own wounds
+                  open on half-formed organs.</span
+                >
+              </span>
+            </button>
+          </li>
           <li
             class="titan mystery"
-            style="--accent: #8a3cff; --accent2: #ff4d6d; --span-4: 4; --span-3: 1; --span-2: 2"
+            style="--accent: #8a3cff; --accent2: #ff4d6d; --span-4: 3; --span-3: 3; --span-2: 1"
           >
             <a class="titan-card" href="#edge" aria-label="A final boss is coming: see what is at the edge">
               <span class="titan-media">
@@ -1102,7 +1150,8 @@
               other down. There is no health bar: every titan's body is a map of simulated pixel matter, and
               every blow cracks, burns, infects, crushes or devours the actual pixels in the attacker's own
               way. Wounds crack, hold and shear off as slabs; the fighters grow lighter, faster and weaker as
-              they come apart. Every sprite, sound and font is generated in code.
+              they come apart. Every sprite, sound and font is generated in code. It is built on its own MULJI
+              Matter Engine <span lang="ko">(물질, Korean for “matter”)</span>, where every pixel is matter.
             </p>
             <h3>Downloads</h3>
             <!-- PRESS-DOWNLOADS: tools/site/build.ts replaces this list with the files in press/ when that folder exists -->
@@ -1163,7 +1212,10 @@
         <strong>ADEUK: TITANS</strong> <span lang="ko">아득</span> · in development · © 2026
         <!-- WJ: rights holder -->
       </p>
-      <p class="small">Every sprite, sound and font in the game is generated in code. Built with three.js.</p>
+      <p class="small">
+        Built on the MULJI Matter Engine <span lang="ko">(물질)</span>: every pixel is matter. Every sprite,
+        sound and font in the game is generated in code, with three.js.
+      </p>
       <p class="small">
         <a href="#top">Back to top</a> · <a href="play/">Play</a> · <a href="#press">Press kit</a>
       </p>

@@ -1704,6 +1704,28 @@ tbody th {
   line-height: 1.5;
   color: var(--dim);
 }
+/* the engine's credit line under the facts: small, like a readout's signature */
+.readout-foot {
+  margin: 22px 0 0;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+  font: 400 11px/1.6 var(--label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.readout-foot b {
+  font-weight: 400;
+  color: var(--celadon);
+}
+.readout-foot [lang='ko'] {
+  font-family: var(--ko);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.readout-foot .sep {
+  margin: 0 6px;
+}
 
 /* the Edge: full-bleed, the thing is too big for the page */
 .edge {

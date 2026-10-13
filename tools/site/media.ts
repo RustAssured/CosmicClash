@@ -17,6 +17,8 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { SITE_ROSTER } from '@/titans/roster';
+import { SHOTS } from '../press/shots';
 
 const EV = 'evidence/compare';
 const WP = `${EV}/now-witness-planet.mp4`;
@@ -69,6 +71,14 @@ const SOURCES = {
     blackhole: { src: BN, ss: 10, t: 4 },
     supernova: { src: SP, ss: 1, t: 4 },
     uri: { src: UW, ss: 2, t: 4 },
+    // every shipped titan with a press card shot (`<id>-card` in tools/press/shots.ts SHOTS, rendered with
+    // tools/press/clip.ts) gets its loop from that clip: the kit's titans (the Cradle first) need no edit here
+    ...Object.fromEntries(
+      SITE_ROSTER.filter((r) => SHOTS.some((s) => s.name === `${r.id}-card`)).map((r) => [
+        r.site.file,
+        { src: `press/work/clips/${r.id}-card.mov`, ss: 0, t: 4 },
+      ]),
+    ),
   } as Record<string, Cut>,
   /** gallery stills, cut from the after-sheet (row, column) or a 1280×720 file at ×2 */
   shots: [
