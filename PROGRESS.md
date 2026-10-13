@@ -151,6 +151,12 @@ the blob placeholder's; not in the ladder's opponents.
   marbled through it with the Cradle's flesh between, broad wet folds with a sheen, a vascular web, calcified nodules, a
   sunk lumen, torn ringed umbilical strands; alive on the field: its veins pulse in slow waves (overlay) and fluid seeps
   from its rim as beads (matter particles). round1/pseudo-organs-before/after.png, false-birth-organ.png.
+- **Round 2, the sac** (docs/gallery/cradle/round2/, cradle/falsebirth.ts `drawSac` / `drawRupture`): a translucent
+  membrane stretched to bursting round the foe; the foe shows through it in its own colours and presses against it (a
+  lit pressure ridge on its outline, a dark crease outside); contraction folds squeezing in pulses with wet lit crests, a
+  pulsing vascular web, seven knuckled calcified ribs straining round it like meridians, a wet hem; fluid beads seep at
+  the seams. The rupture (birth or escape) peels seven great veined, hemmed, ragged flaps back from the opening, with
+  strands stretched between them that snap. The foe reads as trapped inside through the escape window (sac-escape-after).
 
 ## Next
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.

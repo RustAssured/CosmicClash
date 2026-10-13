@@ -20,12 +20,12 @@ import type { FatShape } from '../../shapes';
 import { massFromCells, wrapAngle, type MassProps } from '../../rig/xpbd';
 import { KitBehaviour } from './base';
 import { CRADLE_RIG, buildCradleRig, densityTable, type CradleRigBuild } from './cradle/rig';
-import { Gestation } from './cradle/gestate';
+import { Gestation, bodyLocal } from './cradle/gestate';
 import { Chambers } from './cradle/chambers';
 import { Differentiation } from './cradle/wrong';
 import { SailSkin } from './cradle/sail';
 import { Overlay } from '../../fx/overlay';
-import { drawTear, drawVeil, growPseudoOrgan } from './cradle/falsebirth';
+import { drawRupture, drawSac, drawVeil, growPseudoOrgan } from './cradle/falsebirth';
 import type { ActiveMove } from '../../move';
 
 /**
@@ -1104,8 +1104,16 @@ export class CradleBehaviour extends KitBehaviour {
       fx.layer.z = 0.6;
     } else if (this.escaped) {
       // torn open from inside: the foe got out
-      if (m.phase === 'active' && m.phaseTick < ESCAPE_TICKS + 18)
-        drawTear(fx, fv.x, fv.y, foeR * 1.4, clamp((m.phaseTick % (ESCAPE_TICKS + 18)) / 24, 0, 1), seed);
+      if (m.phase === 'active' && m.phaseTick < ESCAPE_TICKS + 24)
+        drawRupture(
+          fx,
+          fv.x,
+          fv.y,
+          foeR * 1.3,
+          clamp(m.phaseTick / (ESCAPE_TICKS + 24), 0, 1),
+          f.tickNo,
+          seed,
+        );
       fx.layer.z = 0.6;
     } else if (m.phase === 'active' && m.phaseTick < BIRTH_AT) {
       // CONTRACT: it closes round the foe and squeezes in slow pulses; the foe is gone behind it
@@ -1115,11 +1123,57 @@ export class CradleBehaviour extends KitBehaviour {
       const squeeze = 1 - 0.06 * Math.max(0, Math.sin(m.phaseTick * 0.16));
       const cx = hubX + dx * (0.55 + 0.45 * u);
       const cy = hubY + dy * (0.55 + 0.45 * u);
-      drawVeil(fx, cx, cy, r * squeeze, r * 0.92 * squeeze, 0.75 + 0.75 * u, hubX, hubY, u, f.tickNo, seed);
+      // the sac: stretched to bursting round the foe, the foe pressing against it from inside
+      const bodies = this.foeBodies();
+      const loc = this.pt;
+      const inside = (wx: number, wy: number): number => {
+        for (const b of bodies) {
+          const mm = b.map;
+          bodyLocal(b, wx, wy, loc);
+          const ix = Math.floor(loc.x);
+          const iy = Math.floor(loc.y);
+          if (ix < 0 || iy < 0 || ix >= mm.w || iy >= mm.h) continue;
+          const i = iy * mm.w + ix;
+          if (mm.material[i] !== 0) return mm.pixels[i]! | 0xff000000;
+        }
+        return 0;
+      };
+      drawSac(
+        fx,
+        cx,
+        cy,
+        r * squeeze,
+        r * 0.92 * squeeze,
+        u,
+        Math.sin(m.phaseTick * 0.16),
+        f.tickNo,
+        seed,
+        inside,
+      );
+      // fluid seeps at the seams (the ribs' feet on the rim) as beads
+      if (u > 0.6 && m.phaseTick % 5 === 0) {
+        const k = (m.phaseTick / 5) % 7;
+        const a = (k / 7) * Math.PI * 2 + 0.4;
+        f.world.spawnParticles({
+          kind: 'mote',
+          x: cx + Math.cos(a) * r * squeeze,
+          y: cy + Math.sin(a) * r * 0.92 * squeeze,
+          vx: Math.cos(a) * 10,
+          vy: Math.sin(a) * 10 + 8,
+          spread: 5,
+          count: 2,
+          ramp: [0xff6ab4e6, 0xff3a6ab0, 0xff241650],
+          life: [60, 110],
+          fieldScale: 0.2,
+          emissive: 26,
+          size: 2,
+          drag: 0.4,
+        });
+      }
       // it hides the foe: in front of everything it has
       fx.layer.z = u > 0.5 ? 25 : 0.6;
     } else if (m.phase === 'active' && m.phaseTick < BIRTH_AT + 18) {
-      drawTear(fx, fv.x, fv.y, foeR * 1.25, (m.phaseTick - BIRTH_AT) / 18, seed);
+      drawRupture(fx, fv.x, fv.y, foeR * 1.25, (m.phaseTick - BIRTH_AT) / 18, f.tickNo, seed);
       fx.layer.z = 0.6;
     }
   }
