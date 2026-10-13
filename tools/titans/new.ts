@@ -509,6 +509,8 @@ def.kit = {
     clip: false,
   },
   homage: '',
+  // every new titan starts as work in progress: off the menus, site and press until WJ ships it (delete this line then)
+  wip: true,
 };
 
 function hexRgb(h: string): [number, number, number] {
@@ -542,5 +544,6 @@ Next:
   npx tsc --noEmit && npx vitest run src/titans      the roster checks (size, palette, AI coverage, replay)
   npm run titan:check -- ${id}                         the balance sweep and a report
   npm run dev, then ?mode=training&a=${id}&b=planet     play it (or ?a=${id}&b=planet&p1=human&p2=ai for VS AI)
+  ?wip=${id}                                            shows it in the menus (it is work in progress: kit.wip)
   edit src/titans/kit/${id}/${id}.json                  its numbers, palette, card copy (docs/TITAN_GUIDE.md)
   npm run new:titan -- --remove ${id}                  take it out again`);

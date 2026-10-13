@@ -22,6 +22,8 @@ const ticks = opt('ticks', '300,900')
   .map(Number)
   .sort((x, y) => x - y);
 const OUT = opt('out', 'docs/gallery/kit');
+/** The viewport: 1280×720 is the native 640×360 at ×2; --w=1920 --h=1080 gives ×3. */
+const VIEW = { width: +opt('w', '1280'), height: +opt('h', '720') };
 mkdirSync(OUT, { recursive: true });
 
 const { server, url } = await startRenderServer();
@@ -30,7 +32,7 @@ try {
   const { page, errors } = await openGame(
     browser,
     `${url}/?mode=aivai&a=${id}&b=${b}&stage=${stage}&seed=${seed}&ai=4&freeze=1&q=2`,
-    { width: 1280, height: 720 },
+    VIEW,
   );
   for (const t of ticks) {
     const now = (await page.evaluate(() => window.__ADEUK__!.summary().tick)) as number;
@@ -44,8 +46,8 @@ try {
   await page.close();
   // the titan select, as the roster stands (and with the Mouth unlocked: one more tile)
   for (const [q, name] of [
-    ['mode=select', 'select'],
-    ['mode=select&mouth=1', 'select-mouth'],
+    [`mode=select&wip=${id}`, 'select'],
+    [`mode=select&mouth=1&wip=${id}`, 'select-mouth'],
   ] as const) {
     const s = await openGame(browser, `${url}/?${q}`, { width: 1280, height: 720 });
     await s.page.waitForTimeout(1500);

@@ -1,0 +1,1158 @@
+{
+  "id": "cradle",
+  "name": "The Cradle",
+  "nameKo": "태반체",
+  "epithet": "The Organ Before",
+  "attributes": {
+    "mass": 7,
+    "cohesion": 5,
+    "heat": 4,
+    "gravity": 3,
+    "reach": 7,
+    "tempo": 4
+  },
+  "resource": {
+    "id": "fragments",
+    "name": "Cord",
+    "nameKo": "탯줄",
+    "max": 7,
+    "start": 7,
+    "display": "pips"
+  },
+  "destruction": "CRUSH",
+  "passive": {
+    "name": "Gestation",
+    "text": "Whatever it touches starts developing: its blows grow capillary webs, cartilage ridges and swollen organ-masses into the foe’s own matter, and that tissue is soft."
+  },
+  "failureMode": {
+    "name": "Differentiation failure",
+    "text": "As it is hurt its tissues forget what they are: membrane calcifies, sacs grow where the spokes were, a cut cord grows back as bone. It does not weaken; it stops knowing what creature it is."
+  },
+  "materials": [
+    {
+      "key": "membrane",
+      "base": "tendril",
+      "visual": {
+        "ramp": ["#150a14", "#260d1a", "#3c1222", "#57192b", "#732433", "#913a3c", "#b05c48", "#cf8a5c"],
+        "emissive": 0,
+        "char": "#260d1a",
+        "crack": "#150a14",
+        "debris": "#732433"
+      },
+      "physics": {
+        "density": 0.45,
+        "toughness": 0.45
+      }
+    },
+    {
+      "key": "vessel",
+      "base": "tendril",
+      "visual": {
+        "ramp": ["#12070f", "#250a17", "#40101f", "#5e1727", "#7e2230", "#a0353a"],
+        "emissive": 0,
+        "char": "#250a17",
+        "crack": "#12070f",
+        "debris": "#5e1727"
+      }
+    },
+    {
+      "key": "collagen",
+      "base": "tendril",
+      "visual": {
+        "ramp": ["#3a2a2d", "#5b4846", "#7e675d", "#a28b78", "#c4b098", "#e0d1ba"],
+        "emissive": 0,
+        "char": "#5b4846",
+        "crack": "#3a2a2d",
+        "debris": "#a28b78"
+      },
+      "physics": {
+        "toughness": 0.75,
+        "bond": 230
+      }
+    },
+    {
+      "key": "muscle",
+      "base": "tendril",
+      "visual": {
+        "ramp": ["#180b14", "#2c1422", "#451f30", "#5f2d3d", "#7a404c", "#975b60"],
+        "emissive": 0,
+        "char": "#2c1422",
+        "crack": "#180b14",
+        "debris": "#5f2d3d"
+      },
+      "physics": {
+        "density": 0.9
+      }
+    },
+    {
+      "key": "bone",
+      "base": "rock",
+      "visual": {
+        "ramp": ["#1f1514", "#372824", "#524036", "#6f5b4a", "#8d7861", "#ab977c", "#cbbb9c"],
+        "emissive": 0,
+        "char": "#372824",
+        "crack": "#1f1514",
+        "debris": "#6f5b4a"
+      },
+      "physics": {
+        "toughness": 0.75
+      }
+    },
+    {
+      "key": "sac",
+      "base": "eye",
+      "visual": {
+        "ramp": ["#3a1812", "#6a3020", "#9a5430", "#c4823f", "#e0ac62", "#f2d49a"],
+        "emissive": 18,
+        "char": "#6a3020",
+        "crack": "#3a1812",
+        "debris": "#c4823f"
+      }
+    },
+    {
+      "key": "lumen",
+      "base": "eye",
+      "visual": {
+        "ramp": ["#0f2729", "#1a4646", "#2b6c66", "#4b988e", "#86c9b9"],
+        "emissive": 46,
+        "char": "#1a4646",
+        "crack": "#0f2729",
+        "debris": "#2b6c66"
+      }
+    },
+    {
+      "key": "core",
+      "base": "core",
+      "visual": {
+        "ramp": ["#080205", "#170409", "#2c070e", "#4a0c13", "#731317", "#a2241d"],
+        "emissive": 30,
+        "char": "#170409",
+        "crack": "#080205",
+        "debris": "#4a0c13"
+      },
+      "physics": {
+        "density": 3,
+        "toughness": 0.9
+      }
+    }
+  ],
+  "art": {
+    "w": 254,
+    "h": 250,
+    "coreX": 129,
+    "coreY": 99,
+    "coreRadius": 8,
+    "params": {
+      "disc": {
+        "cx": 127,
+        "cy": 69,
+        "rx": 114,
+        "ry": 52,
+        "roll": -0.27,
+        "spokes": 9,
+        "scallop": 0.13,
+        "tears": 2,
+        "tearDepth": 0.3,
+        "tipOut": 0.06
+      },
+      "knot": {
+        "dx": 1,
+        "dy": 32,
+        "r": 29
+      },
+      "core": {
+        "dx": 2,
+        "dy": 2,
+        "r": 10
+      },
+      "tail": {
+        "pts": [
+          [128, 117],
+          [137, 147],
+          [129, 175],
+          [103, 193],
+          [85, 210],
+          [101, 224],
+          [135, 226],
+          [165, 220]
+        ],
+        "r0": 10,
+        "r1": 7,
+        "segs": 12,
+        "jaw": {
+          "len": 34,
+          "r": 13
+        },
+        "links": 6
+      }
+    }
+  },
+  "moves": [
+    {
+      "id": "cradle.lash",
+      "slot": "strike",
+      "name": "Cord Lash",
+      "nameKo": "탯줄 후리기",
+      "frame": {
+        "startup": 16,
+        "active": 12,
+        "recovery": 18,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 7
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "jaw",
+              "from": 0,
+              "to": 12,
+              "shape": {
+                "kind": "point",
+                "ox": 112,
+                "oy": -78,
+                "r": 22
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 430,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 8,
+                  "penetration": 10,
+                  "scatter": 1
+                }
+              },
+              "knockback": {
+                "x": 300,
+                "y": -120
+              },
+              "guardPressure": 0.35
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -60,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 14,
+              "ix": 160,
+              "iy": 0,
+              "damp": 0.15
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "jaw",
+              "from": 0,
+              "to": 12,
+              "shape": {
+                "kind": "point",
+                "ox": 138,
+                "oy": 18,
+                "r": 22
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 430,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 8,
+                  "penetration": 10,
+                  "scatter": 1
+                }
+              },
+              "knockback": {
+                "x": 300,
+                "y": -30
+              },
+              "guardPressure": 0.35
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -60,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 14,
+              "ix": 160,
+              "iy": 0,
+              "damp": 0.15
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "jaw",
+              "from": 0,
+              "to": 12,
+              "shape": {
+                "kind": "point",
+                "ox": 104,
+                "oy": 112,
+                "r": 22
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 430,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 8,
+                  "penetration": 10,
+                  "scatter": 1
+                }
+              },
+              "knockback": {
+                "x": 300,
+                "y": 110
+              },
+              "guardPressure": 0.35
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -60,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 14,
+              "ix": 160,
+              "iy": 0,
+              "damp": 0.15
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": [],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -6
+          },
+          "active": {
+            "lean": 5
+          }
+        },
+        "weight": "medium"
+      }
+    },
+    {
+      "id": "cradle.contraction",
+      "slot": "crush",
+      "name": "Contraction",
+      "nameKo": "수축",
+      "frame": {
+        "startup": 32,
+        "active": 12,
+        "recovery": 46,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 12
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "fold",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "point",
+                "ox": 78,
+                "oy": -46,
+                "r": 60
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 820,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 16,
+                  "penetration": 12,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 520,
+                "y": -160
+              },
+              "guardPressure": 1
+            },
+            {
+              "id": "jaw-hammer",
+              "from": 3,
+              "to": 12,
+              "shape": {
+                "kind": "point",
+                "ox": 104,
+                "oy": -40,
+                "r": 26
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 640,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 14,
+                  "penetration": 16,
+                  "scatter": 1
+                }
+              },
+              "knockback": {
+                "x": 420,
+                "y": -260
+              },
+              "guardPressure": 0.8
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -110,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 32,
+              "ix": 520,
+              "iy": -90,
+              "damp": 0.06
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "fold",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "point",
+                "ox": 78,
+                "oy": -12,
+                "r": 60
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 820,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 16,
+                  "penetration": 12,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 520,
+                "y": 40
+              },
+              "guardPressure": 1
+            },
+            {
+              "id": "jaw-hammer",
+              "from": 3,
+              "to": 12,
+              "shape": {
+                "kind": "point",
+                "ox": 120,
+                "oy": 66,
+                "r": 26
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 640,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 14,
+                  "penetration": 16,
+                  "scatter": 1
+                }
+              },
+              "knockback": {
+                "x": 420,
+                "y": -180
+              },
+              "guardPressure": 0.8
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -110,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 32,
+              "ix": 520,
+              "iy": 0,
+              "damp": 0.06
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "fold",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "point",
+                "ox": 78,
+                "oy": 30,
+                "r": 60
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 820,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 16,
+                  "penetration": 12,
+                  "scatter": 0.8
+                }
+              },
+              "knockback": {
+                "x": 520,
+                "y": 200
+              },
+              "guardPressure": 1
+            },
+            {
+              "id": "jaw-hammer",
+              "from": 3,
+              "to": 12,
+              "shape": {
+                "kind": "point",
+                "ox": 92,
+                "oy": 128,
+                "r": 26
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 640,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 14,
+                  "penetration": 16,
+                  "scatter": 1
+                }
+              },
+              "knockback": {
+                "x": 420,
+                "y": 60
+              },
+              "guardPressure": 0.8
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -110,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 32,
+              "ix": 520,
+              "iy": 90,
+              "damp": 0.06
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["heavy"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -10
+          },
+          "active": {
+            "lean": 12
+          },
+          "recovery": {
+            "lean": 4
+          }
+        },
+        "weight": "heavy"
+      }
+    },
+    {
+      "id": "cradle.billow",
+      "slot": "surge",
+      "name": "Billow",
+      "nameKo": "부풂",
+      "frame": {
+        "startup": 3,
+        "active": 12,
+        "recovery": 11,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 760,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 760,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 760,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "intangible": [2, 9],
+      "tags": ["dash"],
+      "extra": {}
+    },
+    {
+      "id": "cradle.implant",
+      "slot": "signature",
+      "name": "Implant",
+      "nameKo": "착상",
+      "frame": {
+        "startup": 18,
+        "active": 14,
+        "recovery": 26,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 4
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "filament",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "line",
+                "ox0": 30,
+                "oy0": -30,
+                "ox1": 196,
+                "oy1": -110,
+                "width": 18
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 170,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 3,
+                  "penetration": 4,
+                  "scatter": 0.4
+                }
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.3
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "filament",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "line",
+                "ox0": 30,
+                "oy0": -10,
+                "ox1": 196,
+                "oy1": -10,
+                "width": 18
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 170,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 3,
+                  "penetration": 4,
+                  "scatter": 0.4
+                }
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.3
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "filament",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "line",
+                "ox0": 30,
+                "oy0": 10,
+                "ox1": 196,
+                "oy1": 90,
+                "width": 18
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 170,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 3,
+                  "penetration": 4,
+                  "scatter": 0.4
+                }
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.3
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.2
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["burst"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -4
+          },
+          "active": {
+            "lean": 3
+          }
+        },
+        "weight": "light"
+      }
+    },
+    {
+      "id": "cradle.falsebirth",
+      "slot": "ultimate",
+      "name": "False Birth",
+      "nameKo": "거짓 출산",
+      "frame": {
+        "startup": 70,
+        "active": 110,
+        "recovery": 60,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "grip",
+              "from": 0,
+              "to": 70,
+              "shape": {
+                "kind": "point",
+                "ox": 120,
+                "oy": -40,
+                "r": 70
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 1,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "crater": 0.5,
+                  "penetration": 0.5,
+                  "scatter": 0
+                }
+              },
+              "knockback": {
+                "x": -30,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "rehit": 7
+            },
+            {
+              "id": "birth",
+              "from": 72,
+              "to": 82,
+              "shape": {
+                "kind": "point",
+                "ox": 120,
+                "oy": -40,
+                "r": 48
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 560,
+                "duration": 1,
+                "flags": 8,
+                "params": {
+                  "crater": 16,
+                  "penetration": 16,
+                  "scatter": 1.4
+                }
+              },
+              "knockback": {
+                "x": 900,
+                "y": -200
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "grip",
+              "from": 0,
+              "to": 70,
+              "shape": {
+                "kind": "point",
+                "ox": 120,
+                "oy": 0,
+                "r": 70
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 1,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "crater": 0.5,
+                  "penetration": 0.5,
+                  "scatter": 0
+                }
+              },
+              "knockback": {
+                "x": -30,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "rehit": 7
+            },
+            {
+              "id": "birth",
+              "from": 72,
+              "to": 82,
+              "shape": {
+                "kind": "point",
+                "ox": 120,
+                "oy": 0,
+                "r": 48
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 560,
+                "duration": 1,
+                "flags": 8,
+                "params": {
+                  "crater": 16,
+                  "penetration": 16,
+                  "scatter": 1.4
+                }
+              },
+              "knockback": {
+                "x": 900,
+                "y": -120
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "grip",
+              "from": 0,
+              "to": 70,
+              "shape": {
+                "kind": "point",
+                "ox": 120,
+                "oy": 40,
+                "r": 70
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 1,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "crater": 0.5,
+                  "penetration": 0.5,
+                  "scatter": 0
+                }
+              },
+              "knockback": {
+                "x": -30,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "rehit": 7
+            },
+            {
+              "id": "birth",
+              "from": 72,
+              "to": 82,
+              "shape": {
+                "kind": "point",
+                "ox": 120,
+                "oy": 40,
+                "r": 48
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 560,
+                "duration": 1,
+                "flags": 8,
+                "params": {
+                  "crater": 16,
+                  "penetration": 16,
+                  "scatter": 1.4
+                }
+              },
+              "knockback": {
+                "x": 900,
+                "y": 160
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 1,
+      "tags": ["ultimate", "armor"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -6
+          },
+          "active": {
+            "lean": 4
+          }
+        },
+        "weight": "catastrophic"
+      }
+    },
+    {
+      "id": "cradle.enfold",
+      "slot": "guard",
+      "name": "Enfold",
+      "nameKo": "감싸기",
+      "frame": {
+        "startup": 4,
+        "active": 0,
+        "recovery": 6,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": []
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["guard"],
+      "extra": {
+        "shell": {
+          "absorb": {
+            "KINETIC": 0.7,
+            "CRUSH": 0.6,
+            "FRACTURE": 0.45,
+            "THERMAL": 0.2,
+            "TIDAL": 0.3,
+            "ASSIMILATION": 0.5
+          }
+        }
+      }
+    }
+  ],
+  "ai": {
+    "style": "Keeps the foe at the length of its cord: lashes and hammers with the jaw-organ, implants from range, enfolds when pressed.",
+    "weights": {
+      "aggression": 0.5,
+      "patience": 0.5,
+      "zoning": 0.55,
+      "retreat": 0.35,
+      "trap": 0.25,
+      "punish": 0.6,
+      "gaze": 0
+    }
+  },
+  "ui": {
+    "accent": "#9c3048",
+    "accent2": "#e6c9a8",
+    "tagline": "It does not consume worlds. It prepares them."
+  },
+  "feel": {
+    "bob": {
+      "amp": 1.1,
+      "period": 4.4
+    },
+    "sway": {
+      "amp": 0.8,
+      "period": 5.6
+    },
+    "fx": {
+      "kind": "dust",
+      "ramp": ["#c08a6a", "#8a3a44", "#3c1222"],
+      "perHundredPx": 7,
+      "size": 1,
+      "life": [14, 30],
+      "spread": 30,
+      "behind": 24,
+      "rise": 10
+    }
+  },
+  "kit": {
+    "template": "blob",
+    "size": "large",
+    "stage": "nursery",
+    "light": {
+      "c": [0.85, 0.42, 0.32],
+      "radius": 120,
+      "base": 0.2
+    },
+    "voice": {
+      "pitch": 34,
+      "grit": 0.35,
+      "ring": 0.1,
+      "wet": 0.65
+    },
+    "site": {
+      "file": "cradle",
+      "essence": "gestation",
+      "name": "The Cradle",
+      "ko": "태반체",
+      "lore": "Nothing has ever seen The Cradle born. Every civilization that studied it eventually reached the same conclusion: it is not the child. It is the organ preparing the universe for one.",
+      "mech": {
+        "title": "Gestation.",
+        "text": "It does not crush what it hits; it develops it. Capillaries, cartilage ridges and swollen organ-masses grow into the foe in its own colours, and its own wounds open on half-formed organs."
+      },
+      "accent": "#9c3048",
+      "accent2": "#e6c9a8",
+      "portrait": "x1",
+      "clip": false,
+      "tag": "It does not consume worlds. It prepares them."
+    },
+    "homage": "Nods: Akira (uncontrolled proliferation), Cronenberg (anatomy losing its categories), The Thing (unreliable biological identity), teratoma and placental vasculature, deep-sea filter organisms. Its own: a radial membrane disc with calcified spokes, a hanging knot and one umbilical cord; no humanoid or fetus imagery, no eyes, no giant mouth, no tentacles.",
+    "wip": true
+  }
+}

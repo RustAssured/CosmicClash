@@ -111,7 +111,8 @@ const CURATED: [TitanId, number][] = [
 ];
 const lineup: [TitanId, number][] = [
   ...CURATED.filter(([id]) => ROSTER.some((r) => r.id === id)),
-  ...ROSTER.filter((r) => !CURATED.some(([id]) => id === r.id)).map((r): [TitanId, number] => [
+  // work-in-progress titans (kit.wip) stay out of the press key art until they ship
+  ...ROSTER.filter((r) => !r.wip && !CURATED.some(([id]) => id === r.id)).map((r): [TitanId, number] => [
     r.id,
     r.portraitScale,
   ]),

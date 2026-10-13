@@ -1,5 +1,13 @@
 export { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, isImplemented } from './defs';
-export { ROSTER, SITE_ROSTER, rosterEntry, sizeRange, type RosterEntry } from './roster';
+export {
+  ROSTER,
+  SITE_ROSTER,
+  WIP_IDS,
+  isTitanOffered,
+  rosterEntry,
+  sizeRange,
+  type RosterEntry,
+} from './roster';
 export { KIT_TITANS, kitTitan, type KitTitan } from './kit';
 export { paintBlob, buildBlobRig, type BlobRig, type BlobParams } from './kit/blob';
 export {

@@ -2378,10 +2378,12 @@ export class FighterImpl implements Fighter {
         hb.sweepTo,
         u,
       );
+      // a hitbox carried by a part (Behaviour.attachHitShape) lands where the part is; it has no look-ahead
+      const attached = this.behaviour.attachHitShape(hb.id, this.liveShape);
       // a once-per-move blow bites as deep as its own window allows (a lunge carries it further in a few ticks): see deepestBite
       let shape = this.liveShape;
       this.biteKnown = null;
-      if (!(hb.rehit && hb.rehit > 0) && hb.to - at > 1) {
+      if (!attached && !(hb.rehit && hb.rehit > 0) && hb.to - at > 1) {
         const deep = this.deepestBite(hb, at, span);
         if (deep) shape = deep;
       }
@@ -2484,6 +2486,7 @@ export class FighterImpl implements Fighter {
     const a = clamp(at, hb.from, hb.to - 1);
     const u = span > 1 ? (a - hb.from) / (span - 1) : 0;
     instantiateTemplate(hb.shape, this.place(this.lengthScale(hb.reachScale)), out, hb.sweepTo, u);
+    this.behaviour.attachHitShape(hb.id, out);
     return true;
   }
 

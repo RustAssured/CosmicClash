@@ -42,7 +42,7 @@ import { createMatterWorld, warmUp } from '@/matter';
 import { TITAN_SKY, createRenderer, type DebuggableRenderer } from '@/render';
 import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
 import { STAGES, isStageImplemented } from '@/stages';
-import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, renderPortrait } from '@/titans';
+import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, isTitanOffered, renderPortrait } from '@/titans';
 import { isMouthUnlocked, mouthBossDef, mouthDef, setMouthUnlocked } from '@/titans';
 import { mouthPortrait } from '@/titans/mouth/portrait';
 import { arenaForMatch } from '@/combat/mouth/arena';
@@ -227,9 +227,12 @@ export class App {
     this.zdepth = !!opts.zdepth;
     this.witness = !!opts.witness;
     // the vertical slice (D26/D27): only its titans in menus and attract mode unless `?full=1`
-    this.roster = opts.full
-      ? IMPLEMENTED_TITANS.slice()
-      : IMPLEMENTED_TITANS.filter((id) => (SLICE.titans as readonly TitanId[]).includes(id));
+    // work-in-progress titans (kit.wip) only with `?wip=<id>` / `?<id>=1` (an unshipped titan must not go live)
+    this.roster = (
+      opts.full
+        ? IMPLEMENTED_TITANS.slice()
+        : IMPLEMENTED_TITANS.filter((id) => (SLICE.titans as readonly TitanId[]).includes(id))
+    ).filter(isTitanOffered);
     // the Mouth (D37) is the final boss: offered only once unlocked (`?mouth=1` or the ladder's unlock)
     const mouthOn = isMouthUnlocked();
     if (mouthOn) this.roster.push('mouth');
@@ -247,12 +250,13 @@ export class App {
     this.audio.autoUnlock(document);
     this.ui = createUI({
       input: this.input,
-      titans: (opts.full ? TITAN_IDS.filter((id) => id !== 'mouth' || mouthOn) : this.roster).map(
-        (id): TitanInfo => {
-          const d = id === 'mouth' ? mouthDef() : TITAN_DEFS[id];
-          return d ? titanInfoFromDef(d) : FIXTURE_TITANS.find((t) => t.id === id)!;
-        },
-      ),
+      titans: (opts.full
+        ? TITAN_IDS.filter((id) => (id !== 'mouth' || mouthOn) && isTitanOffered(id))
+        : this.roster
+      ).map((id): TitanInfo => {
+        const d = id === 'mouth' ? mouthDef() : TITAN_DEFS[id];
+        return d ? titanInfoFromDef(d) : FIXTURE_TITANS.find((t) => t.id === id)!;
+      }),
       portrait: (id) => {
         if (id === 'mouth') return mouthPortrait();
         if (TITAN_DEFS[id]) return renderPortrait(id, 1, TITAN_SKY);

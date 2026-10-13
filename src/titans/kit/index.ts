@@ -1,5 +1,6 @@
 import type { TitanDef, TitanId } from '@/contracts';
 import type { KitTitan } from './types';
+import cradleKit from './cradle';
 // new:titan imports (the scaffold adds `import <name> from './<id>';` above this line)
 
 /**
@@ -7,6 +8,7 @@ import type { KitTitan } from './types';
  * registers a new one here and in src/contracts/roster.ts; `npm run new:titan -- --remove <id>` takes it out again.
  */
 export const KIT_TITANS: readonly KitTitan[] = [
+  cradleKit,
   // new:titan (the scaffold adds entries above this line)
 ];
 

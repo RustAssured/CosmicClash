@@ -17,6 +17,7 @@ export const ROSTER_IDS = [
   'supernova',
   'planet',
   'uri',
+  'cradle',
   // new:titan (the scaffold adds new ids above this line)
 ] as const;
 
@@ -89,4 +90,9 @@ export interface TitanKit {
   site: SiteCard;
   /** Homage notes (what it nods to, and how it stays its own), for the director. Not shown in the game. */
   homage?: string;
+  /**
+   * Work in progress: it stays on the roster (every check covers it) but is kept out of the menus, the site cards, the press
+   * kit and the site's titan count until WJ ships it. Unlock it in the menus with `?wip=<id>` (or `?wip=all`, or `?<id>=1`).
+   */
+  wip?: boolean;
 }

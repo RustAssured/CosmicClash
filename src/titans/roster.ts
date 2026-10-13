@@ -29,6 +29,8 @@ export interface RosterEntry {
   site: SiteCard;
   /** Built with the kit (its JSON carries this entry). */
   kit: boolean;
+  /** Work in progress (its JSON's `kit.wip`): kept out of the menus, site and press until it ships. */
+  wip?: boolean;
 }
 
 type Builtin = Omit<RosterEntry, 'id' | 'kit'>;
@@ -219,17 +221,40 @@ function entryOf(id: TitanId): RosterEntry {
     throw new Error(
       `roster: titan '${id}' has no roster entry (BUILTIN in src/titans/roster.ts or its JSON kit block)`,
     );
-  return { id, kit: true, size: k.size, stage: k.stage, portraitScale: 1, light: k.light, site: k.site };
+  return {
+    id,
+    kit: true,
+    size: k.size,
+    stage: k.stage,
+    portraitScale: 1,
+    light: k.light,
+    site: k.site,
+    ...(k.wip ? { wip: true } : {}),
+  };
 }
 
 /** Every roster titan's entry, in roster order. */
 export const ROSTER: readonly RosterEntry[] = ROSTER_IDS.map((id) => entryOf(id));
 
-/** The roster in the landing page's card order. */
+/** The roster in the landing page's card order. Work-in-progress titans (`kit.wip`) are left out until they ship. */
 export const SITE_ROSTER: readonly RosterEntry[] = [
   ...SITE_ORDER.map((id) => ROSTER.find((r) => r.id === id)).filter((r): r is RosterEntry => !!r),
   ...ROSTER.filter((r) => !SITE_ORDER.includes(r.id)),
-];
+].filter((r) => !r.wip);
+
+/** The work-in-progress titans (on the roster, kept out of the menus, site and press until WJ ships them). */
+export const WIP_IDS: readonly TitanId[] = ROSTER.filter((r) => r.wip).map((r) => r.id);
+
+/**
+ * Is a work-in-progress titan unlocked in the menus for this session? Only by the URL: `?wip=<id>[,<id>…]`, `?wip=all` or
+ * `?<id>=1` (WJ's test builds). Headless code (tests, tools) sees every WIP titan locked. Shipped titans are always offered.
+ */
+export function isTitanOffered(id: TitanId): boolean {
+  if (!WIP_IDS.includes(id)) return true;
+  const q = new URLSearchParams(globalThis.location?.search ?? '');
+  const wip = (q.get('wip') ?? '').split(',');
+  return wip.includes('all') || wip.includes(id) || q.get(id) === '1';
+}
 
 export const rosterEntry = (id: TitanId): RosterEntry | undefined => ROSTER.find((r) => r.id === id);
 

@@ -1,4 +1,4 @@
-import { DEFAULT_LIGHTING, type StageLighting, type TitanId } from '@/contracts';
+import { DEFAULT_LIGHTING, type MatterMap, type StageLighting, type TitanId } from '@/contracts';
 import { getTitanDef } from './defs';
 import { paintTitanMap } from './generate';
 import { paintWitness } from './art/lastone';
@@ -33,7 +33,9 @@ export function renderPortrait(id: TitanId, seed = 1, lighting: StageLighting = 
     cache.set(key, p);
     return p;
   }
-  const { map } = paintTitanMap(getTitanDef(id), seed, lighting);
+  // a multi-body kit titan (the Cradle) hands over its whole composite: its primary map is only one of its bodies
+  const painted = paintTitanMap(getTitanDef(id), seed, lighting);
+  const map = (painted.rig as { portrait?: MatterMap | null }).portrait ?? painted.map;
   let x0 = map.w;
   let y0 = map.h;
   let x1 = -1;

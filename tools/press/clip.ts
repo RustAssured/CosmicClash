@@ -4,7 +4,7 @@ import type { AudioResult } from '../../dev/press/press';
 import { launch, openGame } from '../lead/browser';
 import { startRenderServer } from '../render/devserver';
 import { WORK, arg, openWorker, query } from './common';
-import { SHOTS } from './shots';
+import { SHOTS, WIP_SHOTS } from './shots';
 
 /**
  * Render the shot list (tools/press/shots.ts): for each shot, the game's own sound for its ticks (the worker, offline) and
@@ -16,6 +16,8 @@ import { SHOTS } from './shots';
  */
 const only = arg('only', '');
 const redo = arg('redo', '0') === '1';
+/** --wip=1: the work-in-progress titans' shots (WIP_SHOTS) instead of the press kit's. */
+const LIST = arg('wip', '0') === '1' ? WIP_SHOTS : SHOTS;
 const CLIPS = `${WORK}/clips`;
 const STILLS = `${WORK}/stills`;
 mkdirSync(CLIPS, { recursive: true });
@@ -25,7 +27,7 @@ const { server, url } = await startRenderServer();
 const browser = await launch();
 try {
   const worker = await openWorker(browser, url);
-  for (const s of SHOTS) {
+  for (const s of LIST) {
     if (only && !only.split(',').includes(s.name)) continue;
     if (!redo && existsSync(`${CLIPS}/${s.name}.mov`)) continue;
     const t = Date.now();

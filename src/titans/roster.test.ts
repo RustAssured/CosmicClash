@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { ROSTER_IDS, SLICE, TITAN_IDS, validateTitanDef, type TitanId } from '@/contracts';
 import { KIT_BEHAVIOURS } from '@/combat/behaviours/kit';
 import { createTitanVoice } from '@/audio/voices';
-import { IMPLEMENTED_TITANS, KIT_TITANS, ROSTER, SITE_ROSTER, getTitanDef, paintTitanMap } from '@/titans';
+import {
+  IMPLEMENTED_TITANS,
+  KIT_TITANS,
+  ROSTER,
+  SITE_ROSTER,
+  WIP_IDS,
+  getTitanDef,
+  isTitanOffered,
+  paintTitanMap,
+} from '@/titans';
 import { DEFAULT_LIGHTING } from '@/contracts';
 import {
   BALANCE_BAND,
@@ -26,8 +35,11 @@ describe('the roster is one list', () => {
     expect([...SLICE.titans]).toEqual(IDS);
     expect(IMPLEMENTED_TITANS).toEqual(IDS);
     expect(ROSTER.map((r) => r.id)).toEqual(IDS);
-    expect(new Set(SITE_ROSTER.map((r) => r.id))).toEqual(new Set(IDS));
-    expect(new Set(SITE_ROSTER.map((r) => r.site.file)).size).toBe(IDS.length);
+    // work-in-progress titans stay off the site and the press kit until they ship
+    const shipped = IDS.filter((id) => !WIP_IDS.includes(id));
+    expect(new Set(SITE_ROSTER.map((r) => r.id))).toEqual(new Set(shipped));
+    expect(new Set(SITE_ROSTER.map((r) => r.site.file)).size).toBe(shipped.length);
+    for (const id of WIP_IDS) expect(isTitanOffered(id), `${id} is locked without ?wip=`).toBe(false);
   });
 
   it('registers every kit titan in every layer (definition, painter, behaviour, voice, card)', () => {

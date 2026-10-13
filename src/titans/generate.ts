@@ -20,6 +20,7 @@ import { paintPlanet, type PlanetRig } from './art/planet';
 import { paintSupernova, type SupernovaRig } from './art/supernova';
 import { resolveMaterials } from './materialTable';
 import type { BlobRig } from './kit/blob';
+import type { CradleRig } from './kit/cradle/paint';
 import { kitTitan } from './kit';
 import { isUriDef, paintUriTitan, type UriTitanRig } from './uri/def';
 
@@ -33,7 +34,8 @@ export type TitanRig =
   | BlackHoleRig
   | SupernovaRig
   | PlanetRig
-  | BlobRig;
+  | BlobRig
+  | CradleRig;
 
 export interface PaintedTitan {
   map: MatterMap;

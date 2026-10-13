@@ -130,3 +130,19 @@ export const SHOTS: Shot[] = [
     stills: around(5221, [-40, -20, 0, 10, 25, 50]),
   },
 ];
+
+/**
+ * Shots of work-in-progress titans (kit.wip): rendered only on request (`npx tsx tools/press/clip.ts --wip=1 --only=…`), never
+ * part of the press kit until the titan ships (then move the shot into SHOTS and its loop into tools/site/media.ts).
+ */
+export const WIP_SHOTS: Shot[] = [
+  {
+    // the Cradle's site hover loop (4 s): the Implant's filaments take hold of the Planet, then the cord lashes
+    name: 'cradle-card',
+    what: 'The Cradle implants the Planet and lashes it with its cord (Nursery)',
+    cfg: c('cradle', 'planet', 'nursery', 21),
+    t0: 2850,
+    t1: 3090,
+    stills: [2900, 3040],
+  },
+];

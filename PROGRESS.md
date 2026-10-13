@@ -76,6 +76,59 @@ palette clash, AI coverage, replay; balance sweep with `TITAN_BALANCE=1` or `npm
 WJ's guide: docs/TITAN_GUIDE.md. Proof (scaffolded, tested, removed): docs/gallery/kit/. The Witness card has its hover clip
 (press shot 'witness-card'); the site grid ends on the boss card spanning the free columns.
 
+## The Cradle / 태반체 (S15) — Gate 1 (look and silhouette), waiting for WJ
+WJ's brief: docs/titans/cradle/BRIEF.md. The first titan made with the kit (`npm run new:titan -- cradle "The Cradle" "태반체"
+--size=large`, blob template), grown into its own painter and rig: src/titans/kit/cradle/paint.ts (`paintCradle`,
+`buildCradleRig`; the disc is painted in its own disc space so Gate 2 can billow and tilt it as a sail). Materials:
+membrane, vessel, collagen, muscle, bone, sac, lumen (the only cold turquoise, two sacs), core. Accent #9c3048 / #e6c9a8
+(nearest other colour: the Nexus red, ΔE 0.12). 243×211 px, class large. Moves, behaviour, voice and HUD resource are still
+the blob placeholder's; not in the ladder's opponents.
+- **Stills** (docs/gallery/cradle/gate1/, `npx tsx tools/titans/cradle-gate1.ts`): cradle-base-x3 (alone, ×3), cradle-64px
+  (the 64 px read, all three variants), cradle-roster-lineup (true relative sizes, ×2), cradle-fight-vs-witness-x3 /
+  -vs-planet-x3 (in the game, ×3, `tools/titans/still.ts --w=1920 --h=1080`), cradle-select.
+- **Open for WJ:** disc tilt (base "eclipse" vs cradle-sail-x3), tail (hooked, jaw forward, vs cradle-trail-x3, S-curve
+  trailing under the body). Also cradle-fight-cord-severed-t240-x3: the blob's blows already cut the cord at its root.
+- **WJ, Gate 1 approved:** SAIL disc, TRAIL cord ("weighty, not a string"), the cord severs (deliberately) and regrows wrong,
+  surface polish (backlit panels and sacs, knuckled spokes, a heavier knot).
+
+### The Cradle, Gates 2–5 (S15) — waiting for WJ
+- **WIP gate (kit-wide):** `kit.wip: true` in a kit titan's JSON keeps it on the roster (every check covers it) but out of
+  the menus, the site cards, the press kit / key art and the site's titan count; `?wip=<id>` (or `?wip=all`, `?<id>=1`)
+  shows it in the menus. `npm run new:titan` now scaffolds every new titan as WIP (docs/TITAN_GUIDE.md §5). The Cradle is
+  WIP; its site art and matter count were taken off the site.
+- **Gate 2, motion and rig** (docs/gallery/cradle/gate2/): the knot is the primary body (KO core); the disc and six cord
+  links + the jaw-organ are rig regions (src/combat/behaviours/kit/cradle.ts, cradle/rig.ts): the painter cuts them out of
+  the composite (joint caps over the seams); the portrait, the size and palette checks read the composite (`rig.portrait`).
+  The disc is a sail (slow under-damped drive from its travel); the cord is heavy (×3.2 mass, slow hang drives, a throw
+  turns it as one limb, then hands it back slowly). New generic hook `Behaviour.attachHitShape`: the jaw hitboxes ride on
+  the real jaw. Moves: Cord Lash, Contraction (crush), Billow (surge), Implant (signature), False Birth (ultimate), Enfold
+  (guard). Sheets: lash, contraction, sail-orbit, enfold-guard, sever-regrow; in-game cradle-vs-lastone t150/t420.
+- **Severing:** a cord joint parts only after its patch loses most of its matter (<35 %) AND a heavy blow (≥600) has
+  landed on that link within 45 ticks, then it strains for 40 ticks (cue `cord-strain`) before it drops with its momentum
+  (`cord-sever`); a link gutted to 4 % lets go at once. The cord takes 35 % of a blow's share and does not count toward
+  health (a limb and a resource, the HUD's CORD pips). Regrowth: 7 s later, a link every 46 ticks, WRONG (calcified bone
+  rings, a solid club for the jaw; blistered with sacs after a second cut); a new round restores it.
+- **Gate 3, gestation** (gate3/): every landed blow plants a site in the foe that develops over 1.5 s in the foe's own
+  darkest/lightest tones: a capillary web, cartilage ridges across the blow, and after a heavy blow a swollen organ-like
+  mass (recoloured only: no mass, no integrity change). Implant: filaments from the spoke tips latch on and keep planting
+  for 2.5 s. Its own wounds open developmental chambers (dark walls and a wrong organ: sac with a dark mass, bone
+  nodules, a vessel tangle, a core-dark lobe).
+- **Gate 4, FALSE BIRTH** (gate4/): the disc spreads as a ribbed translucent membrane over the gap, filaments lock on,
+  the membrane closes into an opaque sac that hides the foe and contracts, then tears open (the birth blow) and expels a
+  pseudo-organ grown from the foe's own matter (its silhouette malformed, in its colours: pseudo-organs.png), launched
+  after it as a matter projectile, then left as an obstacle for 7 s. About 20–40 % of a foe (more on the Nexus).
+- **Gate 5** (gate5/): differentiation failure (cradle/wrong.ts): above 75 % nothing; 75–35 % a wrong turn every 1.2–4.5 s
+  (membrane → bone, sacs where spokes were, knot muscle → bone, bone → vessel); below 35 % runaway (the knot grows
+  tissue on itself, the sail loses its rhythm, the cord's sway quickens); a spoke knocked out regrows 10 s later as a lumpy
+  calcified organ with a sac. Voice: src/audio/voices/cradle.ts (whale pulse + wet sail bed, contraction instead of a
+  roar, muffled clicks, cartilage crackle, fluid). Balance (`npm run titan:check -- cradle`): 63 % at AI level 4, all
+  checks pass; the AI never raises Enfold. Card: WJ's lore line and tagline, mechanic "Gestation."; hover clip rendered
+  as a WIP shot (`npx tsx tools/press/clip.ts --wip=1 --only=cradle-card` → gate5/cradle-card-loop.webm, -clip.mp4).
+- **To ship it:** delete `kit.wip`, `npm run site:art -- --only=cradle` and the matter count, move the `cradle-card` shot
+  from WIP_SHOTS to SHOTS and add `titans.cradle` to tools/site/media.ts (`kit.site.clip: true`), decide its ladder slot.
+- Tools: tools/titans/cradle-series.ts (frame sheets with sever / hurt / plant hooks), cradle-jaw.ts (jaw path and cord
+  angles), cradle-duel.ts (AI duels, cuts, move use), cradle-organs.ts, author/cradle.ts (the moves).
+
 ## Next
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.
 - Then a full balance pass.

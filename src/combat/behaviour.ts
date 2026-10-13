@@ -12,6 +12,7 @@ import type {
 import type { DamageSum } from './damageSum';
 import type { FighterImpl } from './fighter';
 import type { ActiveMove } from './move';
+import type { FatShape } from './shapes';
 
 /** What the attacker tells the defender about the blow (set before `receive`, read by the defender's fighter). */
 export interface HitInfo {
@@ -166,6 +167,15 @@ export abstract class Behaviour {
    * the primary body's own mass properties.
    */
   massFrame(_out: { x: number; y: number; gyration: number; radius: number }): boolean {
+    return false;
+  }
+  /**
+   * Attached hitboxes: move the live shape of hitbox `hb` (its JSON id) onto the part that really carries it this tick (the
+   * Cradle's jaw-organ at the end of its rig chain), so the blow lands where it is drawn. Called after the template was placed
+   * (resolution and `liveHitShape`). Return true when the shape was moved: the fighter then skips its look-ahead (the template
+   * no longer predicts where the part will be). Default: false, the template stands.
+   */
+  attachHitShape(_hb: string, _shape: FatShape): boolean {
     return false;
   }
   /** Fold behaviour-owned sim state (a rig) into a determinism hash. Default: unchanged. */

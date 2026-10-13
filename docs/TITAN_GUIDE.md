@@ -152,6 +152,12 @@ The scaffold does all of this:
 - It registers the titan's painter and behaviour, next to the roster.
 - It draws the titan's website portrait and its Korean name, counts its matter, and regenerates the website's titan cards.
 
+**A new titan starts as work in progress** (`"wip": true` in its JSON's `kit` block). It is on the roster, so every check
+covers it, but it stays out of the menus, the website cards, the press kit and the site's titan count, so an unfinished
+titan can't go live when the repo is pushed. To see it in the menus, add `?wip=<id>` to the URL (or `?wip=all`, or
+`?<id>=1`). Direct fight links (`?a=<id>…`) work as before. When WJ ships it, delete the `wip` line and run
+`npm run site:art -- --only=<id>`.
+
 ---
 
 ## 6. Adding it to the tournament ladder

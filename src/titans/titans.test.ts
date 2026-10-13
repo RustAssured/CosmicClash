@@ -7,6 +7,7 @@ import {
   TITAN_IDS,
   pa,
   validateTitanDef,
+  type MatterMap,
   type StageLighting,
   type TitanAttributes,
   type TitanId,
@@ -21,6 +22,10 @@ import {
   type LastOneRig,
 } from '@/titans';
 import { buildMaterialTable } from '@/matter';
+
+/** The whole titan: a multi-body kit titan's composite (its rig's `portrait`), else the painted map. */
+const portraitMap = (p: { map: MatterMap; rig: unknown }): MatterMap =>
+  (p.rig as { portrait?: MatterMap | null }).portrait ?? p.map;
 
 const COLD: StageLighting = {
   dir: [-0.3, -0.6, 0.74],
@@ -165,22 +170,25 @@ describe('generator: uri (loaded as is)', () => {
 
 describe.each(PAINTED)('generator: %s', (id) => {
   const def = getTitanDef(id);
-  const { map, rig } = paintTitanMap(def, 1234, DEFAULT_LIGHTING);
+  // a multi-body kit titan (the Cradle) is checked as its whole composite (its primary map is one of its bodies)
+  const painted = paintTitanMap(def, 1234, DEFAULT_LIGHTING);
+  const rig = painted.rig;
+  const map = portraitMap(painted);
   const table = buildMaterialTable(def.materials);
 
   const solid = (x: number, y: number): boolean =>
     x >= 0 && y >= 0 && x < map.w && y < map.h && map.material[y * map.w + x] !== 0;
 
   it('is deterministic: same seed and lighting give identical bytes; another seed differs', () => {
-    const b = paintTitanMap(def, 1234, DEFAULT_LIGHTING).map;
+    const b = portraitMap(paintTitanMap(def, 1234, DEFAULT_LIGHTING));
     expect(Buffer.compare(Buffer.from(b.baseColor.buffer), Buffer.from(map.baseColor.buffer))).toBe(0);
     expect(Buffer.compare(Buffer.from(b.material), Buffer.from(map.material))).toBe(0);
-    const c = paintTitanMap(def, 4321, DEFAULT_LIGHTING).map;
+    const c = portraitMap(paintTitanMap(def, 4321, DEFAULT_LIGHTING));
     expect(Buffer.compare(Buffer.from(c.material), Buffer.from(map.material))).not.toBe(0);
   });
 
   it('is lit for the stage: another light changes colours but not the silhouette', () => {
-    const cold = paintTitanMap(def, 1234, COLD).map;
+    const cold = portraitMap(paintTitanMap(def, 1234, COLD));
     expect(Buffer.compare(Buffer.from(cold.baseColor.buffer), Buffer.from(map.baseColor.buffer))).not.toBe(0);
     expect(Buffer.compare(Buffer.from(cold.material), Buffer.from(map.material))).toBe(0);
   });
