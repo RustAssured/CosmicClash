@@ -2,6 +2,7 @@ import {
   angleToStep,
   clamp,
   makeLayer,
+  type ChunkStateOut,
   type DamageEvent,
   type FighterTickCtx,
   type OverlapResult,
@@ -22,6 +23,7 @@ import { CRADLE_RIG, buildCradleRig, densityTable, type CradleRigBuild } from '.
 import { Gestation } from './cradle/gestate';
 import { Chambers } from './cradle/chambers';
 import { Differentiation } from './cradle/wrong';
+import { SailSkin } from './cradle/sail';
 import { Overlay } from '../../fx/overlay';
 import { drawTear, drawVeil, growPseudoOrgan } from './cradle/falsebirth';
 import type { ActiveMove } from '../../move';
@@ -76,14 +78,24 @@ const REGROW_DELAY = 420;
 const REGROW_EVERY = 46;
 /** A root move larger than this in one tick (px) is a jump (respawn, tether snap): the rig is carried along rigidly. */
 const ROOT_JUMP = 24;
+/** What a body of the rig may carry (rad/s, px/s relative to the root) and how far from the knot any body's centre may be. */
+const MAX_SPIN = 5;
+const MAX_SPEED = 1100;
+const MAX_REACH = 330;
+/** A severed link's speed and spin as it leaves (px/s). */
+const CHUNK_SPEED = 380;
 /** How far a throw unfolds the cord's painted S (0 = swung rigid, 1 = pulled straight). */
 const UNFOLD = 0.6;
 const ATLAS_ROW = 512;
 /** FALSE BIRTH: the active tick the membrane throws open (the move's `birth` hitbox), and how long an organ stays. */
 const BIRTH_AT = 72;
-const ORGAN_TICKS = 420;
+const ORGAN_TICKS = 300;
+/** The pseudo-organ's size (px across the foe's swollen silhouette): planetary, the size of a titan's head. */
+const ORGAN_SIZE = 60;
+/** The escape window: the first ticks of the contraction, while the sac is still closing (a Surge breaks out). */
+const ESCAPE_TICKS = 30;
 /** Mass per cell of the pseudo-organ (its throw is one uncapped blow: mass × speed). */
-const ORGAN_MASS = 0.12;
+const ORGAN_MASS = 0.06;
 
 type MoveId =
   | 'cradle.lash'
@@ -109,6 +121,10 @@ export class CradleBehaviour extends KitBehaviour {
   /** Base drive frequencies (moves scale them for a while). */
   private baseHz!: Float64Array;
   private lastVf = 0;
+  /** Root jumps the rig was carried across (instrumentation). */
+  rigJumps = 0;
+  /** Times the rig had to be rebuilt at rest because it left physical sense (instrumentation; should stay 0). */
+  recoveries = 0;
   /** The cord: straining ticks at the root, when it was cut (−1 = whole), how many times, next link to regrow. */
   private strain = 0;
   /** The live link whose joint is straining. */
@@ -131,6 +147,9 @@ export class CradleBehaviour extends KitBehaviour {
   private readonly chambers = new Chambers();
   /** Gate 5: differentiation failure (it develops wrong as it is hurt). */
   private readonly diff = new Differentiation();
+  /** Presentation: the living sail (slow flapping, ripples and contraction waves drawn into the disc's atlas copy). */
+  private readonly skin = new SailSkin();
+  private skinTick = -1;
   /** IMPLANT: ticks the filaments stay latched on the foe (0 = none), and where on it (offset from its centre). */
   private latch = 0;
   private lastSite = -1000;
@@ -138,8 +157,31 @@ export class CradleBehaviour extends KitBehaviour {
   private latchY = 0;
   private fx!: Overlay;
   /** FALSE BIRTH: the pseudo-organs on the field (chunk id, tick to retire it) and whether this move's birth happened. */
-  private organs: { id: number; until: number }[] = [];
+  private organs: {
+    id: number;
+    until: number;
+    veins: { x: number; y: number }[];
+    rim: { x: number; y: number }[];
+  }[] = [];
+  /** Presentation: the organs' slow pulse along their veins (an additive overlay over the chunks). */
+  private organFx!: Overlay;
+  private readonly chunkSt: ChunkStateOut = {
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    angle: 0,
+    spin: 0,
+    mass: 0,
+    radius: 0,
+    mode: 0,
+    owner: 0,
+    origin: 0,
+    temp: 0,
+  };
   private born = false;
+  /** The foe broke out of this False Birth's sac (the escape window). */
+  private escaped = false;
   private readonly ov: OverlapResult = { cells: 0, x: 0, y: 0, nearestX: 0, nearestY: 0, coverage: 0 };
   private readonly touched: number[] = [];
   private readonly fr = { x: 0, y: 0, a: 0 };
@@ -187,6 +229,9 @@ export class CradleBehaviour extends KitBehaviour {
     this.buildRig();
     this.place();
     this.diff.prepare(this.R);
+    const discR = this.R.regions.find((r) => r.kind === 'disc');
+    if (discR) this.skin.prepare(this.R, discR);
+    this.organFx = new Overlay(`cradle-organs-${f.slot}`, 0.7, 900, 600, 'add', true);
     this.fx = new Overlay(`cradle-fx-${f.slot}`, 0.6, 900, 600, 'normal', true);
   }
 
@@ -354,14 +399,60 @@ export class CradleBehaviour extends KitBehaviour {
       rig.frame(this.rb.knot, this.fr);
       const jx = kx - this.fr.x;
       const jy = ky - this.fr.y;
-      if (jx * jx + jy * jy > ROOT_JUMP * ROOT_JUMP) rig.translate(jx, jy);
+      if (jx * jx + jy * jy > ROOT_JUMP * ROOT_JUMP) {
+        rig.translate(jx, jy);
+        this.rigJumps++;
+      }
       rig.setKinematic(this.rb.knot, kx, ky, 0);
       this.updateMass();
       this.steer();
       this.checkCord();
       rig.step();
+      this.sanitize();
     }
     this.place();
+  }
+
+  /**
+   * Keep the rig inside physical sense after every step (WJ's playtest: a cut cord could send the solver off: a link spinning
+   * up to thousands of radians dragged a region hundreds of px away, and with it the fighter's bounds and the camera):
+   * angles are wrapped (geometry unchanged), spin and speed are capped at what a body this size can carry, and if anything
+   * is still non-finite or a body has left the structure, the rig is rebuilt at rest round the root (counted).
+   */
+  private sanitize(): void {
+    const rig = this.rb.rig;
+    const k0 = this.rb.knot;
+    let broken = false;
+    for (const r of this.regions) {
+      if (r.lost || r.rigBody < 0) continue;
+      const i = r.rigBody;
+      if (
+        !Number.isFinite(rig.x[i]!) ||
+        !Number.isFinite(rig.y[i]!) ||
+        !Number.isFinite(rig.a[i]!) ||
+        !Number.isFinite(rig.vx[i]!) ||
+        !Number.isFinite(rig.vy[i]!) ||
+        !Number.isFinite(rig.w[i]!)
+      ) {
+        broken = true;
+        break;
+      }
+      rig.a[i] = wrapAngle(rig.a[i]!);
+      rig.w[i] = clamp(rig.w[i]!, -MAX_SPIN, MAX_SPIN);
+      const dvx = rig.vx[i]! - rig.vx[k0]!;
+      const dvy = rig.vy[i]! - rig.vy[k0]!;
+      const sp = Math.hypot(dvx, dvy);
+      if (sp > MAX_SPEED) {
+        rig.vx[i] = rig.vx[k0]! + (dvx / sp) * MAX_SPEED;
+        rig.vy[i] = rig.vy[k0]! + (dvy / sp) * MAX_SPEED;
+      }
+      if (Math.hypot(rig.x[i]! - rig.x[k0]!, rig.y[i]! - rig.y[k0]!) > MAX_REACH) broken = true;
+    }
+    if (broken) {
+      this.recoveries++;
+      this.buildRig();
+      this.rigTick = this.f.tickNo;
+    }
   }
 
   /** Cells were destroyed: lighter links swing faster, a holed disc turns about a new centre. */
@@ -395,7 +486,10 @@ export class CradleBehaviour extends KitBehaviour {
     const acc = (vf - this.lastVf) * 60;
     this.lastVf = vf;
     let sail = clamp(-0.42 * (vf / 230), -0.38, 0.38) + clamp(f.vy / 230, -1, 1) * 0.08;
-    sail += 0.035 * Math.sin((t * Math.PI * 2) / (60 * 4.6));
+    // the disc breathes: a slow, deep convulsion of the whole sail (seconds, not frames)
+    sail +=
+      0.06 * Math.sin((t * Math.PI * 2) / (60 * 9.5)) +
+      0.025 * Math.sin((t * Math.PI * 2) / (60 * 3.7) + 1.1);
     // runaway: the sail loses its rhythm
     if (this.diff.stage === 2) sail += 0.14 * Math.sin(t * 0.13) * Math.sin(t * 0.051 + 1.3);
     if (this.rb.disc >= 0) rig.w[this.rb.disc] = rig.w[this.rb.disc]! - clamp(acc, -900, 900) * 0.00002;
@@ -444,8 +538,8 @@ export class CradleBehaviour extends KitBehaviour {
           // gather (the load), then the throw starts before the window opens: a heavy cord needs a run-up
           if (m.phase === 'startup') {
             if (u < 0.4) coil(1.6, u / 0.4);
-            else aim(4.2, 0);
-          } else if (m.phase === 'active') aim(4.2, 0);
+            else aim(3.4, 0);
+          } else if (m.phase === 'active') aim(3.4, 0);
           else relMul = 0.8; // the muscles hand it back slowly: it hangs again under its own weight
           if (m.phase === 'active') sail -= 0.12;
           break;
@@ -598,7 +692,11 @@ export class CradleBehaviour extends KitBehaviour {
     for (const r of gone) {
       const b = r.rigBody;
       f.removeRegion(r.body.id);
-      f.world.bodyToChunk(r.body.id, rig.vx[b]! * s, rig.vy[b]!, rig.w[b]! * s);
+      // it falls away with its momentum, but never faster than a heavy limb can move (no chunk shot across the screen)
+      const vx = clamp(rig.vx[b]!, -CHUNK_SPEED, CHUNK_SPEED);
+      const vy = clamp(rig.vy[b]!, -CHUNK_SPEED, CHUNK_SPEED);
+      // and it stays in the fight plane: a cut limb flying at the camera at 2x read as a screen glitch (WJ playtest)
+      f.world.bodyToChunk(r.body.id, vx * s, vy, clamp(rig.w[b]!, -2.5, 2.5) * s, true);
       rig.detach(b);
       this.dropPart(r);
       r.lost = true;
@@ -651,6 +749,7 @@ export class CradleBehaviour extends KitBehaviour {
     );
     // calcified tissue bends less
     rig.addLimit({ a: pb, b, min: -0.35, max: 0.35, aboutPivot: true, hz: CRADLE_RIG.limitHz, zeta: 0.9 });
+    rig.addLimit({ a: -1, b, min: -2.6, max: 1.6, aboutPivot: true, hz: 3, zeta: 1 });
     const hzs = Float64Array.from(rig.drives, (d) => d.hz);
     hzs.set(this.baseHz.subarray(0, Math.min(this.baseHz.length, hzs.length)));
     hzs[di] = hz;
@@ -792,6 +891,22 @@ export class CradleBehaviour extends KitBehaviour {
   }
 
   override attachHitShape(hb: string, shape: FatShape): boolean {
+    // a foe that broke out of the closing sac is not held, and nothing is born from it
+    if (this.escaped && (hb === 'grip' || hb === 'birth')) {
+      shape.x = -1e6;
+      shape.y = -1e6;
+      shape.x0 = shape.x1 = shape.y0 = shape.y1 = -1e6;
+      return true;
+    }
+    // the birth tears open round whatever the sac holds: centred on the foe
+    if (hb === 'birth' && shape.kind === 'point') {
+      // on its near side (where the membrane held it), not on its core
+      const fv = this.f.foe.view;
+      const r = Math.min(46, Math.max(fv.boundsX1 - fv.boundsX0, fv.boundsY1 - fv.boundsY0) * 0.35);
+      shape.x = fv.x - this.facing * r;
+      shape.y = fv.y;
+      return true;
+    }
     if (!hb.startsWith('jaw') || shape.kind !== 'point') return false;
     if (!this.jawPoint(this.pt)) return false;
     shape.x = this.pt.x;
@@ -827,7 +942,67 @@ export class CradleBehaviour extends KitBehaviour {
       this.diff.tick(f.tickNo, f.view.integrityPct / 100, f.world, f.body, disc?.body ?? null, this.R, f.seed)
     )
       this.cue('wrong-growth');
+    this.organsLive();
     this.drawFx();
+  }
+
+  /**
+   * The pseudo-organs on the field are alive for a while: fluid seeps from their rims as slow beads (matter particles, sim
+   * side), and their veins pulse in slow waves (an additive overlay; presentation, tick-driven).
+   */
+  private organsLive(): void {
+    const f = this.f;
+    const world = f.world;
+    const fx = this.organFx;
+    if (this.organs.length === 0 || !world.chunkState) {
+      fx.hide();
+      return;
+    }
+    const st = this.chunkSt;
+    let begun = false;
+    for (let k = 0; k < this.organs.length; k++) {
+      const o = this.organs[k]!;
+      if (!world.chunkState(o.id, st)) continue;
+      const c = Math.cos(st.angle);
+      const s = Math.sin(st.angle);
+      // seeping: a bead every few ticks from a rim point, drifting off with the organ and slowly away from it
+      if (o.rim.length > 0 && (f.tickNo + k * 5) % 9 === 0) {
+        const p = o.rim[(f.tickNo * 7 + k * 13) % o.rim.length]!;
+        const wx = st.x + c * p.x - s * p.y;
+        const wy = st.y + s * p.x + c * p.y;
+        const l = Math.hypot(p.x, p.y) || 1;
+        world.spawnParticles({
+          kind: 'mote',
+          x: wx,
+          y: wy,
+          vx: st.vx * 0.7 + ((c * p.x - s * p.y) / l) * 9,
+          vy: st.vy * 0.7 + ((s * p.x + c * p.y) / l) * 9 + 6,
+          spread: 4,
+          count: 1,
+          ramp: [0xff6ab4e6, 0xff3a6ab0, 0xff241650],
+          life: [70, 130],
+          fieldScale: 0.2,
+          emissive: 26,
+          size: 2,
+          drag: 0.4,
+        });
+      }
+      // the pulse: a slow wave running along the veins (a beat every ~2.5 s)
+      if (!begun) {
+        fx.begin(st.x, st.y);
+        begun = true;
+      }
+      for (let v = 0; v < o.veins.length; v += 2) {
+        const q = o.veins[v]!;
+        const beat = Math.sin((f.tickNo / 150) * Math.PI * 2 - v * 0.35);
+        if (beat < 0.3) continue;
+        const wx = st.x + c * q.x - s * q.y;
+        const wy = st.y + s * q.x + c * q.y;
+        fx.glow(wx, wy, 2.6, 150, 40, 50, (beat - 0.3) * 0.9);
+      }
+    }
+    if (begun) fx.end();
+    else fx.hide();
   }
 
   /** The foe's bodies (its primary and any rig regions), front first. */
@@ -927,6 +1102,11 @@ export class CradleBehaviour extends KitBehaviour {
         seed,
       );
       fx.layer.z = 0.6;
+    } else if (this.escaped) {
+      // torn open from inside: the foe got out
+      if (m.phase === 'active' && m.phaseTick < ESCAPE_TICKS + 18)
+        drawTear(fx, fv.x, fv.y, foeR * 1.4, clamp((m.phaseTick % (ESCAPE_TICKS + 18)) / 24, 0, 1), seed);
+      fx.layer.z = 0.6;
     } else if (m.phase === 'active' && m.phaseTick < BIRTH_AT) {
       // CONTRACT: it closes round the foe and squeezes in slow pulses; the foe is gone behind it
       const u = clamp(m.phaseTick / 18, 0, 1);
@@ -973,8 +1153,22 @@ export class CradleBehaviour extends KitBehaviour {
       }
     if (m.def?.id !== 'cradle.falsebirth') {
       this.born = false;
+      this.escaped = false;
       return;
     }
+    // THE ESCAPE WINDOW (WJ feedback 1): while the sac is still closing, a foe that dashes (Surge) tears out of it; the
+    // membrane fails, the hold ends and nothing is born
+    if (
+      !this.escaped &&
+      !this.born &&
+      m.phase === 'active' &&
+      m.phaseTick < ESCAPE_TICKS &&
+      f.foe.view.state === 'surge'
+    ) {
+      this.escaped = true;
+      this.cue('false-birth-torn');
+    }
+    if (this.escaped) return;
     if (this.born || m.phase !== 'active' || m.phaseTick < BIRTH_AT) return;
     this.born = true;
     const foe = this.f.foe as unknown as { body?: MatterBody };
@@ -982,11 +1176,12 @@ export class CradleBehaviour extends KitBehaviour {
     this.cue('false-birth');
     f.events.push({ t: 'shake', dirX: this.facing, dirY: 0, amp: 7 });
     if (!foe.body) return;
-    const organ = growPseudoOrgan(foe.body.map, 46, f.seed + f.tickNo);
+    const organ = growPseudoOrgan(foe.body.map, ORGAN_SIZE, f.seed + f.tickNo);
     if (!organ) return;
     const s = this.facing;
     const id = world.spawnChunk({
       pixels: organ.pixels,
+      emissive: organ.emissive,
       w: organ.w,
       h: organ.h,
       x: fv.x - s * 24,
@@ -995,11 +1190,12 @@ export class CradleBehaviour extends KitBehaviour {
       vy: 0,
       spin: 0.5 * s,
       mass: organ.cells * ORGAN_MASS,
+      plane: true,
     });
     if (typeof id !== 'number' || id < 0) return;
     // expelled after the foe the birth threw away: a projectile, then an obstacle drifting on the field
-    world.launchChunk?.(id, s * 220, -40, f.body.id, f.slot);
-    this.organs.push({ id, until: f.tickNo + ORGAN_TICKS });
+    world.launchChunk?.(id, s * 150, -30, f.body.id, f.slot);
+    this.organs.push({ id, until: f.tickNo + ORGAN_TICKS, veins: organ.veins, rim: organ.rim });
     if (this.organs.length > 3) {
       world.retireChunk?.(this.organs[0]!.id);
       this.organs.shift();
@@ -1069,13 +1265,30 @@ export class CradleBehaviour extends KitBehaviour {
   override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
     const L = this.atlas;
     let changed = false;
+    const f = this.f;
+    const redrawSkin = this.skin.ready && f.tickNo !== this.skinTick && f.tickNo % 2 === 0;
     for (const r of this.regions) {
       if (r.lost) continue;
       const m = r.body.map;
+      const pl = this.places[r.index]!;
+      if (r.kind === 'disc' && this.skin.ready && (redrawSkin || m.version !== r.version)) {
+        // the living sail: calm and floating it moves fully; under attack at half; knocked out, barely
+        const st = f.state;
+        const amp =
+          st === 'ko' ? 0.25 : st === 'idle' || st === 'move' || st === 'guard' || st === 'intro' ? 1 : 0.5;
+        this.skin.draw(m, L.pixels, L.w, pl.sx, pl.sy, f.tickNo, amp);
+        for (let y = 0; y < m.h; y++) {
+          const src = y * m.w;
+          this.atlasEmis.set(m.emissive.subarray(src, src + m.w), (pl.sy + y) * L.w + pl.sx);
+        }
+        this.skinTick = f.tickNo;
+        r.version = m.version;
+        changed = true;
+        continue;
+      }
       if (m.version === r.version) continue;
       r.version = m.version;
       changed = true;
-      const pl = this.places[r.index]!;
       for (let y = 0; y < m.h; y++) {
         const src = y * m.w;
         const dst = (pl.sy + y) * L.w + pl.sx;
@@ -1094,6 +1307,7 @@ export class CradleBehaviour extends KitBehaviour {
     L.visible = true;
     out.push(L);
     if (this.fx.layer.visible) out.push(this.fx.layer);
+    if (this.organFx.layer.visible) out.push(this.organFx.layer);
   }
 
   /** The jaw-organ and the disc's rim, for the scale-of-motion instrumentation. */
@@ -1110,7 +1324,10 @@ export class CradleBehaviour extends KitBehaviour {
     let x = Math.imul(h ^ this.rb.rig.hash(), 0x01000193);
     x = Math.imul(x ^ (this.strain + 131 * this.cuts), 0x01000193);
     x = Math.imul(x ^ (this.severedAt + 7919 * this.regrowNext), 0x01000193);
-    x = Math.imul(x ^ (this.latch + 4099 * this.organs.length + (this.born ? 1 << 20 : 0)), 0x01000193);
+    x = Math.imul(
+      x ^ (this.latch + 4099 * this.organs.length + (this.born ? 1 << 20 : 0) + (this.escaped ? 1 << 21 : 0)),
+      0x01000193,
+    );
     x = this.diff.hash(this.chambers.hash(this.gest.hash(x >>> 0)));
     return x >>> 0;
   }
@@ -1147,6 +1364,33 @@ export class CradleBehaviour extends KitBehaviour {
   /** Cut the cord at its root now (tests and tools; the game cuts it only through the root's matter). */
   debugSever(): void {
     this.sever(0);
+  }
+  /** Every live region: its body, kind, cord link, transform and rig frame (tests and tools). */
+  debugRegions(): {
+    id: number;
+    kind: string;
+    link: number;
+    x: number;
+    y: number;
+    rx: number;
+    ry: number;
+    a: number;
+  }[] {
+    return this.regions
+      .filter((r) => !r.lost)
+      .map((r) => {
+        this.rb.rig.frame(r.rigBody, this.fr);
+        return {
+          id: r.body.id,
+          kind: r.kind,
+          link: this.cordLive.indexOf(r),
+          x: r.body.transform.x,
+          y: r.body.transform.y,
+          rx: this.fr.x * this.facing,
+          ry: this.fr.y,
+          a: this.fr.a,
+        };
+      });
   }
   get rigBuild(): CradleRigBuild {
     return this.rb;

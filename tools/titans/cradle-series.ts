@@ -14,13 +14,21 @@ import type { FighterImpl } from '@/combat';
 import type { CradleBehaviour } from '@/combat/behaviours/kit/cradle';
 import { createScriptSource, makeMatch, skipIntro } from '@/combat/testing/harness';
 import { blitLayers, makeFrame, paintBackdrop } from '../../dev/titans/blit';
-import { writeContactSheet } from '../lead/png';
+import { writeContactSheet, writePng } from '../lead/png';
 
 const args = process.argv.slice(2);
 const out = args.find((a) => !a.startsWith('--')) ?? '.scratch/cradle/series.png';
 const opt = (k: string, d: string): string =>
   (args.find((a) => a.startsWith(`--${k}=`)) ?? `--${k}=${d}`).split('=').slice(1).join('=');
-const ticks = opt('ticks', '2,20,40,60')
+const range = opt('range', '');
+const ticks = (
+  range
+    ? Array.from(
+        { length: +range.split(':')[1]! - +range.split(':')[0]! },
+        (_, k) => +range.split(':')[0]! + k,
+      ).join(',')
+    : opt('ticks', '2,20,40,60')
+)
   .split(',')
   .map(Number)
   .sort((a, b) => a - b);
@@ -82,6 +90,15 @@ for (const target of ticks) {
   for (let y = 0; y < ch; y++)
     for (let x = 0; x < cw; x++) px[y * cw + x] = frame[(y + oy) * LOGICAL_W + x + ox]!;
   items.push({ pixels: px, w: cw, h: ch });
+  // --frames=dir: every tick listed as its own PNG too (for a clip: ffmpeg -framerate 60 -i dir/f%05d.png)
+  if (opt('frames', ''))
+    writePng(
+      `${opt('frames', '')}/f${String(items.length - 1).padStart(5, '0')}.png`,
+      px,
+      cw,
+      ch,
+      +opt('scale', '2'),
+    );
 }
 mkdirSync(dirname(out), { recursive: true });
 writeContactSheet(out, items, +opt('cols', '4'), +opt('scale', '2'), 3);

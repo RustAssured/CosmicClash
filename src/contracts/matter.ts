@@ -371,6 +371,8 @@ export interface ChunkSpawn {
   spin: number;
   /** Mass units carried by the chunk. */
   mass: number;
+  /** Render-only: keep it drawn in the fight plane (never the 2x near class): a body-sized thing, not a flying shard. */
+  plane?: boolean;
 }
 
 /* ------------------------------------------------------------------------------------------------ *
@@ -480,7 +482,8 @@ export interface MatterWorld {
    * chunk (exact ledger transfer; nothing injected or deleted), the body is removed, the chunk id is returned (−1 if empty).
    * Wound sequencing applies when the sever comes from a blow. Optional until matter implements it (Phase 2, proposal 140).
    */
-  bodyToChunk?(bodyId: number, vx: number, vy: number, spin: number): number;
+  /** `plane`: render-only, the chunk stays drawn in the fight plane (a severed limb is not thrown at the camera at 2x). */
+  bodyToChunk?(bodyId: number, vx: number, vy: number, spin: number, plane?: boolean): number;
   /**
    * 0..1 health of a joint patch: Σ integrity of its live, still-bonded cells / their pristine Σ (a held, shearing cell
    * counts as lost). Patch-sized and allocation-free; read by the XPBD rig to weaken or break a constraint.

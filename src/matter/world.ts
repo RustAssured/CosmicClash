@@ -157,7 +157,8 @@ export interface MatterWorldEx extends MatterWorld {
   /** Internal state access for tests. */
   readonly core: WorldCore;
   /** Implemented (the contract still marks them optional until the Lead makes them required). */
-  bodyToChunk(bodyId: number, vx: number, vy: number, spin: number): number;
+  /** `plane`: render-only, the chunk stays drawn in the fight plane (never thrown at the camera at 2x). */
+  bodyToChunk(bodyId: number, vx: number, vy: number, spin: number, plane?: boolean): number;
   jointHealth(bodyId: number, cells: Int32Array | readonly number[]): number;
   /**
    * Light in a body's CRUSH fissures (packed RGBA; `null` = dark cracks; `undefined` = the default: molten rock's glow if the
@@ -715,7 +716,7 @@ class MatterWorldImpl implements MatterWorldEx {
    * the body is removed (only its accretion pool, if any, is booked as deleted). Returns the chunk id, or -1 if the body is
    * gone or empty. A rotated region's chunk starts at the region's angle, exactly where it was drawn.
    */
-  bodyToChunk(bodyId: number, vx: number, vy: number, spin: number): number {
+  bodyToChunk(bodyId: number, vx: number, vy: number, spin: number, plane = false): number {
     const core = this.core;
     const b = core.bodyById[bodyId];
     if (!b) return -1;
@@ -729,6 +730,10 @@ class MatterWorldImpl implements MatterWorldEx {
       const ch = extractChunk(core, b, cells, n, vx, vy, spin);
       if (ch) {
         ch.spin = spin;
+        if (plane) {
+          ch.plane = true;
+          ch.launchNear = false;
+        }
         id = ch.id;
         core.emitMatter('detach', ch.x, ch.y, ch.mass, b.ownerSlot);
       }
@@ -1246,6 +1251,10 @@ class MatterWorldImpl implements MatterWorldEx {
       0.5,
       0,
     );
+    if (spec.plane) {
+      ch.plane = true;
+      ch.launchNear = false;
+    }
     return ch.id;
   }
 

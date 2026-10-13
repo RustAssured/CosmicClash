@@ -254,6 +254,16 @@ export function createCradleVoice(): TitanVoice {
           });
           bubbles(c, makeOut(c, pan, 0.6), t + 0.3, { dur: 1.2, count: 12, f: 130, gain: 0.06 });
           break;
+        case 'false-birth-torn':
+          // the sac is torn from inside: a wet rip and a deflating contraction, nothing born
+          noiseHit(c, makeOut(c, pan, 0.4), t, {
+            dur: 0.5,
+            gain: 0.16,
+            kind: 'brown',
+            filter: { type: 'lowpass', f0: 1100, f1: 160, q: 1 },
+          });
+          crackle(c, makeOut(c, pan, 0.3), t, { dur: 0.35, count: 10, gain: 0.06, f: 700 });
+          break;
         case 'wrong-growth':
           // differentiation failure: cartilage cracking under pressure, and a click train that falters
           crackle(c, makeOut(c, pan, 0.35), t, { dur: 0.5, count: 9, gain: 0.05, f: 750 });

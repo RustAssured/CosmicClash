@@ -38,6 +38,8 @@ export class Chunk {
   origin = -1;
   /** Thrown fast and big by a blow: renders in the near class for its first ticks (see `chunkDepth`). */
   launchNear = false;
+  /** Render-only: always drawn in the fight plane (1x, no parallax class): a severed limb that must not leap at the camera. */
+  plane = false;
   /** Render-only: the view origin when the chunk was first drawn (parallax is measured from there, so a fresh chunk appears exactly where its cells were). */
   refX = NaN;
   refY = NaN;
@@ -286,6 +288,7 @@ export class ChunkPool {
     c.glowRamp = WHITE_GOLD;
     c.refX = NaN;
     c.refY = NaN;
+    c.plane = false;
     c.launchNear = !this.noNear && pxCount(pixels, w * h) >= 20 && vx * vx + vy * vy >= 140 * 140;
     this.massLive += mass;
     computeChunkGeometry(c);
@@ -935,7 +938,7 @@ const NEAR_LAUNCH_TICKS = 55;
 /** Deterministic depth class of a chunk (from its id, plus the launch boost from its age). Render-only: never read by the sim. */
 export function chunkDepth(c: Chunk): 0 | 1 | 2 {
   // A fresh chunk first appears in place (fight plane, 1x); it moves to its depth class a few ticks later.
-  if (c.age < 6) return DEPTH_MID;
+  if (c.age < 6 || c.plane) return DEPTH_MID;
   if (c.launchNear && c.age < NEAR_LAUNCH_TICKS) return DEPTH_NEAR;
   const h = ((c.id * 2654435761) >>> 0) % 8;
   // A wound's slab (`fast`) is the wound's matter: it never takes the 2x near class, where it would sweep across the wound at

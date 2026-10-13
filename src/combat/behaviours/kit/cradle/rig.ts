@@ -175,7 +175,7 @@ export function buildCradleRig(
       zeta: T.limitZeta,
     });
     // and no link ever turns past itself in the world (a cord thrown hard must not wind round its root)
-    rig.addLimit({ a: -1, b, min: -2.6, max: 1.6, aboutPivot: true });
+    rig.addLimit({ a: -1, b, min: -2.6, max: 1.6, aboutPivot: true, hz: 3, zeta: 1 });
     cord.push(b);
     prev = b;
     prevI = i;

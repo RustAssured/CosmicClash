@@ -129,6 +129,29 @@ the blob placeholder's; not in the ladder's opponents.
 - Tools: tools/titans/cradle-series.ts (frame sheets with sever / hurt / plant hooks), cradle-jaw.ts (jaw path and cord
   angles), cradle-duel.ts (AI duels, cuts, move use), cradle-organs.ts, author/cradle.ts (the moves).
 
+### The Cradle, WJ playtest round 1 (S15) — docs/gallery/cradle/round1/
+- **Cord-cut glitches, two causes, fixed.** (1) A thrown heavy cord could spin a link up past what the XPBD solver holds
+  (angles to −1500 rad): a region was dragged 400–900 px off, and with it the fighter's bounds and the camera (6 of 10
+  AI fights in tools/titans/cradle-sanity.ts). The behaviour now wraps angles and caps spin (5 rad/s) and speed after every
+  rig step, with a rebuild-at-rest fallback (never needed since: 0 recoveries); soft absolute limits on every link,
+  regrown ones too. (2) The cut links became ordinary debris, and by their id a third of them took the 2x "near the
+  camera" depth class: a cord segment suddenly twice its size, sliding with parallax. `bodyToChunk(…, plane)` and
+  `ChunkSpawn.plane` (render-only) keep a severed limb / the pseudo-organ in the fight plane. Severed chunks leave at
+  ≤ 380 px/s. Regression test src/combat/cradle.test.ts (sever/regrow cycles + two AI fights that broke before).
+- **False Birth rebalanced** (tools/titans/ult-compare.ts; integrity taken from a standing planet / asteroid / Witness /
+  Nexus): before 17 / 17 / 16 / 51 (mean 26 %; the earliest build 60–100 %), now 13 / 13 / 14 / 9 (≈13 %; 6 on the
+  Supernova, 6 on the Black Hole; the colossus collapses under most ultimates). Roster ultimates for comparison: means
+  24–67 %. The birth now lands on the foe's near side; the organ is lighter (a gentle shove) and leaves after 5 s; and an
+  ESCAPE WINDOW: a Surge in the sac's first 30 ticks tears out of it (cue `false-birth-torn`): no hold, no birth.
+  Balance after: 56 % at AI level 4.
+- **The living sail** (cradle/sail.ts, presentation only, tick-driven): contraction waves hub → rim (8 s), panels flap in
+  a swell travelling round the disc (13 s), hem ripples (7 s), light travelling with them; half amplitude under attack;
+  the disc's rig also breathes (9.5 s + 3.7 s). Clip: round1/sail-idle-9s.webm / .mp4.
+- **The pseudo-organ at planetary scale:** 60 px, the foe's silhouette fused with a lobed mass of its own, the foe's colours
+  marbled through it with the Cradle's flesh between, broad wet folds with a sheen, a vascular web, calcified nodules, a
+  sunk lumen, torn ringed umbilical strands; alive on the field: its veins pulse in slow waves (overlay) and fluid seeps
+  from its rim as beads (matter particles). round1/pseudo-organs-before/after.png, false-birth-organ.png.
+
 ## Next
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.
 - Then a full balance pass.

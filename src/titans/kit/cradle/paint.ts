@@ -1094,7 +1094,8 @@ function extractRegion(
       y1 = Math.max(y1, y);
     }
   if (x1 < 0) return null;
-  const M = 2;
+  // the disc gets room round it for its living warp (combat/behaviours/kit/cradle/sail.ts): its rim lifts a few px
+  const M = kind === 'disc' ? 7 : 2;
   const ox = x0 - M;
   const oy = y0 - M;
   const w = x1 - x0 + 1 + 2 * M;

@@ -14,11 +14,12 @@ const args = process.argv.slice(2);
 const out = (
   args.find((a) => a.startsWith('--out=')) ?? '--out=docs/gallery/cradle/gate4/pseudo-organs.png'
 ).slice(6);
+const ORGAN_SIZE = 60;
 const items: SheetItem[] = [];
 for (const r of ROSTER) {
   if (r.id === 'cradle') continue;
   const g = generateTitanBody(getTitanDef(r.id as TitanId), 1234, DEFAULT_LIGHTING);
-  const o = growPseudoOrgan(g.map, 46, 77);
+  const o = growPseudoOrgan(g.map, ORGAN_SIZE, 77);
   if (!o) continue;
   items.push({ pixels: o.pixels, w: o.w, h: o.h });
   console.log(`${r.id}: ${o.w}×${o.h}, ${o.cells} cells`);

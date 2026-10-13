@@ -837,7 +837,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1,
+                "energy": 1.4,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -865,7 +865,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 560,
+                "energy": 520,
                 "duration": 1,
                 "flags": 8,
                 "params": {
@@ -904,7 +904,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1,
+                "energy": 1.4,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -932,7 +932,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 560,
+                "energy": 520,
                 "duration": 1,
                 "flags": 8,
                 "params": {
@@ -971,7 +971,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 1,
+                "energy": 1.4,
                 "duration": 1,
                 "flags": 16,
                 "params": {
@@ -999,7 +999,7 @@
               },
               "damage": {
                 "type": "CRUSH",
-                "energy": 560,
+                "energy": 520,
                 "duration": 1,
                 "flags": 8,
                 "params": {
