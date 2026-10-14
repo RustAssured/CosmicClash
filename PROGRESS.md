@@ -201,12 +201,28 @@ the blob placeholder's; not in the ladder's opponents.
 - **Result:** main-thread CPU per frame p95 6–10 ms (was 11–22), every Ultimate and three of four fights with no missed
   vsync at ×2 and ×3 (was 1–3 per Ultimate). Tier stays 1 (auto); tier 2 (opt-in) costs 8.5 ms GPU of scenery.
   `npm run perf:budget` checks it all against tools/perf/budget.json.
-- **Left:** one 50 ms frame at the colossus's KO → next round (`nextRound`: world.heal of its 1024×181 body; sim work, in the
-  budget's known exceptions).
+- **Left:** one 50 ms frame at the colossus's KO → next round. It's a hard cut, and it's in the budget's known exceptions.
+  Diagnosed on 2026-10-14 (tools/perf/budget.json has the numbers): about 20 ms goes to heals of its 19 bodies, and about 13 ms
+  to re-creating severed regions from scratch. Part of the cost is cold code (≈ 18 ms in the page's second match).
+  Rehearsing round changes doesn't reach those paths. Real fixes, if it's ever worth it:
+  - re-use a severed region's Body by restoring it from its snapshot, instead of `createBody`;
+  - or regrow severed regions one per tick during the intro.
+
+## S18–S20 (in the commits of 2026-10-14; details in their docs)
+- **S18:** cross-engine determinism. The sim uses DMath (src/contracts/dmath.ts), a lint rule bans transcendentals and
+  `**` in sim directories, and there is a checksum (docs/netplay/STEP0.md).
+- **S19:** Ultimate freezes fixed (effects drawn at render time, overlap memo), an audio dropout fix and guard, SHOW FPS,
+  and perf tools.
+- **S20:** ONLINE / challenge a friend, with lockstep netplay over WebRTC and a Cloudflare signalling + TURN worker
+  (netplay-worker/, docs/netplay/STEP1.md). The worker has been deployed since 2026-10-14
+  (`https://adeuk-netplay.wj-games.workers.dev`, set as `NETPLAY_URL`), and both its rooms and TURN answer.
+  `?net=local` still gives two-tab local play.
 
 ## Next
+- **Netplay:** after WJ pushes and the site redeploys, run a two-machine test (ONLINE › host › send the link to a friend).
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.
 - Then a full balance pass.
+- Later: "The Observatory / 관측소", the titan-arrival area on the site.
 
 ## History
 - Slice Gates A–C delivered (docs/gates/).

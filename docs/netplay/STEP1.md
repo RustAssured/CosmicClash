@@ -6,9 +6,10 @@ recommendation (docs/netplay/STEP0.md). The client uses only the browser's own W
 
 **Status**
 - Built and tested here: the client, the UI, the local loopback and the tests.
-- Written but **not deployed**: the Cloudflare worker. WJ deploys it with netplay-worker/README.md, then sets
-  `NETPLAY_URL` in `src/net/config.ts`.
-- Until then, ONLINE says "ONLINE PLAY IS NOT SET UP YET". The local test mode (§5) works now.
+- **Deployed (2026-10-14):** WJ deployed the Cloudflare worker at `https://adeuk-netplay.wj-games.workers.dev`, and it is
+  set as `NETPLAY_URL` in `src/net/config.ts`. Checked from localhost: `POST /rooms` returns 200 with a code, and `/turn`
+  returns Cloudflare STUN and TURN servers with credentials, so both TURN secrets are set.
+- Not yet tested: a real match between two machines.
 
 ## 1. Transport: one WebRTC connection, two DataChannels
 

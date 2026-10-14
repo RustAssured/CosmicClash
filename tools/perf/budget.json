@@ -10,7 +10,7 @@
   "known": [
     {
       "run": "fight colossus v nexus",
-      "reason": "one 50 ms frame at the KO → next round reset: the colossus's nextRound (world.heal of its 1024×181 body ≈ 18 ms + behaviour reset; 25 ms in Node, ≈ 50 ms in Edge). Sim work at a round transition, not render; left for a sim-side pass (S21 report).",
+      "reason": "one 50 ms frame at the KO → next round reset (a hard cut): the colossus's nextRound, ≈ 36 ms in Node, ≈ 50 ms in Edge. Measured 2026-10-14 (.scratch/healspike.ts): world.heal of its 19 bodies (the eye 65×65 and 18 rig regions up to 134×101) ≈ 20 ms, and the behaviour reset ≈ 13 ms, mostly re-creating severed regions with a full createBody/initBody. Partly cold code: the second match in a page costs ≈ 18 ms, and a warm, heavily damaged colossus 9–13 ms. Rehearsing round changes in src/app/rehearsal.ts does not help, because its bodies are barely damaged and it never reaches those paths. Sim work at a round transition, not render.",
       "maxFrameMs": 60,
       "cpuMaxMs": 60
     }

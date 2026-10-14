@@ -1,13 +1,13 @@
 /**
  * Netplay configuration (docs/netplay/STEP1.md).
  *
- * NETPLAY_URL is the deployed signalling worker (netplay-worker/README.md, step 5). Empty until WJ deploys it: the ONLINE
- * menu then says online play is not set up yet. A URL parameter overrides it for testing:
+ * NETPLAY_URL is the deployed signalling worker (netplay-worker/README.md, step 5; WJ's Cloudflare account, 2026-10-14).
+ * Empty: the ONLINE menu says online play is not set up yet. A URL parameter overrides it for testing:
  *   ?net=https://adeuk-netplay.example.workers.dev   another worker
  *   ?net=local                                       no worker: two tabs of this browser talk over a BroadcastChannel
  *   &netsim=40,10,0.05                               (local only) one-way latency ms, jitter ms, loss 0..1 on the input lane
  */
-export const NETPLAY_URL = '';
+export const NETPLAY_URL = 'https://adeuk-netplay.wj-games.workers.dev';
 
 /** Bumped whenever the wire format or the session protocol changes (both peers must agree). */
 export const NET_PROTOCOL = 1;
