@@ -266,6 +266,9 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
  *   ?ladder=7&view=card       that rung's story card (view=lose: the defeat menu)
  *   ?ladder=end               the ending with the unlock message (`&as=mouth`: the Mouth's own ending); nothing is unlocked
  *   ?ladder=select            the tournament's titan select (best rung per titan on the tiles)
+ *   ?ladder=modes             the mode choice (CLASSIC / COSMIC CLASH); ?ladder=difficulty the difficulty choice
+ *   &lmode=cosmic|classic     which mode (default: the last chosen); &diff=easy|normal|titan which difficulty;
+ *   &seed=N                   COSMIC CLASH's shuffle seed for a dev run (default 1)
  */
 export function openLadderFlag(app: App, search: string): void {
   const q = new URLSearchParams(search);
@@ -274,14 +277,28 @@ export function openLadderFlag(app: App, search: string): void {
   // `as`, not the harness's `a` (which would boot a fight)
   const a = q.get('as');
   const player = ((TITAN_IDS as readonly string[]).includes(a ?? '') ? a : 'uri') as TitanId;
-  if (flag === 'select') showLadder(app.ui, 'select');
-  else if (flag === 'end') showLadder(app.ui, 'ladder', { ending: { player, unlocked: player !== 'mouth' } });
+  const lm = q.get('lmode');
+  const df = q.get('diff');
+  const pick: { mode?: 'classic' | 'cosmic'; difficulty?: 'easy' | 'normal' | 'titan' } = {};
+  if (lm === 'cosmic' || lm === 'classic') pick.mode = lm;
+  if (df === 'easy' || df === 'normal' || df === 'titan') pick.difficulty = df;
+  if (flag === 'select') showLadder(app.ui, 'select', undefined, pick);
+  else if (flag === 'modes') showLadder(app.ui, 'tourney', { phase: 'mode' }, pick);
+  else if (flag === 'difficulty') showLadder(app.ui, 'tourney', { phase: 'difficulty' }, pick);
+  else if (flag === 'end')
+    showLadder(app.ui, 'ladder', { ending: { player, unlocked: player !== 'mouth' } }, pick);
   else {
     const view = q.get('view');
-    showLadder(app.ui, 'ladder', {
-      dev: { player, rung: parseInt(flag, 10) || 1 },
-      view: view === 'card' || view === 'lose' ? view : 'tower',
-    });
+    showLadder(
+      app.ui,
+      'ladder',
+      {
+        dev: { player, rung: parseInt(flag, 10) || 1 },
+        seed: parseInt(q.get('seed') ?? '1', 10) || 1,
+        view: view === 'card' || view === 'lose' ? view : 'tower',
+      },
+      pick,
+    );
   }
 }
 

@@ -25,6 +25,7 @@ import {
   type ViewRect,
 } from '@/contracts';
 import { shapeBounds, shapeContains } from '../shapes';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * A small MatterWorld test double: pixel-accurate overlap against live cells (same space.ts maths as the real world),
@@ -434,8 +435,8 @@ export function createFakeWorld(seed = 1): FakeWorld {
         // a crater-ish bite biased away from the core, sometimes a slash
         const a = r.range(0, Math.PI * 2);
         const rad = r.range(0.35, 1) * Math.min(map.w, map.h) * 0.42;
-        const cx = map.coreX + Math.cos(a) * rad;
-        const cy = map.coreY + Math.sin(a) * rad;
+        const cx = map.coreX + DMath.cos(a) * rad;
+        const cy = map.coreY + DMath.sin(a) * rad;
         const cr = r.range(5, 13);
         for (let y = Math.floor(cy - cr); y <= Math.ceil(cy + cr); y++)
           for (let x = Math.floor(cx - cr); x <= Math.ceil(cx + cr); x++) {
@@ -443,8 +444,7 @@ export function createFakeWorld(seed = 1): FakeWorld {
             if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > cr * cr) continue;
             const i = y * map.w + x;
             if (map.material[i] === 0) continue;
-            if ((x - map.coreX) ** 2 + (y - map.coreY) ** 2 < (map.coreRadius * 1.3) ** 2 && massFrac > 0.3)
-              continue;
+            if (sq(x - map.coreX) + sq(y - map.coreY) < sq(map.coreRadius * 1.3) && massFrac > 0.3) continue;
             map.mass -= cellMass(b, i);
             map.liveCells--;
             map.material[i] = 0;

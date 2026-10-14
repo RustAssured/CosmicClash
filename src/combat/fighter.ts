@@ -88,6 +88,7 @@ import {
 import { computeStats, topSpeed } from './stats';
 import { blowWeight, lighter } from './weight';
 import { TUNING as T } from './tuning';
+import { DMath, sq } from '@/contracts/dmath';
 
 /** Damage-type absorption profile of a titan's Guard shell (the guard move's `extra.shell`). */
 export interface ShellProfile {
@@ -198,21 +199,21 @@ function shapeGap(s: FatShape, x: number, y: number): number {
   switch (s.kind) {
     case 'point':
     case 'field':
-      return Math.max(0, Math.hypot(x - s.x, y - s.y) - s.r);
+      return Math.max(0, DMath.hypot(x - s.x, y - s.y) - s.r);
     case 'line':
       return Math.max(0, distToSegment(x, y, s.x0, s.y0, s.x1, s.y1) - s.width * 0.5);
     case 'cone': {
       const dx = x - s.x;
       const dy = y - s.y;
-      const d = Math.hypot(dx, dy);
+      const d = DMath.hypot(dx, dy);
       if (d < 1e-6) return 0;
-      const ang = Math.acos(clamp((dx * s.dirX + dy * s.dirY) / d, -1, 1));
+      const ang = DMath.acos(clamp((dx * s.dirX + dy * s.dirY) / d, -1, 1));
       // inside the aperture: short of or within the range; outside it: the distance to the nearer edge ray
       if (ang <= s.halfAngle) return Math.max(0, d - s.range);
-      return d * Math.sin(Math.min(Math.PI / 2, ang - s.halfAngle));
+      return d * DMath.sin(Math.min(Math.PI / 2, ang - s.halfAngle));
     }
     case 'ring': {
-      const d = Math.hypot(x - s.x, y - s.y);
+      const d = DMath.hypot(x - s.x, y - s.y);
       return d < s.r0 ? s.r0 - d : Math.max(0, d - s.r1);
     }
   }
@@ -793,8 +794,8 @@ export class FighterImpl implements Fighter {
       const sx = this.input.moveX;
       const sy = this.input.moveY;
       // the speed the stick asks for (vertical speed is slower in the classic side view)
-      const want = Math.hypot(sx, sy) > T.stickDeadzone ? Math.hypot(sx, sy * T.vertSpeedMul) * top : 0;
-      quiet = Math.abs(Math.hypot(this.vx, this.vy) - want) < T.settleSpeedFrac * top;
+      const want = DMath.hypot(sx, sy) > T.stickDeadzone ? DMath.hypot(sx, sy * T.vertSpeedMul) * top : 0;
+      quiet = Math.abs(DMath.hypot(this.vx, this.vy) - want) < T.settleSpeedFrac * top;
     }
     this.feelTrack.observe(this.tickNo, this.drawn, quiet, this.slot, this.events);
   }
@@ -807,7 +808,7 @@ export class FighterImpl implements Fighter {
     const free = this.state === 'idle' || this.state === 'move' || this.state === 'intro';
     const sx = this.input.moveX;
     const sy = this.input.moveY;
-    const mag = Math.hypot(sx, sy);
+    const mag = DMath.hypot(sx, sy);
     if (!free || mag <= T.stickDeadzone) {
       if (++this.steerIdle >= T.steerRearmTicks) this.steerOn = false;
       return;
@@ -985,9 +986,9 @@ export class FighterImpl implements Fighter {
 
   private updateFreeLabel(): void {
     if (this.state === 'intro') return;
-    const sp = Math.hypot(this.vx, this.vy);
+    const sp = DMath.hypot(this.vx, this.vy);
     this.state =
-      sp > 24 || Math.hypot(this.input.moveX, this.input.moveY) > T.stickDeadzone ? 'move' : 'idle';
+      sp > 24 || DMath.hypot(this.input.moveX, this.input.moveY) > T.stickDeadzone ? 'move' : 'idle';
   }
 
   /** Start a buffered attack/surge or raise the guard. Called whenever the fighter is free to act. */
@@ -1050,7 +1051,7 @@ export class FighterImpl implements Fighter {
     if (def.slot === 'surge') {
       let sx = this.input.moveX;
       let sy = this.input.moveY;
-      const l = Math.hypot(sx, sy);
+      const l = DMath.hypot(sx, sy);
       if (l < 0.35) {
         sx = this.facing;
         sy = 0;
@@ -1157,7 +1158,7 @@ export class FighterImpl implements Fighter {
     const fv = this.foe.view;
     let ux = fv.x - this.px;
     let uy = fv.y - this.py;
-    const l = Math.hypot(ux, uy);
+    const l = DMath.hypot(ux, uy);
     if (l < 1e-6) {
       ux = this.facing;
       uy = 0;
@@ -1407,7 +1408,7 @@ export class FighterImpl implements Fighter {
       // a low-frequency thud for a big body's heavy release, hit or whiff
       const thud =
         T.thudGain *
-        Math.pow(Math.max(0.5, this.stats.mass) / 5, T.thudMassExp) *
+        DMath.pow(Math.max(0.5, this.stats.mass) / 5, T.thudMassExp) *
         this.feel.thud *
         (def.slot === 'ultimate' ? 1.4 : 1);
       if (thud > 0.8) this.events.push({ t: 'shake', dirX: 0, dirY: 1, amp: thud });
@@ -1517,7 +1518,7 @@ export class FighterImpl implements Fighter {
       const k = keys[m.keyIdx++]!;
       if (m.def.slot === 'surge') {
         // a dash takes the body to its dash velocity over a short ramp (a quick but massive launch, not a teleport)
-        const sp = Math.hypot(k.ix, k.iy) * push;
+        const sp = DMath.hypot(k.ix, k.iy) * push;
         this.addRamp(m.dirX * sp - this.vx, m.dirY * sp - this.vy, 0, T.surgeRampTicks);
       } else {
         // ix along the attack axis, iy across it (screen-down for a horizontal axis): 2-D root motion
@@ -1725,7 +1726,7 @@ export class FighterImpl implements Fighter {
    */
   private frameEase(xAxis: boolean, dir: 1 | -1, excess: number): void {
     const want = Math.min(FRAME_PULL_MAX, excess * FRAME_PULL_GAIN);
-    const k = 1 - Math.exp(-TICK_DT / FRAME_PULL_TAU);
+    const k = 1 - DMath.exp(-TICK_DT / FRAME_PULL_TAU);
     const v = xAxis ? this.vx : this.vy;
     const along = v * dir;
     const nv = along < want ? v + dir * (want - along) * k : v;
@@ -1748,7 +1749,7 @@ export class FighterImpl implements Fighter {
     if (sm < 1) {
       // rooted / slowed: a lower top speed and a strong drag on whatever velocity is left
       top *= sm;
-      const k = Math.pow(sm, dt * 3);
+      const k = DMath.pow(sm, dt * 3);
       this.vx *= k;
       this.vy *= k;
     }
@@ -1757,7 +1758,7 @@ export class FighterImpl implements Fighter {
     // impulse-driven moves (dashes, lunges) glide on their own damping; steering is nearly off
     const driven = m.def !== null && m.damp < 1;
     if (driven) {
-      const k = Math.pow(m.damp, dt);
+      const k = DMath.pow(m.damp, dt);
       this.vx *= k;
       this.vy *= k;
       ctl *= 0.25;
@@ -1771,12 +1772,12 @@ export class FighterImpl implements Fighter {
     const soft = Math.max(1, a.softWall);
     const dl = this.px - (a.minX + margin);
     const dr = a.maxX - margin - this.px;
-    if (dl < soft) this.vx += (1 - Math.max(0, dl) / soft) ** 2 * 900 * dt;
-    if (dr < soft) this.vx -= (1 - Math.max(0, dr) / soft) ** 2 * 900 * dt;
+    if (dl < soft) this.vx += sq(1 - Math.max(0, dl) / soft) * 900 * dt;
+    if (dr < soft) this.vx -= sq(1 - Math.max(0, dr) / soft) * 900 * dt;
     const du = this.py - (a.minY + ARENA_MARGIN_TOP);
     const dd = a.maxY - ARENA_MARGIN_BOTTOM - this.py;
-    if (du < 80) this.vy += (1 - Math.max(0, du) / 80) ** 2 * 700 * dt;
-    if (dd < 80) this.vy -= (1 - Math.max(0, dd) / 80) ** 2 * 700 * dt;
+    if (du < 80) this.vy += sq(1 - Math.max(0, du) / 80) * 700 * dt;
+    if (dd < 80) this.vy -= sq(1 - Math.max(0, dd) / 80) * 700 * dt;
 
     this.px += this.vx * dt;
     this.py += this.vy * dt;
@@ -1826,9 +1827,9 @@ export class FighterImpl implements Fighter {
     const dt = TICK_DT;
     const sx = ctl > 0 ? this.input.moveX : 0;
     const sy = ctl > 0 ? this.input.moveY : 0;
-    const mag = Math.hypot(sx, sy);
+    const mag = DMath.hypot(sx, sy);
     const steering = ctl > 0 && mag > T.stickDeadzone;
-    const half = Math.pow(0.5, dt / (T.glideHalfLife * this.feel.glideMul));
+    const half = DMath.pow(0.5, dt / (T.glideHalfLife * this.feel.glideMul));
     if (steering) {
       const w = (T.steerOmega * Math.sqrt(Math.max(0.05, ctl))) / Math.sqrt(this.feel.accelMul);
       const z = this.feel.zeta;
@@ -1840,9 +1841,9 @@ export class FighterImpl implements Fighter {
       this.accY = 0;
       if (!driven) {
         const k = this.tumble
-          ? Math.exp(-dt / T.koGlideTau)
+          ? DMath.exp(-dt / T.koGlideTau)
           : this.stunned()
-            ? Math.exp(-dt / this.brakeTau)
+            ? DMath.exp(-dt / this.brakeTau)
             : half;
         this.vx *= k;
         this.vy *= k;
@@ -1872,7 +1873,7 @@ export class FighterImpl implements Fighter {
     let Vy = this.vy * EY;
     const sx = ctl > 0 ? this.input.moveX : 0;
     const sy = ctl > 0 ? this.input.moveY : 0;
-    const mag = Math.min(1, Math.hypot(sx, sy));
+    const mag = Math.min(1, DMath.hypot(sx, sy));
     const thrusting = ctl > 0 && mag > T.stickDeadzone;
     if (thrusting) {
       const a = (O.thrustPerTop * top * ctl) / this.feel.accelMul;
@@ -1881,7 +1882,7 @@ export class FighterImpl implements Fighter {
       let ax = (O.tangential * at * f.tx + O.radial * ar * f.nx) * a;
       let ay = (O.tangential * at * f.ty + O.radial * ar * f.ny) * a;
       // keep the thrust magnitude honest whatever the split (a diagonal push is not stronger)
-      const al = Math.hypot(ax, ay);
+      const al = DMath.hypot(ax, ay);
       const amax = a * mag;
       if (al > amax && al > 1e-9) {
         ax *= amax / al;
@@ -1903,20 +1904,20 @@ export class FighterImpl implements Fighter {
         const vPar = Vx * ux + Vy * uy;
         const cap = top * ctl * mag;
         if (vPar > cap) {
-          const cut = (vPar - cap) * (1 - Math.exp(-dt / O.capTau));
+          const cut = (vPar - cap) * (1 - DMath.exp(-dt / O.capTau));
           Vx -= ux * cut;
           Vy -= uy * cut;
         }
       }
-      const dk = Math.exp(-dt / O.dragTau);
+      const dk = DMath.exp(-dt / O.dragTau);
       Vx *= dk;
       Vy *= dk;
     } else if (!driven) {
       const k = this.tumble
-        ? Math.exp(-dt / T.koGlideTau)
+        ? DMath.exp(-dt / T.koGlideTau)
         : this.stunned()
-          ? Math.exp(-dt / this.brakeTau)
-          : Math.pow(0.5, dt / (T.glideHalfLife * this.feel.glideMul));
+          ? DMath.exp(-dt / this.brakeTau)
+          : DMath.pow(0.5, dt / (T.glideHalfLife * this.feel.glideMul));
       Vx *= k;
       Vy *= k;
     }
@@ -2021,7 +2022,7 @@ export class FighterImpl implements Fighter {
     const fv = this.foe.view;
     const dx = this.px - fv.x;
     const dyS = (this.py - fv.y) * EY;
-    const r = Math.hypot(dx, dyS);
+    const r = DMath.hypot(dx, dyS);
     if (r > O.tetherSoft && r > 1e-6) {
       const nx = dx / r;
       const ny = dyS / r;
@@ -2031,7 +2032,7 @@ export class FighterImpl implements Fighter {
         const back = r - O.tetherMax;
         const sx = nx * back;
         const sy = (ny * back) / EY;
-        const k = Math.min(1, CORRECTION_STEP_MAX / Math.max(1e-9, Math.hypot(sx, sy)));
+        const k = Math.min(1, CORRECTION_STEP_MAX / Math.max(1e-9, DMath.hypot(sx, sy)));
         this.px -= sx * k;
         this.py -= sy * k;
         if (vOut > 0) {
@@ -2111,7 +2112,7 @@ export class FighterImpl implements Fighter {
     const dy = B.py - A.py;
     const coreGap = A.body.map.coreRadius + B.body.map.coreRadius + 8;
     if (A.footwork === 'orbit' || B.footwork === 'orbit') {
-      const d = Math.hypot(dx, dy);
+      const d = DMath.hypot(dx, dy);
       if (d > 1e-6) {
         nx = dx / d;
         ny = dy / d;
@@ -2137,7 +2138,7 @@ export class FighterImpl implements Fighter {
     // path instead of snapping the velocity. The cores are a hard limit: inside them the full correction applies at once.
     // Every correction is bounded per tick (CORRECTION_STEP_MAX soft, CORE_STEP_MAX for the cores): an overlap measured
     // against bounds that jumped (a multi-body fighter's region union) must never throw a body across the arena.
-    const dist = Math.abs(A.footwork === 'orbit' || B.footwork === 'orbit' ? Math.hypot(dx, dy) : dx);
+    const dist = Math.abs(A.footwork === 'orbit' || B.footwork === 'orbit' ? DMath.hypot(dx, dy) : dx);
     const hard = dist < coreGap;
     const k = hard ? 1 : T.contactSoftness;
     const c = hard
@@ -2258,10 +2259,10 @@ export class FighterImpl implements Fighter {
     const F = this.feel;
     const ph = this.slot * 1.7;
     const bob =
-      calm && F.bobAmp > 0 ? Math.sin(this.tickNo * ((TAU * TICK_DT) / F.bobPeriod) + ph) * F.bobAmp : 0;
+      calm && F.bobAmp > 0 ? DMath.sin(this.tickNo * ((TAU * TICK_DT) / F.bobPeriod) + ph) * F.bobAmp : 0;
     const sway =
       calm && F.swayAmp > 0
-        ? Math.sin(this.tickNo * ((TAU * TICK_DT) / F.swayPeriod) + ph * 2.3) * F.swayAmp
+        ? DMath.sin(this.tickNo * ((TAU * TICK_DT) / F.swayPeriod) + ph * 2.3) * F.swayAmp
         : 0;
     // hit vibration and follow-through are visual offsets only: the body's position (px, py) is untouched
     let ox = this.followX;
@@ -2269,8 +2270,8 @@ export class FighterImpl implements Fighter {
     if (this.shudderAmp > 0.05) {
       const a = this.shudderAmp;
       const k = this.tickNo * 2.399;
-      ox += Math.sin(k * 5.1 + ph) * a;
-      oy += Math.cos(k * 3.7 + ph) * a * 0.7;
+      ox += DMath.sin(k * 5.1 + ph) * a;
+      oy += DMath.cos(k * 3.7 + ph) * a * 0.7;
       this.shudderAmp *= T.shudderDecay;
     } else this.shudderAmp = 0;
     this.followX *= T.followDecay;
@@ -2352,7 +2353,7 @@ export class FighterImpl implements Fighter {
   /** Effective length scale for a hitbox: (reach/5)^reachScale × charge reach. */
   private lengthScale(reachScale: number | undefined): number {
     const reach = (this.def.attributes.reach * this.stats.reachMul) / 5;
-    return Math.pow(reach, reachScale ?? 1) * this.mv.reach;
+    return DMath.pow(reach, reachScale ?? 1) * this.mv.reach;
   }
 
   private resolveMoveHits(): void {
@@ -2532,7 +2533,7 @@ export class FighterImpl implements Fighter {
       dy = shape.y1 - shape.y0;
     }
     if (dx === 0 && dy === 0) dx = this.facing;
-    const dl = Math.hypot(dx, dy) || 1;
+    const dl = DMath.hypot(dx, dy) || 1;
     e.dirX = dx / dl;
     e.dirY = dy / dl;
     e.duration = dmg.duration;
@@ -2601,7 +2602,7 @@ export class FighterImpl implements Fighter {
         weight,
       });
       if (res.hitstop > 0 && !info.continuous) ev.push({ t: 'hitstop', ticks: res.hitstop });
-      const massK = Math.pow((this.stats.mass + fv.stats.mass) / 10, 0.55);
+      const massK = DMath.pow((this.stats.mass + fv.stats.mass) / 10, 0.55);
       // VFX_SPEC item 6: the shake of the blow's weight (a beam's rolling slices shake at half a light blow)
       const amp = info.continuous ? BLOW_SHAKE_PX.light * 0.5 : BLOW_SHAKE_PX[weight];
       ev.push({ t: 'shake', dirX: e.dirX, dirY: e.dirY, amp: graze ? amp * 0.4 : amp });
@@ -2726,7 +2727,7 @@ export class FighterImpl implements Fighter {
       const t = b.transform;
       const m = b.map;
       const reach =
-        Math.hypot(Math.max(t.anchorX, m.w - t.anchorX), Math.max(t.anchorY, m.h - t.anchorY)) +
+        DMath.hypot(Math.max(t.anchorX, m.w - t.anchorX), Math.max(t.anchorY, m.h - t.anchorY)) +
         Math.abs(t.lean) +
         REGION_PROBE_MARGIN;
       if (!shapeIntersectsDisc(shape, t.x, t.y, reach)) continue;
@@ -2926,7 +2927,7 @@ export class FighterImpl implements Fighter {
       // The blow is momentum at a point (impact.ts): Δv = J/m into the body's one velocity (kept until drag or thrust
       // removes it) and, through the lever arm from the centre of mass, a spin. Where it lands decides which dominates.
       const ratio = clamp(
-        Math.pow(Math.max(0.5, attacker.view.stats.mass) / mass, T.knockMassExp),
+        DMath.pow(Math.max(0.5, attacker.view.stats.mass) / mass, T.knockMassExp),
         T.knockRatioMin,
         T.knockRatioMax,
       );
@@ -2935,16 +2936,16 @@ export class FighterImpl implements Fighter {
       const k = T.knockScale * ratio * kbMul * this.feel.knockMul;
       let kx = rawX * k;
       let ky = rawY * k;
-      const sp = Math.hypot(kx, ky);
+      const sp = DMath.hypot(kx, ky);
       if (sp > T.knockMax) {
         kx *= T.knockMax / sp;
         ky *= T.knockMax / sp;
       }
       this.applyImpact(res.x, res.y, kx * mass, ky * mass, mass);
       // a light blow is a nudge the stunned body brakes at once; only a heavy shove keeps sliding for the full brake
-      this.brakeTau = T.stunDragTau * clamp(Math.hypot(this.vx, this.vy) / 350, 0.3, 1);
+      this.brakeTau = T.stunDragTau * clamp(DMath.hypot(this.vx, this.vy) / 350, 0.3, 1);
       // the body itself recoils too: a bend that a heavy defender shows instead of moving
-      const raw = Math.hypot(rawX, rawY);
+      const raw = DMath.hypot(rawX, rawY);
       const kick = clamp(raw * T.recoilGain * Math.sqrt(ratio) * kbMul * this.feel.recoil, 0, T.recoilMax);
       this.leanV += Math.sign(evIn.dirX || 1) * kick * this.facing * 0.6;
       this.shudderAmp = Math.max(
@@ -3041,7 +3042,7 @@ export class FighterImpl implements Fighter {
     if (!fx || !this.live || this.ko || this.tickNo - this.lastFxTick < 3) return;
     const svx = this.vx;
     const svy = this.vy;
-    const speed = Math.hypot(svx, svy);
+    const speed = DMath.hypot(svx, svy);
     const mf = Math.sqrt(Math.max(0.5, this.stats.mass) / 5);
     this.fxDist += speed * TICK_DT * 3;
     this.fxIdle += fx.idleRate * mf * TICK_DT * 3;

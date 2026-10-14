@@ -3,6 +3,7 @@ import { ArtCanvas, buildLitRamps, type ShadeParams } from './canvas';
 import { linkIndex, rasterLink, RIVET_OFFSET } from './chainLink';
 import { keepLargestComponent } from './field';
 import { fbm, hash01 } from './noise';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * THE NEXUS — a crimson graph. A faceted violet/ice crystal hub sits in a collar of hardened chain; six spokes run out to an
@@ -85,7 +86,7 @@ export function buildNexusRig(def: TitanDef, seed: number): NexusRig {
   for (const n of p.nodes) {
     const a = (n.a + rng.range(-1.5, 1.5)) * DEG;
     const d = n.d + rng.range(-1.2, 1.2);
-    nodes.push({ x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d, r: n.r, ring: n.ring });
+    nodes.push({ x: cx + DMath.cos(a) * d, y: cy + DMath.sin(a) * d, r: n.r, ring: n.ring });
   }
   const edges: NexusEdge[] = [];
   p.edges.forEach(([ia, ib], k) => {
@@ -93,7 +94,7 @@ export function buildNexusRig(def: TitanDef, seed: number): NexusRig {
     const B = nodes[ib]!;
     const dx = B.x - A.x;
     const dy = B.y - A.y;
-    const dl = Math.hypot(dx, dy) || 1;
+    const dl = DMath.hypot(dx, dy) || 1;
     const nx = -dy / dl;
     const ny = dx / dl;
     // a gentle bow, alternating sides so the graph looks hand-strung rather than ruled
@@ -118,14 +119,14 @@ export function buildNexusRig(def: TitanDef, seed: number): NexusRig {
     for (let s = 0; s <= N; s++) {
       const x = dense[s * 2]!;
       const y = dense[s * 2 + 1]!;
-      const inA = Math.hypot(x - A.x, y - A.y) < ra;
-      const inB = Math.hypot(x - B.x, y - B.y) < rb;
+      const inA = DMath.hypot(x - A.x, y - A.y) < ra;
+      const inB = DMath.hypot(x - B.x, y - B.y) < rb;
       if (inA || inB) continue;
       if (Number.isNaN(lastX)) {
         pts.push(x, y);
       } else {
-        acc += Math.hypot(x - lastX, y - lastY);
-        len += Math.hypot(x - lastX, y - lastY);
+        acc += DMath.hypot(x - lastX, y - lastY);
+        len += DMath.hypot(x - lastX, y - lastY);
         if (acc >= 2) {
           pts.push(x, y);
           acc = 0;
@@ -137,7 +138,7 @@ export function buildNexusRig(def: TitanDef, seed: number): NexusRig {
     if (pts.length >= 4) {
       const lx = pts[pts.length - 2]!;
       const ly = pts[pts.length - 1]!;
-      if (Math.hypot(lx - lastX, ly - lastY) > 0.5) pts.push(lastX, lastY);
+      if (DMath.hypot(lx - lastX, ly - lastY) > 0.5) pts.push(lastX, lastY);
     }
     edges.push({ a: ia, b: ib, pts, len });
   });
@@ -147,16 +148,16 @@ export function buildNexusRig(def: TitanDef, seed: number): NexusRig {
     const ni = 1 + (t % nodes.length === 0 ? 0 : (t * 5) % (nodes.length - 1));
     const N = nodes[ni]!;
     const outer = N.ring === 2;
-    const base = Math.atan2(N.y - cy, N.x - cx) + rng.range(-0.7, 0.7);
-    let x = N.x + Math.cos(base) * (N.r + SOCKET - 1);
-    let y = N.y + Math.sin(base) * (N.r + SOCKET - 1);
+    const base = DMath.atan2(N.y - cy, N.x - cx) + rng.range(-0.7, 0.7);
+    let x = N.x + DMath.cos(base) * (N.r + SOCKET - 1);
+    let y = N.y + DMath.sin(base) * (N.r + SOCKET - 1);
     let h = base;
     const path: number[] = [x, y];
     const len = Math.floor(rng.range(outer ? 5 : 3, outer ? 10 : 6));
     for (let s = 0; s < len; s++) {
       h += rng.range(-0.22, 0.22);
-      x += Math.cos(h) * 1.6;
-      y += Math.sin(h) * 1.6;
+      x += DMath.cos(h) * 1.6;
+      y += DMath.sin(h) * 1.6;
       path.push(x, y);
     }
     tassels.push({ from: ni, pts: path });
@@ -165,9 +166,9 @@ export function buildNexusRig(def: TitanDef, seed: number): NexusRig {
   for (let i = 0; i < Math.min(p.buds, 6); i++) {
     const N = nodes[7 + i];
     if (!N) break;
-    const ang = Math.atan2(N.y - cy, N.x - cx);
-    const nx = Math.cos(ang);
-    const ny = Math.sin(ang);
+    const ang = DMath.atan2(N.y - cy, N.x - cx);
+    const nx = DMath.cos(ang);
+    const ny = DMath.sin(ang);
     buds.push({ x: N.x + nx * (N.r + 12), y: N.y + ny * (N.r + 12), nx, ny, from: 7 + i });
   }
   return {
@@ -198,7 +199,7 @@ const polyDist = (dx: number, dy: number, rot: number, n: number): number => {
   let best = -1e9;
   for (let k = 0; k < n; k++) {
     const a = rot + (k * Math.PI * 2) / n;
-    const d = dx * Math.cos(a) + dy * Math.sin(a);
+    const d = dx * DMath.cos(a) + dy * DMath.sin(a);
     if (d > best) best = d;
   }
   return best;
@@ -259,7 +260,7 @@ function paintEdge(c: Ctx, e: NexusEdge, k: number, rivets: number[]): void {
     const y0 = pts[s + 1]!;
     const x1 = pts[s + 2]!;
     const y1 = pts[s + 3]!;
-    const seg = Math.hypot(x1 - x0, y1 - y0);
+    const seg = DMath.hypot(x1 - x0, y1 - y0);
     if (seg < 1e-6) continue;
     while (next <= acc + seg && link < n) {
       const f = (next - acc) / seg;
@@ -276,8 +277,8 @@ function paintEdge(c: Ctx, e: NexusEdge, k: number, rivets: number[]): void {
 
 /** Facet lighting: the pyramid facet whose outward direction is `ang` (slope `slope`) against the key light, −0.5 … 0.95. */
 function facetLight(ang: number, slope: number): number {
-  const nx = Math.cos(ang) * slope;
-  const ny = Math.sin(ang) * slope;
+  const nx = DMath.cos(ang) * slope;
+  const ny = DMath.sin(ang) * slope;
   const l = Math.sqrt(nx * nx + ny * ny + 1);
   return (nx * LX + ny * LY + LZ) / l;
 }
@@ -310,11 +311,11 @@ function paintNodes(c: Ctx): void {
         if (x < 0 || y < 0 || x >= W || y >= c.H) continue;
         const dx = x + 0.5 - N.x;
         const dy = y + 0.5 - N.y;
-        const r = Math.hypot(dx, dy);
+        const r = DMath.hypot(dx, dy);
         const i = y * W + x;
         // polygon apothem is smaller than the circumradius: scale so the bead fills roughly the same disc
         const dp = polyDist(dx, dy, rot, SIDES);
-        const th = Math.atan2(dy, dx);
+        const th = DMath.atan2(dy, dx);
         const sec = sectorOf(th, rot, SIDES, r);
         if (dp < R * 0.97) {
           const f = dp / (R * 0.97);
@@ -341,7 +342,7 @@ function paintNodes(c: Ctx): void {
           // the bezel
           cv.mat[i] = rig.ids.chain;
           cv.relief[i] = 3.4;
-          const lit = Math.cos(th - Math.atan2(LY, LX));
+          const lit = DMath.cos(th - DMath.atan2(LY, LX));
           const outer = dp > R + SOCKET - 0.9;
           cv.over[i] = chain[clamp(Math.round(3.4 + lit * 1.8 - (outer ? 1.5 : 0)), 0, chain.length - 1)]!;
         }
@@ -350,8 +351,8 @@ function paintNodes(c: Ctx): void {
     // rivets on the bezel corners and a hard glint on the brightest upper-left facets
     for (let k = 0; k < SIDES; k++) {
       const ang = rot + Math.PI / SIDES + (k * Math.PI * 2) / SIDES;
-      const rx = Math.round(N.x + (Math.cos(ang) * (R + SOCKET * 0.5)) / Math.cos(Math.PI / SIDES));
-      const ry = Math.round(N.y + (Math.sin(ang) * (R + SOCKET * 0.5)) / Math.cos(Math.PI / SIDES));
+      const rx = Math.round(N.x + (DMath.cos(ang) * (R + SOCKET * 0.5)) / DMath.cos(Math.PI / SIDES));
+      const ry = Math.round(N.y + (DMath.sin(ang) * (R + SOCKET * 0.5)) / DMath.cos(Math.PI / SIDES));
       const i = ry * W + rx;
       if (cv.mat[i] === rig.ids.chain) cv.over[i] = chain[chain.length - 2]!;
     }
@@ -383,15 +384,15 @@ function paintHub(c: Ctx): void {
     for (let x = Math.floor(H.x - R - 5); x <= Math.ceil(H.x + R + 5); x++) {
       const dx = x + 0.5 - H.x;
       const dy = y + 0.5 - H.y;
-      const r = Math.hypot(dx, dy);
+      const r = DMath.hypot(dx, dy);
       const i = y * W + x;
       const d8 = polyDist(dx, dy, rot, 8);
-      const th = Math.atan2(dy, dx);
+      const th = DMath.atan2(dy, dx);
       if (d8 >= R) {
         if (d8 < R + 3.4) {
           cv.mat[i] = rig.ids.chain;
           cv.relief[i] = 4;
-          const lit = Math.cos(th - Math.atan2(LY, LX));
+          const lit = DMath.cos(th - DMath.atan2(LY, LX));
           cv.over[i] = ch[clamp(Math.round(3.4 + lit * 1.9 - (d8 > R + 2.4 ? 1.5 : 0)), 0, ch.length - 1)]!;
         }
         continue;
@@ -445,7 +446,7 @@ function paintTassels(c: Ctx): void {
       const ay = path[s + 1]!;
       const bx = path[s + 2]!;
       const by = path[s + 3]!;
-      const steps = Math.ceil(Math.hypot(bx - ax, by - ay) * 2);
+      const steps = Math.ceil(DMath.hypot(bx - ax, by - ay) * 2);
       const t = s / path.length;
       const hw = 1.25 * (1 - 0.6 * t);
       for (let q = 0; q <= steps; q++) {
@@ -454,7 +455,7 @@ function paintTassels(c: Ctx): void {
         for (let yy = Math.floor(y - hw); yy <= Math.ceil(y + hw); yy++)
           for (let xx = Math.floor(x - hw); xx <= Math.ceil(x + hw); xx++) {
             if (xx < 0 || yy < 0 || xx >= W || yy >= c.H) continue;
-            if (Math.hypot(xx + 0.5 - x, yy + 0.5 - y) > hw + 0.15) continue;
+            if (DMath.hypot(xx + 0.5 - x, yy + 0.5 - y) > hw + 0.15) continue;
             const i = yy * W + xx;
             if (cv.mat[i] !== 0) continue;
             cv.mat[i] = rig.ids.lattice;
@@ -469,7 +470,7 @@ function paintTassels(c: Ctx): void {
     for (let yy = Math.floor(ty - 1.6); yy <= Math.ceil(ty + 1.6); yy++)
       for (let xx = Math.floor(tx - 1.6); xx <= Math.ceil(tx + 1.6); xx++) {
         if (xx < 0 || yy < 0 || xx >= W || yy >= c.H) continue;
-        if (Math.hypot(xx + 0.5 - tx, yy + 0.5 - ty) > 1.6) continue;
+        if (DMath.hypot(xx + 0.5 - tx, yy + 0.5 - ty) > 1.6) continue;
         const i = yy * W + xx;
         if (cv.mat[i] === 0 || cv.mat[i] === rig.ids.lattice) {
           cv.mat[i] = rig.ids.lattice;
@@ -574,7 +575,7 @@ export function groupNexusCells(map: MatterMap, rig: NexusRig): NexusGroups {
       for (let x = Math.max(0, Math.floor(N.x - R - 1)); x <= Math.min(W - 1, Math.ceil(N.x + R + 1)); x++) {
         const i = y * W + x;
         if (map.material[i] === 0) continue;
-        const d = Math.hypot(x + 0.5 - N.x, y + 0.5 - N.y);
+        const d = DMath.hypot(x + 0.5 - N.x, y + 0.5 - N.y);
         if (d < R && d < best[i]!) {
           best[i] = d;
           of[i] = n;
@@ -592,7 +593,7 @@ export function groupNexusCells(map: MatterMap, rig: NexusRig): NexusGroups {
       const px = x - ax;
       const py = y - ay;
       const t = clamp((px * vx + py * vy) / (vx * vx + vy * vy || 1), 0, 1);
-      const dd = Math.hypot(px - vx * t, py - vy * t);
+      const dd = DMath.hypot(px - vx * t, py - vy * t);
       if (dd < d) d = dd;
     }
     return d;

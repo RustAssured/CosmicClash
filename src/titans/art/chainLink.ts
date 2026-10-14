@@ -1,4 +1,5 @@
 import { clamp } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * One link of a forged chain, rasterised with hand shading: a face-on link is a ring with a real hole (a torus seen from above),
@@ -16,7 +17,7 @@ export type LinkSink = (px: number, py: number, light: number) => void;
 
 const sdStadium = (u: number, v: number, a: number, b: number): number => {
   const q = Math.max(Math.abs(u) - (a - b), 0);
-  return Math.hypot(q, v) - b;
+  return DMath.hypot(q, v) - b;
 };
 
 /** Half-lengths and radii of the two link kinds (px). */
@@ -56,7 +57,7 @@ export function rasterLink(
         const gu = (sdStadium(u + e, v, cA, cB) - sdStadium(u - e, v, cA, cB)) / (2 * e);
         const gv = (sdStadium(u, v + e, cA, cB) - sdStadium(u, v - e, cA, cB)) / (2 * e);
         const w = clamp(dC / 1.15, -1, 1);
-        const gl = Math.hypot(gu, gv) || 1;
+        const gl = DMath.hypot(gu, gv) || 1;
         wx = ((gu * tx - gv * ty) / gl) * w;
         wy = ((gu * ty + gv * tx) / gl) * w;
       } else {

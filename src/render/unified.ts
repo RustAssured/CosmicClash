@@ -18,7 +18,8 @@ import type { UriLiveFx } from './uriLive';
 export const TITAN_SKY: StageLighting = Object.freeze({
   dir: (() => {
     const l = [-0.55, -0.62, 0.56];
-    const n = Math.hypot(l[0]!, l[1]!, l[2]!);
+    // the titans' paint (sim state) depends on this vector: sqrt, not Math.hypot (implementation-approximated, STEP0.md)
+    const n = Math.sqrt(l[0]! * l[0]! + l[1]! * l[1]! + l[2]! * l[2]!);
     return [l[0]! / n, l[1]! / n, l[2]! / n] as [number, number, number];
   })(),
   color: '#ffffff',

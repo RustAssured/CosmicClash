@@ -3,6 +3,7 @@ import { CONN_NOW, type Body } from './body';
 import type { WorldCore } from './core';
 import { endSpray, extractChunk } from './debris';
 import type { Chunk } from './chunks';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * CHUNK GROUPS (Gate 2C, 우리; uri/docs/URI_SPEC.md §7, the oracle's `tear` / `hitAt` in uri/src/30_breaking_compose.js).
@@ -115,10 +116,18 @@ function tearCells(
   }
   sx /= n;
   sy /= n;
-  const a = Math.atan2(sy - iy, sx - ix) + (rng.next() - 0.5) * 0.6;
+  const a = DMath.atan2(sy - iy, sx - ix) + (rng.next() - 0.5) * 0.6;
   const sp = (TEAR.speedLo + rng.next() * TEAR.speedSpan) * power * 60 * body.groupScale; // oracle px/frame at the body scale
   const spin = (rng.next() - 0.5) * TEAR.spinK * power;
-  const ch = extractChunk(core, body, cells, n, body.vx + Math.cos(a) * sp, body.vy + Math.sin(a) * sp, spin);
+  const ch = extractChunk(
+    core,
+    body,
+    cells,
+    n,
+    body.vx + DMath.cos(a) * sp,
+    body.vy + DMath.sin(a) * sp,
+    spin,
+  );
   endSpray(core);
   if (ch !== null) {
     ch.fast = true; // it leaves with its push at once (no heaviness ramp) and is the wound's matter, never a weapon
@@ -252,8 +261,8 @@ export function hitTear(core: WorldCore, body: Body, wx: number, wy: number, pow
     for (let k = 0; k < TEAR.tries; k++) {
       const a = rng.next() * Math.PI * 2;
       const r = rng.next() * R;
-      const jx = Math.round(x0 + Math.cos(a) * r);
-      const jy = Math.round(y0 + Math.sin(a) * r);
+      const jx = Math.round(x0 + DMath.cos(a) * r);
+      const jy = Math.round(y0 + DMath.sin(a) * r);
       if (jx < 0 || jy < 0 || jx >= w || jy >= body.h) continue;
       const j = jy * w + jx;
       if (body.map.material[j] === 0) continue;

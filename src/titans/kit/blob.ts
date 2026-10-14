@@ -12,6 +12,7 @@ import { blend } from '../art/color';
 import { edt, keepLargestComponent } from '../art/field';
 import { fbm, hash01, makeWorley, worley } from '../art/noise';
 import { sdCircle, sdEllipse, smin } from '../art/sdf';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * THE BLOB CREATURE: the titan kit's minimal template painter (`npm run new:titan -- <id> … --from blob`). One organic body:
@@ -76,7 +77,7 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   for (let k = 0; k < p.lobes; k++) {
     const a = ((k + rng.range(-0.3, 0.3)) / Math.max(1, p.lobes)) * Math.PI * 2;
     const r = Math.min(p.body.rx, p.body.ry) * p.lobeSize * rng.range(0.8, 1.15);
-    lobes.push({ x: cx + Math.cos(a) * p.body.rx * 0.82, y: cy + Math.sin(a) * p.body.ry * 0.82, r });
+    lobes.push({ x: cx + DMath.cos(a) * p.body.rx * 0.82, y: cy + DMath.sin(a) * p.body.ry * 0.82, r });
   }
   const sd = (x: number, y: number): number => {
     const wx = x + fbm(x * 0.04, y * 0.04, s1, 3) * p.wobble;
@@ -92,7 +93,7 @@ function makeLayout(def: TitanDef, seed: number): Layout {
     const a =
       k === 0 ? -0.15 : -0.15 + (k % 2 ? -1 : 1) * (0.45 + 0.3 * Math.ceil(k / 2)) + rng.range(-0.1, 0.1);
     const reach = k === 0 ? 0.45 : 0.6;
-    eyes.push({ x: cx + Math.cos(a) * p.body.rx * reach, y: cy + Math.sin(a) * p.body.ry * reach, r });
+    eyes.push({ x: cx + DMath.cos(a) * p.body.rx * reach, y: cy + DMath.sin(a) * p.body.ry * reach, r });
   }
   return { p, cx, cy, sd, eyes };
 }
@@ -178,7 +179,7 @@ export function paintBlob(
     for (let x = Math.floor(coreX - CR - 2); x <= Math.ceil(coreX + CR + 2); x++) {
       const i = y * W + x;
       if (x < 0 || y < 0 || x >= W || y >= H || !mask[i]) continue;
-      const r = Math.hypot(x + 0.5 - coreX, y + 0.5 - coreY);
+      const r = DMath.hypot(x + 0.5 - coreX, y + 0.5 - coreY);
       if (r < CR) {
         cv.mat[i] = ids.core;
         cv.relief[i] = 10 + (1 - r / CR) * 5;
@@ -191,10 +192,10 @@ export function paintBlob(
       for (let x = Math.floor(e.x - e.r - 2); x <= Math.ceil(e.x + e.r + 2); x++) {
         const i = y * W + x;
         if (x < 0 || y < 0 || x >= W || y >= H || !mask[i]) continue;
-        const r = Math.hypot(x + 0.5 - e.x, y + 0.5 - e.y);
+        const r = DMath.hypot(x + 0.5 - e.x, y + 0.5 - e.y);
         if (r < e.r) {
           cv.mat[i] = ids.eye;
-          cv.relief[i] = 12 + Math.sqrt(1 - (r / e.r) ** 2) * e.r * 0.8;
+          cv.relief[i] = 12 + Math.sqrt(1 - sq(r / e.r)) * e.r * 0.8;
           cv.tone[i] = 0;
         } else if (r < e.r + 1.6) {
           cv.tone[i] = cv.tone[i]! - 1.2; // the lid
@@ -222,10 +223,10 @@ export function paintBlob(
         if (cv.mat[i] !== ids.eye) continue;
         const dx = x + 0.5 - (e.x + e.r * 0.15);
         const dy = y + 0.5 - e.y;
-        if (Math.hypot(dx, dy) < pr) colors[i] = blend(eyeRamp[0]!, 0xff000000, 0.6);
+        if (DMath.hypot(dx, dy) < pr) colors[i] = blend(eyeRamp[0]!, 0xff000000, 0.6);
         const hx = x + 0.5 - (e.x - e.r * 0.35);
         const hy = y + 0.5 - (e.y - e.r * 0.4);
-        if (Math.hypot(hx, hy) < Math.max(0.8, e.r * 0.2)) colors[i] = eyeRamp[eyeRamp.length - 1]!;
+        if (DMath.hypot(hx, hy) < Math.max(0.8, e.r * 0.2)) colors[i] = eyeRamp[eyeRamp.length - 1]!;
       }
   }
 

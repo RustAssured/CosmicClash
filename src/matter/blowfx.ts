@@ -3,6 +3,7 @@ import { localToWorldF, type DamageCtx } from './dmg';
 import { findImpact, type Impact } from './impact';
 import { PF_FLASH, PF_NEAR, PF_STRETCH, PK } from './particles';
 import type { WorldPoint } from './body';
+import { DMath } from '@/contracts/dmath';
 
 const imp: Impact = { fx: 0, fy: 0, nx: 1, ny: 0, hasNormal: false };
 const pt: WorldPoint = { x: 0, y: 0 };
@@ -37,7 +38,7 @@ export function impactBurst(ctx: DamageCtx): void {
   nx /= nl;
   ny /= nl;
   // Blend the outward normal with the blow reversed: sparks leave toward the attacker side and along the surface.
-  const a0 = Math.atan2(ny * 0.7 - ctx.dirY * 0.3, nx * 0.7 - ctx.dirX * 0.3);
+  const a0 = DMath.atan2(ny * 0.7 - ctx.dirY * 0.3, nx * 0.7 - ctx.dirX * 0.3);
 
   // Flash disc (bloom): peaks on the impact frame and is gone within ~100 ms of world time after the hit-stop, so the wound
   // reads by ~300-400 ms wall.
@@ -65,8 +66,8 @@ export function impactBurst(ctx: DamageCtx): void {
   for (let i = 0; i < streaks; i++) {
     const a = a0 + (rng.next() - 0.5) * 2.5;
     const sp = (170 + rng.next() * 330) * (0.8 + 0.25 * k);
-    const c = Math.cos(a);
-    const s = Math.sin(a);
+    const c = DMath.cos(a);
+    const s = DMath.sin(a);
     const off = 4 + rng.next() * 6;
     const p = P.spawn(
       core,
@@ -90,8 +91,8 @@ export function impactBurst(ctx: DamageCtx): void {
   for (let i = 0; i < puffs; i++) {
     const a = a0 + (i / puffs - 0.5) * 3.6 + (rng.next() - 0.5) * 0.3;
     const sp = 80 + rng.next() * 70 * (0.7 + 0.3 * k);
-    const c = Math.cos(a);
-    const s = Math.sin(a);
+    const c = DMath.cos(a);
+    const s = DMath.sin(a);
     P.spawn(
       core,
       PK.dust,
@@ -136,8 +137,8 @@ export function impactBurst(ctx: DamageCtx): void {
     const plume = Math.min(8, Math.round(3 + 2.5 * k));
     for (let i = 0; i < plume; i++) {
       const a = a0 + (rng.next() - 0.5) * 1.6;
-      const c = Math.cos(a);
-      const s = Math.sin(a);
+      const c = DMath.cos(a);
+      const s = DMath.sin(a);
       const lift = 42 + rng.next() * 14;
       const sp = 40 + rng.next() * 40;
       const p = P.spawn(
@@ -167,8 +168,8 @@ export function impactBurst(ctx: DamageCtx): void {
       PK.shard,
       bx,
       by,
-      Math.cos(a) * sp,
-      Math.sin(a) * sp,
+      DMath.cos(a) * sp,
+      DMath.sin(a) * sp,
       14 + rng.int(14),
       2,
       90,

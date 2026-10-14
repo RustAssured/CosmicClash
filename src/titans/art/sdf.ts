@@ -1,17 +1,18 @@
+import { DMath } from '@/contracts/dmath';
 /**
  * Signed-distance primitives (negative inside) for sculpting silhouettes. All in pixel units.
  * Combine with `smin`/`smax` for organic joins and with domain warping (see canvas.ts `warp`) for hand-weathered outlines.
  */
 
 export const sdCircle = (x: number, y: number, cx: number, cy: number, r: number): number =>
-  Math.hypot(x - cx, y - cy) - r;
+  DMath.hypot(x - cx, y - cy) - r;
 
 /** Cheap ellipse distance (first-order): accurate near the boundary, good enough for silhouettes. */
 export function sdEllipse(x: number, y: number, cx: number, cy: number, rx: number, ry: number): number {
   const px = (x - cx) / rx;
   const py = (y - cy) / ry;
-  const k0 = Math.hypot(px, py);
-  const k1 = Math.hypot(px / rx, py / ry);
+  const k0 = DMath.hypot(px, py);
+  const k1 = DMath.hypot(px / rx, py / ry);
   return k1 < 1e-9 ? -Math.min(rx, ry) : (k0 * (k0 - 1)) / k1;
 }
 
@@ -25,8 +26,8 @@ export function sdEllipseRot(
   ry: number,
   rot: number,
 ): number {
-  const c = Math.cos(rot);
-  const s = Math.sin(rot);
+  const c = DMath.cos(rot);
+  const s = DMath.sin(rot);
   const dx = x - cx;
   const dy = y - cy;
   return sdEllipse(dx * c + dy * s, -dx * s + dy * c, 0, 0, rx, ry);
@@ -48,7 +49,7 @@ export function sdTaperedCapsule(
   const bax = bx - ax;
   const bay = by - ay;
   const h = Math.max(0, Math.min(1, (pax * bax + pay * bay) / (bax * bax + bay * bay || 1)));
-  return Math.hypot(pax - bax * h, pay - bay * h) - (ra + (rb - ra) * h);
+  return DMath.hypot(pax - bax * h, pay - bay * h) - (ra + (rb - ra) * h);
 }
 
 export const sdSegment = (x: number, y: number, ax: number, ay: number, bx: number, by: number): number =>
@@ -66,7 +67,7 @@ export function sdRoundBox(
 ): number {
   const qx = Math.abs(x - cx) - hx + r;
   const qy = Math.abs(y - cy) - hy + r;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+  return DMath.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
 }
 
 /** Signed distance to a half-plane: negative on the side opposite to the (nx,ny) normal, offset `d` from origin. */
@@ -116,8 +117,8 @@ export function rot(
   a: number,
   out: { x: number; y: number },
 ): void {
-  const c = Math.cos(a);
-  const s = Math.sin(a);
+  const c = DMath.cos(a);
+  const s = DMath.sin(a);
   const dx = x - cx;
   const dy = y - cy;
   out.x = cx + dx * c - dy * s;

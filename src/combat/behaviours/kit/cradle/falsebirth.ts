@@ -1,6 +1,7 @@
 import type { MatterMap } from '@/contracts';
 import type { Overlay } from '../../../fx/overlay';
 import { fbm, ridged } from '@/titans/art/noise';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * FALSE BIRTH (Gate 4, the brief's signature set-piece; the Ultimate button):
@@ -60,22 +61,22 @@ export function drawVeil(
     for (let x = x0; x <= x1; x++) {
       const px = (x + 0.5 - cx) / rx;
       const py = (y + 0.5 - cy) / ry;
-      const a = Math.atan2(py, px);
+      const a = DMath.atan2(py, px);
       // a torn, lobed edge that breathes
-      const edge = 1 - 0.07 * Math.sin(a * 7 + seed) - 0.04 * Math.sin(a * 13 - tick * 0.05 + seed * 2);
-      const d = Math.hypot(px, py) / edge;
+      const edge = 1 - 0.07 * DMath.sin(a * 7 + seed) - 0.04 * DMath.sin(a * 13 - tick * 0.05 + seed * 2);
+      const d = DMath.hypot(px, py) / edge;
       if (d >= 1) continue;
       // the disc opened out: ribs run from its hub, membrane panels between them pool the light
       const ax = x + 0.5 - vx;
       const ay = y + 0.5 - vy;
-      const hr = Math.max(6, Math.hypot(ax, ay));
-      const va = Math.atan2(ay, ax) + seed * 0.01;
+      const hr = Math.max(6, DMath.hypot(ax, ay));
+      const va = DMath.atan2(ay, ax) + seed * 0.01;
       const q = ((((va / (Math.PI * 2)) * SPOKES) % 1) + 1) % 1;
-      const across = Math.sin(Math.PI * q);
+      const across = DMath.sin(Math.PI * q);
       const ribW = 1.3 / ((hr * Math.PI * 2) / SPOKES);
       const rib = q < ribW || q > 1 - ribW;
-      const vein = Math.abs(Math.sin(va * 31 + Math.sin(hr * 0.045 + seed) * 2.5)) < 0.05 && across > 0.25;
-      const ring = pulse > 0 && Math.abs(Math.sin(d * 7 + tick * 0.2)) < 0.12 * pulse;
+      const vein = Math.abs(DMath.sin(va * 31 + DMath.sin(hr * 0.045 + seed) * 2.5)) < 0.05 && across > 0.25;
+      const ring = pulse > 0 && Math.abs(DMath.sin(d * 7 + tick * 0.2)) < 0.12 * pulse;
       const hem = d > 0.965 && bayer(x + 2, y + 1) < 0.75;
       // translucent: the panels thin toward the ribs and the rim; ribs, hem and veins are solid tissue
       // (opacity above 1 closes it: a contracted sac hides what it holds)
@@ -101,10 +102,10 @@ export function drawTear(fx: Overlay, cx: number, cy: number, r: number, u: numb
     const d0 = r * (0.6 + 1.5 * u);
     const len = r * 0.35 * (1 - u);
     if (len < 1) continue;
-    const ax = cx + Math.cos(a) * d0;
-    const ay = cy + Math.sin(a) * d0;
-    const bx = cx + Math.cos(a) * (d0 + len);
-    const by = cy + Math.sin(a) * (d0 + len);
+    const ax = cx + DMath.cos(a) * d0;
+    const ay = cy + DMath.sin(a) * d0;
+    const bx = cx + DMath.cos(a) * (d0 + len);
+    const by = cy + DMath.sin(a) * (d0 + len);
     fx.capsule(ax, ay, 2.2 * (1 - u) + 0.6, bx, by, 0.6, VEIL_LIT, VEIL_MID, VEIL_DARK, 0);
   }
 }
@@ -148,23 +149,23 @@ export function drawSac(
   const y0 = Math.floor(cy - ry - 3);
   const y1 = Math.ceil(cy + ry + 3);
   const RIBS = 7;
-  const veinPulse = 0.5 + 0.5 * Math.sin((tick / 140) * Math.PI * 2);
+  const veinPulse = 0.5 + 0.5 * DMath.sin((tick / 140) * Math.PI * 2);
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++) {
       const px = (x + 0.5 - cx) / rx;
       const py = (y + 0.5 - cy) / ry;
-      const a = Math.atan2(py, px);
+      const a = DMath.atan2(py, px);
       // stretched to bursting: the outline bulges between the ribs
       const ribA = ((a / (Math.PI * 2)) * RIBS + 100) % 1;
-      const bulge = 1 + 0.05 * Math.sin(Math.PI * ribA) - 0.03 * Math.sin(a * 11 - tick * 0.04 + seed);
-      const d = Math.hypot(px, py) / bulge;
+      const bulge = 1 + 0.05 * DMath.sin(Math.PI * ribA) - 0.03 * DMath.sin(a * 11 - tick * 0.04 + seed);
+      const d = DMath.hypot(px, py) / bulge;
       if (d >= 1) continue;
       const wx = x + 0.5;
       const wy = y + 0.5;
       // sphere-ish surface coordinates (z out of the screen): folds and ribs wrap round it
       const z = Math.sqrt(Math.max(0, 1 - d * d));
-      const lon = Math.atan2(px, z);
-      const lat = Math.asin(Math.max(-1, Math.min(1, py / Math.max(0.2, bulge))));
+      const lon = DMath.atan2(px, z);
+      const lat = DMath.asin(Math.max(-1, Math.min(1, py / Math.max(0.2, bulge))));
       // the membrane: dried burgundy, thinner (more see-through) where it is stretched over the middle
       let c = d > 0.6 ? VEIL_DARK : VEIL_MID;
       let dens = Math.min(1, 0.42 + 0.35 * close + 0.35 * d * d);
@@ -183,7 +184,7 @@ export function drawSac(
         }
       }
       // contraction folds toward the poles, squeezing in pulses: troughs dark, crests wet and lit on the upper left
-      const fold = Math.sin(lon * 9 + Math.sin(lat * 2 + seed) * 1.5 + squeeze * 2.5);
+      const fold = DMath.sin(lon * 9 + DMath.sin(lat * 2 + seed) * 1.5 + squeeze * 2.5);
       if (fold > 0.8) {
         c = mixc(c, x + y < cx + cy ? VEIL_HEM : VEIL_LIT, 0.55);
         dens = Math.max(dens, 0.9);
@@ -192,8 +193,8 @@ export function drawSac(
         dens = Math.max(dens, 0.85);
       }
       // the vascular web over it: veins branching out from the seams, pulsing
-      const vein = Math.abs(Math.sin(lon * 11 + Math.sin(lat * 5 + seed * 1.3) * 3 + lat * 4)) < 0.09;
-      const twig = Math.abs(Math.sin(lat * 17 + Math.sin(lon * 6 + seed) * 2.5)) < 0.05 && fold > -0.2;
+      const vein = Math.abs(DMath.sin(lon * 11 + DMath.sin(lat * 5 + seed * 1.3) * 3 + lat * 4)) < 0.09;
+      const twig = Math.abs(DMath.sin(lat * 17 + DMath.sin(lon * 6 + seed) * 2.5)) < 0.05 && fold > -0.2;
       if (vein || twig) {
         // dark, blood-filled vessels; a slow pulse runs warm light through the main ones
         c = vein ? mixc(VEIL_DARK, VEIL_LIT, 0.15 + 0.45 * veinPulse) : mixc(VEIL_DARK, VEIL_MID, 0.4);
@@ -201,9 +202,9 @@ export function drawSac(
       }
       // calcified ribs straining round it like meridians, knuckled, pale bone with a dark seat
       const ribLon = ((lon / Math.PI + 1) * RIBS * 0.5) % 1;
-      const ribW = 0.022 + 0.022 * Math.pow(Math.abs(Math.cos(lat * 6 + seed)), 6);
+      const ribW = 0.022 + 0.022 * DMath.pow(Math.abs(DMath.cos(lat * 6 + seed)), 6);
       if (z > 0.08 && (ribLon < ribW || ribLon > 1 - ribW)) {
-        const knuckle = Math.pow(Math.abs(Math.cos(lat * 6 + seed)), 6);
+        const knuckle = DMath.pow(Math.abs(DMath.cos(lat * 6 + seed)), 6);
         c = mixc(RIB_BONE, VEIL_DARK, 0.25 - 0.2 * knuckle + (x + y > cx + cy ? 0.25 : 0));
         dens = 1;
       } else if (z > 0.08 && (ribLon < ribW + 0.015 || ribLon > 0.985 - ribW)) {
@@ -212,7 +213,7 @@ export function drawSac(
       }
       // the hem: a thick wet lip, sheen on the lit side
       if (d > 0.965) {
-        c = Math.cos(a + 2.35) > 0.3 ? VEIL_HEM : VEIL_LIT;
+        c = DMath.cos(a + 2.35) > 0.3 ? VEIL_HEM : VEIL_LIT;
         dens = 1;
       }
       if (bayer(x, y) >= dens) continue;
@@ -248,13 +249,13 @@ export function drawRupture(
     const steps = 18;
     for (let s = 0; s < steps; s++) {
       const t = s / steps;
-      const w = span * (1 - t) * (0.6 + 0.4 * Math.sin(t * 9 + k)); // ragged edge
+      const w = span * (1 - t) * (0.6 + 0.4 * DMath.sin(t * 9 + k)); // ragged edge
       const ang = a + curl * t;
       const rr = root + len * t * (0.4 + 0.6 * e);
       for (let q = -8; q <= 8; q++) {
         const aa = ang + (q / 8) * w * 0.5;
-        const wx = cx + Math.cos(aa) * rr;
-        const wy = cy + Math.sin(aa) * rr;
+        const wx = cx + DMath.cos(aa) * rr;
+        const wy = cy + DMath.sin(aa) * rr;
         const edge = Math.abs(q) >= 7;
         const vein = Math.abs(q) < 2 || (q + s) % 6 === 0;
         const c = edge ? VEIL_HEM : vein ? VEIL_VEIN : t < 0.5 ? VEIL_MID : VEIL_DARK;
@@ -269,11 +270,11 @@ export function drawRupture(
     // strands: stretched between this flap's tip and the next flap's root, thinning and snapping as u grows
     if (u < 0.7) {
       const b = ((k + 1) / flaps) * Math.PI * 2 + ihash(k + 1, 1, seed) * 0.6;
-      const ax = cx + Math.cos(a + curl) * (root + len * 0.8);
-      const ay = cy + Math.sin(a + curl) * (root + len * 0.8);
-      const bx = cx + Math.cos(b) * root;
-      const by = cy + Math.sin(b) * root;
-      const mx = (ax + bx) / 2 + Math.sin(tick * 0.05 + k) * 4;
+      const ax = cx + DMath.cos(a + curl) * (root + len * 0.8);
+      const ay = cy + DMath.sin(a + curl) * (root + len * 0.8);
+      const bx = cx + DMath.cos(b) * root;
+      const by = cy + DMath.sin(b) * root;
+      const mx = (ax + bx) / 2 + DMath.sin(tick * 0.05 + k) * 4;
       const my = (ay + by) / 2 + 10 * e;
       const th = 1.4 * (1 - u / 0.7);
       let pxp = ax;
@@ -366,14 +367,14 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
     for (let x = 0; x < w; x++) {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
-      const a = Math.atan2(dy, dx);
+      const a = DMath.atan2(dy, dx);
       // its own lobed body (so even a lattice of a foe becomes a mass) …
-      const lobe = R * (0.62 + 0.1 * Math.sin(a * 3 + seed) + 0.06 * Math.sin(a * 5 - seed * 1.3));
-      let inside = Math.hypot(dx, dy * 1.1) < lobe;
+      const lobe = R * (0.62 + 0.1 * DMath.sin(a * 3 + seed) + 0.06 * DMath.sin(a * 5 - seed * 1.3));
+      let inside = DMath.hypot(dx, dy * 1.1) < lobe;
       // … fused with the foe's silhouette, swollen and warped
-      const swell = 1 + 0.2 * Math.sin(a * 3 + seed) + 0.1 * Math.sin(a * 5 - seed * 1.7);
-      const ux = (dx / swell + 2.2 * Math.sin(y * 0.21 + seed)) / s;
-      const uy = (dy / swell + 2.2 * Math.sin(x * 0.19 - seed)) / s;
+      const swell = 1 + 0.2 * DMath.sin(a * 3 + seed) + 0.1 * DMath.sin(a * 5 - seed * 1.7);
+      const ux = (dx / swell + 2.2 * DMath.sin(y * 0.21 + seed)) / s;
+      const uy = (dy / swell + 2.2 * DMath.sin(x * 0.19 - seed)) / s;
       const sx = Math.floor(x0 + sw / 2 + ux);
       const sy = Math.floor(y0 + sh / 2 + uy);
       let col = 0;
@@ -386,10 +387,10 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
       mask[i] = 1;
       // marbled: long swirls of the victim's tones, the Cradle's flesh running between them
       const swirl = fbm(x * 0.03, y * 0.03, seed, 2) * 3.6;
-      const band = 0.5 + 0.5 * Math.sin(x * 0.06 + y * 0.035 + swirl);
+      const band = 0.5 + 0.5 * DMath.sin(x * 0.06 + y * 0.035 + swirl);
       const tone = pal[Math.min(4, Math.floor(band * 4.99))]!;
       let c = col ? mix(col, tone, 0.55) : tone;
-      if (Math.abs(Math.sin(x * 0.06 + y * 0.035 + swirl + 1.6)) < 0.2) c = mix(c, FLESH, 0.55);
+      if (Math.abs(DMath.sin(x * 0.06 + y * 0.035 + swirl + 1.6)) < 0.2) c = mix(c, FLESH, 0.55);
       else c = mix(c, FLESH, 0.18);
       px[i] = c;
     }
@@ -441,8 +442,8 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
     let x = cx;
     let y = cy;
     for (let d = 0; d < Math.max(w, h); d++) {
-      const nx = cx + Math.cos(a0) * d;
-      const ny = cy + Math.sin(a0) * d;
+      const nx = cx + DMath.cos(a0) * d;
+      const ny = cy + DMath.sin(a0) * d;
       const ix = Math.floor(nx);
       const iy = Math.floor(ny);
       if (ix < 0 || iy < 0 || ix >= w || iy >= h || !mask[iy * w + ix]) break;
@@ -455,8 +456,8 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
       let a = ang;
       for (let k = 0; k < len; k++) {
         a += (ihash(k + depth * 31, tr, seed + 5) - 0.5) * 0.8;
-        px0 += Math.cos(a);
-        py0 += Math.sin(a);
+        px0 += DMath.cos(a);
+        py0 += DMath.sin(a);
         const ix = Math.floor(px0);
         const iy = Math.floor(py0);
         if (ix < 1 || iy < 1 || ix >= w - 1 || iy >= h - 1 || !mask[iy * w + ix]) return;
@@ -479,7 +480,7 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
     for (let y = Math.floor(ny - r - 1); y <= ny + r + 1; y++)
       for (let x = Math.floor(nx - r - 1); x <= nx + r + 1; x++) {
         if (x < 0 || y < 0 || x >= w || y >= h || !mask[y * w + x]) continue;
-        const d = Math.hypot(x + 0.5 - nx, y + 0.5 - ny);
+        const d = DMath.hypot(x + 0.5 - nx, y + 0.5 - ny);
         const i = y * w + x;
         // a domed island of mineral half sunk in the flesh: lit on its upper left, shadowed below
         const side = (x + 0.5 - nx + (y + 0.5 - ny)) / r;
@@ -494,17 +495,17 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
   for (let y = Math.floor(lumY - lr - 2); y <= lumY + lr + 2; y++)
     for (let x = Math.floor(lumX - lr - 2); x <= lumX + lr + 2; x++) {
       if (x < 0 || y < 0 || x >= w || y >= h || !mask[y * w + x]) continue;
-      const a = Math.atan2(y - lumY, x - lumX);
-      const d = Math.hypot(x + 0.5 - lumX, y + 0.5 - lumY) / (lr * (0.85 + 0.2 * Math.sin(a * 3 + seed)));
+      const a = DMath.atan2(y - lumY, x - lumX);
+      const d = DMath.hypot(x + 0.5 - lumX, y + 0.5 - lumY) / (lr * (0.85 + 0.2 * DMath.sin(a * 3 + seed)));
       const i = y * w + x;
       if (d < 1) px[i] = mix(px[i]!, mix(dark, VESSEL, 0.4), 0.85 - 0.35 * d);
-      else if (d < 1.3 && Math.sin(a) < 0) px[i] = mix(px[i]!, light, 0.25);
+      else if (d < 1.3 && DMath.sin(a) < 0) px[i] = mix(px[i]!, light, 0.25);
     }
   // torn umbilical strands trailing from it: ringed cords, tapering, ragged at the ends
   for (let k = 0; k < 3; k++) {
     if (rim.length === 0) break;
     const p = rim[Math.floor(ihash(k, 21, seed) * rim.length)]!;
-    const a = Math.atan2(p.y, p.x) + (ihash(k, 22, seed) - 0.5) * 0.6;
+    const a = DMath.atan2(p.y, p.x) + (ihash(k, 22, seed) - 0.5) * 0.6;
     const len = 10 + ihash(k, 23, seed) * 9;
     let x = p.x + cx;
     let y = p.y + cy;
@@ -512,15 +513,15 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
     for (let d = 0; d < len; d++) {
       // a heavy cord droops and curls as it trails
       ang += (ihash(d, k, seed + 31) - 0.5) * 0.35 + 0.06 * (k % 2 ? 1 : -1);
-      x += Math.cos(ang);
-      y += Math.sin(ang);
+      x += DMath.cos(ang);
+      y += DMath.sin(ang);
       const th = d < len * 0.45 ? 1.5 : d < len * 0.8 ? 1 : 0.5;
       // frayed at the end: the last stretch splits into two fibres
       const fray = d > len * 0.8 ? [-1.2, 1.2] : null;
       for (let o = -Math.ceil(th); o <= Math.ceil(th); o++) {
         if (fray ? !fray.some((f) => Math.abs(o - f) < 0.6) : Math.abs(o) > th) continue;
-        const ix = Math.floor(x - Math.sin(ang) * o);
-        const iy = Math.floor(y + Math.cos(ang) * o);
+        const ix = Math.floor(x - DMath.sin(ang) * o);
+        const iy = Math.floor(y + DMath.cos(ang) * o);
         if (ix < 0 || iy < 0 || ix >= w || iy >= h) continue;
         const i = iy * w + ix;
         if (mask[i]) continue;

@@ -1,3 +1,4 @@
+import { DMath } from '@/contracts/dmath';
 /**
  * Deterministic 2D noise for the titan art toolkit. Integer-hash based (no Math.random, no allocation per call),
  * fast enough to evaluate a few dozen times per cell for a 25k-cell body at load.
@@ -29,7 +30,7 @@ export function gradNoise(x: number, y: number, seed: number): number {
   const yf = y - yi;
   const g = (ix: number, iy: number, dx: number, dy: number): number => {
     const a = ihash2(ix, iy, seed) * F * 6.283185307179586;
-    return Math.cos(a) * dx + Math.sin(a) * dy;
+    return DMath.cos(a) * dx + DMath.sin(a) * dy;
   };
   const n00 = g(xi, yi, xf, yf);
   const n10 = g(xi + 1, yi, xf - 1, yf);

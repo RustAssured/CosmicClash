@@ -7,6 +7,7 @@ import { killCell } from './cells';
 import { PK } from './particles';
 import { lerpPx } from './util';
 import { GLOW_START } from './visual';
+import { DMath } from '@/contracts/dmath';
 
 /** Ramp kinds stored per material in Body.rampIds (index m*4 + kind). */
 export const RAMP_DUST = 0;
@@ -84,8 +85,8 @@ export function spawnMassParticle(
     kind,
     x,
     y,
-    vx + Math.cos(a) * j,
-    vy + Math.sin(a) * j,
+    vx + DMath.cos(a) * j,
+    vy + DMath.sin(a) * j,
     p[0]! + rng.next() * p[1]!,
     p[2]! + Math.floor(rng.next() * (p[3]! + 0.999)),
     p[4]!,
@@ -425,7 +426,7 @@ export function detachVelocity(
       uy /= ul;
       dx = ux;
       dy = uy;
-      const sm = Math.pow(Math.max(0.3, blow.sourceMass) / 5, 0.25);
+      const sm = DMath.pow(Math.max(0.3, blow.sourceMass) / 5, 0.25);
       speed =
         190 * Math.sqrt(blow.energy / (mass + 25)) * sm * (0.55 + 0.45 * fresh) * (0.85 + rng.next() * 0.3);
       speed = Math.max(24, Math.min(430, speed));

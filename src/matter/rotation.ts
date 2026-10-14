@@ -11,6 +11,7 @@ import {
 } from '@/contracts';
 import type { WorldPoint } from './body';
 import { K_CONE, K_POINT, type ShapeQ } from './shape';
+import { DMath } from '@/contracts/dmath';
 
 /** Margin (texels) of the rotated map rectangle that bounds the drawn pixels (sub-samples reach 0.47 px from the centre). */
 const RECT_PAD = 1.5;
@@ -623,7 +624,7 @@ export class RotHitCache {
     const need = box.w * box.h;
     if (this.stamp.length < need) {
       // sized for the largest box at any angle (allocated once per body)
-      const r = Math.hypot(Math.max(t.anchorX, b.w - t.anchorX), Math.max(t.anchorY, b.h - t.anchorY));
+      const r = DMath.hypot(Math.max(t.anchorX, b.w - t.anchorX), Math.max(t.anchorY, b.h - t.anchorY));
       const side = Math.ceil(2 * r) + 6;
       const cap = Math.max(need, side * side);
       this.cell = new Int32Array(cap);

@@ -13,6 +13,7 @@ import {
 } from '@/contracts';
 import { buildMaterialTable } from '../materials';
 import { noise2, valueNoise } from '../util';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * Synthetic test bodies (the real titan generators come from B3). They are authored with the same contract a generator
@@ -139,7 +140,7 @@ function shade(c: Canvas, mats: MaterialDef[], light: StageLighting, seed: numbe
       if (y === 0 || map.material[i - w] === 0) ny -= 1;
       if (y === h - 1 || map.material[i + w] === 0) ny += 1;
       if (nx === 0 && ny === 0) continue;
-      const d = (nx * lx + ny * ly) / Math.hypot(nx, ny);
+      const d = (nx * lx + ny * ly) / DMath.hypot(nx, ny);
       const r = mats[m]!.ramp;
       const cur = out[i]!;
       const idx = Math.max(0, r.indexOf(cur));
@@ -194,7 +195,7 @@ function finish(
 
 /** Warped radius factor around the silhouette, so discs are not perfect circles. */
 function warp(theta: number, seed: number, amp: number): number {
-  return 1 + amp * (valueNoise(Math.cos(theta) * 1.7 + 5, Math.sin(theta) * 1.7 + 5, seed) - 0.5) * 2;
+  return 1 + amp * (valueNoise(DMath.cos(theta) * 1.7 + 5, DMath.sin(theta) * 1.7 + 5, seed) - 0.5) * 2;
 }
 
 function fbm(x: number, y: number, seed: number): number {
@@ -225,7 +226,7 @@ export function layeredDisc(o: TestBodyOpts = {}): TestBody {
     for (let x = 0; x < W; x++) {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
-      const theta = Math.atan2(dy, dx);
+      const theta = DMath.atan2(dy, dx);
       const r = Math.sqrt(dx * dx + dy * dy);
       const Rw = R * warp(theta, seed, 0.07);
       if (r > Rw) continue;
@@ -248,13 +249,13 @@ export function layeredDisc(o: TestBodyOpts = {}): TestBody {
   for (let k = 0; k < 7; k++) {
     const a = noise2(k, 1, seed) * Math.PI * 2;
     const rr = R * (0.35 + 0.5 * noise2(k, 2, seed));
-    const qx = cx + Math.cos(a) * rr;
-    const qy = cy + Math.sin(a) * rr;
+    const qx = cx + DMath.cos(a) * rr;
+    const qy = cy + DMath.sin(a) * rr;
     const cr = 3 + noise2(k, 3, seed) * 7;
     for (let y = Math.floor(qy - cr - 2); y <= Math.ceil(qy + cr + 2); y++)
       for (let x = Math.floor(qx - cr - 2); x <= Math.ceil(qx + cr + 2); x++) {
         if (x < 0 || y < 0 || x >= W || y >= W) continue;
-        const d = Math.hypot(x + 0.5 - qx, y + 0.5 - qy) / cr;
+        const d = DMath.hypot(x + 0.5 - qx, y + 0.5 - qy) / cr;
         if (d > 1.3) continue;
         const i = y * W + x;
         if (c.map.material[i] === 0) continue;
@@ -285,8 +286,8 @@ export function ribbedSlab(o: TestBodyOpts = {}): TestBody {
     for (let x = 0; x < W; x++) {
       const dx = (x + 0.5 - cx) / HW;
       const dy = (y + 0.5 - cy) / HH;
-      const theta = Math.atan2(dy, dx);
-      const q = Math.pow(Math.abs(dx), 2.6) + Math.pow(Math.abs(dy), 2.4);
+      const theta = DMath.atan2(dy, dx);
+      const q = DMath.pow(Math.abs(dx), 2.6) + DMath.pow(Math.abs(dy), 2.4);
       const lim = warp(theta, seed, 0.1);
       if (q > lim) continue;
       const i = y * W + x;
@@ -296,7 +297,7 @@ export function ribbedSlab(o: TestBodyOpts = {}): TestBody {
       // ice veins: thin meandering bands
       const vein = Math.abs(valueNoise(x / 20, y / 20, seed + 11) - 0.5);
       if (vein < 0.018 && q < 0.8) m = 3;
-      if (Math.hypot(dx * HW, dy * HH * 1.4) < 8) m = 4;
+      if (DMath.hypot(dx * HW, dy * HH * 1.4) < 8) m = 4;
       c.map.material[i] = m;
       // ribs
       const rib = Math.abs(((x + 0.5) % 15) - 7.5) < 1.6 ? 0.1 : 0;
@@ -326,7 +327,7 @@ export function sparseLattice(o: TestBodyOpts = {}): TestBody {
   for (let k = 0; k < ringN; k++) {
     const a = (k / ringN) * Math.PI * 2 + 0.3 + (noise2(k, 1, seed) - 0.5) * 0.3;
     const rr = S * (0.72 + 0.2 * noise2(k, 2, seed));
-    nodes.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr, r: 5 + noise2(k, 3, seed) * 3 });
+    nodes.push({ x: cx + DMath.cos(a) * rr, y: cy + DMath.sin(a) * rr, r: 5 + noise2(k, 3, seed) * 3 });
   }
   const segs: [number, number, number][] = []; // [from, to, thick]
   for (let k = 1; k <= ringN; k++) {
@@ -344,7 +345,7 @@ export function sparseLattice(o: TestBodyOpts = {}): TestBody {
   for (const [a, b] of segs) {
     const A = nodes[a]!;
     const B = nodes[b]!;
-    const len = Math.hypot(B.x - A.x, B.y - A.y);
+    const len = DMath.hypot(B.x - A.x, B.y - A.y);
     // two thin lattice strands beside each chain
     for (let t = 0; t <= len; t += 0.5) {
       const u = t / len;
@@ -353,7 +354,7 @@ export function sparseLattice(o: TestBodyOpts = {}): TestBody {
       const nx = -(B.y - A.y) / len;
       const ny = (B.x - A.x) / len;
       for (const off of [-5, 5])
-        put(Math.floor(px + nx * off), Math.floor(py + ny * off), 1, 0.4 + 0.1 * Math.sin(t * 0.6));
+        put(Math.floor(px + nx * off), Math.floor(py + ny * off), 1, 0.4 + 0.1 * DMath.sin(t * 0.6));
     }
   }
   // cross bracing between neighbouring chain midpoints (thin)
@@ -361,7 +362,7 @@ export function sparseLattice(o: TestBodyOpts = {}): TestBody {
     const A = nodes[k]!;
     const B = nodes[(k % ringN) + 1]!;
     const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
-    const len = Math.hypot(M.x - cx, M.y - cy);
+    const len = DMath.hypot(M.x - cx, M.y - cy);
     for (let t = 0; t <= len; t += 0.5) {
       const u = t / len;
       put(Math.floor(cx + (M.x - cx) * u), Math.floor(cy + (M.y - cy) * u), 1, 0.35);
@@ -370,7 +371,7 @@ export function sparseLattice(o: TestBodyOpts = {}): TestBody {
   for (const [a, b, th] of segs) {
     const A = nodes[a]!;
     const B = nodes[b]!;
-    const len = Math.hypot(B.x - A.x, B.y - A.y);
+    const len = DMath.hypot(B.x - A.x, B.y - A.y);
     for (let t = 0; t <= len; t += 0.5) {
       const u = t / len;
       const px = A.x + (B.x - A.x) * u;
@@ -379,7 +380,7 @@ export function sparseLattice(o: TestBodyOpts = {}): TestBody {
       for (let dy = -Math.ceil(rr); dy <= Math.ceil(rr); dy++)
         for (let dx = -Math.ceil(rr); dx <= Math.ceil(rr); dx++) {
           if (dx * dx + dy * dy > rr * rr) continue;
-          const hh = 0.55 + 0.25 * (1 - Math.hypot(dx, dy) / (rr + 0.5));
+          const hh = 0.55 + 0.25 * (1 - DMath.hypot(dx, dy) / (rr + 0.5));
           put(Math.floor(px) + dx, Math.floor(py) + dy, 2, hh);
         }
     }
@@ -387,9 +388,9 @@ export function sparseLattice(o: TestBodyOpts = {}): TestBody {
   nodes.forEach((n, k) => {
     for (let y = Math.floor(n.y - n.r - 1); y <= Math.ceil(n.y + n.r + 1); y++)
       for (let x = Math.floor(n.x - n.r - 1); x <= Math.ceil(n.x + n.r + 1); x++) {
-        const d = Math.hypot(x + 0.5 - n.x, y + 0.5 - n.y);
+        const d = DMath.hypot(x + 0.5 - n.x, y + 0.5 - n.y);
         if (d > n.r) continue;
-        put(x, y, k === 0 ? 4 : 3, 0.5 + 0.4 * Math.sqrt(1 - (d / n.r) ** 2));
+        put(x, y, k === 0 ? 4 : 3, 0.5 + 0.4 * Math.sqrt(1 - sq(d / n.r)));
       }
   });
   return finish(c, specs, o, { x: cx, y: cy, r: 9 });
@@ -418,7 +419,7 @@ export function gasPlanet(o: TestBodyOpts = {}): TestBody {
     for (let x = 0; x < W; x++) {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
-      const theta = Math.atan2(dy, dx);
+      const theta = DMath.atan2(dy, dx);
       const r = Math.sqrt(dx * dx + dy * dy);
       const Rp = R * warp(theta, seed, 0.03);
       const Ra = Rp + 8;
@@ -473,8 +474,8 @@ export function latticeDisc(o: TestBodyOpts = {}): TestBody {
     for (let x = 0; x < W; x++) {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
-      const r = Math.hypot(dx, dy);
-      const Rw = R * warp(Math.atan2(dy, dx), seed, 0.04);
+      const r = DMath.hypot(dx, dy);
+      const Rw = R * warp(DMath.atan2(dy, dx), seed, 0.04);
       if (r > Rw) continue;
       const i = y * W + x;
       let m = 1;
@@ -500,11 +501,11 @@ export function uniformDisc(base: string, o: TestBodyOpts = {}): TestBody {
     for (let x = 0; x < W; x++) {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
-      const r = Math.hypot(dx, dy);
-      if (r > R * warp(Math.atan2(dy, dx), seed, 0.04)) continue;
+      const r = DMath.hypot(dx, dy);
+      if (r > R * warp(DMath.atan2(dy, dx), seed, 0.04)) continue;
       const i = y * W + x;
       c.map.material[i] = 1;
-      c.hf[i] = 0.3 + 0.35 * Math.sqrt(Math.max(0, 1 - (r / R) ** 2)) + 0.12 * (fbm(x, y, seed) - 0.5);
+      c.hf[i] = 0.3 + 0.35 * Math.sqrt(Math.max(0, 1 - sq(r / R))) + 0.12 * (fbm(x, y, seed) - 0.5);
     }
   return finish(c, specs, o, { x: cx, y: cy, r: 6 });
 }
@@ -548,8 +549,8 @@ export function star(o: TestBodyOpts = {}): TestBody {
     for (let x = 0; x < W; x++) {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
-      const theta = Math.atan2(dy, dx);
-      const r = Math.hypot(dx, dy);
+      const theta = DMath.atan2(dy, dx);
+      const r = DMath.hypot(dx, dy);
       const Rs = R * warp(theta, seed, 0.04);
       const Rc = Rs + 10 * (0.6 + 0.8 * valueNoise(theta * 3 + 7, 3, seed));
       if (r > Rc) continue;
@@ -584,9 +585,9 @@ export function blackHole(o: TestBodyOpts = {}): TestBody {
     for (let x = 0; x < W; x++) {
       const dx = x + 0.5 - cx;
       const dy = (y + 0.5 - cy) / 0.72; // disk seen slightly inclined
-      const r = Math.hypot(dx, dy);
+      const r = DMath.hypot(dx, dy);
       const i = y * W + x;
-      if (Math.hypot(dx, y + 0.5 - cy) < Rh) {
+      if (DMath.hypot(dx, y + 0.5 - cy) < Rh) {
         c.map.material[i] = 1;
         c.hf[i] = 0.3;
       } else if (r < Rd && r > Rh * 1.15 && Math.abs(y + 0.5 - cy) < Rd * 0.3 * (1 - (r / Rd) * 0.5) + 2) {
@@ -615,14 +616,14 @@ export function celadonBody(o: TestBodyOpts = {}): TestBody {
     for (let x = 0; x < W; x++) {
       const dx = (x + 0.5 - cx) / R;
       const dy = (y + 0.5 - cy) / (R * 0.92);
-      const theta = Math.atan2(dy, dx);
-      const q = Math.hypot(dx, dy);
+      const theta = DMath.atan2(dy, dx);
+      const q = DMath.hypot(dx, dy);
       const lim = warp(theta, seed, 0.06);
       if (q > lim) continue;
       const i = y * W + x;
       let m = 1;
       if (q < 0.62) m = 2;
-      if (Math.hypot(dx * R, dy * R) < 9) m = 3;
+      if (DMath.hypot(dx * R, dy * R) < 9) m = 3;
       c.map.material[i] = m;
       c.hf[i] = 0.35 + 0.4 * Math.sqrt(Math.max(0, 1 - q * q)) + 0.14 * (fbm(x, y, seed) - 0.5);
     }

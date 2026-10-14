@@ -1,5 +1,6 @@
 import { TICK_DT, clamp, clamp01 } from '@/contracts';
 import type { ActiveMove } from './move';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Whole-body pose: the choreography lean targets of a move (load → commit → recover) and the body's angular state
@@ -112,7 +113,7 @@ export class Angular {
       const w = p.omega;
       this.spin += (-w * w * this.angle - 2 * p.zeta * w * this.spin) * dt;
     }
-    this.spin *= Math.exp(-dt / Math.max(0.05, p.dragTau));
+    this.spin *= DMath.exp(-dt / Math.max(0.05, p.dragTau));
     if (Math.abs(this.spin) < 1e-4) this.spin = 0;
     this.angle += this.spin * dt;
     if (p.omega > 0) {

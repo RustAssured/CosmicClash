@@ -1,4 +1,5 @@
 import { ROT_LUT, ROT_ONE, localToWorld, worldToLocal, type MatterBody, type MatterMap } from '@/contracts';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * GESTATION (Gate 3, brief "How it destroys matter"): the Cradle does not only break what it hits, it DEVELOPS it. Every blow
@@ -116,7 +117,7 @@ export class Gestation {
       for (let yy = cy - 5; yy <= cy + 5; yy++)
         for (let xx = cx - 5; xx <= cx + 5; xx++) {
           if (xx < 0 || yy < 0 || xx >= m.w || yy >= m.h || m.material[yy * m.w + xx] === 0) continue;
-          const d = (xx - cx) ** 2 + (yy - cy) ** 2;
+          const d = sq(xx - cx) + sq(yy - cy);
           if (d < best) {
             best = d;
             bx = xx;
@@ -202,8 +203,8 @@ export class Gestation {
       const steps = Math.ceil(reach);
       for (let k = 0; k < steps; k++) {
         a += (ihash(b, k, s.seed + 7) - 0.5) * 1.1;
-        x += Math.cos(a);
-        y += Math.sin(a);
+        x += DMath.cos(a);
+        y += DMath.sin(a);
         const ix = Math.floor(x);
         const iy = Math.floor(y);
         if (ix < 0 || iy < 0 || ix >= m.w || iy >= m.h) break;
@@ -235,7 +236,7 @@ export class Gestation {
     const R = Math.ceil(s.r * 0.9);
     const cx = Math.floor(s.lx);
     const cy = Math.floor(s.ly);
-    const l = Math.hypot(s.dx, s.dy) || 1;
+    const l = DMath.hypot(s.dx, s.dy) || 1;
     const ux = s.dx / l;
     const uy = s.dy / l;
     for (let y = cy - R; y <= cy + R; y++)
@@ -245,11 +246,11 @@ export class Gestation {
         if (m.material[i] === 0) continue;
         const px = x + 0.5 - s.lx;
         const py = y + 0.5 - s.ly;
-        const d = Math.hypot(px, py) / (s.r * 0.9);
+        const d = DMath.hypot(px, py) / (s.r * 0.9);
         if (d >= 1) continue;
         // bands across the blow's direction, bowed (folded inward), fading at the rim
-        const along = px * ux + py * uy + (0.08 * (px * uy - py * ux) ** 2) / Math.max(1, s.r);
-        const w = Math.sin(along * 1.25 + s.seed);
+        const along = px * ux + py * uy + (0.08 * sq(px * uy - py * ux)) / Math.max(1, s.r);
+        const w = DMath.sin(along * 1.25 + s.seed);
         const fade = (1 - d) * 0.8;
         let c = m.baseColor[i]!;
         if (w > 0.45) c = mix(c, s.light, 0.7 * fade + 0.15);
@@ -282,9 +283,9 @@ export class Gestation {
         const px = x + 0.5 - ox;
         const py = y + 0.5 - oy;
         // lobed outline, not a circle
-        const ang = Math.atan2(py, px);
-        const rr = r * (0.85 + 0.15 * Math.sin(ang * 3 + s.seed));
-        const d = Math.hypot(px, py) / rr;
+        const ang = DMath.atan2(py, px);
+        const rr = r * (0.85 + 0.15 * DMath.sin(ang * 3 + s.seed));
+        const d = DMath.hypot(px, py) / rr;
         if (d >= 1.12) continue;
         let c = m.baseColor[i]!;
         if (d >= 0.86) c = mix(c, s.dark, 0.85);
@@ -293,7 +294,7 @@ export class Gestation {
           const sh = (px + py) / (rr * 1.4);
           const lit = Math.max(0, 1 - d) * 0.7 + Math.max(0, -sh) * 0.4;
           c = sh > 0.25 ? mix(c, s.dark, Math.min(0.7, sh * 0.8)) : mix(c, s.light, Math.min(0.85, lit));
-          if (Math.hypot(x + 0.5 - lumX, y + 0.5 - lumY) < r * 0.24) c = mix(c, s.dark, 0.9);
+          if (DMath.hypot(x + 0.5 - lumX, y + 0.5 - lumY) < r * 0.24) c = mix(c, s.dark, 0.9);
         }
         m.baseColor[i] = c;
         m.pixels[i] = c;

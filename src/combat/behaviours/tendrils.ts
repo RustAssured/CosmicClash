@@ -2,6 +2,7 @@ import { clamp, clamp01, hex, lerpAngle, type BodyTransform } from '@/contracts'
 import type { TendrilRoot } from '@/titans';
 import type { Overlay } from '../fx/overlay';
 import type { SplinePen, SplineStyle } from '../fx/spline';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * The Last One's tendrils: 24 verlet chains rooted on shell anchors. They are NOT in the matter map — they are the eye's
@@ -190,7 +191,7 @@ export class TendrilSystem {
       dx = dx * 0.8 + r.nx * fan;
       dy = dy * 0.8 + r.ny * 0.5;
       // the curl bends the chain over its length: start it rotated back by half the curl so the whole curve keeps the fan
-      this.restAng[i] = Math.atan2(dy, dx) - r.curl * 0.45;
+      this.restAng[i] = DMath.atan2(dy, dx) - r.curl * 0.45;
       // staggered lag: neighbours never arrive together (golden-ratio spread of rates)
       this.lag[i] = 0.05 + 0.04 * ((i * 0.618034) % 1);
     }
@@ -221,9 +222,9 @@ export class TendrilSystem {
   private restHeading(i: number, k: number, base: number, f: number, sway: number, tick: number): number {
     const r = this.roots[i]!;
     const u = k / (NODES - 1);
-    const s = Math.sin(u * 4.4 + r.wavePh);
+    const s = DMath.sin(u * 4.4 + r.wavePh);
     // a slow wave travelling down the length: period ≈ 4.2 s
-    const travel = Math.sin(tick * 0.025 + r.phase * 6.283 - u * 2.6) * sway * (0.35 + u);
+    const travel = DMath.sin(tick * 0.025 + r.phase * 6.283 - u * 2.6) * sway * (0.35 + u);
     return base + (r.curl * u + r.wave * s + travel) * f;
   }
 
@@ -238,8 +239,8 @@ export class TendrilSystem {
       for (let k = 0; k < NODES; k++) {
         if (k > 0) {
           const a = this.restHeading(i, k, a0, t.facing, 0, 0);
-          x += Math.cos(a) * this.seg[i]!;
-          y += Math.sin(a) * this.seg[i]!;
+          x += DMath.cos(a) * this.seg[i]!;
+          y += DMath.sin(a) * this.seg[i]!;
         }
         const j = base + k;
         this.x[j] = x;
@@ -301,7 +302,7 @@ export class TendrilSystem {
     vbx = this.vfx;
     vby = this.vfy;
     const f = t.facing;
-    const spd = Math.hypot(vbx, vby);
+    const spd = DMath.hypot(vbx, vby);
     const swayAmp = 0.14 + 0.2 * posture.agitation;
     for (let i = 0; i < this.n; i++) {
       const cnt = this.count[i]!;
@@ -313,7 +314,7 @@ export class TendrilSystem {
       let ang = this.restAng[i]!;
       if (posture.rise > 0.01) ang = lerpAngle(ang, -1.5708 + (i / (this.n - 1) - 0.5) * 1.5, posture.rise);
       const wd = this.localDirFrom(ang, f);
-      const guardAng = Math.atan2(posture.eyeY - ryi, posture.eyeX - rxi);
+      const guardAng = DMath.atan2(posture.eyeY - ryi, posture.eyeX - rxi);
 
       // whip state: scripted (the behaviour asserts tw), returning (folding back to the rest curve after a whip, staggered and
       // damped), or free
@@ -340,8 +341,8 @@ export class TendrilSystem {
           let qy = ryi;
           for (let k = 1; k < NODES; k++) {
             const a = this.restHeading(i, k, wd, f, swayAmp, tick);
-            qx += Math.cos(a) * this.seg[i]!;
-            qy += Math.sin(a) * this.seg[i]!;
+            qx += DMath.cos(a) * this.seg[i]!;
+            qy += DMath.sin(a) * this.seg[i]!;
           }
           tgx = qx;
           tgy = qy;
@@ -371,14 +372,14 @@ export class TendrilSystem {
         const lag = returning ? this.lag[i]! * 0.55 : this.lag[i]!;
         // the target swings AROUND the root (polar interpolation), never through it: a scythe sweep that keeps the whip long,
         // instead of a chord that collapses the chain into a hairpin
-        const ca = Math.atan2(this.sy[i]! - ryi, this.sx[i]! - rxi);
-        const cr = Math.hypot(this.sx[i]! - rxi, this.sy[i]! - ryi);
-        const ta = Math.atan2(tgy - ryi, tgx - rxi);
-        const tr = Math.hypot(tgx - rxi, tgy - ryi);
+        const ca = DMath.atan2(this.sy[i]! - ryi, this.sx[i]! - rxi);
+        const cr = DMath.hypot(this.sx[i]! - rxi, this.sy[i]! - ryi);
+        const ta = DMath.atan2(tgy - ryi, tgx - rxi);
+        const tr = DMath.hypot(tgx - rxi, tgy - ryi);
         const na = lerpAngle(ca, ta, lag);
         const nr = Math.max(this.seg[i]! * (NODES - 1) * 0.6, cr + (tr - cr) * lag);
-        const nx = rxi + Math.cos(na) * nr;
-        const ny = ryi + Math.sin(na) * nr;
+        const nx = rxi + DMath.cos(na) * nr;
+        const ny = ryi + DMath.sin(na) * nr;
         // the sweep relative to the root (a lunging body carries its whips; only the swing makes the mid-chain trail)
         this.svx[i] = nx - this.sx[i]! - (rxi - this.prx[i]!);
         this.svy[i] = ny - this.sy[i]! - (ryi - this.pry[i]!);
@@ -386,13 +387,13 @@ export class TendrilSystem {
         this.sy[i] = ny;
         let ex = nx - rxi;
         let ey = ny - ryi;
-        let c = Math.hypot(ex, ey) || 1;
+        let c = DMath.hypot(ex, ey) || 1;
         // the bend keeps the side it was given when the whip began (a flip would pass through a straight rod); its magnitude
         // eases toward the requested one, and long whips turn more, so curvature never drops below ~1 rad per 100 px
         const mag = returning ? this.bowCur[i]! : Math.abs(this.tb[i]!);
         this.bowCur[i] = this.bowCur[i]! + (mag - this.bowCur[i]!) * 0.3;
         const phi = this.bowSign[i]! * Math.max(this.bowCur[i]!, Math.min(1.1, 0.35 + c * 0.005));
-        let L = Math.abs(phi) > 1e-3 ? (c * phi) / Math.sin(phi) : c;
+        let L = Math.abs(phi) > 1e-3 ? (c * phi) / DMath.sin(phi) : c;
         // a tendril cannot stretch past EXT_MAX: reach a shorter arc instead of pulling the chain into a straight rod
         const maxL = this.seg[i]! * (NODES - 1) * EXT_MAX;
         if (L > maxL) {
@@ -403,7 +404,7 @@ export class TendrilSystem {
           L = maxL;
         }
         arcL = L;
-        arcB = Math.atan2(ey, ex) + phi;
+        arcB = DMath.atan2(ey, ex) + phi;
         arcK = 2 * phi;
         arcX = ex;
         arcY = ey;
@@ -435,8 +436,8 @@ export class TendrilSystem {
         const j = base + k;
         const u = k / (NODES - 1);
         const a = this.restHeading(i, k, wd, f, swayAmp, tick);
-        restX += Math.cos(a) * seg;
-        restY += Math.sin(a) * seg;
+        restX += DMath.cos(a) * seg;
+        restY += DMath.sin(a) * seg;
         // Verlet integration with damping
         const vx = (this.x[j]! - this.px[j]!) * damp;
         const vy = (this.y[j]! - this.py[j]!) * damp;
@@ -454,9 +455,9 @@ export class TendrilSystem {
         // Guard: curl around the eye
         if (posture.guard > 0.01) {
           const th = guardAng + Math.PI + (i / this.n) * 6.283 * 0.5 + u * 1.9 * (i % 2 === 0 ? 1 : -1);
-          const rad = 24 + 9 * Math.sin(i * 1.7) + u * 6;
-          const gx = posture.eyeX + Math.cos(th + tick * 0.02) * rad;
-          const gy = posture.eyeY + Math.sin(th + tick * 0.02) * rad * 0.9;
+          const rad = 24 + 9 * DMath.sin(i * 1.7) + u * 6;
+          const gx = posture.eyeX + DMath.cos(th + tick * 0.02) * rad;
+          const gy = posture.eyeY + DMath.sin(th + tick * 0.02) * rad * 0.9;
           const gs = 0.0045 * posture.guard * (0.4 + u);
           ax += (gx - this.x[j]!) * gs;
           ay += (gy - this.y[j]!) * gs;
@@ -486,11 +487,11 @@ export class TendrilSystem {
             wy = ryi + arcY * ua;
           } else {
             const r = arcL / arcK;
-            wx = rxi + r * (Math.sin(arcB) - Math.sin(arcB - arcK * ua));
-            wy = ryi + r * (Math.cos(arcB - arcK * ua) - Math.cos(arcB));
+            wx = rxi + r * (DMath.sin(arcB) - DMath.sin(arcB - arcK * ua));
+            wy = ryi + r * (DMath.cos(arcB - arcK * ua) - DMath.cos(arcB));
           }
           // the mid-chain trails the sweep a little (bounded: a fast sweep must not fold the whip into a V)
-          const sv = Math.hypot(this.svx[i]!, this.svy[i]!);
+          const sv = DMath.hypot(this.svx[i]!, this.svy[i]!);
           if (sv > 1e-3) {
             const tr = (Math.min(sv * TRAIL, arcL * 0.08) * 4 * ua * (1 - ua)) / sv;
             wx -= this.svx[i]! * tr;
@@ -565,7 +566,7 @@ export class TendrilSystem {
   }
 
   private localDirFrom(ang: number, f: number): number {
-    return Math.atan2(Math.sin(ang), Math.cos(ang) * f);
+    return DMath.atan2(DMath.sin(ang), DMath.cos(ang) * f);
   }
 
   /** Kick every chain (hit reaction): velocity added as a Verlet displacement of the previous positions. */

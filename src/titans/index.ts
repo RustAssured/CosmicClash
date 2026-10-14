@@ -4,6 +4,7 @@ export {
   SITE_ROSTER,
   WIP_IDS,
   isTitanOffered,
+  ladderRoster,
   rosterEntry,
   sizeRange,
   type RosterEntry,

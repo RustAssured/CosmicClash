@@ -1,4 +1,5 @@
 import { makeLayer, rgba, type RenderLayer } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * A static, precomputed radial glow used as an additive backdrop behind a body. Nothing is redrawn per tick: the layer's
@@ -19,9 +20,9 @@ export class GlowSprite {
     const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
     for (let y = 0; y < size; y++)
       for (let x = 0; x < size; x++) {
-        const d = Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2) / r;
+        const d = DMath.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2) / r;
         if (d >= 1) continue;
-        const t = d <= core ? 1 : Math.pow(1 - (d - core) / (1 - core), 2.1);
+        const t = d <= core ? 1 : DMath.pow(1 - (d - core) / (1 - core), 2.1);
         const q = t * steps;
         const fl = Math.floor(q);
         const lvl = fl + (q - fl > (bayer[((y & 3) << 2) | (x & 3)]! + 0.5) / 16 ? 1 : 0);

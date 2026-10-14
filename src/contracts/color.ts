@@ -1,3 +1,4 @@
+import { DMath } from './dmath';
 /**
  * Packed pixel colour: little-endian RGBA in a Uint32 (byte order R,G,B,A in memory), i.e.
  * value = (a << 24) | (b << 16) | (g << 8) | r. Every pixel buffer in the game uses this layout so it can be
@@ -96,7 +97,7 @@ export function hueShiftRamp(
       t < 0.5
         ? baseHue + (shadowHue - baseHue) * (1 - t * 2)
         : baseHue + (lightHue - baseHue) * ((t - 0.5) * 2);
-    const s = baseSat * (0.55 + 0.45 * Math.sin(Math.PI * Math.min(1, t * 0.9 + 0.05)));
+    const s = baseSat * (0.55 + 0.45 * DMath.sin(Math.PI * Math.min(1, t * 0.9 + 0.05)));
     out.push(hsl(h, Math.min(1, s), l));
   }
   return out;

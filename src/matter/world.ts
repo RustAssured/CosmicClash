@@ -41,7 +41,7 @@ import { stepFronts, stepSlowCuts } from './cracks';
 import { WorldCore } from './core';
 import { beginDamage, DamageCtx, localToWorldF } from './dmg';
 import { CHISEL_DELAY, applyFracture, chisel } from './fracture';
-import { hashWorld } from './hash';
+import { checksumWorld, hashWorld } from './hash';
 import { applyKinetic, stepFuses } from './kinetic';
 import { KIND_ID } from './particles';
 import { mix32 } from './util';
@@ -59,6 +59,7 @@ import { HAIRLINE, finishReleases, shearDelay, stepWounds } from './wound';
 import { extractChunk } from './debris';
 import { hitTear, liveFraction, releaseBudgets, releaseGroups, tearCellList, tearGroup } from './groups';
 import { defineShell, finishShellSwap, restoreShell, stepShellSwap, swapShell, type FarFace } from './shell';
+import { DMath } from '@/contracts/dmath';
 
 /** A multi-tick damage application waiting to deliver its remaining slices. */
 class Job {
@@ -499,7 +500,7 @@ class MatterWorldImpl implements MatterWorldEx {
     c.mode = CHUNK_ORBIT;
     c.owner = slot;
     c.credit = -1;
-    c.phase = Math.atan2((c.y - o.y) / Math.max(0.05, o.flatten), c.x - o.x);
+    c.phase = DMath.atan2((c.y - o.y) / Math.max(0.05, o.flatten), c.x - o.x);
     // each chunk gets its own lane in a band around the ring radius (deterministic from its id)
     c.ring = o.radius + ((Math.imul(c.id, 2654435761) >>> 0) % 13) - 6;
     c.asleep = false;
@@ -518,7 +519,7 @@ class MatterWorldImpl implements MatterWorldEx {
     c.owner = -1;
     c.credit = -1;
     c.asleep = false;
-    const dl = Math.hypot(dirX, dirY) || 1;
+    const dl = DMath.hypot(dirX, dirY) || 1;
     const push = Math.sqrt(Math.max(0, energy) / Math.max(1, c.mass)) * 40;
     c.vx += (dirX / dl) * push;
     c.vy += (dirY / dl) * push;
@@ -1205,8 +1206,8 @@ class MatterWorldImpl implements MatterWorldEx {
         kind,
         spec.x,
         spec.y,
-        spec.vx + Math.cos(a) * r,
-        spec.vy + Math.sin(a) * r,
+        spec.vx + DMath.cos(a) * r,
+        spec.vy + DMath.sin(a) * r,
         l0 + rng.next() * (l1 - l0),
         Math.max(1, Math.min(3, spec.size | 0)),
         spec.emissive,
@@ -1294,6 +1295,15 @@ class MatterWorldImpl implements MatterWorldEx {
       }
       return h;
     });
+  }
+
+  checksum(): number {
+    let h = checksumWorld(this.core);
+    for (let i = 0; i < this.jobs.length; i++) {
+      const j = this.jobs[i]!;
+      if (j.active) h = mix32(h, i | (j.kind << 8) | (j.remaining << 16));
+    }
+    return h >>> 0;
   }
 
   /* ------------------------------------------------------------------ extras */

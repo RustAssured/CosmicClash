@@ -27,6 +27,7 @@ import { buildWitnessRig, setWitnessHeading, type WitnessRig } from '../rig/witn
 import { WitnessKit, type WitnessKitHost } from './witnessKit';
 import { shapeBounds, type Bounds } from '../shapes';
 import { WoundVeil } from '../fx/woundVeil';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * THE WITNESS in game (Phase 2, behind `witness=1`): one matter body per rigid region (D27), driven by the XPBD rig, drawn as
@@ -350,7 +351,7 @@ export class WitnessBehaviour extends Behaviour {
       if (r.kind !== 'halo') continue;
       const mx = r.ox + r.map.coreX + 0.5 - r.pivotX;
       const my = r.oy + r.map.coreY + 0.5 - r.pivotY;
-      halo.push({ body: wr.bodyOf[i]!, mx, my, angle: Math.atan2(my, mx), alive: true });
+      halo.push({ body: wr.bodyOf[i]!, mx, my, angle: DMath.atan2(my, mx), alive: true });
     }
     const arms: WitnessKitHost['arms'] = W.arms.map(() => ({
       elbowBody: -1,
@@ -636,7 +637,7 @@ export class WitnessBehaviour extends Behaviour {
       }
       const dx = this.pt.x * s - e.x;
       const dy = this.pt.y - e.y;
-      const l = Math.hypot(dx, dy) || 1;
+      const l = DMath.hypot(dx, dy) || 1;
       vx += (dx / l) * drift;
       vy += (dy / l) * drift;
     }
@@ -778,8 +779,8 @@ export class WitnessBehaviour extends Behaviour {
           type: 'KINETIC',
           shape: {
             kind: 'point',
-            x: e.x + (33 * WITNESS_SCALE + Math.cos(a) * d) * this.facing,
-            y: e.y - 27 * WITNESS_SCALE + Math.sin(a) * d,
+            x: e.x + (33 * WITNESS_SCALE + DMath.cos(a) * d) * this.facing,
+            y: e.y - 27 * WITNESS_SCALE + DMath.sin(a) * d,
             r: 7 * WITNESS_SCALE,
           },
           energy: 2400,
@@ -830,7 +831,7 @@ export class WitnessBehaviour extends Behaviour {
         const t = r.body.transform;
         const cx = Math.max(b.x0, Math.min(t.x, b.x1));
         const cy = Math.max(b.y0, Math.min(t.y, b.y1));
-        if ((cx - t.x) ** 2 + (cy - t.y) ** 2 > r.reach * r.reach) continue;
+        if (sq(cx - t.x) + sq(cy - t.y) > r.reach * r.reach) continue;
       }
       const id = r ? r.body.id : f.body.id;
       const e2 = this.ev2;
@@ -909,7 +910,7 @@ export class WitnessBehaviour extends Behaviour {
     if (this.dying >= 0) {
       const t = f.tickNo - this.dying;
       const fade = clamp01((FAIL.eyeOut - t) / 60);
-      const flicker = t > FAIL.eyeOut - 60 ? 0.55 + 0.45 * Math.sin(t * 0.9) * Math.sin(t * 0.37) : 1;
+      const flicker = t > FAIL.eyeOut - 60 ? 0.55 + 0.45 * DMath.sin(t * 0.9) * DMath.sin(t * 0.37) : 1;
       light = fade * flicker;
     }
     this.light = light;
@@ -946,7 +947,7 @@ export class WitnessBehaviour extends Behaviour {
       const ty = arm.points[last + 1]!.y - seg.pivotY;
       const dx = tx - jx;
       const dy = ty - jy;
-      const dl = Math.hypot(dx, dy) || 1;
+      const dl = DMath.hypot(dx, dy) || 1;
       for (let k = 0; k < 7; k++) {
         const period = 110 + 17 * k;
         const age = (tick + a * 37 + k * 53) % period;
@@ -971,7 +972,7 @@ export class WitnessBehaviour extends Behaviour {
         WITNESS_SHRINE_LIGHT_Y - reg.pivotY,
         this.pt,
       );
-      const pulse = 0.75 + 0.25 * Math.sin(tick * 0.035);
+      const pulse = 0.75 + 0.25 * DMath.sin(tick * 0.035);
       fx.glow(this.pt.x * s, this.pt.y, 9 * WITNESS_SCALE, 120, 105, 70, 0.55 * pulse * light);
       fx.glow(this.pt.x * s, this.pt.y, 2.5, 255, 245, 210, 0.9 * pulse * light);
     }
@@ -1090,7 +1091,7 @@ function anchorPatch(map: MatterMap): Int32Array {
   for (let y = Math.max(0, map.coreY - r); y <= Math.min(map.h - 1, map.coreY + r); y++)
     for (let x = Math.max(0, map.coreX - r); x <= Math.min(map.w - 1, map.coreX + r); x++) {
       const i = y * map.w + x;
-      if (map.material[i] !== 0 && (x - map.coreX) ** 2 + (y - map.coreY) ** 2 <= r * r) out.push(i);
+      if (map.material[i] !== 0 && sq(x - map.coreX) + sq(y - map.coreY) <= r * r) out.push(i);
     }
   return Int32Array.from(out);
 }
@@ -1115,7 +1116,7 @@ function shapeArea(s: DamageShape): number {
     case 'field':
       return Math.PI * s.r * s.r;
     case 'line':
-      return Math.hypot(s.x1 - s.x0, s.y1 - s.y0) * s.width + 1;
+      return DMath.hypot(s.x1 - s.x0, s.y1 - s.y0) * s.width + 1;
     case 'cone':
       return s.range * s.range * s.halfAngle;
     case 'ring':

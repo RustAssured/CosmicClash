@@ -1,4 +1,5 @@
 import { clamp, type OrbitState } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Planar orbital footwork (SLICE_PLAN §4.3/§6, `footwork: 'orbit'`). Pure helpers shared by the fighter, the AI and the tools.
@@ -104,7 +105,7 @@ export function orbitFrame(
   const EY = ORBIT.ey;
   const dx = fx - x;
   const dy = (fy - y) * EY;
-  const r = Math.hypot(dx, dy);
+  const r = DMath.hypot(dx, dy);
   out.r = r;
   if (r > 1e-6) {
     out.nx = dx / r;
@@ -120,7 +121,7 @@ export function orbitFrame(
   const rvy = (vy - fvy) * EY;
   out.vr = -(rvx * out.nx + rvy * out.ny);
   out.vt = rvx * out.tx + rvy * out.ty;
-  out.speed = Math.hypot(vx, vy * EY);
+  out.speed = DMath.hypot(vx, vy * EY);
   return out;
 }
 

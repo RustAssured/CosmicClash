@@ -16,6 +16,7 @@ import {
 } from '@/render/mouthList';
 import type { MouthCore } from './core';
 import { MOUTH_CONST as C } from './tuning';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * The Mouth's look, laid out (Phase 3C): the CPU half of the locked look-dev renderer (`mouth/src/10_mouth_render_lib.js`
@@ -43,7 +44,7 @@ const cross = (a: V3, b: V3): V3 => [
   a[2] * b[0] - a[0] * b[2],
   a[0] * b[1] - a[1] * b[0],
 ];
-const len = (a: V3): number => Math.hypot(a[0], a[1], a[2]);
+const len = (a: V3): number => DMath.hypot(a[0], a[1], a[2]);
 const norm = (a: V3): V3 => {
   const l = len(a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
@@ -93,7 +94,7 @@ class Path {
       const b = Math.min(this.n - 1, i + 1) * PS;
       const tx = d[b]! - d[a]!;
       const ty = d[b + 1]! - d[a + 1]!;
-      const l = Math.hypot(tx, ty) || 1;
+      const l = DMath.hypot(tx, ty) || 1;
       const o = i * PS;
       d[o + 7] = tx / l;
       d[o + 8] = ty / l;
@@ -136,7 +137,7 @@ function sampleSpine(P: Float64Array, nP: number, step: number, out: Path): Path
   let lastS = 0;
   for (let i = 1; i <= 600; i++) {
     catmull(P, nP, i / 600, cm);
-    s += Math.hypot(cm[0]! - cmPrev[0]!, cm[1]! - cmPrev[1]!);
+    s += DMath.hypot(cm[0]! - cmPrev[0]!, cm[1]! - cmPrev[1]!);
     if (s - lastS >= step || i === 600) {
       out.push(cm[0]!, cm[1]!, cm[2]!, 0, s, 0, 0);
       lastS = s;
@@ -156,7 +157,7 @@ function asSpine(src: Path, out: Path): Path {
   const d = src.d;
   for (let i = 0; i < src.n; i++) {
     const o = i * PS;
-    if (i) s += Math.hypot(d[o]! - d[o - PS]!, d[o + 1]! - d[o + 1 - PS]!);
+    if (i) s += DMath.hypot(d[o]! - d[o - PS]!, d[o + 1]! - d[o + 1 - PS]!);
     out.push(d[o]!, d[o + 1]!, d[o + 2]!, d[o + 3]!, s, 0, 0);
     const q = (out.n - 1) * PS;
     out.d[q + 7] = d[o + 7]!;
@@ -192,14 +193,14 @@ function braid(sp: Path, o: BraidOpts, t: number, out: Path[]): void {
       const f = Ss / total;
       const BR = o.br(f, d[q + 3]!);
       const SR = o.sr(f, k, d[q + 3]!);
-      const ph = ph0 + Ss * o.twist + t * o.writhe + Math.sin(Ss * 0.02 + k + t * 0.7) * 0.25;
+      const ph = ph0 + Ss * o.twist + t * o.writhe + DMath.sin(Ss * 0.02 + k + t * 0.7) * 0.25;
       const wob = (n3(Ss * 0.03, k * 3.1 + o.sid, t * 0.4) - 0.5) * o.wob;
       const off = BR + wob;
-      const c = Math.cos(ph);
+      const c = DMath.cos(ph);
       path.push(
         d[q]! + d[q + 9]! * c * off,
         d[q + 1]! + d[q + 10]! * c * off,
-        d[q + 2]! + Math.sin(ph) * off,
+        d[q + 2]! + DMath.sin(ph) * off,
         SR,
         Ss,
         c,
@@ -292,7 +293,7 @@ export class MouthGeom {
     const bq = (NS - 4) * 4;
     let ax = hx - nk[bq]!;
     let ay = hy - nk[bq + 1]!;
-    const al = Math.hypot(ax, ay) || 1;
+    const al = DMath.hypot(ax, ay) || 1;
     ax /= al;
     ay /= al;
     const a3: V3 = [ax * 0.85, ay * 0.85, 0.52];
@@ -304,11 +305,11 @@ export class MouthGeom {
     for (let i = 0; i < NS; i++) {
       const qx = nk[i * 4]!;
       const qy = nk[i * 4 + 1]!;
-      if (!sev && Math.hypot(qx - hx, qy - hy) < HL * 0.92 && i > 2) break;
-      let z = 40 - i * 0.8 + Math.sin(t + i * 0.5) * 4;
+      if (!sev && DMath.hypot(qx - hx, qy - hy) < HL * 0.92 && i > 2) break;
+      let z = 40 - i * 0.8 + DMath.sin(t + i * 0.5) * 4;
       // the true wrap (Gate 3A §3): round the foe the strands alternate depth, the front half over it, the back half behind
       const w = this.wrap;
-      if (w && i / (NS - 1) > 0.55) z += 50 * Math.sin(Math.atan2(qy - w[1], qx - w[0]));
+      if (w && i / (NS - 1) > 0.55) z += 50 * DMath.sin(DMath.atan2(qy - w[1], qx - w[0]));
       P[nP * 3] = qx;
       P[nP * 3 + 1] = qy;
       P[nP * 3 + 2] = z;
@@ -322,7 +323,7 @@ export class MouthGeom {
       const sw = (t * 0.3) % 1.3;
       let plen = 0;
       for (let i = 1; i < nP; i++)
-        plen += Math.hypot(P[i * 3]! - P[i * 3 - 3]!, P[i * 3 + 1]! - P[i * 3 - 2]!);
+        plen += DMath.hypot(P[i * 3]! - P[i * 3 - 3]!, P[i * 3 + 1]! - P[i * 3 - 2]!);
       const vol = Math.max(0.82, Math.min(1.22, Math.sqrt(250 / Math.max(120, plen))));
       const sp = sampleSpine(P, nP, 3, this.spine);
       braid(
@@ -333,8 +334,8 @@ export class MouthGeom {
           sr: (f, k) =>
             (14.5 - 4.5 * f) *
             vol *
-            (1 + 0.2 * Math.sin(k * 1.7 + f * 9)) *
-            (1 + 0.25 * Math.exp(-Math.pow((f - sw) / 0.08, 2))),
+            (1 + 0.2 * DMath.sin(k * 1.7 + f * 9)) *
+            (1 + 0.25 * DMath.exp(-DMath.pow((f - sw) / 0.08, 2))),
           twist: 0.034,
           writhe: 0.7,
           wob: 4,
@@ -366,7 +367,7 @@ export class MouthGeom {
               if (j % 3) this.pixel(X, Y, ez + er + 1, 220, 40, 30, true);
               else this.pixel(X, Y, ez + er + 1, 255, 120, 80, true);
             }
-            const dl = Math.round(8 + 6 * Math.sin(t * 2 + k));
+            const dl = Math.round(8 + 6 * DMath.sin(t * 2 + k));
             for (let j = 0; j < dl; j++) {
               const Y = Math.round(ey + er + j);
               if (j === dl - 1) this.pixel(Math.round(ex), Y, ez + er, 255, 200, 190, false);
@@ -385,7 +386,7 @@ export class MouthGeom {
         if (i < A.n && j >= 0 && j < Bp.n) {
           const pa: V3 = [A.d[i * PS]!, A.d[i * PS + 1]!, A.d[i * PS + 2]!];
           const pb: V3 = [Bp.d[j * PS]!, Bp.d[j * PS + 1]!, Bp.d[j * PS + 2]!];
-          const dd = Math.hypot(pa[0] - pb[0], pa[1] - pb[1]);
+          const dd = DMath.hypot(pa[0] - pb[0], pa[1] - pb[1]);
           if (dd > 6 && dd < 45) this.slime(pa, pb, 4 + k, t, k * 5 + 50);
         }
       }
@@ -403,7 +404,7 @@ export class MouthGeom {
       const k = t - ko.t0;
       this.head(
         [Lo.x, Lo.y, 20],
-        norm([Math.cos(Lo.roll * 0.5) * 0.8, Math.sin(Lo.roll * 0.5) * 0.8, 0.5]),
+        norm([DMath.cos(Lo.roll * 0.5) * 0.8, DMath.sin(Lo.roll * 0.5) * 0.8, 0.5]),
         Rh,
         t,
         {
@@ -443,7 +444,7 @@ export class MouthGeom {
     this.zBias = 0;
 
     // ---- readability: the tell (a pulsing red ring), the speed echo, the predicted path ----
-    const sp = Math.hypot(core.hdVx, core.hdVy);
+    const sp = DMath.hypot(core.hdVx, core.hdVy);
     if (sp > 420) this.trail.push({ x: hx, y: hy, a: 1 });
     for (const q of this.trail) q.a -= dtS * 4;
     this.trail = this.trail.filter((q) => q.a > 0);
@@ -616,14 +617,14 @@ export class MouthGeom {
 
   /** Slime: a thread of mucus stretched between surfaces, sagging, beaded (fixed pixels). */
   private slime(p0: V3, p1: V3, sag: number, t: number, seed: number): void {
-    const n = Math.max(4, Math.ceil(Math.hypot(p1[0] - p0[0], p1[1] - p0[1])));
+    const n = Math.max(4, Math.ceil(DMath.hypot(p1[0] - p0[0], p1[1] - p0[1])));
     const thick = h3(seed, 1, 2) > 0.7 ? 2 : 1;
     for (let k = 0; k <= n; k++) {
       const f = k / n;
-      const sw = Math.sin(Math.PI * f);
+      const sw = DMath.sin(Math.PI * f);
       const q = lerp3(p0, p1, f);
-      const X = Math.round(q[0] + Math.sin(t * 1.3 + seed + f * 3) * sw * 2);
-      const Y = Math.round(q[1] + sag * sw + Math.cos(t + seed) * sw * 1.5);
+      const X = Math.round(q[0] + DMath.sin(t * 1.3 + seed + f * 3) * sw * 2);
+      const Y = Math.round(q[1] + sag * sw + DMath.cos(t + seed) * sw * 1.5);
       const glint = (k + Math.floor(t * 6) + seed) % 11 === 0;
       if (glint) this.pixel(X, Y, q[2] + 3, 255, 236, 236, true);
       else if (f < 0.12 || f > 0.88) this.pixel(X, Y, q[2] + 3, 150, 60, 70, false);
@@ -651,7 +652,7 @@ export class MouthGeom {
     const n = Math.ceil(TAU * r);
     for (let k = 0; k < n; k++) {
       const a = (k / n) * TAU;
-      this.pixel(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), z, R, G, B, em);
+      this.pixel(Math.round(cx + DMath.cos(a) * r), Math.round(cy + DMath.sin(a) * r), z, R, G, B, em);
     }
   }
 
@@ -666,7 +667,7 @@ export class MouthGeom {
       const q = 1 - u;
       const x = q * q * ax + 2 * q * u * mx + u * u * bx;
       const y = q * q * ay + 2 * q * u * my + u * u * by;
-      s += Math.hypot(x - prevX, y - prevY);
+      s += DMath.hypot(x - prevX, y - prevY);
       prevX = x;
       prevY = y;
       if (s % 9 >= 4) continue;
@@ -690,7 +691,7 @@ export class MouthGeom {
       if (d[b + 3]! < 0.4) continue;
       let fl = (i === 1 ? MF.CAP0 : 0) | (i === n - 1 ? MF.CAP1 : 0);
       // the wrap's back half goes behind the foe (Gate 3A §3)
-      if (w && d[b + 6]! > 0.55 && Math.sin(Math.atan2(d[b + 1]! - w[1], d[b]! - w[0])) < 0) fl |= MF.BACK;
+      if (w && d[b + 6]! > 0.55 && DMath.sin(DMath.atan2(d[b + 1]! - w[1], d[b]! - w[0])) < 0) fl |= MF.BACK;
       this.tube(
         [d[a]!, d[a + 1]!, d[a + 2]!],
         [d[b]!, d[b + 1]!, d[b + 2]!],
@@ -738,18 +739,18 @@ export class MouthGeom {
     const e = { px: 0, py: 0, nx: 0, ny: 0 };
     for (let i = 0; i < 9; i++) {
       core.edgeAt(core.s + OFFS[i]! * (1 - pay * 0.18), e);
-      const dd = (depth[i]! - core.koDrag * 150) * (1 - pay * 0.35) + Math.sin(t * 0.32 + i * 1.3) * 12;
+      const dd = (depth[i]! - core.koDrag * 150) * (1 - pay * 0.35) + DMath.sin(t * 0.32 + i * 1.3) * 12;
       P[i * 3] = e.px + e.nx * dd;
       P[i * 3 + 1] = e.py + e.ny * dd;
-      P[i * 3 + 2] = 62 + Math.sin(t * 0.3 + i) * 10;
+      P[i * 3 + 2] = 62 + DMath.sin(t * 0.3 + i) * 10;
     }
     const sp = sampleSpine(P, 9, 6, this.spine);
     braid(
       sp,
       {
         n: 4,
-        br: (f) => 35 + 5 * Math.sin(f * 9 + t * 0.4),
-        sr: (f, k) => 27 + 5 * Math.sin(f * 7 + k * 2 + t * 0.5) + 4 * Math.sin(f * 23 + k),
+        br: (f) => 35 + 5 * DMath.sin(f * 9 + t * 0.4),
+        sr: (f, k) => 27 + 5 * DMath.sin(f * 7 + k * 2 + t * 0.5) + 4 * DMath.sin(f * 23 + k),
         twist: 0.02,
         writhe: 0.3 + pay * 0.5,
         wob: 9,
@@ -766,7 +767,7 @@ export class MouthGeom {
         {
           n: 4,
           br: (_f, r) => r * 0.5,
-          sr: (f, j, r) => r * (0.5 + 0.1 * Math.sin(f * 17 + j * 2.1 + k)),
+          sr: (f, j, r) => r * (0.5 + 0.1 * DMath.sin(f * 17 + j * 2.1 + k)),
           twist: 0.05,
           writhe: 0.5,
           wob: 3,
@@ -786,7 +787,7 @@ export class MouthGeom {
       const j = Math.min(Bp.n - 1, i + 2);
       const pa: V3 = [A.d[i * PS]!, A.d[i * PS + 1]!, A.d[i * PS + 2]! + A.d[i * PS + 3]! * 0.7];
       const pb: V3 = [Bp.d[j * PS]!, Bp.d[j * PS + 1]!, Bp.d[j * PS + 2]! + Bp.d[j * PS + 3]! * 0.7];
-      if (Math.hypot(pa[0] - pb[0], pa[1] - pb[1]) < 90) this.slime(pa, pb, 8 + k * 2, t, k * 13 + 3);
+      if (DMath.hypot(pa[0] - pb[0], pa[1] - pb[1]) < 90) this.slime(pa, pb, 8 + k * 2, t, k * 13 + 3);
     }
     // keep the bundle (tubes and stamps) for the frames until the next redraw
     if (this.coilTubes.length < L.nTubes * TUBE_STRIDE)
@@ -856,8 +857,8 @@ export class MouthGeom {
     const tips: V3[] = [];
     // the whole head rolls about its own axis — slowly at rest, wrenching in the wind-up
     if (o.roll) {
-      const cr = Math.cos(o.roll);
-      const sr = Math.sin(o.roll);
+      const cr = DMath.cos(o.roll);
+      const sr = DMath.sin(o.roll);
       const u2 = add(mul(u, cr), mul(w, sr));
       const w2 = sub(mul(w, cr), mul(u, sr));
       u = u2;
@@ -877,8 +878,8 @@ export class MouthGeom {
     let prevR = Rn;
     for (let k = 1; k <= 7; k++) {
       const f = k / 7;
-      const ribs = 1 + 0.06 * Math.max(0, Math.sin(f * 13 - t * 1.4));
-      const rk = (Rn + (Rh * 0.96 - Rn) * Math.pow(f, 1.25)) * ribs;
+      const ribs = 1 + 0.06 * Math.max(0, DMath.sin(f * 13 - t * 1.4));
+      const rk = (Rn + (Rh * 0.96 - Rn) * DMath.pow(f, 1.25)) * ribs;
       const ck = lerp3(B, Cp, f * 0.97);
       this.tube(prevP, ck, prevR, rk, (k - 1) * 14, k * 14, 94 + k, -0.08, MF.WARM | (k === 1 ? MF.CAP0 : 0));
       prevP = ck;
@@ -907,8 +908,8 @@ export class MouthGeom {
       this.annulus(ck, a, u, w, rn * 0.85, rk * 1.05, k === Dd ? AK.MAW : AK.THROAT, k, rn, rk, gape);
       const nt = Math.round(11 - k * 1.2);
       for (let j = 0; j < nt; j++) {
-        const th = (j / nt) * TAU + k * 0.41 + Math.sin(t * 0.8 + k) * 0.05;
-        const dir = add(mul(u, Math.cos(th)), mul(w, Math.sin(th)));
+        const th = (j / nt) * TAU + k * 0.41 + DMath.sin(t * 0.8 + k) * 0.05;
+        const dir = add(mul(u, DMath.cos(th)), mul(w, DMath.sin(th)));
         const base = add(ck, mul(dir, rk * 0.98));
         const ln = rk * (0.36 + 0.2 * h3(j, k, 9)) * (o.open || 1);
         if (BRK.has(`t${k}_${j}`)) {
@@ -937,7 +938,7 @@ export class MouthGeom {
     );
     for (let j = 0; j < 30; j++) {
       const th = (j / 30) * TAU + 0.1;
-      const dir = add(mul(u, Math.cos(th)), mul(w, Math.sin(th)));
+      const dir = add(mul(u, DMath.cos(th)), mul(w, DMath.sin(th)));
       const base = add(Cp, add(mul(dir, Rh * 0.97), mul(a, 3)));
       this.claw(base, add(mul(dir, 0.35), mul(a, 0.2)), a, Rh * (0.16 + 0.1 * h3(j, 2, 4)), 2.4);
     }
@@ -964,19 +965,19 @@ export class MouthGeom {
       if (!o.alive[gi]) return;
       const ST =
         o.spinT * (grind && gi % 2 ? -1 - 2 * grind : 1) +
-        jit * 0.35 * Math.sin(t * 23 + gi * 7.1) * Math.max(0, Math.sin(t * 3.1 + gi * 2.3));
+        jit * 0.35 * DMath.sin(t * 23 + gi * 7.1) * Math.max(0, DMath.sin(t * 3.1 + gi * 2.3));
       const gam = g.g0 + ST * g.w;
       const tl = g.tilt + spread * 0.35 * (gi % 2 ? 1 : -1);
       const nrm = norm(
         add(
-          mul(a, Math.cos(tl)),
-          add(mul(u, Math.sin(tl) * Math.cos(gam)), mul(w, Math.sin(tl) * Math.sin(gam))),
+          mul(a, DMath.cos(tl)),
+          add(mul(u, DMath.sin(tl) * DMath.cos(gam)), mul(w, DMath.sin(tl) * DMath.sin(gam))),
         ),
       );
       const [e1, e2] = this.basis(nrm);
       const cc = add(
         add(Cp, mul(a, Rh * (g.off + spread * 0.35 * (gi % 2 ? 0.6 : 1)))),
-        add(mul(u, Math.sin(gi * 2.1) * Rh * 0.08), mul(w, Math.cos(gi * 1.7) * Rh * 0.06)),
+        add(mul(u, DMath.sin(gi * 2.1) * Rh * 0.08), mul(w, DMath.cos(gi * 1.7) * Rh * 0.06)),
       );
       const R0 = Rh * g.R * (o.rs || 1) * (1 + 0.16 * spread);
       const steps = Math.ceil((TAU * R0 * 1.15) / 1.5);
@@ -993,9 +994,9 @@ export class MouthGeom {
           if (gap) continue;
         }
         const th = (j / steps) * TAU + ST * g.spin;
-        const rr = R0 * (1 + g.ell * Math.cos(2 * th) + 0.07 * (n3(th * 1.4, gi * 3, t * 0.15) - 0.5) * 2);
-        const ct = Math.cos(th);
-        const st = Math.sin(th);
+        const rr = R0 * (1 + g.ell * DMath.cos(2 * th) + 0.07 * (n3(th * 1.4, gi * 3, t * 0.15) - 0.5) * 2);
+        const ct = DMath.cos(th);
+        const st = DMath.sin(th);
         const dx = e1[0] * ct + e2[0] * st;
         const dy = e1[1] * ct + e2[1] * st;
         const dz = e1[2] * ct + e2[2] * st;
@@ -1003,8 +1004,8 @@ export class MouthGeom {
         const py = cc[1] + dy * rr;
         const pz = cc[2] + dz * rr;
         // swelling ribs along the band; bone lit toward the sun, flesh where it joins the claws
-        const rib = 0.5 + 0.5 * Math.sin(((j / steps) * TAU * rr) / 6);
-        const hw = 2.4 + 1.6 * rib + 1.2 * Math.max(0, Math.sin(th * 2 + gi));
+        const rib = 0.5 + 0.5 * DMath.sin(((j / steps) * TAU * rr) / 6);
+        const hw = 2.4 + 1.6 * rib + 1.2 * Math.max(0, DMath.sin(th * 2 + gi));
         const lit = Math.max(0, dx * LK[0] - dy * LK[1] + dz * LK[2]) * 0.55 + 0.22 + (dz > 0 ? 0.12 : -0.08);
         this.stamp(SK.RING, Math.round(px), Math.round(py), pz, hw, 0, 0, 0, lit, rib, 0, 0, 0, 0, 0, 0);
         if (j % 4 === 0 && !BRK.has(`r${gi}_${j}`)) {
@@ -1013,7 +1014,7 @@ export class MouthGeom {
           let ix = -dx + nrm[0] * 0.2;
           let iy = -dy + nrm[1] * 0.2;
           let iz = -dz + nrm[2] * 0.2;
-          const il = Math.hypot(ix, iy, iz) || 1;
+          const il = DMath.hypot(ix, iy, iz) || 1;
           ix /= il;
           iy /= il;
           iz /= il;

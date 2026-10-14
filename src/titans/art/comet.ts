@@ -12,6 +12,7 @@ import { resolveMaterials } from '../materialTable';
 import { ArtCanvas, buildLitRamps } from './canvas';
 import { keepLargestComponent } from './field';
 import { fbm, hash01 } from './noise';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * A COMET nucleus for the Planet's Comet Shepherd: a dirty snowball, elongated and lumpy (two lobes fused along a neck), dark
@@ -52,8 +53,8 @@ function paintComet(spec: CometSpec, seed: number, lighting: StageLighting): Com
   const ids = { ice: 1, dust: 2, rock: 3 };
   // two fused lobes along a slightly tilted axis
   const tilt = rng.range(-0.5, 0.5);
-  const ax = Math.cos(tilt);
-  const ay = Math.sin(tilt);
+  const ax = DMath.cos(tilt);
+  const ay = DMath.sin(tilt);
   const half = R * 0.42;
   const r1 = R / spec.elong;
   const r2 = r1 * (1 - 0.35 * spec.lobes);
@@ -64,7 +65,7 @@ function paintComet(spec: CometSpec, seed: number, lighting: StageLighting): Com
     const pr = rng.range(1.2, r1 * 0.45);
     const x = c + ax * u - ay * v;
     const y = c + ay * u + ax * v;
-    if (pits.some((k) => Math.hypot(k.x - x, k.y - y) < k.r + pr)) continue;
+    if (pits.some((k) => DMath.hypot(k.x - x, k.y - y) < k.r + pr)) continue;
     pits.push({ x, y, r: pr });
   }
   for (let y = 1; y < size - 1; y++)
@@ -75,8 +76,8 @@ function paintComet(spec: CometSpec, seed: number, lighting: StageLighting): Com
       const u = fx * ax + fy * ay;
       const v = -fx * ay + fy * ax;
       const w = fbm(x * 0.15, y * 0.15, s, 3) * 1.8;
-      const d1 = Math.hypot((u - half) / r1, v / (r1 * 0.9)) - 1;
-      const d2 = Math.hypot((u + half) / r2, v / (r2 * 0.9)) - 1;
+      const d1 = DMath.hypot((u - half) / r1, v / (r1 * 0.9)) - 1;
+      const d2 = DMath.hypot((u + half) / r2, v / (r2 * 0.9)) - 1;
       const d = Math.min(d1, d2) * r1 + w;
       if (d >= 0) continue;
       const i = y * size + x;
@@ -84,7 +85,7 @@ function paintComet(spec: CometSpec, seed: number, lighting: StageLighting): Com
       let m = fbm(x * 0.11, y * 0.11, s + 3, 3) > 0.05 ? ids.dust : ids.rock;
       let tone = (hash01(x, y, s) - 0.5) * 0.45;
       for (const k of pits) {
-        const q = Math.hypot(x + 0.5 - k.x, y + 0.5 - k.y) / k.r;
+        const q = DMath.hypot(x + 0.5 - k.x, y + 0.5 - k.y) / k.r;
         if (q < 1) {
           rel -= (1 - q * q) * (0.8 + k.r * 0.3);
           // pits expose the bright ice under the dark crust

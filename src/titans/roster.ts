@@ -1,6 +1,7 @@
 import {
   ROSTER_IDS,
   SIZE_CLASSES,
+  TIER_OF_SIZE,
   type SiteCard,
   type SizeClass,
   type TitanId,
@@ -31,14 +32,29 @@ export interface RosterEntry {
   kit: boolean;
   /** Work in progress (its JSON's `kit.wip`): kept out of the menus, site and press until it ships. */
   wip?: boolean;
+  /** Strength tier 1–5 (COSMIC CLASH opens on the tier-1 titans; the Last One is 5). */
+  tier: number;
+  /** The day it shipped (YYYY-MM-DD): the NEW tag in the COSMIC CLASH lineup. Absent while it is WIP. */
+  shippedAt?: string;
+  /** Catalogue number in arrival order (ADK-001 …; `catalogueId`), for the site's Observatory. Absent while it is WIP. */
+  catalogue?: number;
 }
 
 type Builtin = Omit<RosterEntry, 'id' | 'kit'>;
+
+/**
+ * The launch roster's ship date. The six originals arrived on 2026-09-29, 우리 on 10-07 and the Last One (colossus) on
+ * 10-11, but every titan before the catalogue began is backdated to one older day so none of them wears the NEW tag.
+ */
+const LAUNCH = '2026-09-01';
 
 /** The titans that predate the kit. The card copy is the site's (WJ approved); edit it here. */
 const BUILTIN: Readonly<Record<string, Builtin>> = {
   colossus: {
     size: 'large',
+    tier: 5,
+    shippedAt: LAUNCH,
+    catalogue: 8,
     stage: 'mausoleum',
     portraitScale: 1,
     site: {
@@ -59,6 +75,9 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
   },
   planet: {
     size: 'small',
+    tier: 1,
+    shippedAt: LAUNCH,
+    catalogue: 5,
     stage: 'nursery',
     portraitScale: 1,
     site: {
@@ -79,6 +98,9 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
   },
   asteroid: {
     size: 'small',
+    tier: 1,
+    shippedAt: LAUNCH,
+    catalogue: 6,
     stage: 'shearfield',
     portraitScale: 1,
     site: {
@@ -99,6 +121,9 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
   },
   nexus: {
     size: 'medium',
+    tier: 2,
+    shippedAt: LAUNCH,
+    catalogue: 2,
     stage: 'quasar',
     portraitScale: 1,
     site: {
@@ -119,6 +144,9 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
   },
   blackhole: {
     size: 'medium',
+    tier: 3,
+    shippedAt: LAUNCH,
+    catalogue: 3,
     stage: 'tussenruimte',
     portraitScale: 1,
     site: {
@@ -139,6 +167,9 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
   },
   supernova: {
     size: 'medium',
+    tier: 3,
+    shippedAt: LAUNCH,
+    catalogue: 4,
     stage: 'redgiant',
     portraitScale: 1,
     site: {
@@ -159,6 +190,9 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
   },
   lastone: {
     size: 'medium',
+    tier: 2,
+    shippedAt: LAUNCH,
+    catalogue: 1,
     stage: 'rim',
     portraitScale: 1,
     site: {
@@ -179,6 +213,9 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
   },
   uri: {
     size: 'huge',
+    tier: 4,
+    shippedAt: LAUNCH,
+    catalogue: 7,
     stage: 'rim',
     portraitScale: 2 / 3,
     site: {
@@ -230,8 +267,32 @@ function entryOf(id: TitanId): RosterEntry {
     light: k.light,
     site: k.site,
     ...(k.wip ? { wip: true } : {}),
+    tier: k.tier ?? TIER_OF_SIZE[k.size],
+    ...(k.shippedAt ? { shippedAt: k.shippedAt } : {}),
+    ...(k.catalogue ? { catalogue: k.catalogue } : {}),
   };
 }
+
+/**
+ * What the tournament needs of the roster (src/ui/ladder.ts `LadderTitan`): every titan's id, tier, home stage, ship date,
+ * catalogue number and WIP flag. The app hands this to the UI; COSMIC CLASH builds its lineup from it.
+ */
+export const ladderRoster = (): {
+  id: TitanId;
+  tier: number;
+  shippedAt?: string;
+  catalogue?: number;
+  wip?: boolean;
+  stage?: string;
+}[] =>
+  ROSTER.map((r) => ({
+    id: r.id,
+    tier: r.tier,
+    stage: r.stage,
+    ...(r.shippedAt ? { shippedAt: r.shippedAt } : {}),
+    ...(r.catalogue ? { catalogue: r.catalogue } : {}),
+    ...(r.wip ? { wip: true } : {}),
+  }));
 
 /** Every roster titan's entry, in roster order. */
 export const ROSTER: readonly RosterEntry[] = ROSTER_IDS.map((id) => entryOf(id));

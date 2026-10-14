@@ -2,6 +2,7 @@ import type { MatterBody, MatterMap, MatterWorld } from '@/contracts';
 import type { CradleRig } from '@/titans/kit/cradle/paint';
 import { atRank, transmute } from '@/titans/kit/cradle/grow';
 import { bodyWorld, touch } from './gestate';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * DIFFERENTIATION FAILURE (Gate 5, the brief's "Weakness"): the Cradle survives because every part of it keeps telling its
@@ -74,7 +75,7 @@ export class Differentiation {
           const py = y + 0.5 - ay;
           let t = (px * vx + py * vy) / l2;
           t = t < 0.15 ? 0.15 : t > 1 ? 1 : t;
-          if ((px - vx * t) ** 2 + (py - vy * t) ** 2 < 9) cells.push(i);
+          if (sq(px - vx * t) + sq(py - vy * t) < 9) cells.push(i);
         }
       this.spokes.push({
         cells: Int32Array.from(cells),
@@ -181,9 +182,9 @@ export class Differentiation {
       R.ramps,
       (mat, x, y) => {
         if (mat !== from) return 0;
-        const a = Math.atan2(y - cy, x - cx);
-        const rr = r * (0.8 + 0.25 * Math.sin(a * 3 + seed));
-        return (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 < rr * rr ? to : 0;
+        const a = DMath.atan2(y - cy, x - cx);
+        const rr = r * (0.8 + 0.25 * DMath.sin(a * 3 + seed));
+        return sq(x + 0.5 - cx) + sq(y + 0.5 - cy) < rr * rr ? to : 0;
       },
       seed,
       shift,
@@ -209,8 +210,8 @@ export class Differentiation {
       for (let x = 0; x < m.w; x++) {
         const i = y * m.w + x;
         if (before[i] !== 0 || m.material[i] === 0) continue;
-        const knob = Math.sin(x * 1.1 + seed) * Math.sin(y * 0.9 - seed);
-        const nearMid = (x + 0.5 - s.mx) ** 2 + (y + 0.5 - s.my) ** 2 < 6;
+        const knob = DMath.sin(x * 1.1 + seed) * DMath.sin(y * 0.9 - seed);
+        const nearMid = sq(x + 0.5 - s.mx) + sq(y + 0.5 - s.my) < 6;
         const c = nearMid ? atRank(sac, 0.75, x, y, seed) : atRank(ramp, 0.35 + 0.35 * knob, x, y, seed);
         if (nearMid) m.material[i] = R.ids.sac;
         m.baseColor[i] = c;
@@ -225,9 +226,7 @@ export class Differentiation {
       m,
       R.ramps,
       (mat, x, y) =>
-        mat === R.ids.membrane &&
-        (x + 0.5 - s.mx) ** 2 + (y + 0.5 - s.my) ** 2 < 30 &&
-        ihash(x, y, seed) < 0.4
+        mat === R.ids.membrane && sq(x + 0.5 - s.mx) + sq(y + 0.5 - s.my) < 30 && ihash(x, y, seed) < 0.4
           ? R.ids.bone
           : 0,
       seed,

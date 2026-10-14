@@ -1,4 +1,5 @@
 import { clamp, type MatterMap } from '@/contracts';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * The impact model (SLICE_PLAN §6, S1 task 2): a blow is a FORCE AT A POINT. Its momentum J (mass·px/s) goes into the
@@ -77,8 +78,8 @@ export function measureMass(map: MatterMap, out: MassProps): MassProps {
   }
   out.comX = sx / n + 0.5;
   out.comY = sy / n + 0.5;
-  const varX = Math.max(0, sxx / n - (sx / n) ** 2);
-  const varY = Math.max(0, syy / n - (sy / n) ** 2);
+  const varX = Math.max(0, sxx / n - sq(sx / n));
+  const varY = Math.max(0, syy / n - sq(sy / n));
   out.gyration = Math.max(1, Math.sqrt(varX + varY));
   out.radius = out.gyration * 1.55;
   return out;
@@ -115,7 +116,7 @@ export function resolveImpact(
   R: number,
   out: ImpactResult,
 ): ImpactResult {
-  const J = Math.hypot(jx, jy);
+  const J = DMath.hypot(jx, jy);
   const rx = cx - comX;
   const ry = cy - comY;
   if (J < 1e-6) {

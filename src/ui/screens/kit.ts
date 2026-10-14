@@ -12,6 +12,7 @@ import {
 import type { DeviceInfo, InputManager, NavFrame } from '@/input';
 import { KEY_LAYOUTS, Pad, keyLabel, padButtonLabel } from '@/input';
 import type { AdvantageTracker } from '../advantage';
+import type { LadderDifficulty, LadderMode, LadderTitan } from '../ladder';
 import { PixelCanvas, type Sprite } from '../pixel/canvas';
 import { C, accentRamp, alpha, type AccentRamp } from '../pixel/palette';
 import { alphaBounds, samplePortrait } from '../portrait';
@@ -19,6 +20,19 @@ import { chip, drawIcon, iconSize, meterBar } from '../pixel/shapes';
 import { drawText, measureText } from '../pixel/text';
 import type { UISettings } from '../settings';
 import type { TitanInfo, UIDeps } from '../types';
+
+/**
+ * The roster the tournament draws from: the app's (`UIDeps.roster`, every roster titan with its tier and ship date), or one
+ * made from the offered titans (tests, dev pages), limited to the titans this build can play.
+ */
+export function ladderRosterOf(ctx: UICtx): LadderTitan[] {
+  const given: readonly LadderTitan[] =
+    ctx.deps.roster ??
+    ctx.deps.titans
+      .filter((t) => t.id !== 'mouth')
+      .map((t) => ({ id: t.id, tier: t.id === 'colossus' ? 5 : t.id === 'uri' ? 4 : 2 }));
+  return given.filter((t) => ctx.isTitanReady(t.id));
+}
 
 /** Training-mode UI state (mirrors what the UI last asked the app for). */
 export interface TrainingState {
@@ -33,6 +47,9 @@ export interface MatchSetup {
   p1: TitanId;
   p2: TitanId;
   stage: StageId;
+  /** The tournament's mode and difficulty (chosen on the 'tourney' screen; the tower and the select read them). */
+  ladderMode: LadderMode;
+  ladderDifficulty: LadderDifficulty;
 }
 
 /** Everything a screen may use. Implemented by the UI runtime. */

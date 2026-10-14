@@ -27,6 +27,7 @@ import { SailSkin } from './cradle/sail';
 import { Overlay } from '../../fx/overlay';
 import { drawRupture, drawSac, drawVeil, growPseudoOrgan } from './cradle/falsebirth';
 import type { ActiveMove } from '../../move';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * THE CRADLE / 태반체 in the game (WJ's brief docs/titans/cradle/BRIEF.md).
@@ -199,7 +200,7 @@ export class CradleBehaviour extends KitBehaviour {
     this.dens = densityTable(f.body.materials);
     this.firstCord = this.R.regions.findIndex((r) => r.kind === 'cord');
     const root = this.R.regions[this.firstCord]!;
-    this.jawRestDir = Math.atan2(this.R.jawTip.y - root.pivotY, this.R.jawTip.x - root.pivotX);
+    this.jawRestDir = DMath.atan2(this.R.jawTip.y - root.pivotY, this.R.jawTip.x - root.pivotX);
     const k = this.R.regions[0]!;
     this.knotCorner = { x: k.ox + f.body.transform.anchorX, y: k.oy + f.body.transform.anchorY };
     // the atlas: every region map packed in rows (a regrown link reuses its original's slot: same map size)
@@ -322,7 +323,7 @@ export class CradleBehaviour extends KitBehaviour {
       transmute(
         map,
         this.R.ramps,
-        (m, x, y) => (m !== 0 && (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 < r * r ? ids.sac : 0),
+        (m, x, y) => (m !== 0 && sq(x + 0.5 - cx) + sq(y + 0.5 - cy) < r * r ? ids.sac : 0),
         seed + b,
         0.1,
         90,
@@ -441,12 +442,12 @@ export class CradleBehaviour extends KitBehaviour {
       rig.w[i] = clamp(rig.w[i]!, -MAX_SPIN, MAX_SPIN);
       const dvx = rig.vx[i]! - rig.vx[k0]!;
       const dvy = rig.vy[i]! - rig.vy[k0]!;
-      const sp = Math.hypot(dvx, dvy);
+      const sp = DMath.hypot(dvx, dvy);
       if (sp > MAX_SPEED) {
         rig.vx[i] = rig.vx[k0]! + (dvx / sp) * MAX_SPEED;
         rig.vy[i] = rig.vy[k0]! + (dvy / sp) * MAX_SPEED;
       }
-      if (Math.hypot(rig.x[i]! - rig.x[k0]!, rig.y[i]! - rig.y[k0]!) > MAX_REACH) broken = true;
+      if (DMath.hypot(rig.x[i]! - rig.x[k0]!, rig.y[i]! - rig.y[k0]!) > MAX_REACH) broken = true;
     }
     if (broken) {
       this.recoveries++;
@@ -488,10 +489,10 @@ export class CradleBehaviour extends KitBehaviour {
     let sail = clamp(-0.42 * (vf / 230), -0.38, 0.38) + clamp(f.vy / 230, -1, 1) * 0.08;
     // the disc breathes: a slow, deep convulsion of the whole sail (seconds, not frames)
     sail +=
-      0.06 * Math.sin((t * Math.PI * 2) / (60 * 9.5)) +
-      0.025 * Math.sin((t * Math.PI * 2) / (60 * 3.7) + 1.1);
+      0.06 * DMath.sin((t * Math.PI * 2) / (60 * 9.5)) +
+      0.025 * DMath.sin((t * Math.PI * 2) / (60 * 3.7) + 1.1);
     // runaway: the sail loses its rhythm
-    if (this.diff.stage === 2) sail += 0.14 * Math.sin(t * 0.13) * Math.sin(t * 0.051 + 1.3);
+    if (this.diff.stage === 2) sail += 0.14 * DMath.sin(t * 0.13) * DMath.sin(t * 0.051 + 1.3);
     if (this.rb.disc >= 0) rig.w[this.rb.disc] = rig.w[this.rb.disc]! - clamp(acc, -900, 900) * 0.00002;
     // the cord at rest: a slow wave travelling down it (seconds, not frames), held by the relative drives
     const n = this.cordLive.length;
@@ -501,7 +502,7 @@ export class CradleBehaviour extends KitBehaviour {
     for (let k = 0; k < n; k++) {
       bend[k] =
         (0.07 + 0.05 * this.diff.stage) *
-        Math.sin((t * Math.PI * 2) / (60 * (4.2 - 0.8 * this.diff.stage)) - k * 0.75);
+        DMath.sin((t * Math.PI * 2) / (60 * (4.2 - 0.8 * this.diff.stage)) - k * 0.75);
       headHz[k] = 0;
       head[k] = 0;
     }
@@ -510,7 +511,7 @@ export class CradleBehaviour extends KitBehaviour {
     const m = f.mv;
     const id = m.def?.id as MoveId | undefined;
     // the aim: where the attack axis points in the facing frame, plus the variant's lean
-    const aimA = Math.atan2(f.aimUy, f.aimUx * s) + (m.aim === 'up' ? -0.5 : m.aim === 'down' ? 0.5 : 0);
+    const aimA = DMath.atan2(f.aimUy, f.aimUx * s) + (m.aim === 'up' ? -0.5 : m.aim === 'down' ? 0.5 : 0);
     // THROW: every link's own muscle turns it to lie along the aim; the root pulls hardest, each link further down a beat
     // later (a heavy wave down the chain, not a whip-crack)
     const aim = (hz: number, extra: number): void => {
@@ -520,14 +521,14 @@ export class CradleBehaviour extends KitBehaviour {
       for (let k = 0; k < n; k++) {
         const own = wrapAngle(aimA + extra - this.restDirOf(this.cordLive[k]!) - swing);
         head[k] = swing + UNFOLD * own;
-        headHz[k] = hz * Math.pow(0.95, k);
+        headHz[k] = hz * DMath.pow(0.95, k);
       }
     };
     // COIL: the cord gathers back under the body, loading the swing
     const coil = (hz: number, amt: number): void => {
       for (let k = 0; k < n; k++) {
         head[k] = amt * (k === 0 ? 0.75 : 0.45 + 0.05 * k);
-        headHz[k] = hz * Math.pow(0.9, k);
+        headHz[k] = hz * DMath.pow(0.9, k);
       }
     };
     if (id && m.def) {
@@ -601,7 +602,7 @@ export class CradleBehaviour extends KitBehaviour {
       const w = this.throwW[k]!;
       const thrown = w > 0.02;
       const hangT = bend[k]! * (k + 1) * 0.5;
-      const hangHz = T.hangHz * Math.pow(0.9, k) * (f.state === 'ko' ? 0.3 : 1);
+      const hangHz = T.hangHz * DMath.pow(0.9, k) * (f.state === 'ko' ? 0.3 : 1);
       const absT = hangT + w * wrapAngle(this.throwT[k]! - hangT);
       const absT0 =
         k > 0
@@ -840,7 +841,7 @@ export class CradleBehaviour extends KitBehaviour {
       for (let y = 0; y < m.h; y += 2)
         for (let x = 0; x < m.w; x += 2) {
           if (m.material[y * m.w + x] === 0) continue;
-          const d = (x - ax) ** 2 + (y - ay) ** 2;
+          const d = sq(x - ax) + sq(y - ay);
           if (d > best) {
             best = d;
             bx = x - ax;
@@ -963,14 +964,14 @@ export class CradleBehaviour extends KitBehaviour {
     for (let k = 0; k < this.organs.length; k++) {
       const o = this.organs[k]!;
       if (!world.chunkState(o.id, st)) continue;
-      const c = Math.cos(st.angle);
-      const s = Math.sin(st.angle);
+      const c = DMath.cos(st.angle);
+      const s = DMath.sin(st.angle);
       // seeping: a bead every few ticks from a rim point, drifting off with the organ and slowly away from it
       if (o.rim.length > 0 && (f.tickNo + k * 5) % 9 === 0) {
         const p = o.rim[(f.tickNo * 7 + k * 13) % o.rim.length]!;
         const wx = st.x + c * p.x - s * p.y;
         const wy = st.y + s * p.x + c * p.y;
-        const l = Math.hypot(p.x, p.y) || 1;
+        const l = DMath.hypot(p.x, p.y) || 1;
         world.spawnParticles({
           kind: 'mote',
           x: wx,
@@ -994,7 +995,7 @@ export class CradleBehaviour extends KitBehaviour {
       }
       for (let v = 0; v < o.veins.length; v += 2) {
         const q = o.veins[v]!;
-        const beat = Math.sin((f.tickNo / 150) * Math.PI * 2 - v * 0.35);
+        const beat = DMath.sin((f.tickNo / 150) * Math.PI * 2 - v * 0.35);
         if (beat < 0.3) continue;
         const wx = st.x + c * q.x - s * q.y;
         const wy = st.y + s * q.x + c * q.y;
@@ -1080,7 +1081,7 @@ export class CradleBehaviour extends KitBehaviour {
     const hubY = f.view.y - 34;
     const dx = fv.x - hubX;
     const dy = fv.y - hubY;
-    const dist = Math.hypot(dx, dy);
+    const dist = DMath.hypot(dx, dy);
     const foeR = clamp(Math.max(fv.boundsX1 - fv.boundsX0, fv.boundsY1 - fv.boundsY0) * 0.55, 24, 72);
     const seed = f.seed & 1023;
     if (m.phase === 'startup') {
@@ -1120,7 +1121,7 @@ export class CradleBehaviour extends KitBehaviour {
       const u = clamp(m.phaseTick / 18, 0, 1);
       const big = 40 + dist * 0.62 + foeR;
       const r = big + (foeR * 1.25 - big) * (u * u * (3 - 2 * u));
-      const squeeze = 1 - 0.06 * Math.max(0, Math.sin(m.phaseTick * 0.16));
+      const squeeze = 1 - 0.06 * Math.max(0, DMath.sin(m.phaseTick * 0.16));
       const cx = hubX + dx * (0.55 + 0.45 * u);
       const cy = hubY + dy * (0.55 + 0.45 * u);
       // the sac: stretched to bursting round the foe, the foe pressing against it from inside
@@ -1145,7 +1146,7 @@ export class CradleBehaviour extends KitBehaviour {
         r * squeeze,
         r * 0.92 * squeeze,
         u,
-        Math.sin(m.phaseTick * 0.16),
+        DMath.sin(m.phaseTick * 0.16),
         f.tickNo,
         seed,
         inside,
@@ -1156,10 +1157,10 @@ export class CradleBehaviour extends KitBehaviour {
         const a = (k / 7) * Math.PI * 2 + 0.4;
         f.world.spawnParticles({
           kind: 'mote',
-          x: cx + Math.cos(a) * r * squeeze,
-          y: cy + Math.sin(a) * r * 0.92 * squeeze,
-          vx: Math.cos(a) * 10,
-          vy: Math.sin(a) * 10 + 8,
+          x: cx + DMath.cos(a) * r * squeeze,
+          y: cy + DMath.sin(a) * r * 0.92 * squeeze,
+          vx: DMath.cos(a) * 10,
+          vy: DMath.sin(a) * 10 + 8,
           spread: 5,
           count: 2,
           ramp: [0xff6ab4e6, 0xff3a6ab0, 0xff241650],
@@ -1279,7 +1280,7 @@ export class CradleBehaviour extends KitBehaviour {
     const grow = reaching
       ? clamp((m.phase === 'startup' ? m.phaseTick / Math.max(1, m.startup) : 1) * 1.1, 0, 1)
       : 1;
-    const pulse = this.latch > 0 ? 0.5 + 0.5 * Math.sin(f.tickNo * 0.3) : 0;
+    const pulse = this.latch > 0 ? 0.5 + 0.5 * DMath.sin(f.tickNo * 0.3) : 0;
     if (tearing) {
       fx.end();
       return;
@@ -1483,7 +1484,7 @@ function anchorPatch(map: MatterMap): Int32Array {
   for (let y = Math.max(0, map.coreY - r); y <= Math.min(map.h - 1, map.coreY + r); y++)
     for (let x = Math.max(0, map.coreX - r); x <= Math.min(map.w - 1, map.coreX + r); x++) {
       const i = y * map.w + x;
-      if (map.material[i] !== 0 && (x - map.coreX) ** 2 + (y - map.coreY) ** 2 <= r * r) out.push(i);
+      if (map.material[i] !== 0 && sq(x - map.coreX) + sq(y - map.coreY) <= r * r) out.push(i);
     }
   return Int32Array.from(out);
 }

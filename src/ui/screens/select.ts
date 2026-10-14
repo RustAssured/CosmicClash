@@ -1,6 +1,17 @@
-import { LOGICAL_W, type TitanId } from '@/contracts';
+import { LOGICAL_W, hex, type TitanId } from '@/contracts';
 import { ATTRIBUTE_LABELS, DAMAGE_BLURB } from '../labels';
-import { CLEARED, LADDER_HUNTER, LADDER_RUNGS, ladderFor, loadLadder } from '../ladder';
+import {
+  CLEARED,
+  DIFFICULTY_NAMES,
+  LADDER_HUNTER,
+  MODE_LABELS,
+  isNewTitan,
+  ladderFor,
+  loadLadder,
+  type LadderSpec,
+  type Rung,
+} from '../ladder';
+import { drawNewTag } from './tourney';
 import { resolveStore } from '../settings';
 import { C, accentRamp, alpha, greyed } from '../pixel/palette';
 import { chip, drawIcon, panel, segBar } from '../pixel/shapes';
@@ -8,6 +19,7 @@ import { drawText, measureText, wrapClamp } from '../pixel/text';
 import {
   comingSoon,
   confirmBack,
+  ladderRosterOf,
   drawTitanPortrait,
   footer,
   header,
@@ -105,8 +117,19 @@ export function createSelectScreen(): Screen {
   let locked: [boolean, boolean] = [false, false];
   let phase: 0 | 1 = 0;
   let advanceAt = -1;
-  /** Tournament: the best rung reached per titan (shown on the tiles). */
+  /** Tournament: the best rung reached per titan in this mode (shown on the tiles). */
   let best: Partial<Record<TitanId, number>> = {};
+  /** Tournament: the ladder spec (mode, difficulty, roster, and the seed COSMIC CLASH's run will be dealt with). */
+  let spec: LadderSpec = {};
+  const ladderCache = new Map<TitanId, Rung[]>();
+  const ladderOf = (id: TitanId): Rung[] => {
+    let l = ladderCache.get(id);
+    if (!l) {
+      l = ladderFor(id, spec);
+      ladderCache.set(id, l);
+    }
+    return l;
+  };
 
   const two = (ctx: UICtx): boolean => ctx.setup.mode === 'versus';
   /** Tournament: one pick (yours); the right panel previews that titan's ladder. */
@@ -146,10 +169,19 @@ export function createSelectScreen(): Screen {
       phase = 0;
       advanceAt = -1;
       best = {};
+      ladderCache.clear();
       if (ladder(ctx)) {
         // 우리 is the tournament's default highlight ("our Liu Kang"); any titan can be picked
         if (ctx.isTitanReady(LADDER_HUNTER)) cur[0] = idx(ctx, LADDER_HUNTER);
-        best = loadLadder(resolveStore(ctx.deps.storage)).best;
+        best = loadLadder(resolveStore(ctx.deps.storage)).best[ctx.setup.ladderMode];
+        // COSMIC CLASH deals its shuffle now, so the preview shows exactly the lineup the run will get
+        const seed = (ctx.deps.newSeed?.() ?? ((ctx.deps.now?.() ?? Date.now()) * 1000) & 0x7fffffff) >>> 0;
+        spec = {
+          mode: ctx.setup.ladderMode,
+          difficulty: ctx.setup.ladderDifficulty,
+          roster: ladderRosterOf(ctx),
+          seed: seed || 1,
+        };
       }
     },
     update(ctx) {
@@ -158,7 +190,7 @@ export function createSelectScreen(): Screen {
           ctx.setup.p1 = ctx.deps.titans[cur[0]]!.id;
           advanceAt = -1;
           if (ladder(ctx)) {
-            ctx.push('ladder', { start: ctx.setup.p1 });
+            ctx.push('ladder', { start: ctx.setup.p1, seed: spec.seed });
             return;
           }
           ctx.setup.p2 = ctx.deps.titans[cur[1]]!.id;
@@ -223,7 +255,7 @@ export function createSelectScreen(): Screen {
         : ctx.setup.mode === 'vsai'
           ? 'VS AI'
           : ladder(ctx)
-            ? 'TOURNAMENT'
+            ? `${MODE_LABELS[ctx.setup.ladderMode].en} · ${DIFFICULTY_NAMES[ctx.setup.ladderDifficulty].en}`
             : 'TRAINING';
       header(ctx, 'SELECT TITAN', '타이탄 선택', modeText);
 
@@ -247,7 +279,7 @@ export function createSelectScreen(): Screen {
         const b = best[t.id];
         if (b !== undefined) {
           // the best rung this titan reached in the tournament (a star once it cleared it)
-          const label = b >= CLEARED ? '' : `${b}/${LADDER_RUNGS}`;
+          const label = b >= CLEARED ? '' : `${b}/${ladderOf(t.id).length}`;
           const bw = b >= CLEARED ? 9 : measureText(label, { font: 'micro' }) + 4;
           cv.rect(x + 2, y + 2, bw, 9, alpha(C.void, 0.85));
           if (b >= CLEARED) drawIcon(cv, 'star', x + 4, y + 4, C.gold);
@@ -323,17 +355,34 @@ export function createSelectScreen(): Screen {
     }
   }
 
-  /** Tournament: the eight rungs the hovered titan would climb (top = the final boss), in the P2 panel's place. */
+  /**
+   * Tournament: the rungs the hovered titan would climb (top = the final boss), in the P2 panel's place. COSMIC CLASH shows
+   * the very lineup its run will be dealt, NEW on a newly shipped titan. Rows shrink to fit a longer ladder.
+   */
   function drawLadderPreview(ctx: UICtx, i: number): void {
     const cv = ctx.cv;
     const t = ctx.deps.titans[i]!;
     const x = LOGICAL_W - 8 - PANEL_W;
-    panel(cv, x, PANEL_Y, PANEL_W, PANEL_H, { accent: C.gold, border: C.line1, fill: alpha(C.ink1, 0.9) });
-    drawText(cv, 'THE LADDER', x + 10, PANEL_Y + 9, { color: C.gold, tracking: 2 });
-    drawText(cv, '사다리', x + PANEL_W - 10, PANEL_Y + 9, { color: C.dim, align: 'right' });
-    const rungs = ladderFor(t.id);
+    const cosmic = ctx.setup.ladderMode === 'cosmic';
+    panel(cv, x, PANEL_Y, PANEL_W, PANEL_H, {
+      accent: cosmic ? hex('#c070e0') : C.gold,
+      border: C.line1,
+      fill: alpha(C.ink1, 0.9),
+    });
+    drawText(cv, cosmic ? 'COSMIC CLASH' : 'THE LADDER', x + 10, PANEL_Y + 9, {
+      color: cosmic ? hex('#e2a0f0') : C.gold,
+      tracking: 2,
+    });
+    drawText(cv, cosmic ? '우주 대결' : '사다리', x + PANEL_W - 10, PANEL_Y + 9, {
+      color: C.dim,
+      align: 'right',
+    });
+    const rungs = ladderOf(t.id);
     const b = best[t.id] ?? 0;
-    const rowH = 28;
+    const rowH = Math.min(28, Math.floor((PANEL_H - 32) / rungs.length));
+    const tall = rowH >= 26;
+    const ps = Math.min(21, rowH - 5);
+    const now = ctx.deps.today?.() ?? Date.now();
     rungs
       .slice()
       .reverse()
@@ -345,16 +394,27 @@ export function createSelectScreen(): Screen {
         const roleCol = r.role === 'final' ? C.danger : r.role === 'subboss' ? C.gold : C.line1;
         cv.rect(x + 8, y, PANEL_W - 16, rowH - 3, alpha(C.ink0, 0.7));
         cv.frame(x + 8, y, PANEL_W - 16, rowH - 3, r.role === 'fight' ? C.line0 : alpha(roleCol, 0.6));
-        const spr = portraitSprite(ctx, r.foe, 21, false, veiled ? 1 : reached ? 0 : 0.5);
-        if (spr) cv.blit(spr, x + 10, y + 2);
-        drawText(cv, String(r.n), x + 40, y + 7, { color: C.line2, font: 'micro' });
-        drawText(cv, veiled ? '???' : info.name.replace(/^The /, '').toUpperCase(), x + 50, y + 3, {
+        const spr = portraitSprite(ctx, r.foe, ps, false, veiled ? 1 : reached ? 0 : 0.5);
+        if (spr) cv.blit(spr, x + 10, y + 1 + Math.floor((rowH - 3 - ps) / 2));
+        const tx = x + 14 + ps;
+        const ny = tall ? y + 3 : y + Math.floor((rowH - 3 - 10) / 2);
+        drawText(cv, String(r.n), tx, ny + 4, { color: C.line2, font: 'micro' });
+        const nw = drawText(cv, veiled ? '???' : info.name.replace(/^The /, '').toUpperCase(), tx + 10, ny, {
           color: reached ? C.text : C.mid,
           tracking: 1,
         });
+        if (
+          cosmic &&
+          !veiled &&
+          isNewTitan(
+            spec.roster?.find((e) => e.id === r.foe),
+            now,
+          )
+        )
+          drawNewTag(cv, tx + 10 + nw + 4, ny + 1, ctx.t);
         const tag = r.role === 'final' ? 'FINAL BOSS' : r.role === 'subboss' ? 'SUB-BOSS' : '';
-        if (tag) drawText(cv, tag, x + 50, y + 16, { color: roleCol, font: 'micro', tracking: 1 });
-        if (b > r.n) drawIcon(cv, 'check', x + PANEL_W - 18, y + 9, C.celadonDeep);
+        if (tag && tall) drawText(cv, tag, tx + 10, y + 16, { color: roleCol, font: 'micro', tracking: 1 });
+        if (b > r.n) drawIcon(cv, 'check', x + PANEL_W - 18, y + Math.floor(rowH / 2) - 5, C.celadonDeep);
       });
   }
 

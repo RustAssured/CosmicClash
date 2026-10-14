@@ -51,6 +51,7 @@ import {
   MOUTH_MOVES,
   type MouthMoveName,
 } from './tuning';
+import { DMath } from '@/contracts/dmath';
 export { MOUTH_LOOK };
 
 /**
@@ -128,7 +129,7 @@ export class MouthFighter implements Fighter {
   }
   set pace(v: number) {
     this.paceV = v;
-    this.core.paceMul = Math.pow(v / ROUND_LENGTH_PACE.normal, ANALYTIC_PACE_EXP);
+    this.core.paceMul = DMath.pow(v / ROUND_LENGTH_PACE.normal, ANALYTIC_PACE_EXP);
   }
   private paceV = ROUND_LENGTH_PACE.normal;
   private readonly rng: Rng;
@@ -545,7 +546,7 @@ export class MouthFighter implements Fighter {
     }
     // held: the root is drawn to the coil centre (critically damped, ≈ 2 Hz) and its footwork is damped
     if (typeof foe.px === 'number' && typeof foe.py === 'number') {
-      const k = 1 - Math.exp(-TICK_DT * MOUTH_LIVE.holdRate);
+      const k = 1 - DMath.exp(-TICK_DT * MOUTH_LIVE.holdRate);
       foe.px += (m.tgX - foe.px) * k;
       foe.py += (m.tgY - foe.py) * k;
       if (typeof foe.vx === 'number') foe.vx *= 0.6;
@@ -560,7 +561,7 @@ export class MouthFighter implements Fighter {
     if (!fv || fv.ko || fv.intangible || !this.live) return false;
     const cx = clamp(x, fv.boundsX0, fv.boundsX1);
     const cy = clamp(y, fv.boundsY0, fv.boundsY1);
-    return Math.hypot(x - cx, y - cy) <= r;
+    return DMath.hypot(x - cx, y - cy) <= r;
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -582,7 +583,7 @@ export class MouthFighter implements Fighter {
     const I = core.I;
     let dx = core.hdX - I.Xx;
     let dy = core.hdY - I.Xy;
-    const l = Math.hypot(dx, dy) || 1;
+    const l = DMath.hypot(dx, dy) || 1;
     dx /= l;
     dy /= l;
     const energy = (n === 'sweep' ? MOUTH_LIVE.sweepEnergy : MOUTH_LIVE.biteEnergy) * this.rageMul();

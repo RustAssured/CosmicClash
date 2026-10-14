@@ -7,6 +7,7 @@ import { hardness, localToWorldF, resistOf, type DamageCtx } from './dmg';
 import { findImpact, type Impact } from './impact';
 import { valueNoise } from './util';
 import { holdCells, openWound } from './wound';
+import { DMath } from '@/contracts/dmath';
 
 export interface CraterOpts {
   /** Effective energy to spend (after resist averaging). */
@@ -121,7 +122,8 @@ function ejectCell(k: number, d: number, i: number): void {
   let vx = rvx * 0.7 + ej.nOutWx * 0.7 + ej.dirTx * 0.3;
   let vy = rvy * 0.7 + ej.nOutWy * 0.7 + ej.dirTy * 0.3;
   const vl = Math.sqrt(vx * vx + vy * vy) + 1e-6;
-  const sp = (45 + 200 * Math.pow(1 - Math.min(1, d), 1.3)) * (0.5 + rng.next()) * ej.powerBoost * ej.scatter;
+  const sp =
+    (45 + 200 * DMath.pow(1 - Math.min(1, d), 1.3)) * (0.5 + rng.next()) * ej.powerBoost * ej.scatter;
   vx = (vx / vl) * sp;
   vy = (vy / vl) * sp;
   const mass = killCell(body, i);
@@ -259,7 +261,7 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
   const nOutWy = pt.y;
   const dirTx = ctx.dirX - (ctx.dirX * nOutWx + ctx.dirY * nOutWy) * nOutWx;
   const dirTy = ctx.dirY - (ctx.dirX * nOutWx + ctx.dirY * nOutWy) * nOutWy;
-  const powerBoost = Math.pow(Math.max(0.2, budget / 300), 0.25) * o.speedMul;
+  const powerBoost = DMath.pow(Math.max(0.2, budget / 300), 0.25) * o.speedMul;
   const scatter = ctx.params.scatter ?? 1;
   const keep = 1 - o.compact; // fraction of removed mass that is routed to debris
   let spent = 0;
@@ -388,7 +390,7 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     const vl = Math.sqrt(vx * vx + vy * vy) + 1e-6;
     // Heavier fragments move slower.
     const sp =
-      ((40 + 150 * Math.pow(1 - Math.min(1, rl / (Rl * thr + 1)), 1.2)) *
+      ((40 + 150 * DMath.pow(1 - Math.min(1, rl / (Rl * thr + 1)), 1.2)) *
         (0.55 + rng.next() * 0.9) *
         powerBoost *
         scatter) /
@@ -503,15 +505,15 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     const sparks = Math.min(16, 5 + Math.floor(Math.sqrt(budget) * 0.35));
     const rid = body.rampIds[(mat[Math.floor(fy) * w + Math.floor(fx)] || 1) * 5 + RAMP_SHARD]!;
     for (let k = 0; k < sparks; k++) {
-      const a = Math.atan2(nOutWy, nOutWx) + (rng.next() - 0.5) * 2.6;
+      const a = DMath.atan2(nOutWy, nOutWx) + (rng.next() - 0.5) * 2.6;
       const sp = 70 + rng.next() * 190 * powerBoost;
       core.particles.spawn(
         core,
         PK.spark,
         pt2.x,
         pt2.y,
-        Math.cos(a) * sp,
-        Math.sin(a) * sp,
+        DMath.cos(a) * sp,
+        DMath.sin(a) * sp,
         8 + rng.int(14),
         1,
         255,
@@ -530,10 +532,10 @@ export function carveCrater(ctx: DamageCtx, o: CraterOpts, out: CraterOut): bool
     const puffs = Math.min(14, 5 + Math.floor(Math.sqrt(budget) * 0.25));
     const lift = 10 + Rl * thr * 0.4;
     for (let k = 0; k < puffs; k++) {
-      const a = Math.atan2(nOutWy, nOutWx) + (rng.next() - 0.5) * 1.6;
+      const a = DMath.atan2(nOutWy, nOutWx) + (rng.next() - 0.5) * 1.6;
       const sp = 50 + rng.next() * 60 * powerBoost;
-      const c = Math.cos(a);
-      const s = Math.sin(a);
+      const c = DMath.cos(a);
+      const s = DMath.sin(a);
       core.particles.spawn(
         core,
         PK.dust,

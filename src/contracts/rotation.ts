@@ -1,3 +1,4 @@
+import { DMath } from './dmath';
 /**
  * Quantised rotation for rig regions (D27 amends D4; proposals 140/151). ONE sampler shared by matter (hit masks) and the
  * renderer (whose GLSL twin lives in src/render/rotsprite.ts): what you see is what is hit, bit for bit.
@@ -33,8 +34,8 @@ export const ROT_LUT: { cos: Int32Array; sin: Int32Array } = (() => {
     // exact quadrants first, so 90° / 180° / 270° are exact transposes
     const q = i % (ANGLE_STEPS / 4);
     const a = (2 * Math.PI * i) / ANGLE_STEPS;
-    cos[i] = q === 0 ? [ROT_ONE, 0, -ROT_ONE, 0][i / (ANGLE_STEPS / 4)]! : Math.round(Math.cos(a) * ROT_ONE);
-    sin[i] = q === 0 ? [0, ROT_ONE, 0, -ROT_ONE][i / (ANGLE_STEPS / 4)]! : Math.round(Math.sin(a) * ROT_ONE);
+    cos[i] = q === 0 ? [ROT_ONE, 0, -ROT_ONE, 0][i / (ANGLE_STEPS / 4)]! : Math.round(DMath.cos(a) * ROT_ONE);
+    sin[i] = q === 0 ? [0, ROT_ONE, 0, -ROT_ONE][i / (ANGLE_STEPS / 4)]! : Math.round(DMath.sin(a) * ROT_ONE);
   }
   return { cos, sin };
 })();

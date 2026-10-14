@@ -8,6 +8,7 @@ import type {
   UiSoundId,
 } from '@/contracts';
 import type { InputManager, KeyValueStore } from '@/input';
+import type { LadderTitan } from './ladder';
 
 /** What the select screen needs to know about a titan. Build it from a `TitanDef` with `titanInfoFromDef`. */
 export interface TitanInfo {
@@ -85,6 +86,13 @@ export interface UIDeps {
   lockedTitans?: readonly TitanInfo[];
   /** The app persists an unlock (`setMouthUnlocked(true)`) and adds the titan to its own roster. */
   onUnlock?: (id: TitanId) => void;
+  /**
+   * The roster's tournament data (`ladderRoster()` from src/titans/roster.ts): tier, home stage, ship date, catalogue
+   * number, WIP flag. COSMIC CLASH builds its lineup from it; without it the offered titans stand in (tier 2 each).
+   */
+  roster?: readonly LadderTitan[];
+  /** Today's date (epoch ms) for the NEW tags; default `Date.now`. */
+  today?: () => number;
 }
 
 export type ImplementedSet = ReadonlySet<string>;

@@ -393,8 +393,21 @@ export class Match implements MatchApi {
   }
 
   hash(): number {
+    return this.fold(this.world.hash());
+  }
+
+  /**
+   * The netplay desync checksum (docs/netplay/STEP0.md §4): everything `hash()` covers except the matter world's per-cell
+   * arrays (world.checksum() instead of world.hash()). Peers exchange it every tick (a few µs) and the full `hash()` every
+   * N ticks; the first tick where it differs locates a desync.
+   */
+  checksum(): number {
+    return this.fold(this.world.checksum ? this.world.checksum() : this.world.hash());
+  }
+
+  private fold(worldHash: number): number {
     let h = hash32(
-      this.world.hash(),
+      worldHash,
       this.tick,
       this.phase.length,
       this.round,

@@ -2,6 +2,7 @@ import type { MaterialDef } from '@/contracts';
 import type { WitnessBody } from '@/titans/art/lastone';
 import { XpbdRig, massFromCells, type MassProps } from './xpbd';
 import type { RigAnchor } from './witnessDraw';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * Build the Witness's XPBD rig from its painted regions (`paintWitness`): one rig body per rigid region (the interior reveal
@@ -96,14 +97,14 @@ export function setWitnessHeading(wr: WitnessRig, angle: number, tick = -1): voi
     let sway = 0;
     if (tick >= 0) {
       const period = t.swayPeriod[0] + ((k * 0.618034) % 1) * (t.swayPeriod[1] - t.swayPeriod[0]);
-      sway = t.swayAmp * Math.sin((2 * Math.PI * tick) / (60 * period) + k * 1.7);
+      sway = t.swayAmp * DMath.sin((2 * Math.PI * tick) / (60 * period) + k * 1.7);
     }
     wr.rig.drives[wr.headingDrives[k]!]!.target = angle + sway;
   }
   if (tick >= 0)
     for (let k = 0; k < wr.haloDrives.length; k++)
       wr.rig.drives[wr.haloDrives[k]!]!.target =
-        t.haloDrift * Math.sin((2 * Math.PI * tick) / (60 * (6 + 1.3 * k)) + k * 2.1);
+        t.haloDrift * DMath.sin((2 * Math.PI * tick) / (60 * (6 + 1.3 * k)) + k * 2.1);
 }
 
 /** Combine two mass properties given in the same frame (parallel-axis theorem). */
@@ -112,8 +113,8 @@ function combine(a: MassProps, b: MassProps): MassProps {
   if (m <= 0) return a;
   const cx = (a.mass * a.cx + b.mass * b.cx) / m;
   const cy = (a.mass * a.cy + b.mass * b.cy) / m;
-  const ia = a.inertia + a.mass * ((a.cx - cx) ** 2 + (a.cy - cy) ** 2);
-  const ib = b.inertia + b.mass * ((b.cx - cx) ** 2 + (b.cy - cy) ** 2);
+  const ia = a.inertia + a.mass * (sq(a.cx - cx) + sq(a.cy - cy));
+  const ib = b.inertia + b.mass * (sq(b.cx - cx) + sq(b.cy - cy));
   return { mass: m, cx, cy, inertia: ia + ib, cells: a.cells + b.cells };
 }
 

@@ -1,6 +1,7 @@
 import { clamp01 } from '@/contracts';
 import { hash01 } from '@/titans/art/noise';
 import type { Overlay } from './overlay';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * Drawing helpers shared by the Phase 2 titans' effects: a tiling noise table that is cheap to sample per pixel (flames, plasma
@@ -123,7 +124,7 @@ export function flameColumn(
     const u = k / H; // 0 base → 1 tip
     const w = halfW * (1 - 0.5 * u) + 0.6;
     const y = yb - k;
-    const fall = 1 - Math.pow(u, 1.25);
+    const fall = 1 - DMath.pow(u, 1.25);
     for (let dx = -W; dx <= W; dx++) {
       const xx = xr + dx;
       const n = tn(xx * 0.42 + 11, y * 0.16 + tick * 0.95);
@@ -159,8 +160,8 @@ export function ringBand(
   const lead = Math.min(width, 9);
   for (let s = 0; s < steps; s++) {
     const a = arc[0] + ((arc[1] - arc[0]) * s) / steps;
-    const ca = Math.cos(a);
-    const sa = Math.sin(a);
+    const ca = DMath.cos(a);
+    const sa = DMath.sin(a);
     const n = tn(a * 26 + tick * 0.35, tick * 0.6);
     const ragged = 0.14 * lead * (n - 0.5) * 2;
     for (let k = 0; k <= width; k++) {
@@ -172,7 +173,7 @@ export function ringBand(
       if (fromEdge > lead) {
         // wake: sparse, cooling
         const w = 1 - (fromEdge - lead) / Math.max(1, width - lead); // 1 just behind the edge → 0 at the trailing edge
-        const dens = Math.pow(w, 2.2) * 0.8 * gain;
+        const dens = DMath.pow(w, 2.2) * 0.8 * gain;
         if (dens <= (BAYER[((y & 3) << 2) | (x & 3)]! + 0.5) / 16) continue;
         ov.set(x, y, rampDither(ramp, 0.12 + 0.5 * w + 0.2 * (n - 0.5), x, y), Math.round(150 * w));
       } else {
@@ -196,7 +197,7 @@ export function streak(
   b: number,
   gain = 1,
 ): void {
-  const len = Math.max(1, Math.hypot(x1 - x0, y1 - y0));
+  const len = Math.max(1, DMath.hypot(x1 - x0, y1 - y0));
   const n = Math.ceil(len);
   for (let i = 0; i <= n; i++) {
     const u = i / n; // 0 head → 1 tail
@@ -227,7 +228,7 @@ export function glowD(
       const dy = y + 0.5 - cy;
       const d2 = dx * dx + dy * dy;
       if (d2 > r2) continue;
-      const t = (1 - d2 / r2) ** 2 * strength * L;
+      const t = sq(1 - d2 / r2) * strength * L;
       const fl = Math.floor(t);
       const lvl = fl + (t - fl > (BAYER[((y & 3) << 2) | (x & 3)]! + 0.5) / 16 ? 1 : 0);
       if (lvl <= 0) continue;

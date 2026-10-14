@@ -18,6 +18,7 @@ import type { FighterImpl } from '../fighter';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
+import { DMath } from '@/contracts/dmath';
 
 /** Below this mass fraction the rock loses cohesion (rubble pile); leaves again above the upper bound (hysteresis). */
 const RUBBLE_ENTER = 0.35;
@@ -279,10 +280,10 @@ export class AsteroidBehaviour extends Behaviour {
     this.swarmTy = f.py - 6;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * 6.2832 + hash01(i, f.tickNo, 5);
-      this.sx[i] = f.px + Math.cos(a) * 16;
-      this.sy[i] = f.py + Math.sin(a) * 16;
-      this.svx[i] = Math.cos(a) * 4 + f.facing * 2;
-      this.svy[i] = Math.sin(a) * 4;
+      this.sx[i] = f.px + DMath.cos(a) * 16;
+      this.sy[i] = f.py + DMath.sin(a) * 16;
+      this.svx[i] = DMath.cos(a) * 4 + f.facing * 2;
+      this.svy[i] = DMath.sin(a) * 4;
       this.sCd[i] = 0;
       this.sState[i] = 1;
     }
@@ -317,7 +318,7 @@ export class AsteroidBehaviour extends Behaviour {
       // keep the swarm's focus within a leash of the body so it always reads as part of the fighter
       const dx = this.swarmTx - f.px;
       const dy = this.swarmTy - f.py;
-      const d = Math.hypot(dx, dy);
+      const d = DMath.hypot(dx, dy);
       if (d > 330) {
         this.swarmTx = f.px + (dx / d) * 330;
         this.swarmTy = f.py + (dy / d) * 330;
@@ -339,14 +340,14 @@ export class AsteroidBehaviour extends Behaviour {
       if (st === 1) {
         // orbit the target on a ring, each fragment on its own phase, swirling
         const ph = (i / Math.max(1, this.swarmOut)) * 6.2832 + t * 0.09;
-        const rad = cfg.orbit * (0.65 + 0.35 * Math.sin(t * 0.05 + i * 1.3));
-        const dx = this.swarmTx + Math.cos(ph) * rad - x;
-        const dy = this.swarmTy + Math.sin(ph) * rad * 0.8 - y;
+        const rad = cfg.orbit * (0.65 + 0.35 * DMath.sin(t * 0.05 + i * 1.3));
+        const dx = this.swarmTx + DMath.cos(ph) * rad - x;
+        const dy = this.swarmTy + DMath.sin(ph) * rad * 0.8 - y;
         vx += dx * 0.02 * (cfg.steer / 5);
         vy += dy * 0.02 * (cfg.steer / 5);
         vx *= 0.9;
         vy *= 0.9;
-        const sp = Math.hypot(vx, vy);
+        const sp = DMath.hypot(vx, vy);
         const cap = cfg.speed / 60;
         if (sp > cap) {
           vx *= cap / sp;
@@ -362,7 +363,7 @@ export class AsteroidBehaviour extends Behaviour {
         // returning: home in on the body and re-merge
         const dx = f.px - x;
         const dy = f.py - y;
-        const d = Math.hypot(dx, dy) || 1;
+        const d = DMath.hypot(dx, dy) || 1;
         vx += (dx / d) * 2.2;
         vy += (dy / d) * 2.2;
         vx *= 0.86;
@@ -406,7 +407,7 @@ export class AsteroidBehaviour extends Behaviour {
     sh.y = y;
     sh.r = cfg.radius;
     this.dmg.energy = cfg.energy;
-    const sp = Math.hypot(vx, vy);
+    const sp = DMath.hypot(vx, vy);
     const hit = f.strike(
       sh,
       this.dmg,
@@ -456,15 +457,15 @@ export class AsteroidBehaviour extends Behaviour {
 
     // tumble: a slow idle sway, a fast spin during the Tumble surge, a heave when ramming
     this.leanPhase += m.def?.extra?.['spin'] ? 0.5 : 0.028;
-    let lean = Math.sin(this.leanPhase) * (m.def?.extra?.['spin'] ? 13 : 2.6);
+    let lean = DMath.sin(this.leanPhase) * (m.def?.extra?.['spin'] ? 13 : 2.6);
     if (id === 'asteroid.meteor' && m.phase === 'startup') lean = -6 * clamp01(m.phaseTick / 10);
     if (m.def?.slot === 'ultimate' && m.phase === 'startup')
-      lean += Math.sin(tick * 1.9) * 2.2 * clamp01(m.phaseTick / m.startup);
-    if (this.rubble) lean += Math.sin(tick * 0.31) * 0.9;
+      lean += DMath.sin(tick * 1.9) * 2.2 * clamp01(m.phaseTick / m.startup);
+    if (this.rubble) lean += DMath.sin(tick * 0.31) * 0.9;
     this.lean = lean;
 
     // dust trail behind a fast rock; heavier with momentum
-    const spd = Math.hypot(f.vx, f.vy);
+    const spd = DMath.hypot(f.vx, f.vy);
     this.trailClock++;
     if (spd > 150 && this.trailClock % 2 === 0 && !f.ko) this.spawnTrail(spd);
     if (this.rubble && tick % 9 === 0) this.spawnCrumbs();
@@ -496,10 +497,10 @@ export class AsteroidBehaviour extends Behaviour {
     const sp = f.particleSpawn;
     sp.kind = 'dust';
     const a = hash01(f.tickNo, 3, 4) * 6.2832;
-    sp.x = f.px + Math.cos(a) * 34;
-    sp.y = f.py + Math.sin(a) * 30;
-    sp.vx = Math.cos(a) * 14;
-    sp.vy = Math.sin(a) * 14 + 6;
+    sp.x = f.px + DMath.cos(a) * 34;
+    sp.y = f.py + DMath.sin(a) * 30;
+    sp.vx = DMath.cos(a) * 14;
+    sp.vy = DMath.sin(a) * 14 + 6;
     sp.spread = 12;
     sp.count = 1;
     sp.ramp = this.dustRamp;
@@ -547,9 +548,9 @@ export class AsteroidBehaviour extends Behaviour {
         R * (1.12 + 0.11 * (i % 3)) * (guard ? 0.72 : 1) * (this.rubble ? 1.15 + 0.1 * hash01(i, 1, 1) : 1);
       const w = (0.017 + 0.006 * (i % 4)) * spinUp * (i % 2 === 0 ? 1 : -0.8);
       const a = i * 1.7 + tick * w + f.slot;
-      const cx = t.x + 2 + Math.cos(a) * r0 * 1.05;
-      const cy = t.y - 2 + Math.sin(a) * r0 * (0.32 + 0.06 * (i % 3));
-      const behind = Math.sin(a) < 0;
+      const cx = t.x + 2 + DMath.cos(a) * r0 * 1.05;
+      const cy = t.y - 2 + DMath.sin(a) * r0 * (0.32 + 0.06 * (i % 3));
+      const behind = DMath.sin(a) < 0;
       const size = 2 + (i % 3 === 0 ? 1 : 0) + (i % 5 === 0 ? 1 : 0);
       this.pebble(behind ? this.back : this.front, cx, cy, size, i, behind ? 0.75 : 1);
     }
@@ -584,7 +585,7 @@ export class AsteroidBehaviour extends Behaviour {
       const vx = this.svx[i]!;
       const vy = this.svy[i]!;
       // motion streak
-      const steps = clamp(Math.round(Math.hypot(vx, vy) * 0.7), 0, 5);
+      const steps = clamp(Math.round(DMath.hypot(vx, vy) * 0.7), 0, 5);
       for (let s = 1; s <= steps; s++) {
         const k = 1 - s / (steps + 1);
         this.fx.add(Math.round(x - vx * s * 0.8), Math.round(y - vy * s * 0.8), 120 * k, 95 * k, 60 * k);
@@ -597,12 +598,12 @@ export class AsteroidBehaviour extends Behaviour {
     if (this.f.mv.def?.id === 'asteroid.swarm') {
       const a = this.swarmTx;
       const b = this.swarmTy;
-      const p = 0.6 + 0.4 * Math.sin(tick * 0.25);
+      const p = 0.6 + 0.4 * DMath.sin(tick * 0.25);
       for (let k = 0; k < 4; k++) {
         const th = k * 1.5708 + tick * 0.07;
         this.fx.add(
-          Math.round(a + Math.cos(th) * 9),
-          Math.round(b + Math.sin(th) * 9),
+          Math.round(a + DMath.cos(th) * 9),
+          Math.round(b + DMath.sin(th) * 9),
           210 * p,
           180 * p,
           120 * p,
@@ -627,7 +628,7 @@ export class AsteroidBehaviour extends Behaviour {
       for (let g = 0; g < 6; g++)
         this.fx.glow(
           t.x + dir * (40 + g * 46),
-          t.y + Math.sin(tick * 0.2 + g) * 10,
+          t.y + DMath.sin(tick * 0.2 + g) * 10,
           34,
           230,
           130,
@@ -642,7 +643,7 @@ export class AsteroidBehaviour extends Behaviour {
       if (age < 0 || age > 34) continue;
       const spread = ((i * 37) % 100) / 100 - 0.5;
       const x = t.x + dir * (26 + age * 10.5);
-      const y = t.y + spread * 120 * (0.25 + age / 30) + Math.sin(age * 0.5 + i) * 6;
+      const y = t.y + spread * 120 * (0.25 + age / 30) + DMath.sin(age * 0.5 + i) * 6;
       const size = 3 + (i % 4);
       for (let s = 1; s <= 8; s++) {
         const q = 1 - s / 9;
@@ -662,7 +663,7 @@ export class AsteroidBehaviour extends Behaviour {
     else if (m.phase === 'active') k = 1;
     else k = Math.max(0, 0.5 - m.phaseTick / 24);
     if (k <= 0.05) return;
-    const pulse = 1 + 0.15 * Math.sin(tick * 0.7);
+    const pulse = 1 + 0.15 * DMath.sin(tick * 0.7);
     this.fx.glow(this.xy.x, this.xy.y, (14 + 26 * k) * pulse, 255, 140, 60, 0.6 * k);
     this.fx.glow(this.xy.x, this.xy.y, 8 * k * pulse, 255, 230, 170, 0.8 * k);
     if (m.phase === 'active') {
@@ -695,9 +696,9 @@ export class AsteroidBehaviour extends Behaviour {
     for (let i = 0; i < n; i++) {
       const a = i * 2.399 + tick * (0.05 + 0.16 * k) * (i % 2 === 0 ? 1 : -1);
       const rad = (46 + (i % 7) * 6) * (0.7 + 0.6 * k);
-      const x = t.x + Math.cos(a) * rad * 1.1;
-      const y = t.y + Math.sin(a) * rad * 0.55;
-      this.pebble(Math.sin(a) < 0 ? this.back : this.front, x, y, 2 + (i % 3), i, 1);
+      const x = t.x + DMath.cos(a) * rad * 1.1;
+      const y = t.y + DMath.sin(a) * rad * 0.55;
+      this.pebble(DMath.sin(a) < 0 ? this.back : this.front, x, y, 2 + (i % 3), i, 1);
       if (k > 0.5 && i % 4 === 0) this.fx.glow(x, y, 4, 255, 190, 100, 0.4 * k);
     }
     this.fx.glow(t.x, t.y, 30 + 30 * k, 255, 150, 70, 0.25 * k);
@@ -712,8 +713,8 @@ export class AsteroidBehaviour extends Behaviour {
       const a = hash01(i, tick >> 2, 21) * 6.2832;
       const r = 30 + 26 * hash01(i, tick >> 2, 22);
       const life = (tick + i * 5) % 12;
-      const x = t.x + Math.cos(a) * r - f.vx * 0.02 * life;
-      const y = t.y + Math.sin(a) * r * 0.85 - life * 0.6;
+      const x = t.x + DMath.cos(a) * r - f.vx * 0.02 * life;
+      const y = t.y + DMath.sin(a) * r * 0.85 - life * 0.6;
       const e = this.emberRamp[clamp(Math.floor(life / 3), 0, 3)]!;
       this.fx.set(Math.round(x), Math.round(y), e, 220 * k);
     }

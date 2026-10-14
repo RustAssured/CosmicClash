@@ -10,6 +10,7 @@ import {
 } from '@/contracts';
 import { DamageFlag } from '@/contracts';
 import { instantiateTemplate, makeFatShape, shapeBounds } from '@/combat/shapes';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Precomputed facts about one aim variant of one move: frame data and the region its hitboxes sweep, relative to the anchor
@@ -89,10 +90,10 @@ function travel(
   for (let t = 0; t < until; t++) {
     while (ki < sorted.length && sorted[ki]!.at <= t) {
       const k = sorted[ki++]!;
-      v += Math.hypot(k.ix, 0) * Math.sign(k.ix);
+      v += DMath.hypot(k.ix, 0) * Math.sign(k.ix);
       if (k.damp !== undefined) damp = k.damp;
     }
-    v *= Math.pow(damp, TICK_DT);
+    v *= DMath.pow(damp, TICK_DT);
     if (t >= from) x += v * TICK_DT;
   }
   return x;
@@ -186,7 +187,7 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
       let latch = false;
       let harvest = false;
       for (const hb of v.hitboxes) {
-        const s = Math.pow(reach, hb.reachScale ?? 1);
+        const s = DMath.pow(reach, hb.reachScale ?? 1);
         templateExtent(hb.shape, s, ext);
         if (hb.sweepTo && hb.sweepTo.kind === hb.shape.kind) templateExtent(hb.sweepTo, s, ext);
         const continuous = (hb.damage.flags & DamageFlag.CONTINUOUS) !== 0;
@@ -271,6 +272,6 @@ export function surgeDistance(def: TitanDef): number {
   const k = m.variants.forward.movement[0];
   if (!k) return 0;
   const damp = k.damp ?? 0.05;
-  const rate = -Math.log(Math.max(1e-4, Math.min(0.999, damp)));
-  return Math.hypot(k.ix, k.iy) / rate;
+  const rate = -DMath.log(Math.max(1e-4, Math.min(0.999, damp)));
+  return DMath.hypot(k.ix, k.iy) / rate;
 }

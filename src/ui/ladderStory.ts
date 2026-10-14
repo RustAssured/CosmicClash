@@ -24,10 +24,13 @@ export const RUNG_LINES: Readonly<Partial<Record<TitanId, StoryCard>>> = {
   nexus: { text: 'Then the chains closed.', tone: 'white' },
   blackhole: { text: 'Then even the light fell in.', tone: 'white' },
   supernova: { text: 'Then a star chose to burn.', tone: 'white' },
+  cradle: { text: 'Then something began to prepare you.', tone: 'white' },
   colossus: { text: 'Then the Last One opened its eye.', tone: 'gold' },
+  // COSMIC CLASH can deal 우리 a regular rung
+  uri: { text: 'Then the hunter found you.', tone: 'gold' },
 };
 
-/** Rung 7, the sub-boss. */
+/** The sub-boss (the second-to-last rung). */
 export const SUBBOSS_LINES: Readonly<Partial<Record<TitanId, StoryCard>>> = {
   // the Last One (우리's ladder, the Mouth's ladder)
   colossus: { text: 'One is left. It has watched every world end.', tone: 'gold' },
@@ -35,7 +38,7 @@ export const SUBBOSS_LINES: Readonly<Partial<Record<TitanId, StoryCard>>> = {
   uri: { text: 'They built a hunter. Now it hunts you.', tone: 'gold' },
 };
 
-/** Rung 8, the final boss. */
+/** The last rung, the final boss. */
 export const FINAL_LINES: Readonly<Partial<Record<TitanId, StoryCard>>> = {
   mouth: { text: 'Then something came to eat. It is still hungry.', tone: 'red' },
   // the Mouth's own ladder ends at 우리

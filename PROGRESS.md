@@ -170,6 +170,21 @@ the blob placeholder's; not in the ladder's opponents.
   docs/gallery/select/ (`npx tsx tools/ui/select-shots.ts --prefix=after`; `&smode=vsai|training` harness flag).
 - **MULJI Matter Engine (물질)**: credited in the site's readout, footer, press About, /play/ loading screen, README.
 
+## S17: two tournament modes, difficulty, the COSMIC CLASH wordmark
+- **Flow:** Title › TOURNAMENT › join › MODE (CLASSIC / 클래식, COSMIC CLASH / 우주 대결) › DIFFICULTY (EASY / NORMAL /
+  TITAN) › a stored run for that pair resumes on the tower, else the titan select (src/ui/screens/tourney.ts).
+- **CLASSIC:** 9 rungs, the Cradle at rung 7 ("Then something began to prepare you."), then the Last One and the Mouth.
+- **COSMIC CLASH:** every shipped roster titan, no edits: tier-1 openers, a per-run seeded shuffle (the lineup is stored
+  with the run), the Last One + Mouth last. NEW tag for `NEW_TITAN_DAYS` (28) after `kit.shippedAt`.
+- **Roster data:** `tier`, `shippedAt`, `catalogue` (ADK-001 …, the Cradle ADK-009), stamped by `titan:ship`.
+- **Difficulty:** `aiRamp` (EASY ≤ 3, NORMAL the old ramp stretched, TITAN 5 then 6). The boss Mouth on NORMAL / TITAN, the
+  normal Mouth on EASY. Beating either mode's Mouth unlocks it.
+- **Save:** `adeuk.ladder.v2` (a run per mode + difficulty, best per mode); `adeuk.ladder.v1` migrates once.
+- **Wordmark:** src/ui/pixel/cosmicLogo.ts (directions deepfield / nebula / orbit; `COSMIC_STYLE` = nebula). In the mode
+  and difficulty screens, on the site under the titan cards (live count from the roster), press/logo/cosmic-clash-logo-x6/12.
+- Dev: `?ladder=modes|difficulty|select|N&lmode=cosmic&diff=titan&seed=5`. Stills: docs/gallery/cosmicclash/
+  (`npx tsx tools/ladder/shots.ts --set=cosmic`, `npx tsx tools/ui/cosmic-wordmark.ts`).
+
 ## Next
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.
 - Then a full balance pass.

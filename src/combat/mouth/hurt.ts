@@ -2,6 +2,7 @@ import type { DamageShape, OverlapResult } from '@/contracts';
 import { shapeBounds, shapeContains, type Bounds } from '../shapes';
 import type { MouthCore } from './core';
 import { MOUTH_CONST as C, MOUTH_LIVE } from './tuning';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * The Mouth's hurtboxes (Gate 3A §2, D37): the analytic-fighter contract. The Mouth is not matter; it is hit as capsules:
@@ -73,7 +74,7 @@ export class MouthHurt {
     const bq = (NS - 4) * 4;
     let ax = hx - nk[bq]!;
     let ay = hy - nk[bq + 1]!;
-    const al = Math.hypot(ax, ay) || 1;
+    const al = DMath.hypot(ax, ay) || 1;
     ax /= al;
     ay /= al;
     const back = MOUTH_LIVE.headBack;
@@ -81,7 +82,7 @@ export class MouthHurt {
     // neck: braid radius × volume (stretched → thinner)
     let L = 0;
     for (let i = 1; i < NS; i++)
-      L += Math.hypot(nk[i * 4]! - nk[i * 4 - 4]!, nk[i * 4 + 1]! - nk[i * 4 - 3]!);
+      L += DMath.hypot(nk[i * 4]! - nk[i * 4 - 4]!, nk[i * 4 + 1]! - nk[i * 4 - 3]!);
     const vol = Math.max(0.82, Math.min(1.22, Math.sqrt(250 / Math.max(120, L))));
     for (let i = 1; i < NS; i++) {
       const f = (i - 0.5) / (NS - 1);
@@ -121,7 +122,7 @@ export class MouthHurt {
     const dy = c.y1 - c.y0;
     const l2 = dx * dx + dy * dy;
     const u = l2 > 1e-9 ? Math.max(0, Math.min(1, ((x - c.x0) * dx + (y - c.y0) * dy) / l2)) : 0;
-    return Math.hypot(x - (c.x0 + dx * u), y - (c.y0 + dy * u));
+    return DMath.hypot(x - (c.x0 + dx * u), y - (c.y0 + dy * u));
   }
 
   /**

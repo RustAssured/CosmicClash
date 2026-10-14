@@ -1,4 +1,5 @@
 import { makeLayer, pa, pb, pg, pr, rgba, type RenderLayer } from '@/contracts';
+import { sq } from '@/contracts/dmath';
 
 /**
  * A small software-rasterised world-space overlay (tendrils, beams, glows, pebbles…). The layer is a fixed-size sprite whose
@@ -225,7 +226,7 @@ export class Overlay {
         const dy = y + 0.5 - cy;
         const d2 = dx * dx + dy * dy;
         if (d2 > r2) continue;
-        const k = (1 - d2 / r2) ** 2 * strength;
+        const k = sq(1 - d2 / r2) * strength;
         this.add(x, y, cr * k, cg * k, cb * k);
       }
   }

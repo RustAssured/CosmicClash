@@ -32,6 +32,7 @@ import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
 import { spinKeysOf } from '../pose';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
+import { DMath, sq } from '@/contracts/dmath';
 
 /** Moon modes. */
 const ORBIT = 0;
@@ -360,11 +361,12 @@ function skinTablesOf(rig: PlanetRig, w: number, h: number): SkinTables {
       t.crustV[i] = 0.25 + 0.5 * tn(x * 0.5, y * 0.9 + 3) + 0.15 * (((x + y) & 3) === 0 ? 1 : 0);
       t.deadV[i] = 0.12 + 0.2 * tn(x * 0.4, y * 0.4);
       t.mantleB[i] =
-        0.5 + 0.5 * Math.sin(Math.hypot(x - rig.core.x, y - rig.core.y) * 0.55 + 2.2 * tn(x * 0.3, y * 0.3));
+        0.5 +
+        0.5 * DMath.sin(DMath.hypot(x - rig.core.x, y - rig.core.y) * 0.55 + 2.2 * tn(x * 0.3, y * 0.3));
       t.bay[i] = bayer(x, y);
       const lat = rig.lat[i]!;
       // latitude bands turn at slightly different rates (the equator leads)
-      t.band[i] = 1 + 0.5 * Math.cos((lat / 127 - 0.5) * Math.PI);
+      t.band[i] = 1 + 0.5 * DMath.cos((lat / 127 - 0.5) * Math.PI);
       const nz = rig.nz[i]!;
       t.fore[i] = (0.45 + 0.55 * (nz / 255)) * Math.min(1, Math.max(0, (nz - 70) / 90));
       t.lon[i] = rig.lon[i]! / 256;
@@ -385,13 +387,13 @@ const DEEP = (r: PlanetRig['ids'], m: number): boolean => m === r.mantle || m ==
 /** Half-turn ease with a counter-swing: the face first rocks back a little, then comes round and settles (0 → 1). */
 function turnEase(u: number): number {
   const s = smoothstep(0, 1, u);
-  return s - 0.3 * Math.sin(Math.PI * u) * (1 - u) * (1 - u);
+  return s - 0.3 * DMath.sin(Math.PI * u) * (1 - u) * (1 - u);
 }
 
 /** Weight of tick `k` (0..IMPULSE_TICKS−1) of a ramped impulse: a sin² bump that sums to 1. */
 const RAMP_W = Array.from(
   { length: IMPULSE_TICKS },
-  (_, k) => (2 / IMPULSE_TICKS) * Math.sin((Math.PI * (k + 0.5)) / IMPULSE_TICKS) ** 2,
+  (_, k) => (2 / IMPULSE_TICKS) * sq(DMath.sin((Math.PI * (k + 0.5)) / IMPULSE_TICKS)),
 );
 
 /**
@@ -589,7 +591,7 @@ export class PlanetBehaviour extends Behaviour {
     const kx = L.dir[0] * 0.8;
     const ky = L.dir[1];
     const kz = L.dir[2];
-    const kn = Math.hypot(kx, ky, kz) || 1;
+    const kn = DMath.hypot(kx, ky, kz) || 1;
     this.lit = new Uint8Array(map.w * map.h);
     const cx = f.def.art.coreX + 0.5;
     const cy = f.def.art.coreY + 0.5;
@@ -784,7 +786,7 @@ export class PlanetBehaviour extends Behaviour {
   }
   get cometPos(): { x: number; y: number; speed: number } {
     const c = this.comet;
-    return { x: c.x, y: c.y, speed: Math.hypot(c.vx, c.vy) };
+    return { x: c.x, y: c.y, speed: DMath.hypot(c.vx, c.vy) };
   }
 
   /**
@@ -906,7 +908,7 @@ export class PlanetBehaviour extends Behaviour {
     const ids = this.rig.ids;
     const cx = map.coreX + 0.5;
     const cy = map.coreY + 0.5;
-    const r2 = (this.rig.magmaR + 2) ** 2;
+    const r2 = sq(this.rig.magmaR + 2);
     const snapM = this.cenSnapM;
     const snapS = this.cenSnapS;
     const surf = CellFlag.SURFACE;
@@ -1110,7 +1112,7 @@ export class PlanetBehaviour extends Behaviour {
     }
     // the ring: debris orbits with the world, slower than its surface, and is drawn in by commitment and by Tidal Draw
     // (its drift follows the spin smoothly through zero: a reversal of the world never snaps the ring)
-    this.ringPhase -= (0.3 * Math.tanh(this.omega / 0.15) + 0.5 * this.omega) * dt;
+    this.ringPhase -= (0.3 * DMath.tanh(this.omega / 0.15) + 0.5 * this.omega) * dt;
     this.ringTarget = Math.max(this.ringGoal(m), this.drawT);
     this.ringTight += (this.ringTarget - this.ringTight) * 0.035;
     this.ringGlow *= 0.97;
@@ -1288,14 +1290,14 @@ export class PlanetBehaviour extends Behaviour {
     const f = this.f;
     const s = m.spec;
     const ang = m.ang + m.lag;
-    const ex = Math.cos(ang) * s.a;
-    const ey = Math.sin(ang) * s.b;
-    const tilt = s.tilt + PHASE_WANDER[this.phase]! * Math.sin(this.wander);
-    const ct = Math.cos(tilt);
-    const st = Math.sin(tilt);
+    const ex = DMath.cos(ang) * s.a;
+    const ey = DMath.sin(ang) * s.b;
+    const tilt = s.tilt + PHASE_WANDER[this.phase]! * DMath.sin(this.wander);
+    const ct = DMath.cos(tilt);
+    const st = DMath.sin(tilt);
     let x = ex * ct - ey * st;
     let y = ex * st + ey * ct;
-    back.v = Math.sin(ang) < 0;
+    back.v = DMath.sin(ang) < 0;
     const gb = clamp01(this.guardBlend);
     if (gb > 0.01) {
       // shield: stand in front of the planet on the foe's side, one above the other. The side is where the foe IS, not the
@@ -1334,7 +1336,7 @@ export class PlanetBehaviour extends Behaviour {
           m.y = p.y;
         } else {
           // follow the orbit through a light low-pass, so a blend never steps; a moon just caught back glides onto it slowly
-          const k = m.settle > 0 ? 0.04 + 0.31 * (1 - m.settle / SETTLE_TICKS) ** 2 : 0.35;
+          const k = m.settle > 0 ? 0.04 + 0.31 * sq(1 - m.settle / SETTLE_TICKS) : 0.35;
           if (m.settle > 0) m.settle--;
           m.x += (p.x - m.x) * k;
           m.y += (p.y - m.y) * k;
@@ -1400,7 +1402,7 @@ export class PlanetBehaviour extends Behaviour {
       e2.originY = ev.originY;
       const r = f.world.applyDamage(m.body.id, e2);
       const frac = f.world.stats(m.body.id).massFrac;
-      const push = Math.hypot(r.impulseX, r.impulseY) / Math.max(0.2, frac);
+      const push = DMath.hypot(r.impulseX, r.impulseY) / Math.max(0.2, frac);
       if (frac < BREAK_FRAC) this.loseMoon(m, ev.dirX * 90, ev.dirY * 90, true);
       else if (push > KNOCK_LIMIT && m.mode !== DRIFT)
         this.knockOut(m, ev.dirX * Math.min(8, push * 0.012), ev.dirY * Math.min(8, push * 0.012) - 1);
@@ -1459,7 +1461,7 @@ export class PlanetBehaviour extends Behaviour {
     const mass = f.world.stats(m.body.id).mass;
     const cx = m.body.transform.anchorX + 0.5;
     const cy = m.body.transform.anchorY + 0.5;
-    const heading = Math.atan2(vy, vx);
+    const heading = DMath.atan2(vy, vx);
     let total = 0;
     for (let i = 0; i < w * h; i++) if (map.pixels[i]! >>> 24 !== 0) total++;
     for (let k = 0; k < 3; k++) {
@@ -1470,7 +1472,7 @@ export class PlanetBehaviour extends Behaviour {
         for (let x = 0; x < w; x++) {
           const i = y * w + x;
           if (map.pixels[i]! >>> 24 === 0) continue;
-          const a = Math.atan2(y + 0.5 - cy, x + 0.5 - cx) - heading;
+          const a = DMath.atan2(y + 0.5 - cy, x + 0.5 - cx) - heading;
           const sector = Math.floor((((a / (Math.PI * 2)) % 1) + 1) * 3) % 3;
           if (sector !== k) continue;
           px[i] = map.pixels[i]!;
@@ -1479,8 +1481,8 @@ export class PlanetBehaviour extends Behaviour {
         }
       if (n === 0 || total === 0) continue;
       const spread = (k - 1) * 0.28;
-      const c = Math.cos(spread);
-      const s = Math.sin(spread);
+      const c = DMath.cos(spread);
+      const s = DMath.sin(spread);
       const sp = 0.85 + 0.1 * k;
       f.world.spawnChunk({
         pixels: px,
@@ -1526,13 +1528,13 @@ export class PlanetBehaviour extends Behaviour {
       if (m.mode !== ORBIT) continue;
       const s = m.spec;
       const ang = m.ang + m.lag;
-      const tx = -Math.sin(ang) * s.a;
-      const ty = Math.cos(ang) * s.b;
-      const head = Math.atan2(
-        tx * Math.sin(s.tilt) + ty * Math.cos(s.tilt),
-        tx * Math.cos(s.tilt) - ty * Math.sin(s.tilt),
+      const tx = -DMath.sin(ang) * s.a;
+      const ty = DMath.cos(ang) * s.b;
+      const head = DMath.atan2(
+        tx * DMath.sin(s.tilt) + ty * DMath.cos(s.tilt),
+        tx * DMath.cos(s.tilt) - ty * DMath.sin(s.tilt),
       );
-      let off = Math.atan2(f.foe.view.y - m.y, f.foe.view.x - m.x) - head;
+      let off = DMath.atan2(f.foe.view.y - m.y, f.foe.view.x - m.x) - head;
       while (off > Math.PI) off -= Math.PI * 2;
       while (off < -Math.PI) off += Math.PI * 2;
       // it can only swing forward along its orbit: a path that is just past the foe needs most of a turn
@@ -1736,7 +1738,7 @@ export class PlanetBehaviour extends Behaviour {
     }
     if (m.def.id === 'planet.shift' && m.phase === 'active') {
       // a perpendicular pull, ramped in and out over the dash: the path is an arc, not a line
-      const k = Math.sin(Math.PI * clamp01((m.phaseTick - 0.5) / Math.max(1, m.active)));
+      const k = DMath.sin(Math.PI * clamp01((m.phaseTick - 0.5) / Math.max(1, m.active)));
       const a = this.driftCfg.curve * k * this.driftSide;
       f.vx += -m.dirY * a * TICK_DT;
       f.vy += m.dirX * a * TICK_DT;
@@ -1798,7 +1800,7 @@ export class PlanetBehaviour extends Behaviour {
         t.y = Math.round(mo.y);
         mo.layer.tickStart();
         // a moon slung from behind the world stays behind it until it has cleared the disc (no pop through the planet)
-        const clear = Math.hypot(mo.x - f.px, mo.y - f.py) > this.rig.radius + this.rig.atmo + mo.radius;
+        const clear = DMath.hypot(mo.x - f.px, mo.y - f.py) > this.rig.radius + this.rig.atmo + mo.radius;
         if (!(mo.mode === SLAM && mo.back && !clear)) mo.back = false;
       }
     }
@@ -1824,7 +1826,7 @@ export class PlanetBehaviour extends Behaviour {
       mo.y = ny;
       mo.back = this.orbB.v;
       let off =
-        Math.atan2(f.foe.view.y - mo.y, f.foe.view.x - mo.x) + mo.curve * 0.7 - Math.atan2(mo.vy, mo.vx);
+        DMath.atan2(f.foe.view.y - mo.y, f.foe.view.x - mo.x) + mo.curve * 0.7 - DMath.atan2(mo.vy, mo.vx);
       while (off > Math.PI) off -= Math.PI * 2;
       while (off < -Math.PI) off += Math.PI * 2;
       if ((mo.age >= mo.windupMax && Math.abs(off) < 0.45) || mo.age >= mo.windupMax + WHIP_EXTRA) {
@@ -1835,18 +1837,18 @@ export class PlanetBehaviour extends Behaviour {
       mo.age++;
       const tx = f.foe.view.x - mo.x;
       const ty = f.foe.view.y - mo.y;
-      const d = Math.hypot(tx, ty) || 1;
+      const d = DMath.hypot(tx, ty) || 1;
       // desired heading: at the foe, bent to one side while far (the arc), straight at the end
       const bend = mo.curve * clamp01((d - 60 * this.sc) / (220 * this.sc));
-      const des = Math.atan2(ty, tx) + bend;
-      let head = Math.atan2(mo.vy, mo.vx);
+      const des = DMath.atan2(ty, tx) + bend;
+      let head = DMath.atan2(mo.vy, mo.vx);
       let dh = des - head;
       while (dh > Math.PI) dh -= Math.PI * 2;
       while (dh < -Math.PI) dh += Math.PI * 2;
       head += clamp(dh, -mo.turn, mo.turn);
-      const sp = Math.min(mo.speedMax, Math.hypot(mo.vx, mo.vy) + mo.accel);
-      mo.vx = Math.cos(head) * sp;
-      mo.vy = Math.sin(head) * sp;
+      const sp = Math.min(mo.speedMax, DMath.hypot(mo.vx, mo.vy) + mo.accel);
+      mo.vx = DMath.cos(head) * sp;
+      mo.vy = DMath.sin(head) * sp;
       mo.x += mo.vx;
       mo.y += mo.vy;
     }
@@ -1906,7 +1908,7 @@ export class PlanetBehaviour extends Behaviour {
     }
     if (mo.mode === SLAM) {
       f.addThreat(asShape(this.moonShape(mo)), 'CRUSH', mo.energy, 0, 4, true);
-      if (mo.age > mo.life || Math.hypot(mo.x - f.px, mo.y - f.py) > 470 * this.sc) mo.mode = RETURN;
+      if (mo.age > mo.life || DMath.hypot(mo.x - f.px, mo.y - f.py) > 470 * this.sc) mo.mode = RETURN;
     }
   }
 
@@ -1915,30 +1917,30 @@ export class PlanetBehaviour extends Behaviour {
     const f = this.f;
     const dx = f.px - mo.x;
     const dy = f.py - mo.y;
-    const d = Math.hypot(dx, dy) || 1;
+    const d = DMath.hypot(dx, dy) || 1;
     mo.age++;
     const sc = this.sc;
     mo.vx += (dx / d) * 0.45 * sc;
     mo.vy += (dy / d) * 0.45 * sc;
     // quadratic drag (terminal ~6.7·sc px/tick), plus the impact's braking over the first ticks after a blow
-    const sp = Math.hypot(mo.vx, mo.vy);
+    const sp = DMath.hypot(mo.vx, mo.vy);
     const drag = (1 - (0.01 / sc) * sp) * (mo.slamHit && mo.age < 10 ? 0.86 : 1);
     mo.vx *= drag;
     mo.vy *= drag;
     mo.x += mo.vx;
     mo.y += mo.vy;
-    const orb = Math.hypot(mo.spec.a, mo.spec.b) * 0.9;
+    const orb = DMath.hypot(mo.spec.a, mo.spec.b) * 0.9;
     if (d < orb) {
       mo.mode = ORBIT;
       mo.lag = 0;
       mo.lagV = 0;
       mo.settle = SETTLE_TICKS;
       // the orbit point nearest where it is: undo the orbit's tilt, then read the ellipse parameter
-      const ct = Math.cos(mo.spec.tilt);
-      const st = Math.sin(mo.spec.tilt);
+      const ct = DMath.cos(mo.spec.tilt);
+      const st = DMath.sin(mo.spec.tilt);
       const rx = mo.x - f.px;
       const ry = mo.y - f.py;
-      mo.ang = Math.atan2(
+      mo.ang = DMath.atan2(
         (-rx * st + ry * ct) / Math.max(1, mo.spec.b),
         (rx * ct + ry * st) / Math.max(1, mo.spec.a),
       );
@@ -1955,7 +1957,7 @@ export class PlanetBehaviour extends Behaviour {
     mo.age++;
     const dx = f.px - mo.x;
     const dy = f.py - mo.y;
-    const d = Math.hypot(dx, dy) || 1;
+    const d = DMath.hypot(dx, dy) || 1;
     if (!mo.free) {
       const g = 0.028 * this.sc * (1 / Math.max(0.6, d / (160 * this.sc)));
       mo.vx += (dx / d) * g * 4;
@@ -1965,7 +1967,7 @@ export class PlanetBehaviour extends Behaviour {
     mo.y += mo.vy;
     if (d > LOST_RADIUS * this.sc || mo.age > (mo.free ? 400 : 260))
       this.loseMoon(mo, mo.vx * 60, mo.vy * 60, false);
-    else if (!mo.free && mo.age > 90 && d < 190 * this.sc && Math.hypot(mo.vx, mo.vy) < 2.2 * this.sc)
+    else if (!mo.free && mo.age > 90 && d < 190 * this.sc && DMath.hypot(mo.vx, mo.vy) < 2.2 * this.sc)
       mo.mode = RETURN;
   }
 
@@ -1997,7 +1999,7 @@ export class PlanetBehaviour extends Behaviour {
     let bd = 400 * this.sc;
     for (const ac of ctx.comets ?? []) {
       if (ac.mode !== 0) continue;
-      const d = Math.hypot(ac.x - f.px, ac.y - f.py);
+      const d = DMath.hypot(ac.x - f.px, ac.y - f.py);
       if (d < bd) {
         bd = d;
         best = ac.id;
@@ -2033,7 +2035,7 @@ export class PlanetBehaviour extends Behaviour {
     // aim to pass below the world at about its orbit, so the well has a path to bend
     const tx = f.px - (sx - f.px) * 0.2;
     const ty = f.py + cfg.orbit * 0.55;
-    const d = Math.hypot(tx - sx, ty - sy) || 1;
+    const d = DMath.hypot(tx - sx, ty - sy) || 1;
     const id = f.world.spawnChunk({
       pixels: px,
       w: map.w,
@@ -2103,12 +2105,12 @@ export class PlanetBehaviour extends Behaviour {
     const f = this.f;
     const c = this.comet;
     const cfg = this.cometCfg;
-    const speed = Math.hypot(c.vx, c.vy);
+    const speed = DMath.hypot(c.vx, c.vy);
     const mass = this.wx.chunkState?.(c.id, this.info) ? Math.max(1, this.info.mass) : cfg.mass;
     const v = 60 * Math.sqrt((2 * cfg.energy) / mass) * (speed / cfg.vRef);
     const dx = f.foe.view.x - c.x;
     const dy = f.foe.view.y - c.y;
-    const dl = Math.hypot(dx, dy) || 1;
+    const dl = DMath.hypot(dx, dy) || 1;
     c.sling = false;
     if (!this.wx.launchChunk?.(c.id, (dx / dl) * v, (dy / dl) * v, f.body.id, f.slot)) {
       this.dropComet();
@@ -2142,7 +2144,7 @@ export class PlanetBehaviour extends Behaviour {
     c.age++;
     const holding = f.mv.def?.id === 'planet.comet' && f.mv.phase === 'charge';
     if (c.mode === C_INBOUND) {
-      const d = Math.hypot(c.x - f.px, c.y - f.py);
+      const d = DMath.hypot(c.x - f.px, c.y - f.py);
       if (d < cfg.orbit * 1.3 || (c.age > 120 && d < 300 * this.sc)) {
         if (this.wx.captureChunk?.(c.id, f.slot)) {
           c.mode = C_ORBIT;
@@ -2162,7 +2164,7 @@ export class PlanetBehaviour extends Behaviour {
       // caught: the ring (and the comet on it) is spun up for as long as the shepherd holds it, like a flywheel
       if (holding) c.w = Math.min(cfg.w1, c.w + cfg.spinUp * dt);
       if (c.sling) {
-        let off = Math.atan2(f.foe.view.y - c.y, f.foe.view.x - c.x) - Math.atan2(c.vy, c.vx);
+        let off = DMath.atan2(f.foe.view.y - c.y, f.foe.view.x - c.x) - DMath.atan2(c.vy, c.vx);
         while (off > Math.PI) off -= Math.PI * 2;
         while (off < -Math.PI) off += Math.PI * 2;
         const front = c.y >= f.py;
@@ -2303,7 +2305,7 @@ export class PlanetBehaviour extends Behaviour {
     if (best < 0 || !this.wx.chunkState?.(best, this.info)) return false;
     const dx = f.foe.view.x - this.info.x;
     const dy = f.foe.view.y - this.info.y;
-    const dl = Math.hypot(dx, dy) || 1;
+    const dl = DMath.hypot(dx, dy) || 1;
     const v = RING_THROW * power;
     if (!this.wx.launchChunk?.(best, (dx / dl) * v, (dy / dl) * v, f.body.id, f.slot)) return false;
     this.ringIds.splice(this.ringIds.indexOf(best), 1);
@@ -2369,15 +2371,15 @@ export class PlanetBehaviour extends Behaviour {
       e.shape = asShape(s);
       e.type = 'TIDAL';
       e.energy = 70;
-      e.dirX = Math.cos(a);
-      e.dirY = Math.sin(a);
+      e.dirX = DMath.cos(a);
+      e.dirY = DMath.sin(a);
       e.duration = 1;
       e.flags = 0;
       e.params = { pull: 1.6 };
       e.sourceMass = 4;
       e.sourceBodyId = -1;
-      e.originX = f.px + Math.cos(a) * 260;
-      e.originY = f.py + Math.sin(a) * 260;
+      e.originX = f.px + DMath.cos(a) * 260;
+      e.originY = f.py + DMath.sin(a) * 260;
       f.world.applyDamage(f.body.id, e);
     }
     if (t === FAIL_MOONS_AT) {
@@ -2396,7 +2398,7 @@ export class PlanetBehaviour extends Behaviour {
         // let go along the orbit: the tangent of their prograde motion, a little outward, slowly
         const ox = mo.x - f.px;
         const oy = mo.y - f.py;
-        const ol = Math.hypot(ox, oy) || 1;
+        const ol = DMath.hypot(ox, oy) || 1;
         mo.mode = DRIFT;
         mo.free = true;
         mo.age = 0;
@@ -2418,8 +2420,8 @@ export class PlanetBehaviour extends Behaviour {
             amount: 1,
           });
         const a = k * 2.399 + 0.6;
-        const ca = Math.cos(a);
-        const sa = Math.sin(a);
+        const ca = DMath.cos(a);
+        const sa = DMath.sin(a);
         s.kind = 'point';
         s.x = f.px + ca * (R - 4);
         s.y = f.py + sa * (R - 4);
@@ -2629,7 +2631,7 @@ export class PlanetBehaviour extends Behaviour {
     const ws = this.cloudSpin * this.airSense;
     const smear = Math.min(SMEAR_MAX, Math.abs(ws) * SMEAR_PER_SPIN);
     const sdir = ws >= 0 ? 1 : -1;
-    const cover = this.turnTick >= 0 ? Math.sin((Math.PI * (this.turnTick + 0.5)) / TURN_TICKS) : 0;
+    const cover = this.turnTick >= 0 ? DMath.sin((Math.PI * (this.turnTick + 0.5)) / TURN_TICKS) : 0;
     const density = Math.max(this.atmoFrac, cover);
     const cn = this.cloudC;
     // the core going out: the exposed deep strata darken and stop glowing, dithered in from the outside
@@ -2638,7 +2640,7 @@ export class PlanetBehaviour extends Behaviour {
     const crustR = this.crustR;
     const mantleR = this.mantle;
     const magmaR = this.magma;
-    const coreC = rampAt(magmaR, (0.92 + 0.08 * Math.sin(tick * 0.035)) * heat);
+    const coreC = rampAt(magmaR, (0.92 + 0.08 * DMath.sin(tick * 0.035)) * heat);
     const emMantle = Math.round(80 * heat);
     const emMagma = Math.round(190 * heat);
     const emCore = Math.round(240 * heat);
@@ -2789,9 +2791,9 @@ export class PlanetBehaviour extends Behaviour {
     if (vis < 0.03) return;
     const a = R * (RING_LOOSE + (RING_TIGHT - RING_LOOSE) * tight);
     const b = a * RING_FLAT;
-    const tilt = RING_TILT + PHASE_WANDER[this.phase]! * Math.sin(this.wander);
-    const ct = Math.cos(tilt);
-    const st = Math.sin(tilt);
+    const tilt = RING_TILT + PHASE_WANDER[this.phase]! * DMath.sin(this.wander);
+    const ct = DMath.cos(tilt);
+    const st = DMath.sin(tilt);
     const hide = (R + this.rig.atmo) * (R + this.rig.atmo);
     const arc = Math.min(0.5, 0.05 + 0.06 * Math.abs(this.omega) * (0.6 + 0.4 * tight));
     // the ring lies in the moons' (world-fixed) plane; each mote trails an arc behind its motion (see `stepSpin`)
@@ -2806,9 +2808,9 @@ export class PlanetBehaviour extends Behaviour {
       const segs = 1 + Math.round(arc * a * 0.5);
       for (let s = 0; s < segs; s++) {
         const phi = phi0 + (sense * arc * s) / Math.max(1, segs);
-        const sp = Math.sin(phi);
+        const sp = DMath.sin(phi);
         const rr = 1 + 0.05 * (h - 0.5);
-        const ex = Math.cos(phi) * a * rr;
+        const ex = DMath.cos(phi) * a * rr;
         const ey = sp * b * rr;
         const lx = ex * ct - ey * st;
         const ly = ex * st + ey * ct;
@@ -2839,11 +2841,11 @@ export class PlanetBehaviour extends Behaviour {
       (1 - this.coreOut);
     if (level < 0.06) return;
     const rf = t.facing;
-    const tilt = this.rig.tilt + PHASE_WANDER[this.phase]! * Math.cos(this.wander);
-    const s = Math.sin(tilt);
-    const c = Math.cos(tilt);
-    const cb = Math.cos(AURORA_BETA);
-    const sb = Math.sin(AURORA_BETA);
+    const tilt = this.rig.tilt + PHASE_WANDER[this.phase]! * DMath.cos(this.wander);
+    const s = DMath.sin(tilt);
+    const c = DMath.cos(tilt);
+    const cb = DMath.cos(AURORA_BETA);
+    const sb = DMath.sin(AURORA_BETA);
     const height = 2 + 7 * level;
     for (let pole = 0; pole < 2; pole++) {
       const sg = pole === 0 ? 1 : -1;
@@ -2852,8 +2854,8 @@ export class PlanetBehaviour extends Behaviour {
       const py = -c * sg;
       for (let k = 0; k < AURORA_STEPS; k++) {
         const ph = (k / AURORA_STEPS) * Math.PI * 2 + this.thetaAir * 0.5 * sg;
-        const cp = Math.cos(ph);
-        const sp = Math.sin(ph);
+        const cp = DMath.cos(ph);
+        const sp = DMath.sin(ph);
         // a point on the oval: pole·cosβ + (e1·cos φ + view·sin φ)·sinβ, with e1 = (c, s) in the plane
         const ox = px * cb + c * cp * sb;
         const oy = py * cb + s * cp * sb;
@@ -2862,7 +2864,7 @@ export class PlanetBehaviour extends Behaviour {
         // curtains drift and breathe below 0.5 Hz
         const shimmer = tn(k * 0.37 + tick * 0.012, pole * 7 + tick * 0.006);
         const v = level * (0.45 + 0.75 * shimmer);
-        const ol = Math.hypot(ox, oy) || 1;
+        const ol = DMath.hypot(ox, oy) || 1;
         const ux = ox / ol;
         const uy = oy / ol;
         const h = height * (0.5 + 0.5 * shimmer);
@@ -2889,7 +2891,7 @@ export class PlanetBehaviour extends Behaviour {
   private drawComet(X: Overlay): void {
     const c = this.comet;
     if (c.mode === C_NONE) return;
-    const sp = Math.hypot(c.vx, c.vy);
+    const sp = DMath.hypot(c.vx, c.vy);
     if (sp < 1) return;
     const ux = -c.vx / sp;
     const uy = -c.vy / sp;
@@ -2950,8 +2952,8 @@ export class PlanetBehaviour extends Behaviour {
           const a = a0 + u * 1.4;
           if (((k + s) & 3) !== 0) continue;
           X.set(
-            Math.round(t.x + Math.cos(a) * r),
-            Math.round(t.y + Math.sin(a) * r * 0.42),
+            Math.round(t.x + DMath.cos(a) * r),
+            Math.round(t.y + DMath.sin(a) * r * 0.42),
             rampAt(this.crustR, 0.4 + 0.5 * u),
             Math.round(60 * u),
           );
@@ -2977,8 +2979,8 @@ export class PlanetBehaviour extends Behaviour {
           const a = i * 2.399 + tick * 0.02;
           const rr = (R + 60) * (1 - q) * (0.5 + (0.5 * ((i * 37) % 10)) / 10) + R * 0.6;
           X.set(
-            Math.round(t.x + Math.cos(a) * rr),
-            Math.round(t.y + Math.sin(a) * rr * 0.8),
+            Math.round(t.x + DMath.cos(a) * rr),
+            Math.round(t.y + DMath.sin(a) * rr * 0.8),
             rampAt(this.mantle, 0.5 + 0.5 * q),
             200,
           );
@@ -3009,8 +3011,8 @@ export class PlanetBehaviour extends Behaviour {
           const a = k * 0.698 + 0.3;
           glowD(
             X,
-            t.x + Math.cos(a) * R * 0.92,
-            t.y + Math.sin(a) * R * 0.92,
+            t.x + DMath.cos(a) * R * 0.92,
+            t.y + DMath.sin(a) * R * 0.92,
             6 + 6 * q,
             255,
             150,
@@ -3026,8 +3028,8 @@ export class PlanetBehaviour extends Behaviour {
     if (id === 'planet.magmavent') {
       const ang = f.facing === 1 ? 0 : Math.PI;
       const aim = (m.aim === 'up' ? -0.72 : m.aim === 'down' ? 0.72 : 0) * f.facing;
-      const dx = Math.cos(ang + aim);
-      const dy = Math.sin(ang + aim);
+      const dx = DMath.cos(ang + aim);
+      const dy = DMath.sin(ang + aim);
       const mx = t.x + dx * R * 0.95;
       const my = t.y + dy * R * 0.95;
       if (m.phase === 'startup') {
@@ -3035,7 +3037,7 @@ export class PlanetBehaviour extends Behaviour {
         glowD(X, mx, my, 8 + 14 * q, 255, 140, 50, 0.3 + 0.5 * q);
       } else if (m.phase === 'active') {
         // the jet: a tapered magma column out of the wound, its length breathing slowly
-        const len = 200 * (0.85 + 0.15 * Math.sin(tick * 0.05));
+        const len = 200 * (0.85 + 0.15 * DMath.sin(tick * 0.05));
         const jet = this.jet;
         jet[0] = mx;
         jet[1] = my;
@@ -3063,13 +3065,13 @@ export class PlanetBehaviour extends Behaviour {
         const curve = (this.aimY < -0.3 ? -1 : this.aimY > 0.3 ? 1 : 0) * this.cfg.curve;
         const ax = f.foe.view.x - moon.x;
         const ay = f.foe.view.y - moon.y;
-        const base = Math.atan2(ay, ax);
-        const dist = Math.hypot(ax, ay);
+        const base = DMath.atan2(ay, ax);
+        const dist = DMath.hypot(ax, ay);
         for (let d = 24; d < Math.min(dist, 170 + 130 * cf); d += 7) {
-          const a = base + curve * 0.5 * Math.sin((Math.PI * d) / Math.max(1, dist));
+          const a = base + curve * 0.5 * DMath.sin((Math.PI * d) / Math.max(1, dist));
           X.set(
-            Math.round(moon.x + Math.cos(a) * d),
-            Math.round(moon.y + Math.sin(a) * d),
+            Math.round(moon.x + DMath.cos(a) * d),
+            Math.round(moon.y + DMath.sin(a) * d),
             rampAt(this.magma, 0.5 + 0.5 * cf),
             180,
           );
@@ -3158,18 +3160,18 @@ export class PlanetBehaviour extends Behaviour {
       if (mo && mo.mode !== GONE) out.push(mo.x, mo.y);
       else out.push(root.x, root.y);
     }
-    out.push(root.x + Math.cos(this.thetaAir) * R * 0.7, root.y + Math.sin(this.thetaAir) * R * 0.2);
-    const tilt = this.rig.tilt + PHASE_WANDER[this.phase]! * Math.cos(this.wander);
+    out.push(root.x + DMath.cos(this.thetaAir) * R * 0.7, root.y + DMath.sin(this.thetaAir) * R * 0.2);
+    const tilt = this.rig.tilt + PHASE_WANDER[this.phase]! * DMath.cos(this.wander);
     const level = clamp01(0.08 + (0.55 * Math.abs(this.spin)) / SPIN_MAX + this.auroraPulse);
     const rf = f.body.transform.facing;
     out.push(
-      root.x + Math.sin(tilt) * (R + 2 + 7 * level) * rf,
-      root.y - Math.cos(tilt) * (R + 2 + 7 * level),
+      root.x + DMath.sin(tilt) * (R + 2 + 7 * level) * rf,
+      root.y - DMath.cos(tilt) * (R + 2 + 7 * level),
     );
     const a = R * (RING_LOOSE + (RING_TIGHT - RING_LOOSE) * this.ringTight);
     for (let k = 0; k <= 11; k += 11) {
       const phi = (k / RING_MOTES) * Math.PI * 2 + this.ringPhase;
-      out.push(root.x + Math.cos(phi) * a, root.y + Math.sin(phi) * a * RING_FLAT);
+      out.push(root.x + DMath.cos(phi) * a, root.y + DMath.sin(phi) * a * RING_FLAT);
     }
     const c = this.comet;
     if (c.mode !== C_NONE) out.push(c.x, c.y);
@@ -3188,7 +3190,7 @@ export class PlanetBehaviour extends Behaviour {
     const alive = 1 - this.coreOut;
     this.halo.place(t.x, t.y, body.prevX, body.prevY, (0.28 + 0.5 * this.atmoFrac) * (0.15 + 0.85 * alive));
     // Exposed Mantle warms the halo; Core Crisis makes it an apocalyptic glow that breathes; it dies with the core
-    const core = this.phase >= 4 ? 0.3 + 0.1 * Math.sin(this.tickLast * 0.025) : this.phase === 3 ? 0.12 : 0;
+    const core = this.phase >= 4 ? 0.3 + 0.1 * DMath.sin(this.tickLast * 0.025) : this.phase === 3 ? 0.12 : 0;
     this.haloCore.place(t.x, t.y, body.prevX, body.prevY, core * alive);
     out.push(this.haloCore.layer, this.halo.layer, this.skin.layer, this.glow.layer);
     for (const mo of this.moons) {

@@ -16,6 +16,7 @@ import { keepLargestComponent } from './field';
 import { bayer8, fbm, hash01, makeWorley, ridged, worley } from './noise';
 import { sdEllipse } from './sdf';
 import { resolveMaterials } from '../materialTable';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * PLANET — a layered world seen as a lit globe. The visible face is painted from a lat/lon surface (oceans with shallows and
@@ -133,7 +134,7 @@ function buildClouds(seed: number): Uint8Array {
     for (let x = 0; x < W; x++) {
       const u = x / W;
       const lat = (y / H - 0.5) * Math.PI;
-      const band = 0.5 + 0.5 * Math.sin(lat * 7 + 1.2 * periodic(x * 0.03, y * 0.05, W * 0.03, s + 3, 2));
+      const band = 0.5 + 0.5 * DMath.sin(lat * 7 + 1.2 * periodic(x * 0.03, y * 0.05, W * 0.03, s + 3, 2));
       const n = periodic(u * 9, y * 0.06, 9, s, 4) * 0.7 + periodic(u * 20, y * 0.13, 20, s + 9, 3) * 0.3;
       let d = 0.5 + 0.55 * n + 0.3 * band - 0.42;
       // cyclone: a spiral arm pattern around the storm eye
@@ -141,10 +142,10 @@ function buildClouds(seed: number): Uint8Array {
       if (dx > W / 2) dx -= W;
       if (dx < -W / 2) dx += W;
       const dy = (y - stormY) * 1.6;
-      const r = Math.hypot(dx, dy);
+      const r = DMath.hypot(dx, dy);
       if (r < 34) {
-        const th = Math.atan2(dy, dx) + r * 0.16;
-        const arm = 0.5 + 0.5 * Math.cos(th * 2);
+        const th = DMath.atan2(dy, dx) + r * 0.16;
+        const arm = 0.5 + 0.5 * DMath.cos(th * 2);
         d = Math.max(d, 0.85 * arm * (1 - r / 34) + (r < 4 ? -1 : 0) * 0.5);
       }
       raw[y * W + x] = d;
@@ -179,10 +180,10 @@ function layout(def: TitanDef, seed: number): Layout {
     cx: CX(def) + 0.5,
     cy: CY(def) + 0.5,
     seed,
-    rDisc: (th) => p.radius * (1 + 0.012 * fbm(Math.cos(th) * 1.2 + 4, Math.sin(th) * 1.2 + 4, s1, 2)),
+    rDisc: (th) => p.radius * (1 + 0.012 * fbm(DMath.cos(th) * 1.2 + 4, DMath.sin(th) * 1.2 + 4, s1, 2)),
     rAtmo: (th) =>
       p.radius +
-      p.atmo * (0.62 + 0.38 * (0.5 + 0.5 * fbm(Math.cos(th) * 3.1 + 2, Math.sin(th) * 3.1 + 9, s2, 3))),
+      p.atmo * (0.62 + 0.38 * (0.5 + 0.5 * fbm(DMath.cos(th) * 3.1 + 2, DMath.sin(th) * 3.1 + 9, s2, 3))),
   };
 }
 
@@ -196,12 +197,12 @@ function sphere(
   const r2 = dx * dx + dy * dy;
   if (r2 >= 1) return false;
   const nz = Math.sqrt(1 - r2);
-  const c = Math.cos(tilt);
-  const s = Math.sin(tilt);
+  const c = DMath.cos(tilt);
+  const s = DMath.sin(tilt);
   const px = dx * c + dy * s;
   const py = -dx * s + dy * c;
-  out.lat = Math.asin(clamp(-py, -1, 1));
-  out.lon = Math.atan2(px, nz);
+  out.lat = DMath.asin(clamp(-py, -1, 1));
+  out.lon = DMath.atan2(px, nz);
   out.nz = nz;
   return true;
 }
@@ -296,8 +297,8 @@ export function paintPlanet(
     for (let x = 1; x < W - 1; x++) {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
-      const r = Math.hypot(dx, dy);
-      const th = Math.atan2(dy, dx);
+      const r = DMath.hypot(dx, dy);
+      const th = DMath.atan2(dy, dx);
       const rd = L.rDisc(th);
       const i = y * W + x;
       if (r <= rd) {
@@ -326,7 +327,7 @@ export function paintPlanet(
           // mountain ranges crossing the limb: land there is bare rock (the face colours already blend into it)
           if (
             (m === I.forest || m === I.desert) &&
-            fbm(Math.cos(th) * 2.6 + 3, Math.sin(th) * 2.6 - 1, sB + 44, 3) > 0.16
+            fbm(DMath.cos(th) * 2.6 + 3, DMath.sin(th) * 2.6 - 1, sB + 44, 3) > 0.16
           )
             m = I.mountain;
         } else if (d < p.crust) m = I.crust;
@@ -391,7 +392,7 @@ export function paintPlanet(
   const kx = lighting.dir[0] * 0.8;
   const ky = lighting.dir[1];
   const kz = lighting.dir[2];
-  const kn = Math.hypot(kx, ky, kz) || 1;
+  const kn = DMath.hypot(kx, ky, kz) || 1;
   // tone: shallows, vegetation, deserts, glints of variety
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
@@ -420,11 +421,11 @@ export function paintPlanet(
 
   // ---- 3. hand-painted touches: the sun glint on the sea, the atmosphere's lit edge -----------------------------------------
   const key = [lighting.dir[0] * 0.8, lighting.dir[1], lighting.dir[2]];
-  const kl = Math.hypot(key[0]!, key[1]!, key[2]!) || 1;
+  const kl = DMath.hypot(key[0]!, key[1]!, key[2]!) || 1;
   const hx = key[0]! / kl;
   const hy = key[1]! / kl;
   const hz = key[2]! / kl + 1;
-  const hl = Math.hypot(hx, hy, hz);
+  const hl = DMath.hypot(hx, hy, hz);
   const oceanRamp = def.materials[I.ocean - 1]!.visual.ramp.map(hex);
   const atmoRamp = ramps[I.atmosphere]!;
   for (let y = 0; y < H; y++)
@@ -436,16 +437,16 @@ export function paintPlanet(
         const dy = (y + 0.5 - cy) / R;
         const nz = Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy));
         const g = Math.max(0, (dx * hx + dy * hy + nz * hz) / hl);
-        const glint = Math.pow(g, 260);
+        const glint = DMath.pow(g, 260);
         if (glint > 0.4 && hash01(x, y, sA + 40) > 0.25) colors[i] = oceanRamp[oceanRamp.length - 1]!;
         else if (glint > 0.16) colors[i] = oceanRamp[Math.min(oceanRamp.length - 1, 5)]!;
       } else if (m === I.atmosphere) {
         // Rayleigh edge: cyan-white where the limb faces the light, deep blue-violet on the dark side
-        const ang = Math.atan2(y + 0.5 - cy, x + 0.5 - cx);
+        const ang = DMath.atan2(y + 0.5 - cy, x + 0.5 - cx);
         const facing = clamp01(
-          ((Math.cos(ang) * key[0]! + Math.sin(ang) * key[1]!) / Math.hypot(key[0]!, key[1]!)) * 0.5 + 0.5,
+          ((DMath.cos(ang) * key[0]! + DMath.sin(ang) * key[1]!) / DMath.hypot(key[0]!, key[1]!)) * 0.5 + 0.5,
         );
-        const out = clamp01((Math.hypot(x + 0.5 - cx, y + 0.5 - cy) - R) / p.atmo);
+        const out = clamp01((DMath.hypot(x + 0.5 - cx, y + 0.5 - cy) - R) / p.atmo);
         const v = (0.25 + 0.75 * facing * facing) * (1 - 0.55 * out) + 0.12 * (hash01(x, y, sB + 60) - 0.5);
         const s = clamp(v, 0, 1) * (atmoRamp.length - 1);
         const fl = Math.floor(s);
@@ -498,9 +499,9 @@ function paintMoon(def: TitanDef, seed: number, lighting: StageLighting, index: 
     const a = rng.range(0, 6.283);
     const rr = Math.sqrt(rng.next()) * spec.r * 0.85;
     const cr = rng.range(1.8, spec.r * 0.3);
-    const x = c + Math.cos(a) * rr;
-    const y = c + Math.sin(a) * rr;
-    if (craters.some((k) => Math.hypot(k.x - x, k.y - y) < k.r + cr + 0.5)) continue;
+    const x = c + DMath.cos(a) * rr;
+    const y = c + DMath.sin(a) * rr;
+    if (craters.some((k) => DMath.hypot(k.x - x, k.y - y) < k.r + cr + 0.5)) continue;
     craters.push({ x, y, r: cr });
   }
   for (let y = 1; y < size - 1; y++)
@@ -509,18 +510,18 @@ function paintMoon(def: TitanDef, seed: number, lighting: StageLighting, index: 
       const fy = y + 0.5;
       if (sd(fx, fy) >= 0) continue;
       const i = y * size + x;
-      const u = clamp(Math.hypot(fx - c, fy - c) / spec.r, 0, 0.985);
+      const u = clamp(DMath.hypot(fx - c, fy - c) / spec.r, 0, 0.985);
       let rel = 0.9 * spec.r * Math.sqrt(1 - u * u) + fbm(fx * 0.2, fy * 0.2, s + 8, 3) * 1.2;
       let m = fbm(fx * 0.09, fy * 0.09, s + 14, 3) > 0.12 ? ids.dark : ids.rock;
       let tone = (hash01(x, y, s) - 0.5) * 0.5;
       for (const k of craters) {
-        const d = Math.hypot(fx - k.x, fy - k.y) / k.r;
+        const d = DMath.hypot(fx - k.x, fy - k.y) / k.r;
         if (d < 1) {
           rel -= (1 - d * d) * (1 + k.r * 0.35);
           if (d < 0.75) tone -= 0.4;
         } else if (d < 1.25) rel += (1.25 - d) * 3.2;
       }
-      if (Math.hypot(fx - c, fy - c) < spec.r * 0.55 && u > 0.7) m = ids.dust;
+      if (DMath.hypot(fx - c, fy - c) < spec.r * 0.55 && u > 0.7) m = ids.dust;
       cv.mat[i] = m;
       cv.relief[i] = Math.max(0.3, rel);
       cv.tone[i] = tone;

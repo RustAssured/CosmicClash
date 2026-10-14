@@ -3,6 +3,7 @@ import type { WorldCore } from './core';
 import { collideCapsules } from './capsules';
 import { PK } from './particles';
 import { lerpPx, scalePx } from './util';
+import { DMath } from '@/contracts/dmath';
 
 const EMPTY32 = new Uint32Array(0);
 const EMPTY8 = new Uint8Array(0);
@@ -326,7 +327,7 @@ function computeChunkGeometry(c: Chunk): void {
       if (y === 0 || pixels[i - w]! >>> 24 === 0) ny -= 1;
       if (y === h - 1 || pixels[i + w]! >>> 24 === 0) ny += 1;
       if (nx !== 0 || ny !== 0) {
-        let a = Math.atan2(ny, nx);
+        let a = DMath.atan2(ny, nx);
         if (a < 0) a += Math.PI * 2;
         nrm[i] = 1 + (Math.round(a / (Math.PI / 4)) & 7);
       }
@@ -374,8 +375,8 @@ export function degradeToDust(core: WorldCore, c: Chunk): void {
       PK.dust,
       c.x + (core.rng.next() - 0.5) * c.radius,
       c.y + (core.rng.next() - 0.5) * c.radius,
-      c.vx * 0.5 + Math.cos(ang) * sp,
-      c.vy * 0.5 + Math.sin(ang) * sp,
+      c.vx * 0.5 + DMath.cos(ang) * sp,
+      c.vy * 0.5 + DMath.sin(ang) * sp,
       50 + core.rng.int(40),
       2,
       0,
@@ -477,8 +478,8 @@ export function splitChunk(
     }
   const total = c.cells;
   const parentAngle = c.angle;
-  const cos = Math.cos(c.angle);
-  const sin = Math.sin(c.angle);
+  const cos = DMath.cos(c.angle);
+  const sin = DMath.sin(c.angle);
   const parent = splitParent;
   parent.x = c.x;
   parent.y = c.y;
@@ -703,8 +704,8 @@ export function stepChunks(core: WorldCore): void {
       // settle into a slow drift (direction and spin from the chunk id: deterministic)
       const h = (Math.imul(c.id, 2654435761) >>> 0) / 4294967296;
       const ang = h * Math.PI * 2;
-      c.vx = Math.cos(ang) * DRIFT_SPEED;
-      c.vy = Math.sin(ang) * DRIFT_SPEED;
+      c.vx = DMath.cos(ang) * DRIFT_SPEED;
+      c.vy = DMath.sin(ang) * DRIFT_SPEED;
       c.spin = (h - 0.5) * 0.12;
       c.asleep = true;
     }
@@ -728,8 +729,8 @@ function stepOrbit(core: WorldCore, c: Chunk, dt: number): void {
   }
   c.phase += o.omega * dt;
   const R = c.ring;
-  const cs = Math.cos(c.phase);
-  const sn = Math.sin(c.phase);
+  const cs = DMath.cos(c.phase);
+  const sn = DMath.sin(c.phase);
   const F = o.flatten;
   const tx = o.x + cs * R;
   const ty = o.y + sn * R * F;
@@ -824,8 +825,8 @@ function collideBodies(core: WorldCore, c: Chunk): void {
     if (launched && (b.id === c.credit || (c.owner >= 0 && b.ownerSlot === c.owner))) continue;
     // Probe the centre and four points at 0.55 radius on the chunk's rotated axes.
     if (cs === 2) {
-      cs = Math.cos(c.angle);
-      sn = Math.sin(c.angle);
+      cs = DMath.cos(c.angle);
+      sn = DMath.sin(c.angle);
     }
     const rr = r * 0.55;
     let hits = 0;
@@ -982,7 +983,7 @@ export function rasterChunks(
   const L = core.lighting;
   for (let k = 0; k < 8; k++) {
     const a = (k * Math.PI) / 4;
-    const lit = Math.cos(a) * L.lx + Math.sin(a) * L.ly;
+    const lit = DMath.cos(a) * L.lx + DMath.sin(a) * L.ly;
     LIT[k] = Math.round(256 * (1 + 0.5 * lit));
   }
   let nearDrawn = 0;
@@ -1008,8 +1009,8 @@ export function rasterChunks(
     if (depth === DEPTH_NEAR) nearDrawn++;
     const q = Math.round(c.angle / QSTEP);
     const th = q * QSTEP;
-    const cs = Math.cos(th);
-    const sn = Math.sin(th);
+    const cs = DMath.cos(th);
+    const sn = DMath.sin(th);
     const rotSteps = ((q * 8) / QUANT) | 0; // approx normal rotation in 45° units
     // Depth cues: back chunks are darker and hazed; near chunks are shaded harder underneath and rimmed dark.
     const depthDim = depth === DEPTH_BACK ? 206 : 256;

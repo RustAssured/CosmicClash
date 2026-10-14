@@ -2,19 +2,27 @@ import { LOGICAL_W, ROUNDS_TO_WIN, type MatchConfig, type TitanId } from '@/cont
 import { DIFFICULTY_LABELS } from '../labels';
 import {
   CLEARED,
-  LADDER_RUNGS,
+  DIFFICULTY_NAMES,
+  LADDER_FINAL,
+  MODE_LABELS,
   abandonRun,
-  ladderFor,
+  emptyLadder,
+  isNewTitan,
   loadLadder,
   recordLoss,
   recordWin,
+  runOf,
+  runRungs,
   saveLadder,
   startRun,
-  unlockOnClear,
+  type LadderDifficulty,
+  type LadderMode,
+  type LadderRun,
   type LadderSave,
   type Rung,
 } from '../ladder';
 import { ENDING_LINES, MOUTH_ENDING_LINES, storyCard, type StoryTone } from '../ladderStory';
+import { drawNewTag } from './tourney';
 import { PixelCanvas, type Sprite } from '../pixel/canvas';
 import { C, accentRamp, alpha } from '../pixel/palette';
 import { drawIcon, panel, pips } from '../pixel/shapes';
@@ -27,6 +35,7 @@ import {
   header,
   portraitSprite,
   drawTitanPortrait,
+  ladderRosterOf,
   promptLabels,
   scrim,
   settled,
@@ -40,6 +49,8 @@ import {
 export interface LadderParams {
   /** A fresh run for this titan (from the select). */
   start?: TitanId;
+  /** COSMIC CLASH: the seed of that run's shuffle (the select previews the lineup it deals). */
+  seed?: number;
   /** The fight that just ended (the runtime routes a tournament match's end here instead of the results screen). */
   result?: 'win' | 'lose';
   /** Dev flag `?ladder=N`: a run for `player` at rung N (persisted, like a real run). */
@@ -55,13 +66,25 @@ type View = 'tower' | 'card' | 'lose' | 'ending' | 'empty';
 const TONE: Record<StoryTone, number> = { white: C.text, gold: C.gold, red: C.danger };
 const ACCENT = accentRamp('#a8bdb2');
 
-/* tower geometry: rung 1 at the bottom, the final boss on top */
+/*
+ * tower geometry: rung 1 at the bottom, the final boss on top. Eight rungs fit 34 px rows; a taller tower (CLASSIC's nine,
+ * a growing COSMIC CLASH) shrinks its rows to fit between the header and the plinth, and narrows its taper.
+ */
 const TX = 314;
-const ROW = 34;
 const BASE = 321;
-const RUNG_H = 32;
-const rungW = (i: number): number => 198 - i * 8;
+const TOWER_TOP = 42;
+let ROW = 34;
+let RUNG_H = 32;
+let TAPER = 8;
+function towerFor(n: number): void {
+  ROW = Math.min(34, Math.floor((BASE - TOWER_TOP) / Math.max(1, n)));
+  RUNG_H = ROW - 2;
+  TAPER = n > 1 ? Math.min(8, Math.floor(80 / (n - 1))) : 8;
+}
+const rungW = (i: number): number => 198 - i * TAPER;
 const rungTop = (i: number): number => BASE - (i + 1) * ROW + 2;
+/** Room for a second line (RUNG n, the boss tag) under the name. */
+const twoLines = (): boolean => RUNG_H >= 28;
 const LEFT_X = 14;
 const LEFT_W = 158;
 const RIGHT_X = 428;
@@ -78,17 +101,33 @@ const CLIMB_SEC = 0.8;
  * lives in localStorage (src/ui/ladder.ts), so a closed tab resumes at the current rung.
  */
 export function createLadderScreen(): Screen {
-  let save: LadderSave = { run: null, best: {} };
+  let save: LadderSave = emptyLadder();
   let view: View = 'tower';
   let menu = new Menu([]);
   /** Rung index (0-based) the player just climbed from, while the climb plays; -1 = none. */
   let climbFrom = -1;
   let viewAt = 0;
   let ending: { player: TitanId; unlocked: boolean } | null = null;
+  /** The tournament on screen (set from the setup on enter). */
+  let mode: LadderMode = 'classic';
+  let diff: LadderDifficulty = 'normal';
+  let roster: ReturnType<typeof ladderRosterOf> = [];
+  /** Cached rungs of the stored run (rebuilt when the run changes). */
+  let cache: { run: LadderRun; rung: Rung[] } | null = null;
 
   const persist = (ctx: UICtx): void => saveLadder(resolveStore(ctx.deps.storage), save);
-  const rungs = (): Rung[] => (save.run ? ladderFor(save.run.player) : []);
-  const current = (): Rung | null => (save.run ? (rungs()[save.run.rung - 1] ?? null) : null);
+  const run = (): LadderRun | null => runOf(save, mode, diff);
+  const rungs = (): Rung[] => {
+    const r = run();
+    if (!r) return [];
+    if (cache?.run !== r) cache = { run: r, rung: runRungs(r, mode, diff, roster) };
+    return cache.rung;
+  };
+  const current = (): Rung | null => {
+    const r = run();
+    return r ? (rungs()[r.rung - 1] ?? null) : null;
+  };
+  const total = (): number => rungs().length;
 
   const setView = (ctx: UICtx, v: View): void => {
     view = v;
@@ -112,17 +151,20 @@ export function createLadderScreen(): Screen {
     ctx.go('title');
   };
 
+  const newSeed = (ctx: UICtx): number =>
+    ctx.deps.newSeed?.() ?? ((ctx.deps.now?.() ?? Date.now()) * 1000) & 0x7fffffff;
+
   const fight = (ctx: UICtx): void => {
-    const run = save.run;
+    const r = run();
     const rung = current();
-    if (!run || !rung) return;
-    const seed = ctx.deps.newSeed?.() ?? ((ctx.deps.now?.() ?? Date.now()) * 1000) & 0x7fffffff;
+    if (!r || !rung) return;
+    const seed = newSeed(ctx);
     const config: MatchConfig = {
       seed: seed || 1,
       stage: ctx.isStageReady(rung.stage) ? rung.stage : ctx.setup.stage,
       mode: 'vsai',
       slots: [
-        { titan: run.player, controller: 'human' },
+        { titan: r.player, controller: 'human' },
         { titan: rung.foe, controller: 'ai', aiLevel: rung.aiLevel, ...(rung.boss ? { boss: true } : {}) },
       ],
     };
@@ -134,6 +176,10 @@ export function createLadderScreen(): Screen {
     enter(ctx, params) {
       const p = (params ?? {}) as LadderParams;
       save = loadLadder(resolveStore(ctx.deps.storage));
+      mode = ctx.setup.ladderMode;
+      diff = ctx.setup.ladderDifficulty;
+      roster = ladderRosterOf(ctx);
+      cache = null;
       climbFrom = -1;
       ending = null;
       ctx.setup.mode = 'ladder';
@@ -142,35 +188,39 @@ export function createLadderScreen(): Screen {
         setView(ctx, 'ending');
         return;
       }
+      const opts = { mode, difficulty: diff, roster };
       if (p.start) {
-        startRun(save, p.start);
+        startRun(save, p.start, { ...opts, seed: p.seed ?? newSeed(ctx) });
         persist(ctx);
       } else if (p.dev) {
-        startRun(save, p.dev.player, p.dev.rung);
+        startRun(save, p.dev.player, { ...opts, rung: p.dev.rung, seed: p.seed ?? 1 });
         persist(ctx);
       } else if (p.result === 'win') {
-        const player = save.run?.player;
-        const r = recordWin(save);
+        const before = run();
+        const last = rungs()[rungs().length - 1];
+        const r = recordWin(save, mode, diff, roster);
         persist(ctx);
-        if (r === 'cleared' && player) {
-          const unlock = unlockOnClear(player);
-          ending = { player, unlocked: unlock ? ctx.unlockTitan(unlock) : false };
+        if (r === 'cleared' && before) {
+          // beating either mode's final boss (the Mouth) unlocks it
+          const unlock = last?.foe === LADDER_FINAL ? LADDER_FINAL : null;
+          ending = { player: before.player, unlocked: unlock ? ctx.unlockTitan(unlock) : false };
           ctx.sound('roundwin');
           setView(ctx, 'ending');
           return;
         }
         if (r === 'next') {
-          climbFrom = save.run!.rung - 2;
+          climbFrom = run()!.rung - 2;
           ctx.sound('roundwin');
         }
       } else if (p.result === 'lose') {
-        recordLoss(save);
+        recordLoss(save, mode, diff);
         persist(ctx);
-        setView(ctx, save.run ? 'lose' : 'empty');
+        setView(ctx, run() ? 'lose' : 'empty');
         return;
       }
-      if (save.run) ctx.setup.p1 = save.run.player;
-      setView(ctx, !save.run ? 'empty' : p.view === 'card' || p.view === 'lose' ? p.view : 'tower');
+      const r = run();
+      if (r) ctx.setup.p1 = r.player;
+      setView(ctx, !r ? 'empty' : p.view === 'card' || p.view === 'lose' ? p.view : 'tower');
     },
 
     update(ctx) {
@@ -219,7 +269,7 @@ export function createLadderScreen(): Screen {
           fight(ctx);
           break;
         case 'new':
-          abandonRun(save);
+          abandonRun(save, mode, diff);
           persist(ctx);
           ctx.go('title');
           ctx.push('select');
@@ -244,8 +294,15 @@ export function createLadderScreen(): Screen {
         scrim(bg, 0.8, 0.7, 0.86);
         vignette(bg);
       });
-      header(ctx, 'TOURNAMENT', '토너먼트', save.run ? `RUNG ${save.run.rung} / ${LADDER_RUNGS}` : undefined);
-      if (!save.run) return;
+      const r = run();
+      header(
+        ctx,
+        'TOURNAMENT',
+        '토너먼트',
+        `${MODE_LABELS[mode].en} · ${DIFFICULTY_NAMES[diff].en}${r ? `  RUNG ${r.rung} / ${total()}` : ''}`,
+      );
+      if (!r) return;
+      towerFor(total());
       drawTower(ctx);
       drawPlayer(ctx);
       drawNext(ctx);
@@ -267,7 +324,7 @@ export function createLadderScreen(): Screen {
 
   /** The rung's state on the tower: beaten (below the player), current, or still ahead. */
   function stateOf(i: number): 'beaten' | 'current' | 'ahead' {
-    const at = (save.run?.rung ?? 1) - 1;
+    const at = (run()?.rung ?? 1) - 1;
     return i < at ? 'beaten' : i === at ? 'current' : 'ahead';
   }
 
@@ -290,7 +347,7 @@ export function createLadderScreen(): Screen {
       drawRung(ctx, r, i, st, crack);
     });
     // the player's marker: climbs from the beaten rung to the current one
-    const at = save.run!.rung - 1;
+    const at = run()!.rung - 1;
     let y = rungTop(at);
     let x = TX - rungW(at) / 2;
     if (climbFrom >= 0) {
@@ -299,13 +356,15 @@ export function createLadderScreen(): Screen {
       y = Math.round(rungTop(climbFrom) + (rungTop(at) - rungTop(climbFrom)) * e);
       x = Math.round(TX - rungW(climbFrom) / 2 + ((rungW(climbFrom) - rungW(at)) / 2) * e);
     }
-    const mx = x - 32;
+    const ms = Math.min(26, RUNG_H - 4);
+    const mx = x - ms - 6;
+    const my = y + Math.floor((RUNG_H - ms) / 2);
     const pulse = Math.floor(ctx.t * 3) % 2;
-    cv.rect(mx - 1, y + 3, 26, 26, alpha(C.ink0, 0.9));
-    cv.frame(mx - 1, y + 3, 26, 26, C.p1);
-    const spr = portraitSprite(ctx, save.run!.player, 22);
-    if (spr) cv.blit(spr, mx + 1, y + 5);
-    drawIcon(cv, 'chevron', x - 5 + pulse, y + 12, C.p1);
+    cv.rect(mx - 1, my, ms, ms, alpha(C.ink0, 0.9));
+    cv.frame(mx - 1, my, ms, ms, C.p1);
+    const spr = portraitSprite(ctx, run()!.player, ms - 4);
+    if (spr) cv.blit(spr, mx + 1, my + 2);
+    drawIcon(cv, 'chevron', x - 5 + pulse, y + Math.floor(RUNG_H / 2) - 4, C.p1);
   }
 
   function drawRung(ctx: UICtx, r: Rung, i: number, st: 'beaten' | 'current' | 'ahead', crack: number): void {
@@ -322,10 +381,11 @@ export function createLadderScreen(): Screen {
     cv.rect(x, y, w, RUNG_H, fill);
     // stone courses: a mortar line and staggered joints, faint enough to read text over
     const mortar = alpha(C.void, st === 'beaten' ? 0.5 : 0.32);
-    cv.hline(x + 1, y + 16, w - 2, mortar);
+    const half = Math.floor(RUNG_H / 2);
+    cv.hline(x + 1, y + half, w - 2, mortar);
     for (let jx = x + (i % 2 ? 14 : 26); jx < x + w - 4; jx += 26) {
-      cv.vline(jx, y + 1, 15, mortar);
-      cv.vline(jx + 13, y + 17, 14, mortar);
+      cv.vline(jx, y + 1, half - 1, mortar);
+      cv.vline(jx + 13, y + half + 1, RUNG_H - half - 2, mortar);
     }
     if (st === 'current') {
       const glow = 0.1 + 0.06 * Math.sin(ctx.t * 4);
@@ -348,7 +408,7 @@ export function createLadderScreen(): Screen {
       }
     }
     // portrait
-    const ps = 26;
+    const ps = Math.min(26, RUNG_H - 6);
     cv.rect(x + 3, y + 3, ps, ps, alpha(C.void, 0.6));
     if (veil) {
       const sil = silhouette(ctx, r.foe, ps);
@@ -360,27 +420,42 @@ export function createLadderScreen(): Screen {
     // name + Korean
     const nameCol = st === 'current' ? C.white : st === 'beaten' ? C.line2 : C.mid;
     const name = veil ? '???' : info.name.replace(/^The /, '').toUpperCase();
-    const nw = drawText(cv, name, x + 34, y + 5, { color: nameCol, tracking: 1 });
+    const tx = x + ps + 8;
+    const two = twoLines();
+    const nameY = two ? y + 5 : y + Math.floor((RUNG_H - 10) / 2);
+    const nw = drawText(cv, name, tx, nameY, { color: nameCol, tracking: 1 });
+    // COSMIC CLASH: a newly shipped titan wears NEW (not while it is still a veiled silhouette)
+    const fresh =
+      mode === 'cosmic' &&
+      !veil &&
+      isNewTitan(
+        roster.find((t) => t.id === r.foe),
+        ctx.deps.today?.() ?? Date.now(),
+      );
+    const newW = fresh ? drawNewTag(cv, tx + nw + 4, nameY + 1, ctx.t) + 4 : 0;
     const ko = veil || info.nameKo === info.name ? '' : info.nameKo;
     const kw = measureText(ko);
-    if (ko && x + 34 + nw + 8 + kw <= x + w - 6)
-      drawText(cv, ko, x + w - 6, y + 4, {
+    if (ko && tx + nw + newW + 8 + kw <= x + w - 6)
+      drawText(cv, ko, x + w - 6, nameY - 1, {
         color: st === 'current' ? ramp.light : st === 'beaten' ? C.line1 : C.dim,
         align: 'right',
       });
     const tag = r.role === 'final' ? 'FINAL BOSS' : r.role === 'subboss' ? 'SUB-BOSS' : '';
-    drawText(cv, `RUNG ${r.n}`, x + 34, y + 21, {
-      color: st === 'current' ? C.soft : C.line2,
-      font: 'micro',
-      tracking: 1,
-    });
-    if (tag)
-      drawText(cv, tag, x + 34 + 40, y + 21, {
-        color: st === 'beaten' ? C.line2 : roleCol,
+    if (two) {
+      const ly = y + RUNG_H - 11;
+      drawText(cv, `RUNG ${r.n}`, tx, ly, {
+        color: st === 'current' ? C.soft : C.line2,
         font: 'micro',
         tracking: 1,
       });
-    if (st === 'beaten') drawIcon(cv, 'check', x + w - 11, y + 20, C.celadonDeep);
+      if (tag)
+        drawText(cv, tag, tx + 40, ly, {
+          color: st === 'beaten' ? C.line2 : roleCol,
+          font: 'micro',
+          tracking: 1,
+        });
+    }
+    if (st === 'beaten') drawIcon(cv, 'check', x + w - 11, y + RUNG_H - 12, C.celadonDeep);
     if (st === 'current') {
       const o = Math.floor(ctx.t * 4) % 2;
       cv.corners(x - 2 - o, y - 2 - o, w + 4 + o * 2, RUNG_H + 4 + o * 2, ramp.light, 5);
@@ -432,7 +507,8 @@ export function createLadderScreen(): Screen {
 
   function drawPlayer(ctx: UICtx): void {
     const cv = ctx.cv;
-    const run = save.run!;
+    const run = runOf(save, mode, diff)!;
+    const n = total();
     const info = ctx.titan(run.player);
     const ramp = accentRamp(info.accent);
     panel(cv, LEFT_X, PANEL_Y, LEFT_W, PANEL_H, { accent: C.p1, border: C.line1 });
@@ -454,9 +530,9 @@ export function createLadderScreen(): Screen {
     if (info.nameKo !== info.name)
       drawText(cv, info.nameKo, cx, PANEL_Y + 136, { color: ramp.light, align: 'center' });
     cv.hline(LEFT_X + 12, PANEL_Y + 156, LEFT_W - 24, C.line0);
-    const best = save.best[run.player] ?? run.rung;
+    const best = save.best[mode][run.player] ?? run.rung;
     const rows: [string, string][] = [
-      ['RUNG', `${run.rung} / ${LADDER_RUNGS}`],
+      ['RUNG', `${run.rung} / ${n}`],
       ['DEFEATS', String(run.continues)],
       ['BEST', best >= CLEARED ? 'CLEARED' : `RUNG ${best}`],
     ];
@@ -468,17 +544,19 @@ export function createLadderScreen(): Screen {
         align: 'right',
       });
     });
+    // one pip per rung; a long COSMIC CLASH packs them tighter
+    const gap = Math.max(1, Math.min(3, Math.floor((LEFT_W - 20) / n) - 5));
     pips(
       cv,
-      LEFT_X + (LEFT_W - (LADDER_RUNGS * 8 - 3)) / 2,
+      LEFT_X + Math.round((LEFT_W - (n * (5 + gap) - gap)) / 2),
       PANEL_Y + 228,
-      LADDER_RUNGS,
+      n,
       run.rung - 1,
       C.p1,
       C.line1,
-      3,
+      gap,
     );
-    drawText(cv, `${LADDER_RUNGS} TITANS  BEST OF ${ROUNDS_TO_WIN * 2 - 1}`, cx, PANEL_Y + 246, {
+    drawText(cv, `${n} TITANS  BEST OF ${ROUNDS_TO_WIN * 2 - 1}`, cx, PANEL_Y + 246, {
       color: C.line2,
       font: 'micro',
       align: 'center',
@@ -576,7 +654,7 @@ export function createLadderScreen(): Screen {
     const col = TONE[card.tone];
     const cx = LOGICAL_W / 2;
     const roleCol = r.role === 'final' ? C.danger : r.role === 'subboss' ? C.gold : C.dim;
-    drawText(cv, `RUNG ${r.n} / ${LADDER_RUNGS}`, cx, 54, {
+    drawText(cv, `${MODE_LABELS[mode].en}  ·  RUNG ${r.n} / ${total()}`, cx, 54, {
       color: roleCol,
       font: 'micro',
       align: 'center',
@@ -685,13 +763,16 @@ export function createLadderScreen(): Screen {
         tracking: 1,
       });
     } else {
-      drawText(cv, 'TOURNAMENT CLEARED', cx, 232, {
+      drawText(cv, `${MODE_LABELS[mode].en} CLEARED`, cx, 232, {
         color: C.gold,
         align: 'center',
         tracking: 2,
         outline: C.void,
       });
-      drawText(cv, '토너먼트 우승', cx, 248, { color: C.celadon, align: 'center' });
+      drawText(cv, `${MODE_LABELS[mode].ko} 우승  ·  ${DIFFICULTY_NAMES[diff].en}`, cx, 248, {
+        color: C.celadon,
+        align: 'center',
+      });
     }
     if (t > 1.5) footer(ctx, [{ chip: promptLabels(ctx).confirm, text: 'CONTINUE' }]);
   }

@@ -29,6 +29,8 @@ import { createResultsScreen } from './screens/results';
 import { createSelectScreen } from './screens/select';
 import { createStageScreen } from './screens/stage';
 import { createTitleScreen } from './screens/title';
+import { createTourneyScreen } from './screens/tourney';
+import { loadLadder, type LadderDifficulty, type LadderMode } from './ladder';
 import { loadUISettings, resolveStore, saveUISettings, type UISettings } from './settings';
 import type { TitanInfo, UIDeps } from './types';
 
@@ -89,7 +91,10 @@ class UIRuntime implements GameUI, UICtx {
     this.attractAfter = deps.attractAfterSec ?? 60;
     const firstReady = (deps.implementedTitans[0] ?? deps.titans[0]?.id ?? 'lastone') as TitanId;
     const pick = (id: TitanId): TitanId => (this.readyTitans.has(id) ? id : firstReady);
+    const lastLadder = loadLadder(this.store).last;
     this.setup = {
+      ladderMode: lastLadder.mode,
+      ladderDifficulty: lastLadder.difficulty,
       mode: 'versus',
       aiLevel: this.settings.aiLevel,
       p1: pick(this.settings.lastP1),
@@ -374,6 +379,8 @@ class UIRuntime implements GameUI, UICtx {
         return createHudScreen();
       case 'ladder':
         return createLadderScreen();
+      case 'tourney':
+        return createTourneyScreen();
     }
   }
 
@@ -420,9 +427,18 @@ export function setSetupMode(ui: GameUI, mode: 'versus' | 'vsai' | 'training'): 
 
 /**
  * Open a tournament screen in ladder mode (the `?ladder=` dev flag, screenshots, tests): `id` 'ladder' takes the ladder
- * screen's params (`LadderParams`), 'select' is the ladder's titan pick.
+ * screen's params (`LadderParams`), 'select' is the ladder's titan pick, 'tourney' the mode / difficulty choice (params
+ * `TourneyParams`). `mode` / `difficulty` pick the tournament (default: the last one chosen).
  */
-export function showLadder(ui: GameUI, id: 'ladder' | 'select', params?: unknown): void {
-  (ui as UIRuntime).setup.mode = 'ladder';
+export function showLadder(
+  ui: GameUI,
+  id: 'ladder' | 'select' | 'tourney',
+  params?: unknown,
+  pick: { mode?: LadderMode; difficulty?: LadderDifficulty } = {},
+): void {
+  const s = (ui as UIRuntime).setup;
+  s.mode = 'ladder';
+  if (pick.mode) s.ladderMode = pick.mode;
+  if (pick.difficulty) s.ladderDifficulty = pick.difficulty;
   (ui as UIRuntime).stackReset(id, params);
 }

@@ -1,5 +1,6 @@
 import { clamp01 } from '@/contracts';
 import type { Overlay } from './overlay';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Pixel-art spline strokes: tendrils today, the Witness's arms, fibres and membrane edges tomorrow.
@@ -102,7 +103,7 @@ export class SplinePen {
 
   /** Stage light direction FROM the surface TOWARD the light (view space, as `StageLighting.dir`). */
   setLight(dir: readonly [number, number, number] | readonly number[]): void {
-    const l = Math.hypot(dir[0]!, dir[1]!, dir[2]!) || 1;
+    const l = DMath.hypot(dir[0]!, dir[1]!, dir[2]!) || 1;
     this.lx = dir[0]! / l;
     this.ly = dir[1]! / l;
     this.lz = dir[2]! / l;
@@ -148,7 +149,7 @@ export class SplinePen {
       const y0 = k > 0 ? ys[i1 - 1]! : 2 * y1 - y2;
       const x3 = k + 2 < cnt ? xs[i2 + 1]! : 2 * x2 - x1;
       const y3 = k + 2 < cnt ? ys[i2 + 1]! : 2 * y2 - y1;
-      const segLen = Math.hypot(x2 - x1, y2 - y1);
+      const segLen = DMath.hypot(x2 - x1, y2 - y1);
       const n = Math.max(2, Math.ceil(segLen / STEP));
       const kk = k + nodeOffset;
       const jointA = st.jointEvery > 0 && kk > 0 && kk % st.jointEvery === 0;
@@ -174,11 +175,11 @@ export class SplinePen {
           0.5 * (-x0 + x2 + 2 * (2 * x0 - 5 * x1 + 4 * x2 - x3) * t + 3 * (-x0 + 3 * x1 - 3 * x2 + x3) * t2);
         let ty =
           0.5 * (-y0 + y2 + 2 * (2 * y0 - 5 * y1 + 4 * y2 - y3) * t + 3 * (-y0 + 3 * y1 - 3 * y2 + y3) * t2);
-        const tl = Math.hypot(tx, ty) || 1;
+        const tl = DMath.hypot(tx, ty) || 1;
         tx /= tl;
         ty /= tl;
         const u = clamp01((kk + t) * uScale);
-        let r = (st.r0 + (st.r1 - st.r0) * Math.pow(u, st.taperPow)) * widthMul;
+        let r = (st.r0 + (st.r1 - st.r0) * DMath.pow(u, st.taperPow)) * widthMul;
         // joints: a bulge around the node and a groove right on it
         const dA = t * segLen;
         const dB = (1 - t) * segLen;

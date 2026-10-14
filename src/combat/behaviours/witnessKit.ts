@@ -6,6 +6,7 @@ import type { ActiveMove } from '../move';
 import { asShape, makeFatShape, type FatShape } from '../shapes';
 import { wrapAngle } from '../rig/xpbd';
 import type { WitnessRig } from '../rig/witnessRig';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * The Witness's six moves (SLICE_PHASE2 S2.4) on top of its rig. The JSON moves (`witnessMoves`) carry frame data and S1's
@@ -136,7 +137,7 @@ export class WitnessKit {
     const f = h.f;
     const m = f.mv;
     const kind = (m.def?.extra?.['witness'] as string | undefined) ?? '';
-    const aim = Math.atan2(f.aimUy, f.aimUx * h.facing); // attack direction in the facing frame
+    const aim = DMath.atan2(f.aimUy, f.aimUx * h.facing); // attack direction in the facing frame
     this.haloFree = false;
     this.armOffset = 0;
     this.haloOffset.fill(0);
@@ -230,7 +231,7 @@ export class WitnessKit {
         const fv = f.foe.view;
         const dx = fv.x - this.pa.x;
         const dy = fv.y - this.pa.y;
-        const dl = Math.hypot(dx, dy);
+        const dl = DMath.hypot(dx, dy);
         this.shUx[k] = dl > 1 ? dx / dl : f.aimUx;
         this.shUy[k] = dl > 1 ? dy / dl : f.aimUy;
         this.shT[k] = f.tickNo;
@@ -346,7 +347,7 @@ export class WitnessKit {
         if (ov !== null && ov.cells > 0) {
           const dx = this.sh.x1 - this.sh.x0;
           const dy = this.sh.y1 - this.sh.y0;
-          const l = Math.hypot(dx, dy) || 1;
+          const l = DMath.hypot(dx, dy) || 1;
           const cx = ov.x;
           const cy = ov.y;
           const delay = 18 + ((f.tickNo * 7) % 31);
@@ -369,14 +370,14 @@ export class WitnessKit {
         const ex = h.openEyeX[k]!;
         const ey = h.openEyeY[k]!;
         const side = k % 2 === 0 ? 1 : -1;
-        const ang = Math.atan2(fv.y - ey, fv.x - ex) + side * 0.08 * (1 + (k >> 1));
+        const ang = DMath.atan2(fv.y - ey, fv.x - ex) + side * 0.08 * (1 + (k >> 1));
         this.beam(h, ang, BEAM_LEN * 0.85, 36, 6, 'signature', m.def!.id, m.phaseTick + k, ex, ey);
       }
     }
     if (live && kind === 'revelation' && m.phase === 'active') {
       const n = 3 + h.openEyes;
-      const base = Math.atan2(f.aimUy, f.aimUx);
-      const turn = 0.35 * Math.sin(m.phaseTick * 0.045);
+      const base = DMath.atan2(f.aimUy, f.aimUx);
+      const turn = 0.35 * DMath.sin(m.phaseTick * 0.045);
       for (let k = 0; k < n; k++) {
         const ang = base + turn + (n > 1 ? (k / (n - 1) - 0.5) * 1.3 : 0);
         // every beam that lands every 12 ticks also lays a fracture across the foe that shears 0.3–0.8 s later
@@ -386,8 +387,8 @@ export class WitnessKit {
         ) {
           const ov = f.foe.probe(asShape(this.sh), this.ov);
           if (ov.cells > 0) {
-            const c = Math.cos(ang + 1.2) * 26;
-            const s = Math.sin(ang + 1.2) * 26;
+            const c = DMath.cos(ang + 1.2) * 26;
+            const s = DMath.sin(ang + 1.2) * 26;
             this.mark(
               h,
               ov.x - c,
@@ -423,8 +424,8 @@ export class WitnessKit {
     s.kind = 'line';
     s.x0 = ox;
     s.y0 = oy;
-    s.x1 = ox + Math.cos(ang) * len;
-    s.y1 = oy + Math.sin(ang) * len;
+    s.x1 = ox + DMath.cos(ang) * len;
+    s.y1 = oy + DMath.sin(ang) * len;
     s.width = 8;
     this.drawBeam(s.x0, s.y0, s.x1, s.y1, 0.8);
     return (
@@ -555,7 +556,7 @@ export class WitnessKit {
     const fx = this.fx;
     const dx = x1 - x0;
     const dy = y1 - y0;
-    const len = Math.hypot(dx, dy) || 1;
+    const len = DMath.hypot(dx, dy) || 1;
     const ux = dx / len;
     const uy = dy / len;
     const reach = width * 1.8;

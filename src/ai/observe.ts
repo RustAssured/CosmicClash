@@ -6,6 +6,7 @@ import {
   type MoveSlot,
   type ThreatShape,
 } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 /** Flattened copy of a public ThreatShape: an AABB is all the AI needs (it never sees the foe's pending input, only its telegraphs). */
 export interface ThreatSnap {
@@ -176,14 +177,14 @@ function copyThreat(dst: ThreatSnap, t: ThreatShape): void {
     }
     case 'cone': {
       // bounding box of the wedge: origin, the two edge points and the tip
-      const a = Math.atan2(s.dirY, s.dirX);
+      const a = DMath.atan2(s.dirY, s.dirX);
       let x0 = s.x;
       let x1 = s.x;
       let y0 = s.y;
       let y1 = s.y;
       for (const da of [-s.halfAngle, 0, s.halfAngle]) {
-        const px = s.x + Math.cos(a + da) * s.range;
-        const py = s.y + Math.sin(a + da) * s.range;
+        const px = s.x + DMath.cos(a + da) * s.range;
+        const py = s.y + DMath.sin(a + da) * s.range;
         x0 = Math.min(x0, px);
         x1 = Math.max(x1, px);
         y0 = Math.min(y0, py);

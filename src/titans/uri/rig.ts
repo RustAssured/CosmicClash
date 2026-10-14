@@ -1,5 +1,6 @@
 // the metadata of uri/data/uri_rig.json (src/titans/uri/asset.ts; the grids are in uri_rig.bin, loaded separately)
 import rigJson from './uri_rig.meta.json';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * 우리's rig (uri/docs/URI_SPEC.md §4; the oracle's `bodyTransforms` and frame placement in uri/src/20_kinetics.js).
@@ -205,23 +206,23 @@ export interface Xf {
 
 /** Apply a transform to a point. */
 export function apply(T: Xf, px: number, py: number, out: { x: number; y: number }): void {
-  const c = Math.cos(T.a);
-  const s = Math.sin(T.a);
+  const c = DMath.cos(T.a);
+  const s = DMath.sin(T.a);
   out.x = px * c - py * s + T.x;
   out.y = px * s + py * c + T.y;
 }
 
 /** Rotation by `a` about the point (cx, cy). */
 export function about(cx: number, cy: number, a: number): Xf {
-  const c = Math.cos(a);
-  const s = Math.sin(a);
+  const c = DMath.cos(a);
+  const s = DMath.sin(a);
   return { a, x: cx - (cx * c - cy * s), y: cy - (cx * s + cy * c) };
 }
 
 /** A ∘ B (apply B first, then A). */
 export function compose(A: Xf, B: Xf): Xf {
-  const c = Math.cos(A.a);
-  const s = Math.sin(A.a);
+  const c = DMath.cos(A.a);
+  const s = DMath.sin(A.a);
   return { a: A.a + B.a, x: B.x * c - B.y * s + A.x, y: B.x * s + B.y * c + A.y };
 }
 

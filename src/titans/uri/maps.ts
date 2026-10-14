@@ -2,6 +2,7 @@ import { createMatterMap, rgba, type MaterialSpec, type MatterMap } from '@/cont
 import { uriGrids } from './asset';
 import { URI_PARTS, URI_REF, URI_SCALE, type UriPartKey } from './rig';
 import { scaleUriFields, uriGridOf } from './scale';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * 우리's part grids as matter maps (uri/data/uri_rig.json, loaded as is: nothing is repainted).
@@ -216,7 +217,7 @@ const rampAt = (R: [number, number, number][], l: number, x: number, y: number):
 /** The sky: upper-left-front (spec §2.3). */
 const LS = (() => {
   const l = [-0.55, -0.62, 0.56];
-  const n = Math.hypot(l[0]!, l[1]!, l[2]!);
+  const n = DMath.hypot(l[0]!, l[1]!, l[2]!);
   return l.map((v) => v / n) as [number, number, number];
 })();
 
@@ -250,7 +251,7 @@ function restColour(f: Decoded, i: number, x: number, y: number): number {
   let lum = wForm * form * 1.3 + (1 - wForm) * (0.06 + 0.58 * dk) + (tone - 0.5) * 0.22;
   if (mat === URI_MAT.crevice) lum *= 0.3;
   let c = rampAt(f.surf[i] === 2 ? RX.s2 : RX.s1, lum, x, y);
-  const rim = Math.pow(1 - lnz, 2) * Math.max(0, lnx * 0.9 - lny * 0.1);
+  const rim = DMath.pow(1 - lnz, 2) * Math.max(0, lnx * 0.9 - lny * 0.1);
   if (rim > 0.5 && mat === URI_MAT.rock)
     c = [(c[0] * 0.6 + 44) | 0, (c[1] * 0.6 + 47.2) | 0, (c[2] * 0.6 + 64) | 0];
   // every part outlined in its own darker colour
@@ -315,7 +316,7 @@ function decodeAll(fields: readonly Decoded[], scale: number): UriPartMatter[] {
     let bd = Infinity;
     for (let i = 0; i < map.material.length; i++) {
       if (!map.material[i]) continue;
-      const d = ((i % meta.w) + 0.5 - meta.pivX) ** 2 + (Math.floor(i / meta.w) + 0.5 - meta.pivY) ** 2;
+      const d = sq((i % meta.w) + 0.5 - meta.pivX) + sq(Math.floor(i / meta.w) + 0.5 - meta.pivY);
       if (d < bd) {
         bd = d;
         best = i;

@@ -2,6 +2,7 @@ import { clamp01 } from '@/contracts';
 import type { Overlay } from '../fx/overlay';
 import { SplinePen, type SplineStyle } from '../fx/spline';
 import type { XpbdRig } from './xpbd';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Runtime drawing of the Witness's soft structure on top of `SplinePen`, driven by `XpbdRig` state:
@@ -66,7 +67,7 @@ export class WitnessSoftPen {
     tear: number,
     st: MembraneStyle,
   ): number {
-    const len = Math.hypot(cx - bx, cy - by) || 1;
+    const len = DMath.hypot(cx - bx, cy - by) || 1;
     const stretch = len / Math.max(1, restLen);
     const slack = clamp01(1 - stretch);
     const hot = clamp01((stretch - 1.05) / 0.2);
@@ -90,7 +91,7 @@ export class WitnessSoftPen {
     const my = (by + cy) / 2 + ny * sag;
     const tx = mx + (ax - mx) * clamp01(tear * 1.05);
     const ty = my + (ay - my) * clamp01(tear * 1.05);
-    const tlen = Math.hypot(tx - mx, ty - my);
+    const tlen = DMath.hypot(tx - mx, ty - my);
     const tw = 0.6 + 2.6 * tear;
     let n = 0;
     for (let y = y0; y <= y1; y++)
@@ -113,9 +114,9 @@ export class WitnessSoftPen {
           const dy = py - (my + (ty - my) * q);
           const jag = (hash(x, y) - 0.5) * 1.4;
           const open = tw * (1 - q * 0.6);
-          if (Math.hypot(dx, dy) + jag < open && q < 0.999) continue;
+          if (DMath.hypot(dx, dy) + jag < open && q < 0.999) continue;
           // a fully parted membrane loses a little more around the tear as the flaps curl back
-          if (tear >= 1 && Math.hypot(dx, dy) < open + 1.5) continue;
+          if (tear >= 1 && DMath.hypot(dx, dy) < open + 1.5) continue;
         }
         let c = bayer(x, y) < 0.5 ? st.fill0 : st.fill1;
         let em = 0;
@@ -143,7 +144,7 @@ export class WitnessSoftPen {
     tear: number,
     st: SplineStyle,
   ): number {
-    const len = Math.hypot(bx - ax, by - ay) || 1;
+    const len = DMath.hypot(bx - ax, by - ay) || 1;
     const N = 7;
     const xs = this.xs;
     const ys = this.ys;
@@ -198,9 +199,9 @@ export class WitnessSoftPen {
       const b = Math.min(n - 1, k + 1);
       const tx = px[b]! - px[a]!;
       const ty = py[b]! - py[a]!;
-      const tl = Math.hypot(tx, ty) || 1;
+      const tl = DMath.hypot(tx, ty) || 1;
       const t = n > 1 ? k / (n - 1) : 0;
-      const off = bladeOffset * Math.sin(Math.PI * Math.min(1, t * 1.05)) * bladeSide;
+      const off = bladeOffset * DMath.sin(Math.PI * Math.min(1, t * 1.05)) * bladeSide;
       ox[k] = px[k]! + (-ty / tl) * off;
       oy[k] = py[k]! + (tx / tl) * off;
     }

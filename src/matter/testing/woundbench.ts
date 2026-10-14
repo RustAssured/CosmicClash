@@ -15,6 +15,7 @@ import { localToWorldF } from '../dmg';
 import { rasterParticles } from '../particles';
 import { SLAB_HELD } from '../wound';
 import type { MatterWorldEx } from '../world';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Wound-sequencing bench (D1): one heavy blow of a real move on a real generated titan body, applied the way a Match does
@@ -110,8 +111,8 @@ function place(s: ShapeTemplate, ax: number, ay: number): DamageShape {
         kind: 'cone',
         x: ax + s.ox,
         y: ay + s.oy,
-        dirX: Math.cos(s.angle),
-        dirY: Math.sin(s.angle),
+        dirX: DMath.cos(s.angle),
+        dirY: DMath.sin(s.angle),
         range: s.range,
         halfAngle: s.halfAngle,
       };
@@ -302,10 +303,10 @@ export function measureBlow(spec: BlowSpec, deps: BenchDeps): BlowResult {
         localToWorldF(b, b.wounds.lx[wound]!, b.wounds.ly[wound]!, p);
         let rx = c.x - p.x;
         let ry = c.y - p.y;
-        const rl = Math.hypot(rx, ry) || 1;
+        const rl = DMath.hypot(rx, ry) || 1;
         rx /= rl;
         ry /= rl;
-        const vl = Math.hypot(c.vx, c.vy) || 1;
+        const vl = DMath.hypot(c.vx, c.vy) || 1;
         const cross = (rx * c.vy - ry * c.vx) / vl;
         if (Math.abs(cross) > 0.25 && c.spin !== 0) {
           spinN++;

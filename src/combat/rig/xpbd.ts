@@ -1,3 +1,4 @@
+import { DMath, sq } from '@/contracts/dmath';
 /**
  * A small deterministic 2-D XPBD solver for the Witness's region rig (eye cradle, carapace, shrine, halo arcs, arm segments).
  *
@@ -240,8 +241,8 @@ export class XpbdRig {
     this.linDrag[i] = opts.linDrag ?? 0.6;
     this.angDrag[i] = opts.angDrag ?? 0.8;
     this.a[i] = ang;
-    const c = Math.cos(ang);
-    const s = Math.sin(ang);
+    const c = DMath.cos(ang);
+    const s = DMath.sin(ang);
     this.x[i] = fx + c * mp.cx - s * mp.cy;
     this.y[i] = fy + s * mp.cx + c * mp.cy;
     this.k0x[i] = this.k1x[i] = fx;
@@ -333,8 +334,8 @@ export class XpbdRig {
   /** Update a body's mass properties (cells were destroyed); the frame stays put, the centre of mass moves. */
   setMass(i: number, mp: Pick<MassProps, 'mass' | 'cx' | 'cy' | 'inertia'>): void {
     if (this.kinematic[i]) return;
-    const c = Math.cos(this.a[i]!);
-    const s = Math.sin(this.a[i]!);
+    const c = DMath.cos(this.a[i]!);
+    const s = DMath.sin(this.a[i]!);
     const dx = mp.cx - this.comX[i]!;
     const dy = mp.cy - this.comY[i]!;
     this.x[i] = this.x[i]! + c * dx - s * dy;
@@ -364,8 +365,8 @@ export class XpbdRig {
 
   /** Frame pose of body i (what the region body's transform is set from). */
   frame(i: number, out: { x: number; y: number; a: number }): void {
-    const c = Math.cos(this.a[i]!);
-    const s = Math.sin(this.a[i]!);
+    const c = DMath.cos(this.a[i]!);
+    const s = DMath.sin(this.a[i]!);
     out.x = this.x[i]! - (c * this.comX[i]! - s * this.comY[i]!);
     out.y = this.y[i]! - (s * this.comX[i]! + c * this.comY[i]!);
     out.a = this.a[i]!;
@@ -373,8 +374,8 @@ export class XpbdRig {
 
   /** World position of a frame-local point of body i. */
   worldPoint(i: number, lx: number, ly: number, out: { x: number; y: number }): void {
-    const c = Math.cos(this.a[i]!);
-    const s = Math.sin(this.a[i]!);
+    const c = DMath.cos(this.a[i]!);
+    const s = DMath.sin(this.a[i]!);
     const dx = lx - this.comX[i]!;
     const dy = ly - this.comY[i]!;
     out.x = this.x[i]! + c * dx - s * dy;
@@ -403,8 +404,8 @@ export class XpbdRig {
           const ang = this.k0a[i]! + wrapAngle(this.k1a[i]! - this.k0a[i]!) * f;
           const fx = this.k0x[i]! + (this.k1x[i]! - this.k0x[i]!) * f;
           const fy = this.k0y[i]! + (this.k1y[i]! - this.k0y[i]!) * f;
-          const c = Math.cos(ang);
-          const s = Math.sin(ang);
+          const c = DMath.cos(ang);
+          const s = DMath.sin(ang);
           this.a[i] = ang;
           this.x[i] = fx + c * this.comX[i]! - s * this.comY[i]!;
           this.y[i] = fy + s * this.comX[i]! + c * this.comY[i]!;
@@ -441,10 +442,10 @@ export class XpbdRig {
   }
 
   private frameX(i: number): number {
-    return this.x[i]! - (Math.cos(this.a[i]!) * this.comX[i]! - Math.sin(this.a[i]!) * this.comY[i]!);
+    return this.x[i]! - (DMath.cos(this.a[i]!) * this.comX[i]! - DMath.sin(this.a[i]!) * this.comY[i]!);
   }
   private frameY(i: number): number {
-    return this.y[i]! - (Math.sin(this.a[i]!) * this.comX[i]! + Math.cos(this.a[i]!) * this.comY[i]!);
+    return this.y[i]! - (DMath.sin(this.a[i]!) * this.comX[i]! + DMath.cos(this.a[i]!) * this.comY[i]!);
   }
 
   private solveJoints(h: number): void {
@@ -455,8 +456,8 @@ export class XpbdRig {
       const a = jt.a;
       const b = jt.b;
       // world anchors and lever arms (from the centres of mass)
-      const ca = Math.cos(this.a[a]!);
-      const sa = Math.sin(this.a[a]!);
+      const ca = DMath.cos(this.a[a]!);
+      const sa = DMath.sin(this.a[a]!);
       const rax = ca * (jt.ax - this.comX[a]!) - sa * (jt.ay - this.comY[a]!);
       const ray = sa * (jt.ax - this.comX[a]!) + ca * (jt.ay - this.comY[a]!);
       const pax = this.x[a]! + rax;
@@ -466,8 +467,8 @@ export class XpbdRig {
       let rbx = 0;
       let rby = 0;
       if (b >= 0) {
-        const cb = Math.cos(this.a[b]!);
-        const sb = Math.sin(this.a[b]!);
+        const cb = DMath.cos(this.a[b]!);
+        const sb = DMath.sin(this.a[b]!);
         rbx = cb * (jt.bx - this.comX[b]!) - sb * (jt.by - this.comY[b]!);
         rby = sb * (jt.bx - this.comX[b]!) + cb * (jt.by - this.comY[b]!);
         pbx = this.x[b]! + rbx;
@@ -544,7 +545,7 @@ export class XpbdRig {
   private pivotInvInertia(i: number): number {
     if (i < 0 || this.kinematic[i] || this.invInertia[i] === 0) return 0;
     const m = this.invMass[i]! > 0 ? 1 / this.invMass[i]! : 0;
-    const I = 1 / this.invInertia[i]! + m * (this.comX[i]! ** 2 + this.comY[i]! ** 2);
+    const I = 1 / this.invInertia[i]! + m * (sq(this.comX[i]!) + sq(this.comY[i]!));
     return 1 / I;
   }
 
@@ -554,10 +555,10 @@ export class XpbdRig {
     const a0 = this.a[i]!;
     const cx = this.comX[i]!;
     const cy = this.comY[i]!;
-    const c0 = Math.cos(a0);
-    const s0 = Math.sin(a0);
-    const c1 = Math.cos(a0 + da);
-    const s1 = Math.sin(a0 + da);
+    const c0 = DMath.cos(a0);
+    const s0 = DMath.sin(a0);
+    const c1 = DMath.cos(a0 + da);
+    const s1 = DMath.sin(a0 + da);
     this.x[i] = this.x[i]! + (c1 * cx - s1 * cy) - (c0 * cx - s0 * cy);
     this.y[i] = this.y[i]! + (s1 * cx + c1 * cy) - (s0 * cx + c0 * cy);
     this.a[i] = a0 + da;

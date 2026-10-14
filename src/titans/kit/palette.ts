@@ -1,3 +1,4 @@
+import { DMath } from '@/contracts/dmath';
 /**
  * Colour helpers for the titan kit: perceptual distance (OKLab) for the roster's palette-clash check, hue maths and a
  * hue-shifted pixel-art ramp builder for new titans. Pure.
@@ -8,14 +9,14 @@ export function oklab(hexColor: string): [number, number, number] {
   const v = parseInt(hexColor.slice(1, 7), 16);
   const lin = (c: number): number => {
     const s = c / 255;
-    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    return s <= 0.04045 ? s / 12.92 : DMath.pow((s + 0.055) / 1.055, 2.4);
   };
   const r = lin((v >> 16) & 255);
   const g = lin((v >> 8) & 255);
   const b = lin(v & 255);
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const l = DMath.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = DMath.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = DMath.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
   return [
     0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
     1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
@@ -27,7 +28,7 @@ export function oklab(hexColor: string): [number, number, number] {
 export function deltaE(a: string, b: string): number {
   const p = oklab(a);
   const q = oklab(b);
-  return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+  return DMath.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
 }
 
 /** Below this distance two signature colours read as the same colour on the select screen and the HUD. */
@@ -102,8 +103,8 @@ export function buildRamp(h: number, n = 7, sat = 0.6, lo = 0.08, hi = 0.86): st
     const toward = t > 0.5 ? 60 : 240;
     const dir = ((toward - h + 540) % 360) - 180 > 0 ? 1 : -1;
     const hue = h + dir * Math.abs(shift);
-    const s = sat * (0.55 + 0.45 * Math.sin(Math.PI * Math.min(1, 0.15 + t)));
-    out.push(hslToHex(hue, s, lo + (hi - lo) * Math.pow(t, 0.95)));
+    const s = sat * (0.55 + 0.45 * DMath.sin(Math.PI * Math.min(1, 0.15 + t)));
+    out.push(hslToHex(hue, s, lo + (hi - lo) * DMath.pow(t, 0.95)));
   }
   return out;
 }

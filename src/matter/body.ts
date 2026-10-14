@@ -20,6 +20,7 @@ import { WoundBook } from './wound';
 import { isMolten } from './materials';
 import type { ShellFace } from './shell';
 import { RotBox, RotHitCache, rotCellAtCached, rotCollectDirect, rotWorldToLocal } from './rotation';
+import { DMath } from '@/contracts/dmath';
 
 export const TILE = 16;
 export const TILE_SHIFT = 4;
@@ -40,8 +41,8 @@ export const ACT_INFECT = 2;
 const R2 = REGION_GRID * REGION_GRID;
 const RG = REGION_GRID;
 /** The 16 core-exposure ray directions (computeCore), evaluated once. */
-const RAY_X = Float64Array.from({ length: 16 }, (_, a) => Math.cos((a * Math.PI) / 8 + 0.1));
-const RAY_Y = Float64Array.from({ length: 16 }, (_, a) => Math.sin((a * Math.PI) / 8 + 0.1));
+const RAY_X = Float64Array.from({ length: 16 }, (_, a) => DMath.cos((a * Math.PI) / 8 + 0.1));
+const RAY_Y = Float64Array.from({ length: 16 }, (_, a) => DMath.sin((a * Math.PI) / 8 + 0.1));
 const LEAN = leanShift;
 /** Local copies of contract constants read per query (a bundler's live-binding getter per read is not free in hot paths). */
 const STEPS = ANGLE_STEPS;

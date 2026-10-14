@@ -19,6 +19,7 @@ import { ChainPen } from '../fx/chain';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
+import { DMath } from '@/contracts/dmath';
 
 const MAX_CHAINS = 3;
 const MAX_WHIPS = 8;
@@ -313,7 +314,7 @@ export class NexusBehaviour extends Behaviour {
     while (top > 0 && top < stack.length - 4) {
       const i = stack[--top]!;
       const x = i % W;
-      const dd = Math.hypot(x + 0.5 - F.x, (i - x) / W + 0.5 - F.y);
+      const dd = DMath.hypot(x + 0.5 - F.x, (i - x) / W + 0.5 - F.y);
       if (dd > farD) {
         farD = dd;
         far = i;
@@ -430,7 +431,7 @@ export class NexusBehaviour extends Behaviour {
       localToWorld(t, N.x, N.y, this.xy2);
       let dx = this.xy.x - this.xy2.x;
       let dy = this.xy.y - this.xy2.y;
-      const dl = Math.hypot(dx, dy) || 1;
+      const dl = DMath.hypot(dx, dy) || 1;
       dx /= dl;
       dy /= dl;
       this.spawnWhip(this.xy.x, this.xy.y, dx, dy, 5.5);
@@ -741,7 +742,7 @@ export class NexusBehaviour extends Behaviour {
       this.nodePos(this.chNode[i]!);
       const dx = this.xy.x - ex;
       const dy = this.xy.y - ey;
-      const dl = Math.hypot(dx, dy) || 1;
+      const dl = DMath.hypot(dx, dy) || 1;
       this.spawnWhip(ex, ey, dx / dl, dy / dl, 6);
     }
     this.clearChains();
@@ -793,7 +794,7 @@ export class NexusBehaviour extends Behaviour {
       for (let k = 0; k < SEGS; k++) {
         if (!this.segOn[k]) continue;
         const a = this.segAngle(k) + c.spin;
-        this.spawnWhip(c.cx + Math.cos(a) * c.r, c.cy + Math.sin(a) * c.r, Math.cos(a), Math.sin(a), 3.5);
+        this.spawnWhip(c.cx + DMath.cos(a) * c.r, c.cy + DMath.sin(a) * c.r, DMath.cos(a), DMath.sin(a), 3.5);
       }
     }
   }
@@ -853,7 +854,7 @@ export class NexusBehaviour extends Behaviour {
     // the crush
     if (c.t === cfg.closeTo) {
       const reach = cfg.radius[1] + 14;
-      if (Math.hypot(fv.x - c.cx, fv.y - c.cy) <= reach) {
+      if (DMath.hypot(fv.x - c.cx, fv.y - c.cy) <= reach) {
         const sh = this.shape;
         sh.kind = 'point';
         sh.x = c.cx;
@@ -899,7 +900,7 @@ export class NexusBehaviour extends Behaviour {
       const a0 = this.segAngle(k) + c.spin;
       for (let s = 0; s < 5; s++) {
         const u = (s / 4 - 0.5) * 2 * CAGE_SEG_W * reveal;
-        if (cb(k, c.cx + Math.cos(a0 + u) * c.r, c.cy + Math.sin(a0 + u) * c.r)) return;
+        if (cb(k, c.cx + DMath.cos(a0 + u) * c.r, c.cy + DMath.sin(a0 + u) * c.r)) return;
       }
     }
   }
@@ -950,7 +951,7 @@ export class NexusBehaviour extends Behaviour {
         this.segOn[k] = 0;
         const c = this.cage;
         const a = this.segAngle(k) + c.spin;
-        this.spawnWhip(c.cx + Math.cos(a) * c.r, c.cy + Math.sin(a) * c.r, Math.cos(a), Math.sin(a), 4.5);
+        this.spawnWhip(c.cx + DMath.cos(a) * c.r, c.cy + DMath.sin(a) * c.r, DMath.cos(a), DMath.sin(a), 4.5);
       }
     }
     if (struck > 0) {
@@ -1007,7 +1008,7 @@ export class NexusBehaviour extends Behaviour {
           const b = a + 1;
           const dx = this.wx[b]! - this.wx[a]!;
           const dy = this.wy[b]! - this.wy[a]!;
-          const dl = Math.hypot(dx, dy) || 1;
+          const dl = DMath.hypot(dx, dy) || 1;
           const diff = (dl - WHIP_LEN) / dl;
           const half = k === 0 ? 0.35 : 0.5;
           this.wx[a] = this.wx[a]! + dx * diff * half;
@@ -1035,7 +1036,7 @@ export class NexusBehaviour extends Behaviour {
     if (this.cage.fade > 0 && !this.cage.on) this.cage.fade--;
     // a slow sway; a heave when Constrict winds up
     const m = f.mv;
-    this.lean = Math.sin(tick * 0.021 + f.slot) * 1.8;
+    this.lean = DMath.sin(tick * 0.021 + f.slot) * 1.8;
     if (m.def?.id === 'nexus.constrict' && m.phase === 'startup') this.lean += -5 * clamp01(m.phaseTick / 14);
     f.view.parts = Math.floor(f.resource);
     for (let n = 0; n < this.nN; n++) {
@@ -1099,7 +1100,7 @@ export class NexusBehaviour extends Behaviour {
     for (let n = 1; n < this.nN; n++) {
       if (!this.lit[n]) continue;
       const N = rig.nodes[n]!;
-      const br = 0.2 + 0.1 * Math.sin(tick * 0.06 + n * 1.9);
+      const br = 0.2 + 0.1 * DMath.sin(tick * 0.06 + n * 1.9);
       fx.glow(this.nodeWX[n]!, this.nodeWY[n]!, N.r * 1.25, 255, 40, 80, br + (harvesting ? 0.15 : 0));
     }
     // the hub: a breathing heart and a slow diagonal shimmer through the crystal
@@ -1107,7 +1108,7 @@ export class NexusBehaviour extends Behaviour {
     fx.glow(
       this.nodeWX[0]!,
       this.nodeWY[0]!,
-      14 + 2 * Math.sin(tick * 0.05),
+      14 + 2 * DMath.sin(tick * 0.05),
       255,
       110,
       170,
@@ -1267,16 +1268,24 @@ export class NexusBehaviour extends Behaviour {
       for (let i = 0; i < n; i++) {
         const u = ((i + 0.5) / n - 0.5) * 2 * w;
         const a = a0 + u;
-        const px = c.cx + Math.cos(a) * R;
-        const py = c.cy + Math.sin(a) * R;
+        const px = c.cx + DMath.cos(a) * R;
+        const py = c.cy + DMath.sin(a) * R;
         // tangent of the circle
-        this.pen.link(ov, px, py, -Math.sin(a), Math.cos(a), i + k, this.segHp[k]! < cfg.hp * 0.4 ? -0.5 : 0);
+        this.pen.link(
+          ov,
+          px,
+          py,
+          -DMath.sin(a),
+          DMath.cos(a),
+          i + k,
+          this.segHp[k]! < cfg.hp * 0.4 ? -0.5 : 0,
+        );
         drawn++;
       }
       // joint beads between segments, glowing as the crush nears
       const ja = a0 + Math.PI / SEGS;
-      const jx = c.cx + Math.cos(ja) * R;
-      const jy = c.cy + Math.sin(ja) * R;
+      const jx = c.cx + DMath.cos(ja) * R;
+      const jy = c.cy + DMath.sin(ja) * R;
       if (reveal > 0.6) {
         ov.disc(jx, jy, 3.2, this.nodeRamp[3]!, 60);
         ov.disc(jx - 0.6, jy - 0.6, 1.6, this.nodeRamp[5]!, 90);

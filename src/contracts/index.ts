@@ -1,6 +1,7 @@
 export * from './constants';
 export * from './rng';
 export * from './math';
+export * from './dmath';
 export * from './color';
 export * from './space';
 export * from './damage';

@@ -420,6 +420,8 @@ export interface MatchApi {
   step(): void;
   /** State hash for determinism tests (world + fighters + phase). */
   hash(): number;
+  /** Cheap per-tick netplay checksum: `hash()` without the matter world's per-cell arrays (docs/netplay/STEP0.md). */
+  checksum(): number;
   /** Current arena. */
   readonly arena: ArenaInfo;
   readonly lighting: StageLighting;

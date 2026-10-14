@@ -10,6 +10,7 @@ import { cohesionBondScale } from './bodyinit';
 import { lerpPx, noise2, hash2 } from './util';
 import type { MatterWorldEx } from './world';
 import { clearWounds, flushWounds } from './wound';
+import { DMath, sq } from '@/contracts/dmath';
 
 const pt: WorldPoint = { x: 0, y: 0 };
 const F_CRACK = CellFlag.CRACKED;
@@ -173,7 +174,7 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
       let best = members[0]!;
       let bd = Infinity;
       for (const c of members) {
-        const d = ((c % w) - sx) ** 2 + ((c - (c % w)) / w - sy) ** 2;
+        const d = sq((c % w) - sx) + sq((c - (c % w)) / w - sy);
         if (d < bd) {
           bd = d;
           best = c;
@@ -222,7 +223,7 @@ export function heal(core: WorldCore, body: Body, fraction: number, seed: number
       const c = queue[k]!;
       const cx0 = c % w;
       const cy0 = (c - cx0) / w;
-      const de = Math.hypot(cx0 - srcX[c]!, cy0 - srcY[c]!);
+      const de = DMath.hypot(cx0 - srcX[c]!, cy0 - srcY[c]!);
       const pr = de + rng.next() * 3.2 + noise2(cx0, cy0, seed) * 2.5;
       keys[k] = Math.floor(pr * 32) * 65536 + c;
     }
@@ -589,7 +590,7 @@ function carveBody(world: MatterWorldEx, body: Body, massFrac: number, seed: num
       else type = r < 0.4 ? 'KINETIC' : r < 0.7 ? 'FRACTURE' : 'CRUSH';
       const remaining = lastMass - goal;
       // Near the core, a blow must not be able to dig through to it (a crater's area grows ~ energy): the core is left last.
-      const coreDist = Math.hypot(x - map.coreX, y - map.coreY);
+      const coreDist = DMath.hypot(x - map.coreX, y - map.coreY);
       const room = Math.max(4, coreDist - map.coreRadius * 1.5);
       const energy = Math.min(
         Math.max(60, Math.min(900, remaining * 0.32)) * (0.7 + 0.5 * rng.next()),

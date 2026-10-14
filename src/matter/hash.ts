@@ -110,6 +110,59 @@ function hashBody(h: number, b: Body): number {
   return h;
 }
 
+/**
+ * The netplay checksum (docs/netplay/STEP0.md §4): a cheap per-tick summary for peers to exchange. It folds every scalar
+ * the full hash folds per body (transform, mass economy, crack fronts, fuses, wounds' head, last blow, RNG) and every
+ * debris chunk's motion, but none of the per-cell arrays (the bulk of `hashWorld`'s cost). A desync in cells reaches these
+ * scalars (masses, RNG draws, debris) within a few ticks; peers also exchange the full hash every N ticks to be sure.
+ */
+export function checksumWorld(core: WorldCore): number {
+  let h = 0x2545f491 | 0;
+  h = mix32(h, core.tick);
+  for (const b of core.bodyList) {
+    const t = b.transform;
+    h = mix32(h, b.id | ((t.facing + 1) << 20));
+    h = mixF(h, t.x);
+    h = mixF(h, t.y);
+    h = mix32(h, (t.rot ?? 0) | (t.anchorX << 12));
+    h = mixF(h, t.lean);
+    h = mixF(h, b.pool);
+    h = mixF(h, b.massGained);
+    h = mixF(h, b.massLost);
+    h = mix32(h, b.frontCount | (b.fuseCount << 16));
+    h = mix32(h, b.slowN | (b.slowPos << 16));
+    const wb = b.wounds;
+    h = mix32(h, wb.next | (wb.held << 8) | (wb.top << 16));
+    h = mix32(h, b.blow.tick);
+    h = mixF(h, b.blow.energy);
+    h = mix32(h, b.debrisTick);
+    const s = b.rng.getState();
+    h = mix32(mix32(mix32(mix32(h, s[0]), s[1]), s[2]), s[3]);
+  }
+  const cp = core.chunks;
+  h = mix32(h, cp.count);
+  for (let i = 0; i < cp.hi; i++) {
+    const c = cp.list[i]!;
+    if (!c.alive) continue;
+    h = mix32(h, c.id);
+    h = mixF(h, c.x);
+    h = mixF(h, c.y);
+    h = mixF(h, c.angle);
+    h = mixF(h, c.mass);
+  }
+  const pp = core.particles;
+  h = mix32(h, pp.count);
+  h = mixF(h, pp.massLive);
+  h = mixF(h, cp.massLive);
+  const l = core.ledger;
+  h = mixF(h, l.created);
+  h = mixF(h, l.deleted);
+  h = mixF(h, l.dissipated);
+  const r = core.rng.getState();
+  h = mix32(mix32(mix32(mix32(h, r[0]), r[1]), r[2]), r[3]);
+  return h >>> 0;
+}
+
 /** Stable 32-bit hash of all simulation state: bodies, chunks, particles, ledger, gravity, RNG. */
 export function hashWorld(core: WorldCore, extra: (h: number) => number): number {
   let h = 0x811c9dc5 | 0;

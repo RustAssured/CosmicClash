@@ -1,4 +1,5 @@
 import type { AimDir, FrameData, MoveDef, MovePhase, MoveVariant } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 /** Max hitboxes per variant the runtime tracks re-hit state for (validated when a move starts). */
 export const MAX_HITBOXES = 24;
@@ -106,7 +107,7 @@ export function fillDisplacement(
   dt: number,
   glideHalfLife: number,
 ): void {
-  const half = Math.pow(0.5, dt / glideHalfLife);
+  const half = DMath.pow(0.5, dt / glideHalfLife);
   let v = v0;
   let x = 0;
   let damp = 1;
@@ -121,7 +122,7 @@ export function fillDisplacement(
       const age = t - keys[j]!.at + 1;
       if (age >= 1 && age <= KEY_RAMP_TICKS) v += keys[j]!.ix * rampWeight(age);
     }
-    v *= damp < 1 ? Math.pow(damp, dt) : half;
+    v *= damp < 1 ? DMath.pow(damp, dt) : half;
     x += v * dt;
     out[t] = x;
   }

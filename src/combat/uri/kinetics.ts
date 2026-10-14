@@ -8,6 +8,7 @@ import {
   type UriSide,
   type Xf,
 } from '@/titans/uri/rig';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * 우리's kinetic system (Phase 2B; URI_SPEC §6, TUNING.md): a port of the locked oracle's `uri/src/20_kinetics.js`.
@@ -26,7 +27,7 @@ import {
  */
 
 const D = Math.PI / 180;
-const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+const wrap = (a: number): number => DMath.atan2(DMath.sin(a), DMath.cos(a));
 
 /** The §9 sliders (all 1.00 in the locked demo). */
 export interface UriTune {
@@ -394,13 +395,13 @@ export class UriKinetics {
   targetVec(): { x: number; y: number; dist: number; ang: number } {
     const dx = this.target[0] - URI_CM0[0];
     const dy = this.target[1] - URI_CM0[1];
-    return { x: dx, y: dy, dist: Math.hypot(dx, dy), ang: Math.atan2(-dy, dx) };
+    return { x: dx, y: dy, dist: DMath.hypot(dx, dy), ang: DMath.atan2(-dy, dx) };
   }
 
   /** The best move for the target (spec §6.4): elevation > 40° → uppercut, < −38° → slam, else punch / cross alternating. */
   pickMove(): UriMoveName {
     const tv = this.targetVec();
-    const el = Math.atan2(-tv.y, Math.abs(tv.x)) / D;
+    const el = DMath.atan2(-tv.y, Math.abs(tv.x)) / D;
     if (el > 40) return 'upper';
     if (el < -38) return 'slam';
     // (the oracle remembers the last move only while a move is still running)
@@ -477,8 +478,8 @@ export class UriKinetics {
     P.wL = L.wL.x;
     P.wR = L.wR.x;
     // the oracle draws a pylon at the hips' angle + half its vectoring + a slow wobble
-    P.pyL = this.pyl.L.ang * 0.5 + Math.sin(this.t * 0.9) * 0.02;
-    P.pyR = this.pyl.R.ang * 0.5 + Math.sin(this.t * 0.9 + 1) * 0.02;
+    P.pyL = this.pyl.L.ang * 0.5 + DMath.sin(this.t * 0.9) * 0.02;
+    P.pyR = this.pyl.R.ang * 0.5 + DMath.sin(this.t * 0.9 + 1) * 0.02;
     return P;
   }
 
@@ -502,7 +503,7 @@ export class UriKinetics {
     out.pylon.R.th = this.pyl.R.th;
     out.pylon.R.ang = this.pyl.R.ang;
     out.moon = this.moonS.init
-      ? { x: this.moonS.x, y: this.moonS.y + Math.sin(this.t * 0.8) * 1.2, a: this.moonS.a }
+      ? { x: this.moonS.x, y: this.moonS.y + DMath.sin(this.t * 0.8) * 1.2, a: this.moonS.a }
       : null;
     out.spread.L = this.L.cL.x;
     out.spread.R = this.L.cR.x;
@@ -558,28 +559,28 @@ export class UriKinetics {
     const S0 = ua.ja!;
     const E0 = ua.jb!;
     const W0 = fa.jb!;
-    const L1 = Math.hypot(E0[0] - S0[0], E0[1] - S0[1]);
-    const L2 = Math.hypot(W0[0] - E0[0], W0[1] - E0[1]);
-    const a10 = Math.atan2(E0[1] - S0[1], E0[0] - S0[0]);
-    const a20 = Math.atan2(W0[1] - E0[1], W0[0] - E0[0]);
+    const L1 = DMath.hypot(E0[0] - S0[0], E0[1] - S0[1]);
+    const L2 = DMath.hypot(W0[0] - E0[0], W0[1] - E0[1]);
+    const a10 = DMath.atan2(E0[1] - S0[1], E0[0] - S0[0]);
+    const a20 = DMath.atan2(W0[1] - E0[1], W0[0] - E0[0]);
     apply(Td, S0[0], S0[1], this.tmp);
     const Sx = this.tmp.x;
     const Sy = this.tmp.y;
     const dx = wx - Sx;
     const dy = wy - Sy;
-    const d = Math.hypot(dx, dy) || 1;
+    const d = DMath.hypot(dx, dy) || 1;
     const dmax = (L1 + L2) * limitReach;
     const dmin = Math.abs(L1 - L2) + 4;
     const dc = Math.max(dmin, Math.min(dmax, d));
-    const ph = Math.atan2(dy, dx);
+    const ph = DMath.atan2(dy, dx);
     const cb = Math.max(-1, Math.min(1, (L1 * L1 + dc * dc - L2 * L2) / (2 * L1 * dc)));
-    const be = Math.acos(cb);
+    const be = DMath.acos(cb);
     let best: { t1: number; t2: number; out: number } | null = null;
     for (const sg of [1, -1]) {
       const t1 = ph + sg * be;
-      const Ex = Sx + Math.cos(t1) * L1;
-      const Ey = Sy + Math.sin(t1) * L1;
-      const t2 = Math.atan2(Sy + Math.sin(ph) * dc - Ey, Sx + Math.cos(ph) * dc - Ex);
+      const Ex = Sx + DMath.cos(t1) * L1;
+      const Ey = Sy + DMath.sin(t1) * L1;
+      const t2 = DMath.atan2(Sy + DMath.sin(ph) * dc - Ey, Sx + DMath.cos(ph) * dc - Ex);
       const out = (s === 'L' ? -1 : 1) * (Ex - 200) + 0.3 * (Ey - Sy);
       if (!best || out > best.out) best = { t1, t2, out };
     }
@@ -590,8 +591,8 @@ export class UriKinetics {
     const ua = uriPart(s === 'L' ? 'uaL' : 'uaR');
     const fa = uriPart(s === 'L' ? 'faL' : 'faR');
     return (
-      Math.hypot(ua.jb![0] - ua.ja![0], ua.jb![1] - ua.ja![1]) +
-      Math.hypot(fa.jb![0] - fa.ja![0], fa.jb![1] - fa.ja![1])
+      DMath.hypot(ua.jb![0] - ua.ja![0], ua.jb![1] - ua.ja![1]) +
+      DMath.hypot(fa.jb![0] - fa.ja![0], fa.jb![1] - fa.ja![1])
     );
   }
 
@@ -679,14 +680,14 @@ export class UriKinetics {
       else G.cR = v;
     };
     const reachDir = (S: [number, number], cone: number, axis: number): [number, number] => {
-      let a = Math.atan2(this.target[1] - S[1], this.target[0] - S[0]);
+      let a = DMath.atan2(this.target[1] - S[1], this.target[0] - S[0]);
       const da = wrap(a - axis);
       a = axis + Math.max(-cone, Math.min(cone, da));
-      return [Math.cos(a), Math.sin(a)];
+      return [DMath.cos(a), DMath.sin(a)];
     };
     // aiming correction grows only for steep targets
     const tv = this.targetVec();
-    const el = Math.abs(Math.atan2(-tv.y, Math.abs(tv.x))) / D;
+    const el = Math.abs(DMath.atan2(-tv.y, Math.abs(tv.x))) / D;
     G.ikw = 0.14 + 0.14 * Math.min(1, Math.max(0, (el - 20) / 45));
     const taper = (): void => {
       // layered settling: the fist resolves first, then the arm, then the shoulder ark, then the torso and root
@@ -740,8 +741,8 @@ export class UriKinetics {
         setDx(rr, 12 * d);
         setDa(ld, -6 * D * d);
         setDx(ld, -4 * d);
-        const a = Math.atan2(this.target[1] - 150, this.target[0] - 200);
-        setWrist(rr, 200 + Math.cos(a) * Ln * 0.62, 150 + Math.sin(a) * Ln * 0.62 + 10);
+        const a = DMath.atan2(this.target[1] - 150, this.target[0] - 200);
+        setWrist(rr, 200 + DMath.cos(a) * Ln * 0.62, 150 + DMath.sin(a) * Ln * 0.62 + 10);
         setC(rr, 0.8);
       }
       if (n === 'taper') taper();
@@ -763,7 +764,7 @@ export class UriKinetics {
       }
       if (n === 'apex') {
         // a held moment of impossible poise: still, not floppy
-        G.hy = -23 + Math.sin(t * 37) * 0.4;
+        G.hy = -23 + DMath.sin(t * 37) * 0.4;
         G.daL = -16 * D;
         G.daR = 16 * D;
         G.cL = G.cR = 0.92;
@@ -1009,7 +1010,7 @@ export class UriKinetics {
       }
       const dx = ax - M.x;
       const dy = ay - M.y;
-      const dist = Math.hypot(dx, dy);
+      const dist = DMath.hypot(dx, dy);
       // the further it trails, the harder the pull: a tether, not a spring toy
       const pull = MN.pull * (1 + Math.min(1.5, dist / 14));
       M.vx += (pull * dx - 2 * MN.zeta * Math.sqrt(MN.pull) * M.vx) * dt;
@@ -1018,7 +1019,7 @@ export class UriKinetics {
       M.y += M.vy * dt;
       const ex = M.x - ax;
       const ey = M.y - ay;
-      const ed = Math.hypot(ex, ey);
+      const ed = DMath.hypot(ex, ey);
       if (ed > MN.trail) {
         M.x = ax + (ex / ed) * MN.trail;
         M.y = ay + (ey / ed) * MN.trail;

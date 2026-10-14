@@ -12,6 +12,7 @@ import { ArtCanvas, buildLitRamps, type ShadeParams } from '../../art/canvas';
 import { keepLargestComponent } from '../../art/field';
 import { bayer8, fbm, hash01, ridged } from '../../art/noise';
 import { sdCircle, sdTaperedCapsule, smin } from '../../art/sdf';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * THE CRADLE / 태반체: its own painter (grown out of the kit's blob template; WJ's brief docs/titans/cradle/BRIEF.md).
@@ -211,8 +212,8 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
   const p = params(def);
   const D = p.disc;
   const rng = new Rng(seed ^ 0xc4ad1e);
-  const cr = Math.cos(D.roll);
-  const sr = Math.sin(D.roll);
+  const cr = DMath.cos(D.roll);
+  const sr = DMath.sin(D.roll);
   const toScreen = (u: number, v: number, out: { x: number; y: number }): void => {
     const a = u * D.rx;
     const b = v * D.ry;
@@ -248,9 +249,10 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
   };
   const edge = (phi: number): { r: number; k: number; t: number } => {
     const { k, t } = panelOf(phi);
-    let r = 1 - D.scallop * Math.pow(Math.sin(Math.PI * t), 1.3) + fbm(phi * 2.2, 0.5, seed + 77, 3) * 0.035;
+    let r =
+      1 - D.scallop * DMath.pow(DMath.sin(Math.PI * t), 1.3) + fbm(phi * 2.2, 0.5, seed + 77, 3) * 0.035;
     const tear = tears.get(k);
-    if (tear) r -= tear.d * Math.max(0, 1 - Math.abs(t - tear.t) / tear.w) ** 1.4;
+    if (tear) r -= tear.d * DMath.pow(Math.max(0, 1 - Math.abs(t - tear.t) / tear.w), 1.4);
     return { r, k, t };
   };
 
@@ -268,18 +270,18 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
     for (let s = 0; s <= SPOKE_PIECES; s++) {
       const t = s / SPOKE_PIECES;
       const rho = 0.06 + (reach - 0.06) * t;
-      const a = phi + bow * Math.sin(Math.PI * t);
-      toScreen(Math.cos(a) * rho, Math.sin(a) * rho, tmp);
+      const a = phi + bow * DMath.sin(Math.PI * t);
+      toScreen(DMath.cos(a) * rho, DMath.sin(a) * rho, tmp);
       pts.push({ x: tmp.x, y: tmp.y });
     }
     // nearer spokes (the lower half, v > 0: toward the camera) read a touch heavier
-    const near = 1 + 0.25 * Math.sin(phi);
+    const near = 1 + 0.25 * DMath.sin(phi);
     // knuckled, calcified bone: a run of swollen joints (like vertebrae fused into a rib), thinning toward the tip
     const knuckles = Math.round(rng.range(5, 7.5));
     const kph = rng.range(0, 1);
     const rad = (t: number): number => {
       const taper = 3.6 - 1.9 * t;
-      const knot = Math.pow(Math.abs(Math.cos(Math.PI * (t * knuckles + kph))), 4);
+      const knot = DMath.pow(Math.abs(DMath.cos(Math.PI * (t * knuckles + kph))), 4);
       return taper * (0.66 + 0.48 * knot) * near;
     };
     const segs: Seg[] = [];
@@ -318,10 +320,10 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
     let cv = v;
     let d = dir;
     for (let step = 0; step < 7 - depth; step++) {
-      const nu = cu + Math.cos(d) * len;
-      const nv = cv + Math.sin(d) * len;
-      const rho = Math.hypot(nu, nv);
-      if (rho > edge(Math.atan2(nv, nu)).r - 0.03) return;
+      const nu = cu + DMath.cos(d) * len;
+      const nv = cv + DMath.sin(d) * len;
+      const rho = DMath.hypot(nu, nv);
+      if (rho > edge(DMath.atan2(nv, nu)).r - 0.03) return;
       toScreen(cu, cv, a0);
       toScreen(nu, nv, a1);
       const r = Math.max(0.5, rad * (1 - step * 0.1));
@@ -329,9 +331,9 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
       cu = nu;
       cv = nv;
       // vessels drift outward, wandering
-      const out = Math.atan2(cv, cu);
+      const out = DMath.atan2(cv, cu);
       let delta = out - d;
-      delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+      delta = DMath.atan2(DMath.sin(delta), DMath.cos(delta));
       d += delta * 0.2 + rng.range(-0.5, 0.5);
       if (depth < 2 && step % 2 === 1 && rng.next() < (depth === 0 ? 0.7 : 0.35))
         grow(
@@ -348,7 +350,7 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
     const mid = phis[k]! + ((((phis[(k + 1) % N]! - phis[k]!) % TAU) + TAU) % TAU) / 2;
     for (const off of [-0.2, 0.2]) {
       const a = mid + off * rng.range(0.6, 1.3);
-      grow(Math.cos(a) * 0.24, Math.sin(a) * 0.24, a, 0.085, 0.72, 0);
+      grow(DMath.cos(a) * 0.24, DMath.sin(a) * 0.24, a, 0.085, 0.72, 0);
     }
   }
 
@@ -363,15 +365,15 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
       const phi = phis[k]! + span * t;
       const er = edge(phi).r;
       const rho = er * rng.range(0.5, 0.68);
-      toScreen(Math.cos(phi) * rho, Math.sin(phi) * rho, tmp);
+      toScreen(DMath.cos(phi) * rho, DMath.sin(phi) * rho, tmp);
       const size = (count === 1 ? rng.range(0.1, 0.135) : rng.range(0.07, 0.095)) * D.rx;
       // perspective: chambers bulge toward the camera, so they squash less than the disc does
       sacs.push({
         x: tmp.x,
         y: tmp.y,
-        a: size * (0.75 + 0.25 * Math.abs(Math.sin(phi))),
-        b: size * (0.5 + 0.18 * Math.abs(Math.cos(phi))),
-        rot: D.roll + Math.cos(phi) * 0.35,
+        a: size * (0.75 + 0.25 * Math.abs(DMath.sin(phi))),
+        b: size * (0.5 + 0.18 * Math.abs(DMath.cos(phi))),
+        rot: D.roll + DMath.cos(phi) * 0.35,
         lumen: false,
         seed: Math.floor(rng.range(0, 1e6)),
       });
@@ -391,10 +393,10 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
   const lobes: { x: number; y: number; r: number }[] = [{ x: kx, y: ky, r: KR * 0.72 }];
   for (let j = 0; j < 8; j++) {
     const a = (j / 8) * TAU + rng.range(-0.3, 0.3);
-    const low = Math.max(0, Math.sin(a));
+    const low = Math.max(0, DMath.sin(a));
     lobes.push({
-      x: kx + Math.cos(a) * KR * (0.6 + 0.1 * low),
-      y: ky + Math.sin(a) * KR * 0.62 + KR * 0.12,
+      x: kx + DMath.cos(a) * KR * (0.6 + 0.1 * low),
+      y: ky + DMath.sin(a) * KR * 0.62 + KR * 0.12,
       r: KR * rng.range(0.36, 0.5) * (0.8 + 0.4 * low),
     });
   }
@@ -417,17 +419,17 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
     // steep wraps (never a horizontal band across the core: that would read as a mouth)
     const a = Math.PI / 2 + (j % 2 ? 1 : -1) * rng.range(0.35, 0.8);
     const off = rng.range(-0.5, 0.5) * KR;
-    const ox = Math.cos(a + Math.PI / 2) * off;
-    const oy = Math.sin(a + Math.PI / 2) * off;
+    const ox = DMath.cos(a + Math.PI / 2) * off;
+    const oy = DMath.sin(a + Math.PI / 2) * off;
     const L = KR * 0.9;
     const n = 6;
-    let px = kx + ox - Math.cos(a) * L;
-    let py = ky + oy - Math.sin(a) * L;
+    let px = kx + ox - DMath.cos(a) * L;
+    let py = ky + oy - DMath.sin(a) * L;
     for (let s = 1; s <= n; s++) {
       const t = s / n;
-      const bow = Math.sin(Math.PI * t) * KR * 0.18;
-      const qx = kx + ox - Math.cos(a) * L + Math.cos(a) * 2 * L * t + Math.cos(a + Math.PI / 2) * bow;
-      const qy = ky + oy - Math.sin(a) * L + Math.sin(a) * 2 * L * t + Math.sin(a + Math.PI / 2) * bow;
+      const bow = DMath.sin(Math.PI * t) * KR * 0.18;
+      const qx = kx + ox - DMath.cos(a) * L + DMath.cos(a) * 2 * L * t + DMath.cos(a + Math.PI / 2) * bow;
+      const qy = ky + oy - DMath.sin(a) * L + DMath.sin(a) * 2 * L * t + DMath.sin(a + Math.PI / 2) * bow;
       knotBands.push({ ax: px, ay: py, ra: 0.8, bx: qx, by: qy, rb: 0.8 });
       px = qx;
       py = qy;
@@ -437,7 +439,7 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
   for (let j = 0; j < 5; j++) {
     const a = rng.range(0, TAU);
     const r = rng.range(0.45, 0.85) * KR;
-    knotNodules.push({ x: kx + Math.cos(a) * r, y: ky + Math.sin(a) * r * 1.1, r: rng.range(1.8, 3.2) });
+    knotNodules.push({ x: kx + DMath.cos(a) * r, y: ky + DMath.sin(a) * r * 1.1, r: rng.range(1.8, 3.2) });
   }
   const knotVessels: Seg[] = [];
   for (let j = 0; j < 12; j++) {
@@ -445,8 +447,8 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
     let y = D.cy + rng.range(0, 6);
     let d = Math.PI / 2 + rng.range(-1.1, 1.1);
     for (let s = 0; s < 9; s++) {
-      const nx = x + Math.cos(d) * 4.2;
-      const ny = y + Math.sin(d) * 4.2;
+      const nx = x + DMath.cos(d) * 4.2;
+      const ny = y + DMath.sin(d) * 4.2;
       knotVessels.push({ ax: x, ay: y, ra: 1.0 - s * 0.05, bx: nx, by: ny, rb: 0.95 - s * 0.05 });
       x = nx;
       y = ny;
@@ -461,8 +463,8 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
   for (let i = 0; i < raw.length; i++) {
     const a = raw[Math.max(0, i - 1)]!;
     const b = raw[Math.min(raw.length - 1, i + 1)]!;
-    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    if (i > 0) s += Math.hypot(raw[i]!.x - raw[i - 1]!.x, raw[i]!.y - raw[i - 1]!.y);
+    const l = DMath.hypot(b.x - a.x, b.y - a.y) || 1;
+    if (i > 0) s += DMath.hypot(raw[i]!.x - raw[i - 1]!.x, raw[i]!.y - raw[i - 1]!.y);
     tail.push({ x: raw[i]!.x, y: raw[i]!.y, tx: (b.x - a.x) / l, ty: (b.y - a.y) / l, s });
   }
 
@@ -471,7 +473,7 @@ export function makeLayout(def: TitanDef, seed: number): Layout {
   for (let j = 0; j < 5; j++) {
     const phi = Math.PI / 2 + rng.range(-1.3, 1.3);
     const rho = rng.range(0.3, 0.55);
-    toScreen(Math.cos(phi) * rho, Math.sin(phi) * rho, tmp);
+    toScreen(DMath.cos(phi) * rho, DMath.sin(phi) * rho, tmp);
     const len = rng.range(6, 13);
     strands.push({
       ax: tmp.x,
@@ -551,14 +553,14 @@ function tailRadius(L: Layout, s: number): { r: number; seg: number; inJaw: numb
     const q = (s - jawStart) / t.jaw.len;
     // swells, holds, then a blunt rounded end
     const swell = smoothstep(0, 0.35, q);
-    const end = q > 0.82 ? Math.sqrt(Math.max(0, 1 - ((q - 0.82) / 0.18) ** 2)) : 1;
+    const end = q > 0.82 ? Math.sqrt(Math.max(0, 1 - sq((q - 0.82) / 0.18))) : 1;
     return { r: (t.r1 + (t.jaw.r - t.r1) * swell) * (0.35 + 0.65 * end), seg: -1, inJaw: q };
   }
   const q = s / jawStart;
   const base = t.r0 + (t.r1 - t.r0) * q;
   const spacing = jawStart / t.segs;
   const f = (s / spacing) % 1;
-  const bead = 0.84 + 0.16 * Math.pow(Math.sin(Math.PI * f), 0.6);
+  const bead = 0.84 + 0.16 * DMath.pow(DMath.sin(Math.PI * f), 0.6);
   return { r: base * bead, seg: f, inJaw: -1 };
 }
 
@@ -585,7 +587,7 @@ function rigGeometry(def: TitanDef, seed: number): CradleRig {
     knot: L.knot,
     core: L.core,
     tail,
-    jaw: { x: js.x, y: js.y, angle: Math.atan2(js.ty, js.tx), len: p.tail.jaw.len, r: p.tail.jaw.r },
+    jaw: { x: js.x, y: js.y, angle: DMath.atan2(js.ty, js.tx), len: p.tail.jaw.len, r: p.tail.jaw.r },
     jawTip: { x: L.tail[L.tail.length - 1]!.x, y: L.tail[L.tail.length - 1]!.y },
     radius: (p.disc.rx + p.disc.ry) / 2,
     regions: [],
@@ -648,17 +650,17 @@ export function paintCradle(
       const fx = x + 0.5;
       const fy = y + 0.5;
       L.toDisc(fx, fy, uv);
-      const rho = Math.hypot(uv.u, uv.v);
+      const rho = DMath.hypot(uv.u, uv.v);
       if (rho > 1.2) continue;
-      const phi = Math.atan2(uv.v, uv.u);
+      const phi = DMath.atan2(uv.v, uv.u);
       const e = L.edge(phi);
       if (rho > e.r) continue;
       const i = y * W + x;
-      const across = Math.sin(Math.PI * e.t);
+      const across = DMath.sin(Math.PI * e.t);
       const outer = rho / e.r;
-      const billow = across * Math.sin(Math.PI * Math.min(1, outer * 1.05));
+      const billow = across * DMath.sin(Math.PI * Math.min(1, outer * 1.05));
       const wrinkle = ridged(phi * 9, rho * 3.2, sA, 3);
-      const glow = Math.pow(across, 0.9) * smoothstep(0.18, 0.55, outer) * (1 - smoothstep(0.82, 1, outer));
+      const glow = DMath.pow(across, 0.9) * smoothstep(0.18, 0.55, outer) * (1 - smoothstep(0.82, 1, outer));
       let tone = -2.3 + glow * 5.2 + fbm(fx * 0.06, fy * 0.06, sB, 3) * 0.7 - wrinkle * 0.6;
       tone += (hash01(x, y, sA) - 0.5) * 0.3;
       if (outer > 0.93) tone -= 0.8; // the thickened, darker hem
@@ -668,7 +670,8 @@ export function paintCradle(
       if (rho < hubR) {
         // the bruise-purple muscle sheet the disc contracts with: radial fibres
         m = ids.muscle;
-        tone = -0.4 + Math.sin(phi * 46 + fbm(fx * 0.2, fy * 0.2, sA + 3, 2) * 3) * 0.55 + (rho / hubR) * 0.8;
+        tone =
+          -0.4 + DMath.sin(phi * 46 + fbm(fx * 0.2, fy * 0.2, sA + 3, 2) * 3) * 0.55 + (rho / hubR) * 0.8;
         rel = 8 + (1 - rho / hubR) * 3;
       }
       set(i, m, rel, tone);
@@ -684,8 +687,8 @@ export function paintCradle(
   //    cold turquoise light (the only cold colour on the body)
   for (const s of L.sacs) {
     const R = Math.max(s.a, s.b) + 3;
-    const c = Math.cos(s.rot);
-    const sn = Math.sin(s.rot);
+    const c = DMath.cos(s.rot);
+    const sn = DMath.sin(s.rot);
     for (let y = Math.floor(s.y - R); y <= Math.ceil(s.y + R); y++)
       for (let x = Math.floor(s.x - R); x <= Math.ceil(s.x + R); x++) {
         if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
@@ -695,22 +698,23 @@ export function paintCradle(
         const dy = y + 0.5 - s.y;
         const a = (dx * c + dy * sn) / s.a;
         const b = (-dx * sn + dy * c) / s.b;
-        const q = Math.hypot(a, b) + fbm(x * 0.15, y * 0.15, s.seed, 2) * 0.08;
+        const q = DMath.hypot(a, b) + fbm(x * 0.15, y * 0.15, s.seed, 2) * 0.08;
         if (q < 1) {
           // BACKLIT FLUID SEEN THROUGH TISSUE: no solid dome; the light pools in the middle and fades into the membrane at
           // the rim (dithered, no outline), the fluid's clouds drift in it, and something half-formed hangs in it as a
           // silhouette against the glow
-          const glow = Math.pow(1 - q * q, 0.8);
+          const glow = DMath.pow(1 - q * q, 0.8);
           const cloud = fbm(a * 2.2 + 1.3, b * 2.2, s.seed + 1, 3);
           const fold = ridged(a * 3 + 7, b * 3, s.seed + 2, 2);
           // the rim: the membrane's own tissue thins over the sac, dithered into it
           if (q > 0.78 && bayer8(x, y) < (q - 0.78) / 0.22) continue;
           let m = ids.sac;
           let tone = -1.6 + glow * 3.4 + cloud * 0.8 - fold * 0.7;
-          const oq = Math.hypot(a * 1.25 - 0.2, b * 1.1 + 0.15) + fbm(a * 2.6, b * 2.6, s.seed + 6, 3) * 0.45;
+          const oq =
+            DMath.hypot(a * 1.25 - 0.2, b * 1.1 + 0.15) + fbm(a * 2.6, b * 2.6, s.seed + 6, 3) * 0.45;
           if (hash01(s.seed, 3, 17) < 0.6 && oq < 0.42) tone -= 2.4 - oq * 2.5;
           if (s.lumen) {
-            const lq = Math.hypot(a + 0.15, b - 0.1) + fbm(a * 3, b * 3, s.seed + 4, 2) * 0.35;
+            const lq = DMath.hypot(a + 0.15, b - 0.1) + fbm(a * 3, b * 3, s.seed + 4, 2) * 0.35;
             if (lq < 0.27) {
               m = ids.lumen;
               tone = (0.27 - lq) * 6 - 0.6;
@@ -735,7 +739,7 @@ export function paintCradle(
     for (let j = 0; j < 7; j++) {
       const phi = rng.range(0, TAU);
       const rho = rng.range(0.3, 0.8) * L.edge(phi).r;
-      L.toScreen(Math.cos(phi) * rho, Math.sin(phi) * rho, tmp);
+      L.toScreen(DMath.cos(phi) * rho, DMath.sin(phi) * rho, tmp);
       islands.push({ x: tmp.x, y: tmp.y, r: rng.range(1.4, 2.4) });
     }
   }
@@ -747,7 +751,7 @@ export function paintCradle(
     segs.forEach((sg, s) => {
       // along the rib: swollen knuckles catch the light, the narrow waists between them sink into shadow
       const t = (s + 0.5) / segs.length;
-      const knot = Math.pow(Math.abs(Math.cos(Math.PI * (t * kn.n + kn.ph))), 4);
+      const knot = DMath.pow(Math.abs(DMath.cos(Math.PI * (t * kn.n + kn.ph))), 4);
       stamp(W, H, [sg], (i, d) => {
         const x = i % W;
         const y = (i / W) | 0;
@@ -764,7 +768,7 @@ export function paintCradle(
     for (let y = Math.floor(n.y - R); y <= Math.ceil(n.y + R); y++)
       for (let x = Math.floor(n.x - R); x <= Math.ceil(n.x + R); x++) {
         if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
-        const d = Math.hypot(x + 0.5 - n.x, y + 0.5 - n.y);
+        const d = DMath.hypot(x + 0.5 - n.x, y + 0.5 - n.y);
         if (d < n.r) set(y * W + x, ids.bone, 14 + (1 - d / n.r) * 3, 0.1 - d / n.r);
       }
   }
@@ -774,10 +778,10 @@ export function paintCradle(
       const i = y * W + x;
       if (cv.mat[i] !== ids.membrane && cv.mat[i] !== ids.vessel) continue;
       L.toDisc(x + 0.5, y + 0.5, uv);
-      const rho = Math.hypot(uv.u, uv.v);
-      const e = L.edge(Math.atan2(uv.v, uv.u));
+      const rho = DMath.hypot(uv.u, uv.v);
+      const e = L.edge(DMath.atan2(uv.v, uv.u));
       // ~1.3 px wide in screen, whatever the squash
-      const px = ((e.r - rho) * Math.hypot(uv.u * p.disc.rx, uv.v * p.disc.ry)) / Math.max(rho, 1e-3);
+      const px = ((e.r - rho) * DMath.hypot(uv.u * p.disc.rx, uv.v * p.disc.ry)) / Math.max(rho, 1e-3);
       if (px < 1.4 && fbm(x * 0.3, y * 0.3, sB + 21, 2) > -0.35) set(i, ids.collagen, cv.relief[i]! + 1, 0.2);
     }
 
@@ -845,7 +849,7 @@ export function paintCradle(
       for (let x = Math.floor(n.x - R); x <= Math.ceil(n.x + R); x++) {
         const i = y * W + x;
         if (cv.mat[i] !== ids.muscle && cv.mat[i] !== ids.vessel) continue;
-        const d = Math.hypot(x + 0.5 - n.x, y + 0.5 - n.y);
+        const d = DMath.hypot(x + 0.5 - n.x, y + 0.5 - n.y);
         if (d < n.r) set(i, ids.bone, cv.relief[i]! + 2 + (1 - d / n.r) * 2, 0.6 - d / n.r);
       }
   }
@@ -897,8 +901,8 @@ export function paintCradle(
           // the helical vessels (the cord's own arteries)
           const pitch = 26;
           for (const ph of [0, Math.PI]) {
-            const h = Math.sin((smp.s / pitch) * TAU + ph) * 0.72;
-            const front = Math.cos((smp.s / pitch) * TAU + ph) > -0.2;
+            const h = DMath.sin((smp.s / pitch) * TAU + ph) * 0.72;
+            const front = DMath.cos((smp.s / pitch) * TAU + ph) > -0.2;
             if (front && Math.abs(c - h) < 1.15 / r) {
               m = ids.vessel;
               tone = -1.7 + dome * 0.5;
@@ -909,10 +913,10 @@ export function paintCradle(
       } else {
         // the jaw-organ: plated, blunt, closed
         const q = tr.inJaw;
-        const seam = 0.12 + 0.3 * Math.pow(Math.max(0, q - 0.55) / 0.45, 1.6) + 0.04 * Math.sin(q * 9);
+        const seam = 0.12 + 0.3 * DMath.pow(Math.max(0, q - 0.55) / 0.45, 1.6) + 0.04 * DMath.sin(q * 9);
         if (q > 0.22 && Math.abs(c) > seam) {
           m = ids.bone;
-          const plate = Math.sin(q * 4 * Math.PI + 1) > 0.8 ? -1.1 : 0;
+          const plate = DMath.sin(q * 4 * Math.PI + 1) > 0.8 ? -1.1 : 0;
           tone = -2.4 + dome * 1.3 + plate + (c < 0 ? 0.3 : -0.4);
           rel += 2;
         } else if (q > 0.22) {
@@ -940,7 +944,7 @@ export function paintCradle(
         for (let x = Math.floor(nx - 4); x <= Math.ceil(nx + 4); x++) {
           const i = y * W + x;
           if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1 || cv.mat[i] === 0) continue;
-          const d = Math.hypot(x + 0.5 - nx, y + 0.5 - ny);
+          const d = DMath.hypot(x + 0.5 - nx, y + 0.5 - ny);
           if (d < 2.6) set(i, ids.bone, cv.relief[i]! + 2, 0.4 - d * 0.3);
         }
     }
@@ -989,7 +993,7 @@ export function paintCradle(
     for (let y = cy - 8; y <= cy + 8; y++)
       for (let x = cx - 8; x <= cx + 8; x++)
         if (map.material[y * W + x] === ids.core) {
-          const d = (x - C.x) ** 2 + (y - C.y) ** 2;
+          const d = sq(x - C.x) + sq(y - C.y);
           if (d < best) {
             best = d;
             cx = x;
@@ -1079,7 +1083,7 @@ function extractRegion(
   const mine = (i: number, x: number, y: number): boolean =>
     src.material[i] !== 0 &&
     (own[i] === o ||
-      (cap > 0 && own[i] === capOwner && (x + 0.5 - pivotX) ** 2 + (y + 0.5 - pivotY) ** 2 < cap * cap));
+      (cap > 0 && own[i] === capOwner && sq(x + 0.5 - pivotX) + sq(y + 0.5 - pivotY) < cap * cap));
   let x0 = src.w;
   let y0 = src.h;
   let x1 = -1;
@@ -1130,7 +1134,7 @@ function extractRegion(
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       if (map.material[y * w + x] === 0) continue;
-      const d = (x + 0.5 - lx) ** 2 + (y + 0.5 - ly) ** 2;
+      const d = sq(x + 0.5 - lx) + sq(y + 0.5 - ly);
       if (d < best) {
         best = d;
         cx = x;

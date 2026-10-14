@@ -1,5 +1,6 @@
 import { LINK, linkIndex, rasterLink } from '@/titans';
 import type { Overlay } from './overlay';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Draws forged chains into an `Overlay`: links placed along a sagging span or along a free polyline (a whip), alternating face-on
@@ -45,7 +46,7 @@ export class ChainPen {
   ): void {
     const dx = x1 - x0;
     const dy = y1 - y0;
-    const len = Math.hypot(dx, dy);
+    const len = DMath.hypot(dx, dy);
     if (len < 4 || reveal <= 0) return;
     const nx = -dy / len;
     const ny = dx / len;
@@ -53,15 +54,15 @@ export class ChainPen {
     const last = Math.min(n, Math.ceil(n * Math.min(1, reveal)));
     for (let k = 0; k < last; k++) {
       const t = (k + 0.5) / n;
-      const off = sag * 4 * t * (1 - t) + wave * Math.sin(t * 9 + phase) * Math.sin(t * Math.PI);
+      const off = sag * 4 * t * (1 - t) + wave * DMath.sin(t * 9 + phase) * DMath.sin(t * Math.PI);
       const px = x0 + dx * t + nx * off;
       const py = y0 + dy * t + ny * off;
       // tangent by a small forward difference of the same curve
       const t2 = t + 0.02;
-      const off2 = sag * 4 * t2 * (1 - t2) + wave * Math.sin(t2 * 9 + phase) * Math.sin(t2 * Math.PI);
+      const off2 = sag * 4 * t2 * (1 - t2) + wave * DMath.sin(t2 * 9 + phase) * DMath.sin(t2 * Math.PI);
       const qx = x0 + dx * t2 + nx * off2 - px;
       const qy = y0 + dy * t2 + ny * off2 - py;
-      const ql = Math.hypot(qx, qy) || 1;
+      const ql = DMath.hypot(qx, qy) || 1;
       this.link(ov, px, py, qx / ql, qy / ql, k);
       if (out && k === last - 1) {
         out.x = px;
@@ -75,7 +76,7 @@ export class ChainPen {
     for (let k = 0; k + 1 < n; k++) {
       const dx = xs[k + 1]! - xs[k]!;
       const dy = ys[k + 1]! - ys[k]!;
-      const l = Math.hypot(dx, dy) || 1;
+      const l = DMath.hypot(dx, dy) || 1;
       this.link(ov, (xs[k]! + xs[k + 1]!) / 2, (ys[k]! + ys[k + 1]!) / 2, dx / l, dy / l, k);
     }
   }

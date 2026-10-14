@@ -24,6 +24,7 @@ import { flameColumn, glowD, plasmaBall, rampAt, rampDither, ribbon, ringBand, s
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
+import { DMath, sq } from '@/contracts/dmath';
 
 /* ---- fuel economy -------------------------------------------------------------------------------------------------------- */
 /** Fraction of the star's initial mass that burns away per fuel point spent: spending all 100 fuel shrinks it by over a third. */
@@ -55,7 +56,7 @@ const LAYER_BLOW_MASS = 0.045;
 const TRAIL = 20;
 
 const SIN = new Float32Array(256);
-for (let i = 0; i < 256; i++) SIN[i] = Math.sin((i / 256) * Math.PI * 2);
+for (let i = 0; i < 256; i++) SIN[i] = DMath.sin((i / 256) * Math.PI * 2);
 
 interface WallCfg {
   half: number;
@@ -244,7 +245,7 @@ export class SupernovaBehaviour extends Behaviour {
   /** A star running on fumes hits softer (a dim remnant softer still): the fuel is what makes its heat, the mass what makes its weight. */
   override adjustStats(s: EffectiveStats, _massFrac: number): void {
     const k = this.fuelFrac();
-    s.damageMul *= 0.62 + 0.38 * Math.pow(k, 0.7);
+    s.damageMul *= 0.62 + 0.38 * DMath.pow(k, 0.7);
     if (this.remnant) s.damageMul *= 0.85;
   }
 
@@ -619,7 +620,7 @@ export class SupernovaBehaviour extends Behaviour {
   private windParticles(): void {
     const f = this.f;
     const sp = f.particleSpawn;
-    const speed = Math.hypot(f.vx, f.vy);
+    const speed = DMath.hypot(f.vx, f.vy);
     if (speed < 90) return;
     sp.kind = 'plasma';
     sp.x = f.px;
@@ -653,10 +654,10 @@ export class SupernovaBehaviour extends Behaviour {
     const sp = f.particleSpawn;
     const a = (f.tickNo * 0.37) % 6.283;
     sp.kind = 'mote';
-    sp.x = f.px + Math.cos(a) * 92;
-    sp.y = f.py + Math.sin(a) * 92;
-    sp.vx = -Math.cos(a) * 90;
-    sp.vy = -Math.sin(a) * 90;
+    sp.x = f.px + DMath.cos(a) * 92;
+    sp.y = f.py + DMath.sin(a) * 92;
+    sp.vx = -DMath.cos(a) * 90;
+    sp.vy = -DMath.sin(a) * 90;
     sp.spread = 8;
     sp.count = 1;
     sp.ramp = this.ember;
@@ -691,10 +692,10 @@ export class SupernovaBehaviour extends Behaviour {
     const dying = f.ko ? clamp01(1 - f.stateTicks / 70) : 1;
     const id = m.def?.id ?? '';
     // pulse of the whole star: a slow breath, faster and harder when it is hurt, a held breath in a collapse
-    let pulse = 0.5 + 0.5 * Math.sin(tick * (0.06 + 0.05 * this.hurt) + f.slot);
+    let pulse = 0.5 + 0.5 * DMath.sin(tick * (0.06 + 0.05 * this.hurt) + f.slot);
     const collapsing = (id === 'supernova.nova' || id === 'supernova.collapse') && m.phase === 'startup';
     const cq = collapsing ? clamp01(m.phaseTick / Math.max(1, m.startup)) : 0;
-    if (collapsing) pulse = 0.6 + 0.4 * Math.sin(tick * (0.2 + 0.6 * cq));
+    if (collapsing) pulse = 0.6 + 0.4 * DMath.sin(tick * (0.2 + 0.6 * cq));
     this.haloA = clamp01(
       (0.34 + 0.2 * pulse) * (0.35 + 0.65 * k) * (0.5 + 0.5 * massK) * dying + 0.35 * cq + 0.22 * this.hurt,
     );
@@ -740,7 +741,7 @@ export class SupernovaBehaviour extends Behaviour {
         const ph = phase[i]!;
         // each granule brightens and fades on its own beat; a wave rolls across them so the surface boils
         const s = SIN[(ph + t1) & 255]! * 0.6 + SIN[(((i * 5) & 255) + t2) & 255]! * 0.4;
-        const a = (s * 0.5 + 0.5) ** 2 * (w / 255) * gain;
+        const a = sq(s * 0.5 + 0.5) * (w / 255) * gain;
         if (a < 0.04) continue;
         px[i] =
           0xff000000 | (Math.min(255, cb * a) << 16) | (Math.min(255, cg * a) << 8) | Math.min(255, cr * a);
@@ -777,7 +778,7 @@ export class SupernovaBehaviour extends Behaviour {
     const t = f.body.transform;
     const P = this.prom;
     const calm = f.state === 'idle' || f.state === 'move' || f.state === 'intro';
-    const moving = Math.hypot(f.vx, f.vy) > 50;
+    const moving = DMath.hypot(f.vx, f.vy) > 50;
     if (!calm || moving || (tick & 1) === 0 || !P.layer.visible) {
       P.begin(t.x, t.y);
       const map = f.body.map;
@@ -801,9 +802,9 @@ export class SupernovaBehaviour extends Behaviour {
             s1 = 1;
           } else continue;
           const drift = (Math.floor((tick + A.offset) / A.period) * 1.7 + ai) % 6.283;
-          const a0 = A.angle + 0.35 * Math.sin(drift) - A.sep;
-          const a1 = A.angle + 0.35 * Math.sin(drift) + A.sep;
-          const h = A.h * live * (0.6 + 0.4 * Math.sin(u * Math.PI));
+          const a0 = A.angle + 0.35 * DMath.sin(drift) - A.sep;
+          const a1 = A.angle + 0.35 * DMath.sin(drift) + A.sep;
+          const h = A.h * live * (0.6 + 0.4 * DMath.sin(u * Math.PI));
           this.drawArch(P, map, ids, R, a0, a1, h, s0, s1, tick, ai, live);
         }
       }
@@ -829,10 +830,10 @@ export class SupernovaBehaviour extends Behaviour {
     const t = f.body.transform;
     const rf = R * 0.93;
     // footpoints in map cells must still be plasma
-    const c0x = this.rig.core.x + Math.cos(a0) * rf;
-    const c0y = this.rig.core.y + Math.sin(a0) * rf;
-    const c1x = this.rig.core.x + Math.cos(a1) * rf;
-    const c1y = this.rig.core.y + Math.sin(a1) * rf;
+    const c0x = this.rig.core.x + DMath.cos(a0) * rf;
+    const c0y = this.rig.core.y + DMath.sin(a0) * rf;
+    const c1x = this.rig.core.x + DMath.cos(a1) * rf;
+    const c1y = this.rig.core.y + DMath.sin(a1) * rf;
     const alive = (x: number, y: number): boolean => {
       const ix = Math.floor(x);
       const iy = Math.floor(y);
@@ -846,10 +847,10 @@ export class SupernovaBehaviour extends Behaviour {
       out.x = t.x + (lx - this.rig.core.x) * face;
       out.y = t.y + (ly - this.rig.core.y);
     };
-    const ca = Math.cos(a0);
-    const sa = Math.sin(a0);
-    const cb2 = Math.cos(a1);
-    const sb = Math.sin(a1);
+    const ca = DMath.cos(a0);
+    const sa = DMath.sin(a0);
+    const cb2 = DMath.cos(a1);
+    const sb = DMath.sin(a1);
     const kk = h * 1.34;
     const x0 = c0x;
     const y0 = c0y;
@@ -868,9 +869,9 @@ export class SupernovaBehaviour extends Behaviour {
       const bx = u * u * u * x0 + 3 * u * u * s * x1 + 3 * u * s * s * x2 + s * s * s * x3;
       const by = u * u * u * y0 + 3 * u * u * s * y1 + 3 * u * s * s * y2 + s * s * s * y3;
       wx(bx, by, p);
-      const flow = 0.5 + 0.5 * Math.sin(s * 15 - tick * 0.14 + seed * 2);
+      const flow = 0.5 + 0.5 * DMath.sin(s * 15 - tick * 0.14 + seed * 2);
       const edge = Math.min(smoothstep(s0, s0 + 0.12, s), smoothstep(s1, s1 - 0.12, s));
-      const thick = (1.1 + 1.5 * Math.sin(Math.PI * s)) * (0.6 + 0.4 * edge) * (0.6 + 0.4 * live);
+      const thick = (1.1 + 1.5 * DMath.sin(Math.PI * s)) * (0.6 + 0.4 * edge) * (0.6 + 0.4 * live);
       const v = (0.42 + 0.5 * flow) * (0.5 + 0.5 * edge);
       const col = rampDither(this.flame, v, Math.round(p.x), Math.round(p.y));
       P.disc(p.x, p.y, thick, col, 210);
@@ -893,15 +894,15 @@ export class SupernovaBehaviour extends Behaviour {
     // ---- Flare: the star's face swells, then a fan of flame tongues bursts out to the field ----
     if (id === 'supernova.flare' && !m.feint) {
       const s = this.aimOf(m);
-      const mx = t.x + Math.cos(s) * R * 0.92;
-      const my = t.y + Math.sin(s) * R * 0.92;
+      const mx = t.x + DMath.cos(s) * R * 0.92;
+      const my = t.y + DMath.sin(s) * R * 0.92;
       if (m.phase === 'startup') {
         const q = clamp01(m.phaseTick / m.startup);
         glowD(X, mx, my, 14 + 30 * q, 255, 180, 80, 0.75 * q);
         plasmaBall(
           X,
-          mx - Math.cos(s) * 4,
-          my - Math.sin(s) * 4,
+          mx - DMath.cos(s) * 4,
+          my - DMath.sin(s) * 4,
           4 + 9 * q,
           tick,
           this.flame,
@@ -928,8 +929,8 @@ export class SupernovaBehaviour extends Behaviour {
         // arms of plasma reach out from the limb toward the ball
         for (let a = 0; a < 5; a++) {
           const ang = (a / 5) * 6.283 + tick * 0.06;
-          const rr = R * (1 - 0.35 * (1 - q)) + 4 * Math.sin(tick * 0.2 + a);
-          glowD(X, t.x + Math.cos(ang) * rr, t.y + Math.sin(ang) * rr, 5, 255, 190, 90, 0.5 * q);
+          const rr = R * (1 - 0.35 * (1 - q)) + 4 * DMath.sin(tick * 0.2 + a);
+          glowD(X, t.x + DMath.cos(ang) * rr, t.y + DMath.sin(ang) * rr, 5, 255, 190, 90, 0.5 * q);
         }
       } else if (m.phase === 'active' && this.fbLive && !this.fbHit) {
         plasmaBall(X, this.fbX, this.fbY, this.fbR * 0.95, tick, this.flame, dir * 1.6, 0);
@@ -940,7 +941,7 @@ export class SupernovaBehaviour extends Behaviour {
           glowD(
             X,
             this.fbX - dir * s * 9,
-            this.fbY + Math.sin(tick * 0.4 + s) * 2,
+            this.fbY + DMath.sin(tick * 0.4 + s) * 2,
             this.fbR * 0.7 * q + 2,
             255,
             130 + 60 * q,
@@ -966,8 +967,8 @@ export class SupernovaBehaviour extends Behaviour {
         plasmaBall(X, px, py, 4 + 8 * q, tick, this.flame, 0, -0.3, 230);
         // the star's own prominences lean toward the gathering point
         for (let a = 0; a < 3; a++) {
-          const ang = -1.2 + a * 0.5 + 0.2 * Math.sin(tick * 0.1 + a);
-          glowD(X, t.x + Math.cos(ang) * (R + 4), t.y + Math.sin(ang) * (R + 4), 5, 255, 190, 90, 0.5 * q);
+          const ang = -1.2 + a * 0.5 + 0.2 * DMath.sin(tick * 0.1 + a);
+          glowD(X, t.x + DMath.cos(ang) * (R + 4), t.y + DMath.sin(ang) * (R + 4), 5, 255, 190, 90, 0.5 * q);
         }
       } else if (m.phase === 'active' && at >= 0 && at < 12 && f.liveHitShape(0, at, this.tmp)) {
         this.drawArcFlight(X, tick, at);
@@ -999,7 +1000,7 @@ export class SupernovaBehaviour extends Behaviour {
     for (let j = 0; j < n - 1; j++) {
       const a = (head - 1 - j + TRAIL * 4) % TRAIL;
       const b = (head - 2 - j + TRAIL * 4) % TRAIL;
-      total += Math.hypot(tr[a * 2]! - tr[b * 2]!, tr[a * 2 + 1]! - tr[b * 2 + 1]!);
+      total += DMath.hypot(tr[a * 2]! - tr[b * 2]!, tr[a * 2 + 1]! - tr[b * 2 + 1]!);
     }
     if (total < 6) return;
     const pos = (u: number, out: { x: number; y: number }): void => {
@@ -1033,8 +1034,8 @@ export class SupernovaBehaviour extends Behaviour {
     const s = this.tmp;
     const dx = s.x - bx;
     const dy = s.y - by;
-    const d = Math.hypot(dx, dy) || 1;
-    const ang0 = Math.atan2(dy, dx);
+    const d = DMath.hypot(dx, dy) || 1;
+    const ang0 = DMath.atan2(dy, dx);
     const grow = smoothstep(-1, 3, at);
     const fade = 1 - clamp01((at - 3) / 5);
     const reach = (d + s.r * 1.1) * grow;
@@ -1044,8 +1045,8 @@ export class SupernovaBehaviour extends Behaviour {
       const a = ang0 + u * 0.62;
       const nn = tn(i * 9.3, tick * 0.7);
       const len = reach * (0.6 + 0.4 * nn) * (1 - 0.32 * Math.abs(u));
-      const ca = Math.cos(a);
-      const sa = Math.sin(a);
+      const ca = DMath.cos(a);
+      const sa = DMath.sin(a);
       for (let l = 0; l < len; l += 1) {
         const q = l / len;
         const w = (1 + 3.6 * (1 - q) * (1 - Math.abs(u) * 0.5)) * 0.5;
@@ -1068,8 +1069,8 @@ export class SupernovaBehaviour extends Behaviour {
       s.r * 0.5 * (0.6 + 0.4 * grow),
       tick,
       this.flame,
-      0.6 * Math.cos(ang0),
-      0.6 * Math.sin(ang0),
+      0.6 * DMath.cos(ang0),
+      0.6 * DMath.sin(ang0),
       255,
     );
     glowD(X, s.x, s.y, s.r * 1.3, 255, 150, 60, 0.32 * fade);
@@ -1087,8 +1088,8 @@ export class SupernovaBehaviour extends Behaviour {
       const a = i * 0.5236 + 0.3;
       const rr2 = 6 + r * 1.2 * Math.sqrt(q) * (0.6 + 0.4 * tn(i * 7, 3));
       X.set(
-        Math.round(x + Math.cos(a) * rr2),
-        Math.round(y + Math.sin(a) * rr2),
+        Math.round(x + DMath.cos(a) * rr2),
+        Math.round(y + DMath.sin(a) * rr2),
         rampAt(this.flame, 1 - q),
         240,
       );
@@ -1108,7 +1109,7 @@ export class SupernovaBehaviour extends Behaviour {
     const ex = this.wallShape.x;
     const ey = this.wallShape.y;
     const span = Math.max(1, hb.to - 1 - hb.from);
-    const loft = Math.min(46, 0.34 * Math.hypot(ex - sx, ey - sy) + 12);
+    const loft = Math.min(46, 0.34 * DMath.hypot(ex - sx, ey - sy) + 12);
     const at2 = clamp(at, 0, span);
     const pos = (u: number, out: { x: number; y: number }): void => {
       out.x = sx + (ex - sx) * u;
@@ -1117,7 +1118,7 @@ export class SupernovaBehaviour extends Behaviour {
     const u = at2 / span;
     const p = this.xy;
     pos(u, p);
-    const total = Math.hypot(ex - sx, ey - sy) + loft;
+    const total = DMath.hypot(ex - sx, ey - sy) + loft;
     ribbon(X, pos, Math.max(0, u - 0.55), u, total, 1, 5.5, tick, this.flame);
     plasmaBall(X, p.x, p.y, 6.5, tick, this.flame, 0, 0, 255);
     glowD(X, p.x, p.y, 26, 255, 160, 60, 0.5);
@@ -1157,7 +1158,7 @@ export class SupernovaBehaviour extends Behaviour {
     for (let e = 0; e < 5; e++) {
       const h = ((tick * 3 + e * 37) % 70) / 70;
       X.set(
-        Math.round(this.wallX + Math.sin(tick * 0.2 + e * 2.1) * c.width * 0.6),
+        Math.round(this.wallX + DMath.sin(tick * 0.2 + e * 2.1) * c.width * 0.6),
         Math.round(bottom - h * (bottom - top) * 1.1),
         rampAt(this.flame, 1 - h * 0.5),
         230 * g,
@@ -1180,10 +1181,10 @@ export class SupernovaBehaviour extends Behaviour {
         const life = (q * 1.6 + seed / 97) % 1;
         const rad = (R + 90) * (1 - life) + 6;
         const ang = i * 2.399 + life * 4.2 + tick * 0.02;
-        const x = t.x + Math.cos(ang) * rad;
-        const y = t.y + Math.sin(ang) * rad * 0.9;
-        const tx = t.x + Math.cos(ang - 0.3) * (rad + 18);
-        const ty = t.y + Math.sin(ang - 0.3) * (rad + 18) * 0.9;
+        const x = t.x + DMath.cos(ang) * rad;
+        const y = t.y + DMath.sin(ang) * rad * 0.9;
+        const tx = t.x + DMath.cos(ang - 0.3) * (rad + 18);
+        const ty = t.y + DMath.sin(ang - 0.3) * (rad + 18) * 0.9;
         streak(X, x, y, tx, ty, 255, 200 + 40 * life, 120 + 100 * life, 0.5 + 0.8 * life);
         X.set(Math.round(x), Math.round(y), rampAt(this.flame, 0.6 + 0.4 * life), 255);
       }
@@ -1221,7 +1222,7 @@ export class SupernovaBehaviour extends Behaviour {
     const hp = clamp01(f.view.guardHealth);
     ringBand(X, t.x, t.y, R - 1, R + 2 + 2.5 * hp, tick, this.flame, 0.55 + 0.6 * hp + this.hurt * 0.6);
     // a second, fainter shell just outside, rippling out of phase
-    const wob = 2.5 * Math.sin(tick * 0.2);
+    const wob = 2.5 * DMath.sin(tick * 0.2);
     ringBand(X, t.x, t.y, R + 6 + wob, R + 7.5 + wob, tick + 9, this.flame, 0.35 * hp);
     glowD(X, t.x, t.y, R + 14, 255, 150, 70, 0.1 + 0.16 * hp + 0.3 * this.hurt);
     if (this.hurt > 0.3)
@@ -1229,8 +1230,8 @@ export class SupernovaBehaviour extends Behaviour {
         const a = (i * 2.399 + tick * 0.4) % 6.283;
         const rr = R + 3 + 8 * this.hurt * ((i * 7 + tick) % 5) * 0.3;
         X.set(
-          Math.round(t.x + Math.cos(a) * rr),
-          Math.round(t.y + Math.sin(a) * rr),
+          Math.round(t.x + DMath.cos(a) * rr),
+          Math.round(t.y + DMath.sin(a) * rr),
           rampAt(this.flame, 0.9),
           255,
         );

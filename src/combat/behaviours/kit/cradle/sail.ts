@@ -1,5 +1,6 @@
 import type { MatterMap } from '@/contracts';
 import type { CradleRegion, CradleRig } from '@/titans/kit/cradle/paint';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * THE LIVING SAIL (WJ feedback round 1: "the sail should visibly FLAP and ripple … the disc should slowly convulse / pulse
@@ -47,8 +48,8 @@ export class SailSkin {
     this.flex = new Uint8Array(n);
     this.ramps = R.ramps;
     const D = R.disc;
-    const cr = Math.cos(D.roll);
-    const sr = Math.sin(D.roll);
+    const cr = DMath.cos(D.roll);
+    const sr = DMath.sin(D.roll);
     const ids = R.ids;
     for (let y = 0; y < m.h; y++)
       for (let x = 0; x < m.w; x++) {
@@ -57,9 +58,9 @@ export class SailSkin {
         const dy = y + 0.5 + disc.oy - D.cy;
         const u = (dx * cr + dy * sr) / D.rx;
         const v = (-dx * sr + dy * cr) / D.ry;
-        this.rho[i] = Math.min(1.3, Math.hypot(u, v));
-        this.phi[i] = Math.atan2(v, u);
-        const l = Math.hypot(dx, dy) || 1;
+        this.rho[i] = Math.min(1.3, DMath.hypot(u, v));
+        this.phi[i] = DMath.atan2(v, u);
+        const l = DMath.hypot(dx, dy) || 1;
         this.hx[i] = -dx / l;
         this.hy[i] = -dy / l;
         const mat = m.material[i]!;
@@ -92,11 +93,11 @@ export class SailSkin {
         const r = this.rho[i]!;
         const a = this.phi[i]!;
         // the swell lifts the panels and the rim (screen-up), growing toward the rim
-        const lift = Math.sin(3 * a - fl) * 2.6 + Math.sin(2 * a + fl * 0.6 + 1.3) * 1.2;
-        const hem = r > 0.82 ? Math.sin(9 * a - hm) * 1.4 * (r - 0.82) * 5.5 : 0;
-        const k = amp * Math.pow(Math.min(1, r), 1.6);
+        const lift = DMath.sin(3 * a - fl) * 2.6 + DMath.sin(2 * a + fl * 0.6 + 1.3) * 1.2;
+        const hem = r > 0.82 ? DMath.sin(9 * a - hm) * 1.4 * (r - 0.82) * 5.5 : 0;
+        const k = amp * DMath.pow(Math.min(1, r), 1.6);
         // the contraction wave: a ring travelling hub → rim pulls the tissue toward the hub as it passes
-        const wave = Math.sin(r * 5 - br);
+        const wave = DMath.sin(r * 5 - br);
         const pull = Math.max(0, wave) * 1.6 * amp * Math.min(1, r);
         const dy = Math.round(-(lift + hem) * k + this.hy[i]! * pull);
         const dx = Math.round(this.hx[i]! * pull);
@@ -112,7 +113,7 @@ export class SailSkin {
             const s = this.rank[j]!;
             if (s >= 0) {
               const shift = wave > 0.72 ? -1 : wave < -0.8 ? 1 : 0;
-              const lit = Math.sin(3 * a - fl) > 0.85 ? 1 : 0;
+              const lit = DMath.sin(3 * a - fl) > 0.85 ? 1 : 0;
               const q = Math.max(0, Math.min(ramp.length - 1, s + shift + lit));
               if (q !== s) c = ramp[q]!;
             }

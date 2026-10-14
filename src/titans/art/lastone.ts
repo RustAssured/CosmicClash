@@ -20,6 +20,7 @@ import { ArtCanvas, buildLitRamps, type ShadeParams } from './canvas';
 import { edt, keepLargestComponent } from './field';
 import { bayer8, fbm, hash01, makeWorley, ridged, worley } from './noise';
 import { sdCircle, sdEllipse, sdEllipseRot, sdSegment, smax, smin, ssub } from './sdf';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * THE WITNESS (id 'lastone'; it was the Last One until D36) — an ancient glazed idol: a weathered pod-head with FIVE eyes
@@ -133,7 +134,7 @@ function nearestEye(eyes: readonly LastOneEye[], x: number, y: number): { e: Las
   let bestK = Infinity;
   let bestRho = 0;
   for (const e of eyes) {
-    const rho = Math.hypot(x - e.x, y - e.y);
+    const rho = DMath.hypot(x - e.x, y - e.y);
     const k = rho / e.socketR;
     if (k < bestK) {
       bestK = k;
@@ -173,7 +174,7 @@ function makeLayout(def: TitanDef, seed: number): Layout {
     let d = smin(head, bulge, 14);
     // bell mantle: tapered column cut flat at the hem
     const t = clamp01((wy - (cy + m.top)) / Math.max(1, m.bottom - m.top));
-    const r = lerp(m.topR, m.bottomR, t) + m.belly * Math.sin(Math.PI * t);
+    const r = lerp(m.topR, m.bottomR, t) + m.belly * DMath.sin(Math.PI * t);
     let bell = smax(Math.abs(wx - (cx - 3 - 2 * t)) - r, wy - (cy + m.bottom), 4);
     bell = smax(bell, cy + m.top - 8 - wy, 6);
     d = smin(d, bell, 15);
@@ -191,8 +192,12 @@ function makeLayout(def: TitanDef, seed: number): Layout {
     const ox = cx - 2;
     const oy = cy - 4;
     let r = 10;
-    while (r < 120 && base(ox + Math.cos(a) * r, oy + Math.sin(a) * r) < 0) r += 0.5;
-    chips.push({ x: ox + Math.cos(a) * (r + 0.8), y: oy + Math.sin(a) * (r + 0.8), r: rng.range(2.6, 5.2) });
+    while (r < 120 && base(ox + DMath.cos(a) * r, oy + DMath.sin(a) * r) < 0) r += 0.5;
+    chips.push({
+      x: ox + DMath.cos(a) * (r + 0.8),
+      y: oy + DMath.sin(a) * (r + 0.8),
+      r: rng.range(2.6, 5.2),
+    });
   }
   const sdBody = (x: number, y: number): number => {
     let d = base(x, y);
@@ -206,12 +211,12 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   const hy = cy + hp.cy;
   const haloPts: Layout['haloPts'] = [];
   const NP = 120;
-  const c = Math.cos(hp.tilt);
-  const sn = Math.sin(hp.tilt);
+  const c = DMath.cos(hp.tilt);
+  const sn = DMath.sin(hp.tilt);
   for (let i = 0; i < NP; i++) {
     const a = (i / NP) * Math.PI * 2;
-    const ex = Math.cos(a) * hp.a;
-    const ey = Math.sin(a) * hp.b;
+    const ex = DMath.cos(a) * hp.a;
+    const ey = DMath.sin(a) * hp.b;
     haloPts.push({ x: hx + ex * c - ey * sn, y: hy + ex * sn + ey * c });
   }
   const sdHalo = (x: number, y: number): number =>
@@ -255,8 +260,8 @@ function makeRoots(L: Layout): TendrilRoot[] {
   for (let i = 0; i < n; i++) {
     const t = (i + 0.5) / n;
     const a = lerp(a0, a1, t) + rng.range(-0.04, 0.04);
-    const dx = Math.cos(a);
-    const dy = Math.sin(a);
+    const dx = DMath.cos(a);
+    const dy = DMath.sin(a);
     let r = 6;
     while (r < 120 && L.sdBody(ox + dx * r, oy + dy * r) < 0) r += 0.5;
     const x = ox + dx * (r - 2.2);
@@ -264,7 +269,7 @@ function makeRoots(L: Layout): TendrilRoot[] {
     const e = 1.2;
     let nx = L.sdBody(x + e, y) - L.sdBody(x - e, y);
     let ny = L.sdBody(x, y + e) - L.sdBody(x, y - e);
-    const nl = Math.hypot(nx, ny) || 1;
+    const nl = DMath.hypot(nx, ny) || 1;
     nx /= nl;
     ny /= nl;
     const kind: TendrilRoot['kind'] = t < 0.16 ? 'front' : t < 0.55 ? 'hem' : t < 0.86 ? 'back' : 'crown';
@@ -328,14 +333,14 @@ function pickSpokes(L: Layout, count: number): { x: number; y: number; ex: numbe
   const chosen: typeof cands = [];
   for (const c of cands) {
     if (chosen.length >= count) break;
-    if (chosen.every((q) => Math.hypot(q.x - c.x, q.y - c.y) > 22)) chosen.push(c);
+    if (chosen.every((q) => DMath.hypot(q.x - c.x, q.y - c.y) > 22)) chosen.push(c);
   }
   const tx = L.cx + p.head.cx - 4;
   const ty = L.cy + p.head.cy;
   return chosen.map((c) => {
     const dx = tx - c.x;
     const dy = ty - c.y;
-    const dl = Math.hypot(dx, dy);
+    const dl = DMath.hypot(dx, dy);
     let t = 0;
     while (t < dl && L.sdBody(c.x + (dx / dl) * t, c.y + (dy / dl) * t) > -2.6) t += 0.5;
     return { x: c.x, y: c.y, ex: c.x + (dx / dl) * t, ey: c.y + (dy / dl) * t };
@@ -406,12 +411,12 @@ export function paintLastOne(
 
       const d = dBody[i]!;
       // the seams and plate arcs radiate from the lead eye; the sockets are each eye's own (the nearest one)
-      const rhoL = Math.hypot(fx - ex0, fy - ey0);
-      const thL = Math.atan2(fy - ey0, fx - ex0);
+      const rhoL = DMath.hypot(fx - ex0, fy - ey0);
+      const thL = DMath.atan2(fy - ey0, fx - ex0);
       const { e: E, rho } = nearestEye(L.eyes, fx, fy);
       const dx = fx - E.x;
       const dy = fy - E.y;
-      const th = Math.atan2(dy, dx);
+      const th = DMath.atan2(dy, dx);
       const eyeR = E.r;
       const sockR = E.socketR;
 
@@ -419,7 +424,7 @@ export function paintLastOne(
       const isMantle = fy > L.cy + p.mantle.top - 6 && fy > ey0 + 24;
       const cdx0 = fx - L.coreX;
       const cdy0 = fy - L.coreY;
-      const cr0 = Math.hypot(cdx0, cdy0);
+      const cr0 = DMath.hypot(cdx0, cdy0);
       // glaze thickness: thick on the head, thinner on the robe, always thinning toward the lantern so the lattice shows there
       const shellT =
         (isMantle ? 5 : 11) * (0.55 + 0.45 * smoothstep(8, 34, cr0)) + fbm(fx * 0.1, fy * 0.1, sA, 2) * 2.2;
@@ -438,7 +443,7 @@ export function paintLastOne(
       if (m === ids.shell && rho > sockR + 1.5) {
         const step = (Math.PI * 2) / p.seams;
         const warpA =
-          0.28 * Math.sin(rhoL / 15 + (L.seed & 255) * 0.05) + 0.16 * fbm(fx * 0.04, fy * 0.04, sA + 9, 2);
+          0.28 * DMath.sin(rhoL / 15 + (L.seed & 255) * 0.05) + 0.16 * fbm(fx * 0.04, fy * 0.04, sA + 9, 2);
         const k = Math.round((thL - warpA) / step);
         const perp = Math.abs(angDiff(thL - warpA, k * step)) * rhoL;
         if (perp < 0.62 && hash01(k + 40, Math.floor(rhoL / 9), sA) > 0.12) {
@@ -446,7 +451,7 @@ export function paintLastOne(
           rel -= 1.4;
         }
         for (const rr of [39, 54, 70]) {
-          const dr = Math.abs(rhoL - (rr + 2.5 * Math.sin(thL * 3 + rr)));
+          const dr = Math.abs(rhoL - (rr + 2.5 * DMath.sin(thL * 3 + rr)));
           if (dr < 0.6 && hash01(Math.floor(thL * 6 + rr), rr, sB) > 0.35) {
             m = ids.seam;
             rel -= 1.1;
@@ -466,12 +471,12 @@ export function paintLastOne(
       // ---- lattice interior: facets, dark fault ribs, warm light bleeding from the core ----
       const cdx = fx - L.coreX;
       const cdy = fy - L.coreY;
-      const cr = Math.hypot(cdx, cdy);
+      const cr = DMath.hypot(cdx, cdy);
       if (m === ids.inner) {
-        const cth = Math.atan2(cdy, cdx);
+        const cth = DMath.atan2(cdy, cdx);
         const nRib = 7;
         const step = (Math.PI * 2) / nRib;
-        const wob = 0.3 * Math.sin(cr / 11);
+        const wob = 0.3 * DMath.sin(cr / 11);
         const kk = Math.round((cth + wob) / step);
         const perp = Math.abs(angDiff(cth + wob, kk * step)) * cr;
         if (cr > p.core.r + 3 && perp < 0.6 && hash01(kk + 9, Math.floor(cr / 7), sA) > 0.28) {
@@ -498,8 +503,8 @@ export function paintLastOne(
         if (rho <= eyeR + 0.5) {
           const q = rho / eyeR;
           // almond lids, turned by the eye's own tilt
-          const ct = Math.cos(E.tilt);
-          const st = Math.sin(E.tilt);
+          const ct = DMath.cos(E.tilt);
+          const st = DMath.sin(E.tilt);
           const ux = dx * ct + dy * st;
           const uy = -dx * st + dy * ct;
           const upper = sdCircle(ux, uy, 0, eyeR * 0.475, eyeR * 1.075);
@@ -529,9 +534,9 @@ export function paintLastOne(
       if (isMantle && m !== ids.core) {
         const nx0 = L.cx - 3;
         const ny0 = L.cy + p.mantle.top;
-        const pa = Math.atan2(fy - ny0, fx - nx0);
-        const pr = Math.hypot(fx - nx0, fy - ny0);
-        const fold = Math.sin(pa * 11 + fbm(fx * 0.05, fy * 0.05, sB + 5, 2) * 1.4);
+        const pa = DMath.atan2(fy - ny0, fx - nx0);
+        const pr = DMath.hypot(fx - nx0, fy - ny0);
+        const fold = DMath.sin(pa * 11 + fbm(fx * 0.05, fy * 0.05, sB + 5, 2) * 1.4);
         rel += fold * 1.5 * smoothstep(6, 20, pr);
         tone += fold * 0.55;
         if (m === ids.shell || m === ids.inner) {
@@ -604,9 +609,9 @@ function bleedCoreLight(
       const i = y * W + x;
       const m = cv.mat[i];
       if (m !== ids.inner && m !== ids.shell && m !== ids.seam) continue;
-      const r = Math.hypot(x + 0.5 - L.coreX, y + 0.5 - L.coreY) - R;
+      const r = DMath.hypot(x + 0.5 - L.coreX, y + 0.5 - L.coreY) - R;
       if (r <= 0) continue;
-      const k = Math.exp(-(r * r) / 150) * (m === ids.shell ? 0.4 : 0.7);
+      const k = DMath.exp(-(r * r) / 150) * (m === ids.shell ? 0.4 : 0.7);
       const lv = k * 4.2;
       const fl = Math.floor(lv);
       const level = fl + (lv - fl > bayer8(x, y) ? 1 : 0);
@@ -661,9 +666,9 @@ function paintOneEye(
       if (m !== ids.eye && m !== ids.iris && m !== ids.pupil) continue;
       const dx = x + 0.5 - ex;
       const dy = y + 0.5 - ey;
-      const q = Math.hypot(dx, dy) / R;
+      const q = DMath.hypot(dx, dy) / R;
       if (q * R > R + 0.75) continue; // a neighbouring eye's pixel
-      const th = Math.atan2(dy, dx);
+      const th = DMath.atan2(dy, dx);
       let c: number;
       if (m === ids.eye) {
         // sclera: pale, shaded toward the lids
@@ -710,7 +715,7 @@ function paintOneEye(
     for (let y = Math.floor(ey - R); y <= ey; y++) {
       const i = y * W + x;
       if (cv.mat[i] !== ids.eye && cv.mat[i] !== ids.iris) continue;
-      if (Math.hypot(x + 0.5 - ex, y + 0.5 - ey) > R + 0.75) continue;
+      if (DMath.hypot(x + 0.5 - ex, y + 0.5 - ey) > R + 0.75) continue;
       if (cv.mat[(y - 1) * W + x] === ids.shell) colors[i] = blend(colors[i]!, iris[0]!, 0.7);
     }
   }
@@ -730,8 +735,8 @@ function paintCore(
     for (let x = Math.floor(L.coreX - p.core.r - 3); x <= Math.ceil(L.coreX + p.core.r + 3); x++) {
       const i = y * W + x;
       if (cv.mat[i] !== ids.core) continue;
-      const r = Math.hypot(x + 0.5 - L.coreX, y + 0.5 - L.coreY) / p.core.r;
-      const sw = 0.5 + 0.5 * Math.sin(Math.atan2(y - L.coreY, x - L.coreX) * 3 + r * 5);
+      const r = DMath.hypot(x + 0.5 - L.coreX, y + 0.5 - L.coreY) / p.core.r;
+      const sw = 0.5 + 0.5 * DMath.sin(DMath.atan2(y - L.coreY, x - L.coreX) * 3 + r * 5);
       const k = clamp(6.4 - r * 3.4 + (sw - 0.5) * 0.8, 1.6, 5);
       const fl = Math.floor(k);
       const th = ((x & 1) * 2 + (y & 1) * 3 + ((x + y) & 3)) / 8;
@@ -765,7 +770,7 @@ function paintHaloDetail(
     const b = L.haloPts[(idx + 1) % L.haloPts.length]!;
     let tx = b.x - a.x;
     let ty = b.y - a.y;
-    const tl = Math.hypot(tx, ty) || 1;
+    const tl = DMath.hypot(tx, ty) || 1;
     tx /= tl;
     ty /= tl;
     const nx = -ty;
@@ -1097,7 +1102,7 @@ function finishRegion(
   for (let y = 0; y < cv.h; y++)
     for (let x = 0; x < cv.w; x++) {
       if (cv.mat[y * cv.w + x] === 0) continue;
-      const d = (dz(x, ox) - anchorX) ** 2 + (dz(y, oy) - anchorY) ** 2;
+      const d = sq(dz(x, ox) - anchorX) + sq(dz(y, oy) - anchorY);
       if (d < bd) {
         bd = d;
         best = y * cv.w + x;
@@ -1119,13 +1124,13 @@ function bezierSamples(
   const s = new Float64Array(n + 1);
   for (let i = 0; i <= n; i++) {
     const t = i / n;
-    const a = (1 - t) ** 3;
-    const b = 3 * (1 - t) ** 2 * t;
+    const a = DMath.pow(1 - t, 3);
+    const b = 3 * sq(1 - t) * t;
     const cc = 3 * (1 - t) * t * t;
-    const d = t ** 3;
+    const d = DMath.pow(t, 3);
     x[i] = a * c[0]! + b * c[2]! + cc * c[4]! + d * c[6]!;
     y[i] = a * c[1]! + b * c[3]! + cc * c[5]! + d * c[7]!;
-    if (i > 0) s[i] = s[i - 1]! + Math.hypot(x[i]! - x[i - 1]!, y[i]! - y[i - 1]!);
+    if (i > 0) s[i] = s[i - 1]! + DMath.hypot(x[i]! - x[i - 1]!, y[i]! - y[i - 1]!);
   }
   const L = s[n]!;
   for (let i = 0; i <= n; i++) s[i] = s[i]! / L;
@@ -1191,11 +1196,11 @@ export function paintWitness(
     const root = arm.points[0]!;
     const elbow = arm.points[1]!;
     // the carapace anchor sits a little below and inside the arm root (output px, like the arm points)
-    const ang = Math.atan2(root.y - opx(WE.carCY), root.x - opx(WE.carCX)) + (root.x > 0 ? 0.55 : -0.55);
+    const ang = DMath.atan2(root.y - opx(WE.carCY), root.x - opx(WE.carCX)) + (root.x > 0 ? 0.55 : -0.55);
     const ca = {
       region: car,
-      x: opx(WE.carCX + Math.cos(ang) * (WE.carR - 3)),
-      y: opx(WE.carCY + Math.sin(ang) * (WE.carR - 3)),
+      x: opx(WE.carCX + DMath.cos(ang) * (WE.carR - 3)),
+      y: opx(WE.carCY + DMath.sin(ang) * (WE.carR - 3)),
     };
     membranes.push([
       { region: arm.regions[0]!, x: root.x, y: root.y },
@@ -1257,9 +1262,9 @@ function paintEyeCradle(ramps: number[][], lighting: StageLighting, micro: boole
     for (let x = 0; x < cv.w; x++) {
       const bx = dz(x, ox);
       const by = dz(y, oy);
-      const rho = Math.hypot(bx, by);
+      const rho = DMath.hypot(bx, by);
       const i = y * cv.w + x;
-      const th = Math.atan2(by, bx);
+      const th = DMath.atan2(by, bx);
       if (rho > WE.rimR) {
         // crystal teeth round the burning ring: 28 of them, uneven in length, tapering outward
         if (rho > WE.teethR) continue;
@@ -1277,14 +1282,14 @@ function paintEyeCradle(ramps: number[][], lighting: StageLighting, micro: boole
         // the socket: a raised ring of gold that BURNS on its inner edge, with notched inlays
         const t = (rho - R) / (WE.rimR - R);
         cv.mat[i] = t < 0.3 ? burn : gold;
-        cv.relief[i] = 12 + 4 * Math.sqrt(Math.max(0, 1 - (2 * t - 1) ** 2));
+        cv.relief[i] = 12 + 4 * Math.sqrt(Math.max(0, 1 - sq(2 * t - 1)));
         const notch = Math.abs((((th / (Math.PI * 2)) * 36 + 36) % 1) - 0.5) > 0.44;
         if (notch && t >= 0.3) cv.tone[i] = -1.4;
         continue;
       }
       // the iris and pupil are offset from the sclera's centre (it looks; it is not a target)
       const q = rho / R;
-      const qi = Math.hypot(bx - WE.pupilDX, (by - WE.pupilDY) * 0.94) / R;
+      const qi = DMath.hypot(bx - WE.pupilDX, (by - WE.pupilDY) * 0.94) / R;
       cv.mat[i] = qi < 0.27 ? pupil : qi < 0.66 ? iris : sclera;
       cv.relief[i] = 10 + 8 * (1 - q * q);
     }
@@ -1357,7 +1362,7 @@ function paintWitnessEye(
       const dx = cx - ax;
       const dy = cy - ay;
       const u = clamp01(((bx - ax) * dx + (by - ay) * dy) / (dx * dx + dy * dy));
-      if (opx(Math.hypot(bx - ax - u * dx, by - ay - u * dy)) < 0.5) return true;
+      if (opx(DMath.hypot(bx - ax - u * dx, by - ay - u * dy)) < 0.5) return true;
     }
     return false;
   };
@@ -1374,15 +1379,17 @@ function paintWitnessEye(
       if (m !== sclera && m !== iris && m !== pupil) continue;
       const bx = dz(x, ox);
       const by = dz(y, oy);
-      const q = Math.hypot(bx, by) / R;
+      const q = DMath.hypot(bx, by) / R;
       const ix = bx - WE.pupilDX;
       const iy = (by - WE.pupilDY) * 0.94;
-      const qi = Math.hypot(ix, iy) / R;
-      const th = Math.atan2(iy, ix);
+      const qi = DMath.hypot(ix, iy) / R;
+      const th = DMath.atan2(iy, ix);
       // sphere light: the side toward the key light is brighter
       const nz = Math.sqrt(Math.max(0, 1 - q * q));
       const lit = clamp01(
-        0.55 + (0.45 * ((bx / R) * lx + (by / R) * ly)) / Math.max(0.3, Math.hypot(lx, ly)) - 0.25 * (1 - nz),
+        0.55 +
+          (0.45 * ((bx / R) * lx + (by / R) * ly)) / Math.max(0.3, DMath.hypot(lx, ly)) -
+          0.25 * (1 - nz),
       );
       const th8 = bayer8(x, y) / 64;
       let c: number;
@@ -1396,7 +1403,7 @@ function paintWitnessEye(
           // a few hairline fissures, and a crenellated ring wall where the sclera meets the iris
           // (plates and seams keep their OUTPUT-px grain at the small size: fewer, bolder marks)
           worley(opx(bx) * 0.11, opx(by) * 0.11, 9131, wor);
-          const lat = Math.asin(clamp(by / R, -1, 1)) * (opx(R) / 6);
+          const lat = DMath.asin(clamp(by / R, -1, 1)) * (opx(R) / 6);
           let d = 0;
           if (wor.f2 - wor.f1 < 0.045 && hash01(x, y, 71) > 0.3) d = -1;
           else if (Math.abs(lat - Math.round(lat)) < 0.08 && (x + y) % 2 === 0) d = -1;
@@ -1419,7 +1426,7 @@ function paintWitnessEye(
             if ((((th + Math.PI) / (Math.PI * 2)) * 16) % 1 < 0.16) k -= 1;
           } else {
             // canyons: 14 radial cuts, slightly meandering, one step down; three terrace lips one step up (broken)
-            const a = ((th + Math.PI) / (Math.PI * 2)) * 14 + 0.3 * Math.sin(qi * 9 + th * 3);
+            const a = ((th + Math.PI) / (Math.PI * 2)) * 14 + 0.3 * DMath.sin(qi * 9 + th * 3);
             if (a - Math.floor(a) < 0.07) k -= 1;
             else
               for (const tt of [0.4, 0.58, 0.74]) if (Math.abs(t - tt) < 0.022 && (x + y) % 2 === 0) k += 1;
@@ -1428,8 +1435,8 @@ function paintWitnessEye(
         c = irisR[clamp(k, 0, 5)]!;
         if (micro && t > 0.2 && t < 0.86)
           for (const [la, lt] of lights) {
-            const px = WE.pupilDX + Math.cos(la) * (0.27 + lt * 0.39) * R;
-            const py = WE.pupilDY + (Math.sin(la) * (0.27 + lt * 0.39) * R) / 0.94;
+            const px = WE.pupilDX + DMath.cos(la) * (0.27 + lt * 0.39) * R;
+            const py = WE.pupilDY + (DMath.sin(la) * (0.27 + lt * 0.39) * R) / 0.94;
             if (Math.floor(opx(px)) - ox === x && Math.floor(opx(py)) - oy === y) c = warm[lt > 0.6 ? 0 : 1]!;
           }
       } else {
@@ -1483,8 +1490,8 @@ const carapaceSd = (bx: number, by: number, seed: number): number => {
       sdCircle(
         bx,
         by,
-        WE.carCX + Math.cos(a) * r,
-        WE.carCY + Math.sin(a) * r,
+        WE.carCX + DMath.cos(a) * r,
+        WE.carCY + DMath.sin(a) * r,
         1.8 + hash01(a * 10, 1, seed) * 1.6,
       ),
       1.5,
@@ -1514,21 +1521,21 @@ function paintCarapace(
   for (let k = 0; k < 9; k++) {
     let a = (k / 9) * Math.PI * 2 + rng.range(-0.2, 0.2);
     let r = WE.socketR + 0.5;
-    let px = Math.cos(a) * r;
-    let py = Math.sin(a) * r;
+    let px = DMath.cos(a) * r;
+    let py = DMath.sin(a) * r;
     let branch = rng.int(3) + 2;
     const glow = 0; // art v3: cyan only glints at the frayed rim (below), never along the veins
     while (r < R * 0.82) {
       a += rng.range(-0.18, 0.18);
       r += 3;
-      const nx = Math.cos(a) * r;
-      const ny = Math.sin(a) * r;
+      const nx = DMath.cos(a) * r;
+      const ny = DMath.sin(a) * r;
       veinSegs.push(px, py, nx, ny);
       veinGlow.push(glow && r < WE.socketR + 12 ? 1 : 0);
       if (--branch === 0) {
         // a short side crack
         const ba = a + (rng.next() < 0.5 ? -0.5 : 0.5);
-        veinSegs.push(nx, ny, nx + Math.cos(ba) * 7, ny + Math.sin(ba) * 7);
+        veinSegs.push(nx, ny, nx + DMath.cos(ba) * 7, ny + DMath.sin(ba) * 7);
         veinGlow.push(0);
       }
       px = nx;
@@ -1540,11 +1547,11 @@ function paintCarapace(
       const bx = dz(x, ox);
       const by = dz(y, oy);
       if (carapaceSd(bx, by, seed) > 0) continue;
-      const rho = Math.hypot(bx, by);
+      const rho = DMath.hypot(bx, by);
       if (rho < WE.socketR) continue;
       const i = y * cv.w + x;
       cv.mat[i] = carapace;
-      const rr = Math.hypot(bx - WE.carCX, by - WE.carCY) / R;
+      const rr = DMath.hypot(bx - WE.carCX, by - WE.carCY) / R;
       let rel = 30 * Math.sqrt(Math.max(0, 1 - rr * rr)) + Math.max(0, WE.socketR + 5 - rho) * 1.3;
       // a MOSAIC of plates: dark seams between them that widen toward the rim, where the plates come apart (it frays)
       worley(opx(bx) / 9, opx(by) / 9, seed + 17, worleyOut, 0.85);
@@ -1633,16 +1640,16 @@ function paintInterior(
       const bx = dz(x, ox);
       const by = dz(y, oy);
       if (carapaceSd(bx, by, seed) > -1) continue;
-      const rho = Math.hypot(bx, by);
+      const rho = DMath.hypot(bx, by);
       if (rho < inner) continue;
       const i = y * cv.w + x;
-      const th = Math.atan2(by, bx);
-      const rr = Math.hypot(bx - WE.carCX, by - WE.carCY);
+      const th = DMath.atan2(by, bx);
+      const rr = DMath.hypot(bx - WE.carCX, by - WE.carCY);
       if (layer === 1) {
         // luminous tension channels: radial veins of stress joined by two hoops
         let on = false;
         for (let k = 0; k < 12; k++) {
-          const a = (k / 12) * Math.PI * 2 + 0.12 + 0.07 * Math.sin(rho * 0.22 + k);
+          const a = (k / 12) * Math.PI * 2 + 0.12 + 0.07 * DMath.sin(rho * 0.22 + k);
           let d = th - a;
           d -= Math.round(d / (Math.PI * 2)) * Math.PI * 2;
           if (opx(Math.abs(d) * rho) < 0.95) on = true;
@@ -1664,9 +1671,9 @@ function paintInterior(
           opx(rho - inner) < 1.2;
         for (let k = 0; k < 6 && !on; k++) {
           const a = (k / 6) * Math.PI * 2 + Math.PI / 6;
-          const cx = WE.carCX + Math.cos(a) * (R - 6);
-          const cy = WE.carCY + Math.sin(a) * (R - 6);
-          if (opx(Math.abs(Math.hypot(bx - cx, by - cy) - 12)) < 0.95) on = true;
+          const cx = WE.carCX + DMath.cos(a) * (R - 6);
+          const cy = WE.carCY + DMath.sin(a) * (R - 6);
+          if (opx(Math.abs(DMath.hypot(bx - cx, by - cy) - 12)) < 0.95) on = true;
           let d = th - (a - Math.PI / 6);
           d -= Math.round(d / (Math.PI * 2)) * Math.PI * 2;
           if (opx(Math.abs(d) * rho) < 0.95) on = true;
@@ -1681,7 +1688,7 @@ function paintInterior(
         if (hash01(x * 3 + 1, y * 5 + 2, seed + 91) > 0.986) cv.mat[i] = star;
         for (const [ex, ey, er] of innerEyes) {
           // closed lids: a bone almond (pointed: two arcs) with a dark lash slit (Phase 2 opens them)
-          const half = er * 0.42 * Math.max(0, 1 - ((bx - ex) / er) ** 2);
+          const half = er * 0.42 * Math.max(0, 1 - sq((bx - ex) / er));
           if (Math.abs(bx - ex) < er && Math.abs(by - ey) < half + 0.5) {
             cv.mat[i] = opx(Math.abs(by - ey - half * 0.15)) < 0.6 ? pupil : sclera;
             cv.relief[i] = 3 + half;
@@ -1825,7 +1832,7 @@ function paintShrine(
         tone = Math.abs(((bx + 40) % 5) - 2.5) < 0.6 ? -1 : 0.3;
       }
       // the light: a bright bead at the end of the longest strand
-      if (Math.hypot(bx - 1.5, by - SHRINE_LIGHT_Y) < 3.3) {
+      if (DMath.hypot(bx - 1.5, by - SHRINE_LIGHT_Y) < 3.3) {
         m = light;
         rel = 9;
         tone = 1.5;
@@ -1836,13 +1843,13 @@ function paintShrine(
         const v = (by - ry) / len;
         if (v < 0 || v > 1) continue;
         // a slow, slight curve: strands hang, they are not ruled lines
-        const cx = sx + Math.sin(v * 2.4 + k) * 1.2 * v + 0.5;
+        const cx = sx + DMath.sin(v * 2.4 + k) * 1.2 * v + 0.5;
         const half = kind === 1 ? opx(2.2 * (1 - v)) + 0.5 : 0.8; // output px: a strand stays one or two pixels wide
         if (opx(Math.abs(bx - cx)) > half) continue;
         const bead =
           kind === 0 && Math.abs(((by - ry + k * 3) % 13) - 6.5) < 1.1 && opx(Math.abs(bx - cx)) < 1.6;
         m = kind === 1 || bead ? bone : gold;
-        rel = kind === 1 ? 6 * Math.sqrt(Math.max(0, 1 - (opx(bx - cx) / half) ** 2)) + 2 : 4;
+        rel = kind === 1 ? 6 * Math.sqrt(Math.max(0, 1 - sq(opx(bx - cx) / half))) + 2 : 4;
         tone = kind === 1 ? 0 : 0.6 + (bead ? 0.4 : 0);
       }
       // beads stand proud of their strand
@@ -1853,7 +1860,7 @@ function paintShrine(
           const ry = spireRootY(sx);
           const v = (by - ry) / len;
           if (v < 0 || v > 1) continue;
-          const cx = sx + Math.sin(v * 2.4 + k) * 1.2 * v + 0.5;
+          const cx = sx + DMath.sin(v * 2.4 + k) * 1.2 * v + 0.5;
           if (Math.abs(((by - ry + k * 3) % 13) - 6.5) < 1.1 && opx(Math.abs(bx - cx)) < 1.6) {
             m = bone;
             rel = 5;
@@ -1902,10 +1909,10 @@ function paintHaloArc(
   for (let s = 0; s <= 32; s++) {
     const a = a0 + ((a1 - a0) * s) / 32;
     for (const r of [R - T, R + T + 2]) {
-      x0 = Math.min(x0, Math.cos(a) * r);
-      x1 = Math.max(x1, Math.cos(a) * r);
-      y0 = Math.min(y0, Math.sin(a) * r);
-      y1 = Math.max(y1, Math.sin(a) * r);
+      x0 = Math.min(x0, DMath.cos(a) * r);
+      x1 = Math.max(x1, DMath.cos(a) * r);
+      y0 = Math.min(y0, DMath.sin(a) * r);
+      y1 = Math.max(y1, DMath.sin(a) * r);
     }
   }
   if (sigil) y0 = Math.min(y0, -R - 20);
@@ -1925,15 +1932,15 @@ function paintHaloArc(
       const bx = dz(x, ox);
       const by = dz(y, oy);
       const i = y * cv.w + x;
-      const rho = Math.hypot(bx, by);
-      const th = wrapNear(Math.atan2(by, bx));
+      const rho = DMath.hypot(bx, by);
+      const th = wrapNear(DMath.atan2(by, bx));
       // broken ends: the angular limits wander with the radius
       const rag = (hash01(Math.floor(rho), k, seed + 5) - 0.5) * 0.05;
       let on = rho > R - T * 0.5 && rho < R + T * 0.5 && th > a0 + rag && th < a1 - rag;
       let rel = 0;
       if (on) {
         const t = (rho - (R - T * 0.5)) / T;
-        rel = 4 + 4 * Math.sqrt(Math.max(0, 1 - (2 * t - 1) ** 2));
+        rel = 4 + 4 * Math.sqrt(Math.max(0, 1 - sq(2 * t - 1)));
       }
       // tick marks: an astrolabe rim, every 5°; every fourth a raised stud
       const deg = (th * 180) / Math.PI;
@@ -1945,7 +1952,7 @@ function paintHaloArc(
       }
       if (sigil) {
         // the crosshair sigil: a ring on a vertical spine, crossed
-        const ring = opx(Math.abs(Math.hypot(bx, by - sy) - 5)) < 1.0;
+        const ring = opx(Math.abs(DMath.hypot(bx, by - sy) - 5)) < 1.0;
         const vert = opx(Math.abs(bx)) < 0.9 && by > sy - 7 && by < -R + T * 0.5;
         const hor = opx(Math.abs(by - sy)) < 0.8 && Math.abs(bx) < 10;
         if (ring || vert || hor) {
@@ -1960,7 +1967,7 @@ function paintHaloArc(
       cv.tone[i] = tick && rho > R ? -0.9 : 0.9 + (hash01(x, y, seed + 13) - 0.5) * 0.4;
     }
   const mid = (a0 + a1) / 2;
-  return finishRegion(rc, ramps, lighting, null, Math.cos(mid) * R, Math.sin(mid) * R, 2, {
+  return finishRegion(rc, ramps, lighting, null, DMath.cos(mid) * R, DMath.sin(mid) * R, 2, {
     key: `halo${k}`,
     kind: 'halo',
     pivotX: 0,
@@ -2022,10 +2029,16 @@ function paintArmSegment(
     for (let i = 1; i <= 400; i++) {
       const t = i / 400;
       const qx =
-        (1 - t) ** 3 * c[0]! + 3 * (1 - t) ** 2 * t * c[2]! + 3 * (1 - t) * t * t * c[4]! + t ** 3 * c[6]!;
+        DMath.pow(1 - t, 3) * c[0]! +
+        3 * sq(1 - t) * t * c[2]! +
+        3 * (1 - t) * t * t * c[4]! +
+        DMath.pow(t, 3) * c[6]!;
       const qy =
-        (1 - t) ** 3 * c[1]! + 3 * (1 - t) ** 2 * t * c[3]! + 3 * (1 - t) * t * t * c[5]! + t ** 3 * c[7]!;
-      L += Math.hypot(qx - px, qy - py);
+        DMath.pow(1 - t, 3) * c[1]! +
+        3 * sq(1 - t) * t * c[3]! +
+        3 * (1 - t) * t * t * c[5]! +
+        DMath.pow(t, 3) * c[7]!;
+      L += DMath.hypot(qx - px, qy - py);
       px = qx;
       py = qy;
     }
@@ -2067,8 +2080,8 @@ function paintArmSegment(
   /** Core half-width at arc length t: tapering, swelling at every joint, with a slow knotted rhythm between. */
   const core = (t: number): number => {
     let r = W * (2.1 + 3.3 * Math.max(0, 1 - t / L));
-    for (const jt of jointsT) r += W * 1.9 * Math.exp(-(((t - jt) / 5) ** 2));
-    r += W * 0.8 * Math.max(0, Math.sin(t / (5.2 + arm * 0.4) + ph)) ** 3;
+    for (const jt of jointsT) r += W * 1.9 * DMath.exp(-sq((t - jt) / 5));
+    r += W * 0.8 * DMath.pow(Math.max(0, DMath.sin(t / (5.2 + arm * 0.4) + ph)), 3);
     return r;
   };
   const tipStart = L - 12;
@@ -2092,22 +2105,26 @@ function paintArmSegment(
     const u = Math.min(1, t / L);
     // beefy all round (WJ): a broad root, a broad belly, a blunt rounded end; a swelling and a narrowing along the length
     const base =
-      W * (5.5 * (1 - u) ** 1.3 + 8.5 * Math.sin(Math.PI * Math.min(1, u * 1.05)) ** 0.8 + 3 * (1 - u) + 2.6);
-    return base * (1 + 0.16 * Math.sin(u * Math.PI * 2.6 + arm * 1.9));
+      W *
+      (5.5 * DMath.pow(1 - u, 1.3) +
+        8.5 * DMath.pow(DMath.sin(Math.PI * Math.min(1, u * 1.05)), 0.8) +
+        3 * (1 - u) +
+        2.6);
+    return base * (1 + 0.16 * DMath.sin(u * Math.PI * 2.6 + arm * 1.9));
   };
   /** The limb's own centre wanders off the curve as it grows: a slight S or kink, different per arm. */
   const wander = (t: number): number => {
     const u = Math.min(1, t / L);
-    return W * 2.4 * u * Math.sin(u * Math.PI * 1.7 + arm * 1.3);
+    return W * 2.4 * u * DMath.sin(u * Math.PI * 1.7 + arm * 1.3);
   };
   const cellArm = (t: number, s0: number): ArmCell | null => {
     const s = s0 - wander(t);
     if (t > L) {
       // a blunt, rounded end (no thin tip)
       const re = crescent(L);
-      if (Math.hypot(t - L, s) > re) return null;
+      if (DMath.hypot(t - L, s) > re) return null;
     }
-    const r = t > L ? Math.sqrt(Math.max(1, crescent(L) ** 2 - (t - L) ** 2)) : crescent(t);
+    const r = t > L ? Math.sqrt(Math.max(1, sq(crescent(L)) - sq(t - L))) : crescent(t);
     if (Math.abs(s) > r) return null;
     const u = Math.min(1, t / L);
     // across the width: −1 on the OUTER (convex) edge, +1 on the inner edge
@@ -2127,7 +2144,7 @@ function paintArmSegment(
     const eT = (t + arm * 11) % 40;
     const eS = s + 0.12 * r;
     // (the orb is sized in output px: it must still read as an eye on the small Witness)
-    const ed = opx(Math.hypot(eT - 20, eS));
+    const ed = opx(DMath.hypot(eT - 20, eS));
     if (u > 0.08 && u < 0.86 && ed < 4.3 && opx(r) > 4.5) {
       if (ed > 3.0) return { m: mat.speck, rel: 7, tone: 1.2 };
       // the upper half is a heavy lid; a slit of iris shows below it, with a dark point
@@ -2155,7 +2172,7 @@ function paintArmSegment(
         const brk = L - 2 - 3 * hash01(arm, 9, seed);
         if (t < brk && Math.abs(s) <= r)
           return { m: mat.plate, rel: 4, tone: -0.6 + 0.6 * hash01(bay, arm, seed) };
-        const sag = 0.06 * (t - brk) ** 2 * (arm % 2 ? 1 : -1);
+        const sag = 0.06 * sq(t - brk) * (arm % 2 ? 1 : -1);
         if (t < L + 5 && Math.abs(s - sag) < 1.1)
           return { m: t > L + 3.5 ? mat.glint : mat.filament, rel: 2, tone: 0.4 };
         return null;
@@ -2183,7 +2200,7 @@ function paintArmSegment(
         if (s < -0.15 * r && plated)
           return {
             m: mat.plate,
-            rel: 5 + 2 * Math.sqrt(Math.max(0, 1 - (s / r) ** 2)),
+            rel: 5 + 2 * Math.sqrt(Math.max(0, 1 - sq(s / r))),
             tone: edge ? -1.4 : 0.1,
           };
         if (!plated && Math.abs(s + 0.2 * r) < 0.7) return { m: mat.filament, rel: 3, tone: 0.5 };
@@ -2196,7 +2213,7 @@ function paintArmSegment(
         const web =
           W *
           3.2 *
-          Math.sin((Math.PI * (u - 0.12)) / 0.38) *
+          DMath.sin((Math.PI * (u - 0.12)) / 0.38) *
           (0.45 + 0.55 * hash01(Math.floor(t / 3), arm, seed));
         if (s < r + web && hash01(Math.floor(t), Math.floor(s), seed + arm) > 0.18)
           return { m: mat.sinew, rel: 2, tone: -1.1 + 0.4 * ((s - r) / Math.max(1, web)) };
@@ -2207,18 +2224,18 @@ function paintArmSegment(
       const node = (t + arm * 5) % 13 < 2.2 && t > 4;
       if (node && Math.abs(s) <= r) return { m: mat.bronze, rel: 6, tone: -0.2 };
       const a = t / 5 + ph;
-      const c0 = r * 0.45 * Math.sin(a);
+      const c0 = r * 0.45 * DMath.sin(a);
       const rs = r * 0.62;
       const in0 = Math.abs(s - c0) < rs;
       const in1 = Math.abs(s + c0) < rs;
       if ((in0 || in1) && Math.abs(s) <= r) {
         // over and under: which strand is in front alternates every half twist
-        const front0 = Math.cos(a) > 0;
+        const front0 = DMath.cos(a) > 0;
         const k0 = in0 && (!in1 || front0);
         return {
           m: k0 ? mat.bone : mat.fibre,
           rel: 4 + (k0 === front0 ? 1 : 0),
-          tone: (k0 ? 0.2 : -0.2) + 0.3 * Math.cos(a),
+          tone: (k0 ? 0.2 : -0.2) + 0.3 * DMath.cos(a),
         };
       }
       // rootlets: a short branch every ~17 px on the inner side, reaching across and along
@@ -2251,7 +2268,7 @@ function paintArmSegment(
     const k = Math.round(u0 * N);
     const nx = -(S.y[Math.min(N, k + 1)]! - S.y[Math.max(0, k - 1)]!);
     const ny = S.x[Math.min(N, k + 1)]! - S.x[Math.max(0, k - 1)]!;
-    const nl = Math.hypot(nx, ny) || 1;
+    const nl = DMath.hypot(nx, ny) || 1;
     const off = core(u0 * L) + 2.2;
     orbX = joint.x - (turn * nx * off) / nl;
     orbY = joint.y - (turn * ny * off) / nl;
@@ -2262,8 +2279,8 @@ function paintArmSegment(
       const by = dz(y, oy);
       const i = y * cv.w + x;
       // the joint (and its orb-eye) belongs to the segment that starts there
-      const dj = Math.hypot(bx - joint.x, by - joint.y);
-      if (style !== 'cells' && seg > 0 && Math.hypot(bx - orbX, by - orbY) < 2.8) {
+      const dj = DMath.hypot(bx - joint.x, by - joint.y);
+      if (style !== 'cells' && seg > 0 && DMath.hypot(bx - orbX, by - orbY) < 2.8) {
         // dormant, but not quite closed: a gold lid with a thin slit of iris and a dark point
         const slit = Math.abs(by - orbY) < 0.55;
         cv.mat[i] = slit ? (Math.abs(bx - orbX) < 0.6 ? mat.pupil : mat.iris) : mat.orb;
@@ -2272,7 +2289,7 @@ function paintArmSegment(
       }
       if (style !== 'cells' && dj < jointR) {
         cv.mat[i] = mat.bronze;
-        cv.relief[i] = 6 + 4 * Math.sqrt(1 - (dj / jointR) ** 2);
+        cv.relief[i] = 6 + 4 * Math.sqrt(1 - sq(dj / jointR));
         cv.tone[i] = dj > jointR - 1.2 ? -0.8 : 0;
         continue;
       }
@@ -2280,7 +2297,7 @@ function paintArmSegment(
       let best = 0;
       let bd = Infinity;
       for (let k = 0; k <= N; k++) {
-        const d = (bx - S.x[k]!) ** 2 + (by - S.y[k]!) ** 2;
+        const d = sq(bx - S.x[k]!) + sq(by - S.y[k]!);
         if (d < bd) {
           bd = d;
           best = k;
@@ -2292,7 +2309,7 @@ function paintArmSegment(
       const k1 = Math.min(N, best + 1);
       const tdx = S.x[k1]! - S.x[k0]!;
       const tdy = S.y[k1]! - S.y[k0]!;
-      const tl = Math.hypot(tdx, tdy) || 1;
+      const tl = DMath.hypot(tdx, tdy) || 1;
       // signed distance across: + toward the inner (concave) side; arc length along, extended past the end
       const s = (((bx - S.x[best]!) * -tdy + (by - S.y[best]!) * tdx) / tl) * turn;
       const along = ((bx - S.x[best]!) * tdx + (by - S.y[best]!) * tdy) / tl;

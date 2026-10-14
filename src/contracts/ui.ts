@@ -39,7 +39,9 @@ export type UIScreenId =
   | 'results'
   | 'attract'
   /** The tournament ladder (src/ui/screens/ladder.ts): the tower, the story cards, the ending. */
-  | 'ladder';
+  | 'ladder'
+  /** The tournament's mode (CLASSIC / COSMIC CLASH) and difficulty choice (src/ui/screens/tourney.ts). */
+  | 'tourney';
 
 /** Pixel-art UI/HUD. Renders into ONE screen-space layer at logical resolution (crisp, composited last). */
 export interface GameUI {

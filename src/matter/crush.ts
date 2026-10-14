@@ -18,6 +18,7 @@ import {
   type DamageCtx,
 } from './dmg';
 import { stepBlast } from './blast';
+import { DMath } from '@/contracts/dmath';
 
 const opts: CraterOpts = {
   budget: 0,
@@ -113,11 +114,11 @@ function plantTectonics(ctx: DamageCtx, cr: CraterOut, E: number): void {
   const count = Math.max(2, Math.min(5, Math.round(E / 450)));
   const stress = Math.min(255, 90 + E * 0.09);
   // Fan of directions over the half-plane pointing into the body.
-  const inAng = Math.atan2(-cr.ny, -cr.nx);
+  const inAng = DMath.atan2(-cr.ny, -cr.nx);
   for (let k = 0; k < count; k++) {
     const a = inAng + ((k + 0.5) / count - 0.5) * Math.PI * 0.95 + (rng.next() - 0.5) * 0.3;
-    const ca = Math.cos(a);
-    const sa = Math.sin(a);
+    const ca = DMath.cos(a);
+    const sa = DMath.sin(a);
     // March from the centre until we leave the void of the crater and hit live matter: that is the crater edge.
     let ex = -1;
     let ey = -1;
@@ -182,7 +183,7 @@ function stepShock(core: WorldCore, body: Body, wv: Wave): void {
   const w = body.w;
   const rng = body.rng;
   const r = wv.r;
-  const f = Math.pow(1 - r / wv.maxR, 1.3) * wv.power;
+  const f = DMath.pow(1 - r / wv.maxR, 1.3) * wv.power;
   const x0 = Math.max(0, Math.floor(wv.cx - r - 2));
   const x1 = Math.min(w - 1, Math.ceil(wv.cx + r + 2));
   const y0 = Math.max(0, Math.floor(wv.cy - r - 2));
@@ -237,8 +238,8 @@ function stepShock(core: WorldCore, body: Body, wv: Wave): void {
   // A ring of light marks the shock front where it crosses live matter.
   for (let g = 0; g < 7; g++) {
     const a = rng.next() * Math.PI * 2;
-    const gx = Math.floor(wv.cx + Math.cos(a) * r);
-    const gy = Math.floor(wv.cy + Math.sin(a) * r);
+    const gx = Math.floor(wv.cx + DMath.cos(a) * r);
+    const gy = Math.floor(wv.cy + DMath.sin(a) * r);
     if (gx < 0 || gy < 0 || gx >= w || gy >= body.h || map.material[gy * w + gx] === 0) continue;
     localToWorldF(body, gx + 0.5, gy + 0.5, pt);
     core.particles.spawn(
@@ -246,8 +247,8 @@ function stepShock(core: WorldCore, body: Body, wv: Wave): void {
       PK.glint,
       pt.x,
       pt.y,
-      Math.cos(a) * body.transform.facing * 30,
-      Math.sin(a) * 30,
+      DMath.cos(a) * body.transform.facing * 30,
+      DMath.sin(a) * 30,
       7 + rng.int(6),
       1,
       220,

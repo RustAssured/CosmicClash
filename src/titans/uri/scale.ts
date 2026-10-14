@@ -1,4 +1,5 @@
 import type { UriPartMeta } from './rig';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * 우리 at its game size (D34, WJ 2026-10-09: original-like sizes, 우리 about 200 px tall, the asset is about 300).
@@ -132,7 +133,7 @@ export function scaleUriFields(p: UriPartMeta, f: UriFields, scale: number): Uri
       out.chunk[o] = bc;
       out.tone[o] = Math.round(tone / live);
       out.form[o] = Math.round(form / live);
-      const l = Math.hypot(nx, ny, nz) || 1;
+      const l = DMath.hypot(nx, ny, nz) || 1;
       out.nx[o] = clamp255(Math.round((nx / l) * 120 + 128));
       out.ny[o] = clamp255(Math.round((ny / l) * 120 + 128));
       out.nz[o] = clamp255(Math.round((nz / l) * 250));

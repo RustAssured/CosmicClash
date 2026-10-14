@@ -1,3 +1,4 @@
+import { DMath } from './dmath';
 export const TAU = Math.PI * 2;
 export const DEG = Math.PI / 180;
 
@@ -18,5 +19,5 @@ export const lerpAngle = (a: number, b: number, t: number): number => {
 };
 /** Exponential approach with frame-rate-independent factor: pass dt in seconds and a half-life. */
 export const damp = (cur: number, target: number, halfLifeSec: number, dtSec: number): number =>
-  target + (cur - target) * Math.pow(0.5, dtSec / halfLifeSec);
+  target + (cur - target) * DMath.pow(0.5, dtSec / halfLifeSec);
 export const len2 = (x: number, y: number): number => Math.sqrt(x * x + y * y);

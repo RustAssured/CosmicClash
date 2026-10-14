@@ -1,5 +1,6 @@
 import { pa, pb, pg, pr, rgba, type SimEvent } from '@/contracts';
 import type { Overlay } from './overlay';
+import { DMath } from '@/contracts/dmath';
 
 /** Blows below this energy (continuous beams, light pokes) leave the attack overlay alone. */
 const MIN_ENERGY = 300;
@@ -70,7 +71,7 @@ export class WoundVeil {
           const i = y * fx.w + x;
           const c = px[i]!;
           if (pa(c) === 0) continue;
-          const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+          const d = DMath.hypot(x + 0.5 - cx, y + 0.5 - cy);
           if (d >= R) continue;
           const s = d <= CLEAR_R ? g : g + (1 - g) * ((d - CLEAR_R) / RIM);
           px[i] =

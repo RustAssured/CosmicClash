@@ -1,4 +1,5 @@
 import { Btn, type InputFrame } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 /** How a step steers the stick. World axes: +x right, +y down. */
 export const enum Steer {
@@ -98,7 +99,7 @@ export class Plan {
     const s = this.steps[this.index]!;
     let mx = 0;
     let my = 0;
-    const l = Math.hypot(dx, dy) || 1;
+    const l = DMath.hypot(dx, dy) || 1;
     switch (s.steer) {
       case Steer.Toward:
         if (orbit) {

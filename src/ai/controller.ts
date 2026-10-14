@@ -19,6 +19,7 @@ import { buildMoveInfos, surgeDistance, type MoveInfo } from './moves';
 import { NGram, type Token } from './predict';
 import { ObservationRing, Snapshot } from './observe';
 import { Plan, Steer } from './plan';
+import { DMath } from '@/contracts/dmath';
 
 const TYPES: DamageType[] = ['FRACTURE', 'ASSIMILATION', 'TIDAL', 'THERMAL', 'CRUSH', 'KINETIC'];
 const GLIDE_TAU = 0.35 / Math.LN2;
@@ -187,7 +188,7 @@ export class UtilityAI implements AIController {
    * above 40° the uppercut, below −38° the double slam (with a full meter; else the level blows), else punch and cross in turn.
    */
   private uriBestMove(S: FighterView, dx: number, dy: number): string {
-    const el = (Math.atan2(-(dy + URI_CM_ABOVE), Math.abs(dx)) * 180) / Math.PI;
+    const el = (DMath.atan2(-(dy + URI_CM_ABOVE), Math.abs(dx)) * 180) / Math.PI;
     if (el > 40) return 'upper';
     if (el < -38 && S.meter >= 1 - 1e-6) return 'slam';
     return this.uriCrossNext ? 'cross' : 'punch';
@@ -507,7 +508,7 @@ export class UtilityAI implements AIController {
     A.copyFrom(F);
     const dx = F.x - S.x;
     const dy = F.y - S.y;
-    const d = Math.hypot(dx, dy);
+    const d = DMath.hypot(dx, dy);
     const ux = d > 1e-6 ? dx / d : S.facing;
     const uy = d > 1e-6 ? dy / d : 0;
     const f: 1 | -1 = dx > 0 || (dx === 0 && S.facing > 0) ? 1 : -1;
@@ -555,7 +556,7 @@ export class UtilityAI implements AIController {
       this.whiffs[mi.idx] = 0;
       return 1;
     }
-    return Math.pow(0.4, n);
+    return DMath.pow(0.4, n);
   }
 
   /**
@@ -658,7 +659,7 @@ export class UtilityAI implements AIController {
     const ay = S.y + ln.y0 * rs;
     const bx = S.x + disp + f * ln.x1 * rs;
     const by = S.y + ln.y1 * rs;
-    const len = Math.hypot(bx - ax, by - ay);
+    const len = DMath.hypot(bx - ax, by - ay);
     if (len < 1) return 0;
     const nx = -(by - ay) / len;
     const ny = (bx - ax) / len;
@@ -694,7 +695,7 @@ export class UtilityAI implements AIController {
   /** Foe displacement (px) `ticks` after the delayed observation (glide model, same constants as the fighter). */
   private foeShift(F: Snapshot, ticks: number, axis: 'x' | 'y'): number {
     const v = axis === 'x' ? F.vx : F.vy;
-    return v * GLIDE_TAU * (1 - Math.exp(-(ticks * TICK_DT) / GLIDE_TAU));
+    return v * GLIDE_TAU * (1 - DMath.exp(-(ticks * TICK_DT) / GLIDE_TAU));
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -878,7 +879,7 @@ export class UtilityAI implements AIController {
     const dx = F.x - S.x + this.noiseX;
     const dy = F.y - S.y + this.noiseY;
     // (우리 judges the foe in the real plane, not the orbit attack frame: its distance is the true one)
-    const dist = this.uri ? Math.hypot(dx, dy) : Math.abs(dx);
+    const dist = this.uri ? DMath.hypot(dx, dy) : Math.abs(dx);
     if (this.uri) this.uriWant = this.uriBestMove(S, dx, dy);
     // who is winning decides whether to gamble: playing safe only makes sense when ahead
     const ahead = S.integrityPct > F.integrityPct + 8;
@@ -1028,7 +1029,7 @@ export class UtilityAI implements AIController {
       );
       if (this.orbit) {
         // straight at the foe in the plane
-        const l = Math.hypot(this.realDx, this.realDy) || 1;
+        const l = DMath.hypot(this.realDx, this.realDy) || 1;
         dash.dirX = this.realDx / l;
         dash.dirY = this.realDy / l;
       } else {
@@ -1072,7 +1073,7 @@ export class UtilityAI implements AIController {
     if (this.orbit) {
       // orbit footwork: circle the foe (keep the sense we are already turning in); a zoner circles at range, and circling
       // out of the line of a windup is the cheapest dodge
-      const l = Math.hypot(this.realDx, this.realDy) || 1;
+      const l = DMath.hypot(this.realDx, this.realDy) || 1;
       const vt = (-S.vx * this.realDy + S.vy * this.realDx) / l;
       const ci = this.add(
         foeWindup ? 'off the line' : 'circle',
@@ -1206,8 +1207,8 @@ export class UtilityAI implements AIController {
     const d = this.surgeDist * 0.9;
     for (let i = 0; i < 8; i++) {
       const a = (i * Math.PI) / 4;
-      const ux = Math.cos(a);
-      const uy = Math.sin(a);
+      const ux = DMath.cos(a);
+      const uy = DMath.sin(a);
       const nx0 = S.boundsX0 + ux * d;
       const nx1 = S.boundsX1 + ux * d;
       const ny0 = S.boundsY0 + uy * d;
@@ -1367,10 +1368,10 @@ export class UtilityAI implements AIController {
       for (let i = 0; i < this.nCands; i++) max = Math.max(max, this.cands[i]!.score);
       let sum = 0;
       const T = this.P.temperature;
-      for (let i = 0; i < this.nCands; i++) sum += Math.exp((this.cands[i]!.score - max) / T);
+      for (let i = 0; i < this.nCands; i++) sum += DMath.exp((this.cands[i]!.score - max) / T);
       let r = this.rng.next() * sum;
       for (let i = 0; i < this.nCands; i++) {
-        r -= Math.exp((this.cands[i]!.score - max) / T);
+        r -= DMath.exp((this.cands[i]!.score - max) / T);
         if (r <= 0) {
           pick = i;
           break;

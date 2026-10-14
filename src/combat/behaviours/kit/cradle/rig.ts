@@ -1,6 +1,7 @@
 import type { MaterialDef } from '@/contracts';
 import type { CradleRegion } from '@/titans/kit/cradle/paint';
 import { XpbdRig, massFromCells, wrapAngle, type MassProps } from '../../../rig/xpbd';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * THE CRADLE'S RIG (Gate 2): one XPBD body per region. The knot (the fighter's primary body, the KO core) is kinematic: it is
@@ -109,8 +110,8 @@ export function buildCradleRig(
       k + 1 < cordRegions.length
         ? pivot[cordRegions[k + 1]!.i]!
         : { fx: jawTip.x - knotCorner.x, fy: jawTip.y - knotCorner.y };
-    dirs.push(Math.atan2(nb.fy - a.fy, nb.fx - a.fx));
-    length += Math.hypot(nb.fx - a.fx, nb.fy - a.fy);
+    dirs.push(DMath.atan2(nb.fy - a.fy, nb.fx - a.fx));
+    length += DMath.hypot(nb.fx - a.fx, nb.fy - a.fy);
   }
   // the first link's bend is measured from straight down (the knot holds the cord hanging)
   const straighten = dirs.map((d, k) => wrapAngle((k === 0 ? Math.PI / 2 : dirs[k - 1]!) - d));

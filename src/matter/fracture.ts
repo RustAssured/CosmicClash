@@ -25,6 +25,7 @@ import { findImpact, type Impact } from './impact';
 import { K_LINE } from './shape';
 import { carveCrater, type CraterOpts, type CraterOut } from './crater';
 import { openWound } from './wound';
+import { DMath } from '@/contracts/dmath';
 
 /** Energy (baseline units) to sever one full-strength (255) bond. Seam bonds are cheaper: they are the weak paths. */
 const K_E = 3.6;
@@ -326,7 +327,7 @@ function lineCut(ctx: DamageCtx, E: number, cutB: number, grindB: number, pierce
   const sy = Math.floor(sC / w1);
   const tx = tC % w1;
   const ty = Math.floor(tC / w1);
-  const chord = Math.hypot(tx - sx, ty - sy);
+  const chord = DMath.hypot(tx - sx, ty - sy);
   const A = slabArea(E, 1);
   const h = Math.max(4, Math.min(36, Math.sqrt(A) * 0.55));
   const cTarget = (1.5 * A) / h;
@@ -335,7 +336,7 @@ function lineCut(ctx: DamageCtx, E: number, cutB: number, grindB: number, pierce
     // A shallow chord (the lash skims the outline): dive under it so a real slab is isolated.
     let inx = body.map.coreX + 0.5 - (sx + tx) * 0.5;
     let iny = body.map.coreY + 0.5 - (sy + ty) * 0.5;
-    const il = Math.hypot(inx, iny) || 1;
+    const il = DMath.hypot(inx, iny) || 1;
     inx /= il;
     iny /= il;
     return uCutVia(ctx, sC, tC, (sx + tx) * 0.5 + inx * h, (sy + ty) * 0.5 + iny * h, cutB, grindB);
@@ -429,8 +430,8 @@ function uCutVia(
   const ty = Math.floor(tC / w1);
   const mx = wCorner % w1;
   const my = Math.floor(wCorner / w1);
-  const l1 = Math.hypot(mx - sx, my - sy);
-  const l2 = Math.hypot(tx - mx, ty - my);
+  const l1 = DMath.hypot(mx - sx, my - sy);
+  const l2 = DMath.hypot(tx - mx, ty - my);
   const legs: [number, number, number, number, number][] = [
     [sx, sy, mx, my, l1],
     [mx, my, tx, ty, l2],
@@ -814,7 +815,7 @@ function plantSeeds(ctx: DamageCtx, E: number, brit: number): void {
       const cy = Math.floor(c / w1);
       let ix = body.map.coreX + 0.5 - cx;
       let iy = body.map.coreY + 0.5 - cy;
-      const il = Math.hypot(ix, iy) || 1;
+      const il = DMath.hypot(ix, iy) || 1;
       ix = ix / il + (rng.next() - 0.5) * 0.8;
       iy = iy / il + (rng.next() - 0.5) * 0.8;
       if (plantFrontToward(body, cx, cy, ix, iy, stress0 * (0.75 + 0.5 * rng.next()), speed, 0)) continue;

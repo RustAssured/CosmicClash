@@ -10,6 +10,7 @@ import {
 } from './titan';
 import type { StageInfo } from './render';
 import { DAMAGE_TYPES } from './damage';
+import { DMath } from './dmath';
 
 /** Feel targets in ticks (60 Hz). Ranges are inclusive. See titan.ts. */
 export const FEEL_TARGETS = {
@@ -117,7 +118,7 @@ export function validateStageInfo(s: StageInfo): string[] {
   if (s.ramps && s.ramps.reduce((a, b) => a + b, 0) !== n)
     errs.push(`${s.id}: ramps sum to ${s.ramps.reduce((a, b) => a + b, 0)} but palette has ${n} colours`);
   const [x, y, z] = s.lighting.dir;
-  if (Math.abs(Math.hypot(x, y, z) - 1) > 1e-3) errs.push(`${s.id}: lighting.dir must be unit length`);
+  if (Math.abs(DMath.hypot(x, y, z) - 1) > 1e-3) errs.push(`${s.id}: lighting.dir must be unit length`);
   if (s.arena.maxX <= s.arena.minX || s.arena.maxY <= s.arena.minY) errs.push(`${s.id}: degenerate arena`);
   return errs;
 }

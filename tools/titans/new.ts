@@ -29,6 +29,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import {
   ROSTER_IDS,
   SIZE_CLASSES,
+  TIER_OF_SIZE,
   type MaterialSpec,
   type MoveDef,
   type SizeClass,
@@ -509,6 +510,8 @@ def.kit = {
     clip: false,
   },
   homage: '',
+  // its strength tier (COSMIC CLASH opens on tier 1); `titan:ship` stamps shippedAt and its catalogue number
+  tier: TIER_OF_SIZE[size],
   // every new titan starts as work in progress: off the menus, site and press until WJ ships it (delete this line then)
   wip: true,
 };

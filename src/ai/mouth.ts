@@ -9,6 +9,7 @@ import {
   type InputFrame,
   type TitanDef,
 } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * The Mouth's AI (D37): a crane at the edge. It observes only public state (its own view's `mouth` frame and the foe's
@@ -196,11 +197,11 @@ export class MouthAI implements AIController {
     // strike when the foe is inside the arc and the reach
     const dx = fx - m.exitX;
     const dy = fy - m.exitY;
-    const dist = Math.hypot(dx, dy);
-    const ang = Math.acos(Math.max(-1, Math.min(1, (dx * m.nx + dy * m.ny) / (dist || 1))));
+    const dist = DMath.hypot(dx, dy);
+    const ang = DMath.acos(Math.max(-1, Math.min(1, (dx * m.nx + dy * m.ny) / (dist || 1))));
     if (ang > 1.2 || dist < 70) return;
     if (dist > reach * 1.08) return;
-    const speed = Math.hypot(fvx, fvy);
+    const speed = DMath.hypot(fvx, fvy);
     // punish: a committed foe (its move or stun outlasts the bite's arrival) is struck at once, outside the gap
     const committed =
       COMMITTED.has(fState) && fLeft >= BITE_TICKS.low - 4 && ctx.tick - this.lastStrike >= 20;

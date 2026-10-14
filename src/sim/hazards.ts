@@ -10,6 +10,7 @@ import {
   type TitanDef,
 } from '@/contracts';
 import { generateCometBody } from '@/titans/art/comet';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Arena hazards (SLICE_PLAN §9, proposal 134): comets crossing the Star-birth Shearfield on a READABLE cadence — a warning
@@ -96,7 +97,7 @@ export class ArenaHazards {
     const y = this.rng.range(a.minY + inset, a.restY - 40);
     const tx = (a.minX + a.maxX) / 2 + this.rng.range(-160, 160) * (fromLeft ? 1 : -1);
     const ty = a.restY + this.rng.range(-110, 60);
-    const len = Math.hypot(tx - x, ty - y) || 1;
+    const len = DMath.hypot(tx - x, ty - y) || 1;
     const sp = this.rng.range(s.speed[0], s.speed[1]);
     return { x, y, vx: ((tx - x) / len) * sp, vy: ((ty - y) / len) * sp };
   }

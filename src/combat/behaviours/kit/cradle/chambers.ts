@@ -1,6 +1,7 @@
 import type { MatterMap } from '@/contracts';
 import { transmute } from '@/titans/kit/cradle/grow';
 import { touch } from './gestate';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * DEVELOPMENTAL CHAMBERS (Gate 3, brief: "damage ruptures membrane layers and exposes nested developmental chambers. Some
@@ -93,8 +94,8 @@ export class Chambers {
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2;
       for (let d = 2; d <= 12; d++) {
-        const x = Math.floor(cx + Math.cos(a) * d);
-        const y = Math.floor(cy + Math.sin(a) * d);
+        const x = Math.floor(cx + DMath.cos(a) * d);
+        const y = Math.floor(cy + DMath.sin(a) * d);
         if (x < 0 || y < 0 || x >= m.w || y >= m.h) break;
         if (m.material[y * m.w + x] !== 0) {
           n++;
@@ -119,7 +120,7 @@ export class Chambers {
       m,
       ramps,
       (mat, x, y) => {
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+        const d = DMath.hypot(x + 0.5 - cx, y + 0.5 - cy);
         if (d > R || mat === ids.core) return 0;
         return nearVoid(m, x, y) ? ids.muscle : 0;
       },
@@ -135,18 +136,19 @@ export class Chambers {
     for (let y = Math.floor(cy - R); y <= cy + R; y++)
       for (let x = Math.floor(cx - R); x <= cx + R; x++) {
         if (x < 0 || y < 0 || x >= m.w || y >= m.h || m.material[y * m.w + x] === 0) continue;
-        const d = (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2;
+        const d = sq(x + 0.5 - cx) + sq(y + 0.5 - cy);
         if (d < best) {
           best = d;
           ox = x + 0.5;
           oy = y + 0.5;
         }
       }
-    const dl = Math.hypot(ox - cx, oy - cy) || 1;
+    const dl = DMath.hypot(ox - cx, oy - cy) || 1;
     ox += ((ox - cx) / dl) * 2.5;
     oy += ((oy - cy) / dl) * 2.5;
     const r = 2.6 + ihash(3, 4, seed) * 2.2;
-    const inside = (x: number, y: number, rr: number): boolean => Math.hypot(x + 0.5 - ox, y + 0.5 - oy) < rr;
+    const inside = (x: number, y: number, rr: number): boolean =>
+      DMath.hypot(x + 0.5 - ox, y + 0.5 - oy) < rr;
     if (kind === 0) {
       // a fluid sac with a dark mass curled in it
       transmute(m, ramps, (mat, x, y) => (mat !== 0 && inside(x, y, r) ? ids.sac : 0), seed, 0.15);
@@ -155,12 +157,12 @@ export class Chambers {
       // bone nodules, clustered like teeth that belong to nothing
       for (let k = 0; k < 4; k++) {
         const a = ihash(k, 9, seed) * Math.PI * 2;
-        const nx = ox + Math.cos(a) * r * 0.7;
-        const ny = oy + Math.sin(a) * r * 0.7;
+        const nx = ox + DMath.cos(a) * r * 0.7;
+        const ny = oy + DMath.sin(a) * r * 0.7;
         transmute(
           m,
           ramps,
-          (mat, x, y) => (mat !== 0 && Math.hypot(x + 0.5 - nx, y + 0.5 - ny) < 1.6 ? ids.bone : 0),
+          (mat, x, y) => (mat !== 0 && DMath.hypot(x + 0.5 - nx, y + 0.5 - ny) < 1.6 ? ids.bone : 0),
           seed + k,
           0.25,
         );
@@ -172,7 +174,7 @@ export class Chambers {
         ramps,
         (mat, x, y) =>
           mat !== 0 && inside(x, y, r)
-            ? Math.sin((x + y) * 1.3 + seed) > 0.2
+            ? DMath.sin((x + y) * 1.3 + seed) > 0.2
               ? ids.vessel
               : ids.collagen
             : 0,

@@ -5,6 +5,7 @@ import type { WorldCore } from './core';
 import { buildRamps } from './debris';
 import { hash2, noise2, valueNoise } from './util';
 import { refreshVisuals } from './visual';
+import { DMath } from '@/contracts/dmath';
 
 const F_SURF = CellFlag.SURFACE;
 
@@ -219,8 +220,8 @@ function makeFaults(body: Body, x0: number, y0: number, x1: number, y1: number):
     const ang = noise2(k, 3, seed) * Math.PI;
     const off = (noise2(k, 4, seed) - 0.5) * span * 0.55;
     const along = (noise2(k, 8, seed) - 0.5) * span * 0.3;
-    const ux = Math.cos(ang);
-    const uy = Math.sin(ang);
+    const ux = DMath.cos(ang);
+    const uy = DMath.sin(ang);
     out.push({
       px: cx + -uy * off + ux * along,
       py: cy + ux * off + uy * along,

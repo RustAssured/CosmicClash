@@ -12,6 +12,7 @@ import { ArtCanvas, buildLitRamps, type ShadeParams } from './canvas';
 import { edt, keepLargestComponent } from './field';
 import { bayer4, fbm, hash01, makeWorley, ridged, worley } from './noise';
 import { sdCircle, sdEllipse, sdTaperedCapsule, smax, smin, ssub } from './sdf';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * THE ASTEROID — an iron-nickel wanderer. Faceted silhouette with a horn-like prow and a few silhouette-breaking crags;
@@ -90,7 +91,7 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   const nf = p.facets;
   for (let k = 0; k < nf; k++) {
     const a = ((k + rng.range(-0.28, 0.28)) / nf) * Math.PI * 2;
-    planes.push({ nx: Math.cos(a), ny: Math.sin(a), d: meanR * rng.range(0.86, 1.02) });
+    planes.push({ nx: DMath.cos(a), ny: DMath.sin(a), d: meanR * rng.range(0.86, 1.02) });
   }
   const crags = p.crags.map((c) => ({
     ...c,
@@ -113,8 +114,8 @@ function makeLayout(def: TitanDef, seed: number): Layout {
     const a = rng.range(-Math.PI, Math.PI);
     if (Math.abs(a) < 0.35) continue;
     let r = 12;
-    while (r < 120 && base(cx + Math.cos(a) * r, cy + Math.sin(a) * r) < 0) r += 0.5;
-    bites.push({ x: cx + Math.cos(a) * (r - 0.5), y: cy + Math.sin(a) * (r - 0.5), r: rng.range(4.5, 8) });
+    while (r < 120 && base(cx + DMath.cos(a) * r, cy + DMath.sin(a) * r) < 0) r += 0.5;
+    bites.push({ x: cx + DMath.cos(a) * (r - 0.5), y: cy + DMath.sin(a) * (r - 0.5), r: rng.range(4.5, 8) });
   }
   const sd = (x: number, y: number): number => {
     let d = base(x, y);
@@ -129,8 +130,8 @@ function makeLayout(def: TitanDef, seed: number): Layout {
     const y = cy + rng.range(-34, 34);
     const r = rng.range(5, 12);
     if (sd(x, y) > -r - 3) continue;
-    if (Math.hypot(x - (cx + p.core.x), y - (cy + p.core.y)) < p.core.r + r) continue;
-    if (craters.some((c) => Math.hypot(c.x - x, c.y - y) < c.r + r + 3)) continue;
+    if (DMath.hypot(x - (cx + p.core.x), y - (cy + p.core.y)) < p.core.r + r) continue;
+    if (craters.some((c) => DMath.hypot(c.x - x, c.y - y) < c.r + r + 3)) continue;
     craters.push({ x, y, r });
   }
   // olivine (pallasite) gems inside the metal
@@ -140,9 +141,9 @@ function makeLayout(def: TitanDef, seed: number): Layout {
     const y = cy + rng.range(-32, 32);
     const r = rng.range(2.4, 4.6);
     if (sd(x, y) > -r - 8) continue;
-    if (Math.hypot(x - (cx + p.core.x), y - (cy + p.core.y)) < p.core.r + r + 3) continue;
-    if (craters.some((c) => Math.hypot(c.x - x, c.y - y) < c.r + r + 1)) continue;
-    if (olivine.some((o) => Math.hypot(o.x - x, o.y - y) < o.r + r + 5)) continue;
+    if (DMath.hypot(x - (cx + p.core.x), y - (cy + p.core.y)) < p.core.r + r + 3) continue;
+    if (craters.some((c) => DMath.hypot(c.x - x, c.y - y) < c.r + r + 1)) continue;
+    if (olivine.some((o) => DMath.hypot(o.x - x, o.y - y) < o.r + r + 5)) continue;
     olivine.push({ x, y, r, rot: rng.range(0, Math.PI) });
   }
 
@@ -157,8 +158,8 @@ function makeLayout(def: TitanDef, seed: number): Layout {
     for (let s = 0; s < len; s++) {
       turn = turn * 0.9 + rng.range(-0.1, 0.1);
       h += turn;
-      x += Math.cos(h) * 2.6;
-      y += Math.sin(h) * 2.6;
+      x += DMath.cos(h) * 2.6;
+      y += DMath.sin(h) * 2.6;
       const t = s / len;
       path.push(x, y, w0 * (1 - 0.55 * t));
       if (depth === 0 && s === Math.floor(len * 0.45))
@@ -170,9 +171,9 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   for (let v = 0; v < p.veins; v++) {
     const a = rng.range(0, Math.PI * 2);
     let r = 10;
-    while (r < 100 && sd(cx + Math.cos(a) * r, cy + Math.sin(a) * r) < 0) r += 0.5;
-    const sx = cx + Math.cos(a) * (r - 5);
-    const sy = cy + Math.sin(a) * (r - 5);
+    while (r < 100 && sd(cx + DMath.cos(a) * r, cy + DMath.sin(a) * r) < 0) r += 0.5;
+    const sx = cx + DMath.cos(a) * (r - 5);
+    const sy = cy + DMath.sin(a) * (r - 5);
     walk(sx, sy, a + Math.PI + rng.range(-0.7, 0.7), rng.intRange(20, 30), 1.7, 0);
   }
   return { p, cx, cy, sd, craters, olivine, veins };
@@ -258,10 +259,10 @@ export function paintAsteroid(
         // Widmanstätten basket-weave: Voronoi domains, two lamellar families each
         worley(fx / 34, fy / 34, sB + 60, w2, 0.95);
         const th = w2.id * Math.PI;
-        const c1 = Math.cos(th);
-        const s1 = Math.sin(th);
-        const c2 = Math.cos(th + 1.15);
-        const s2 = Math.sin(th + 1.15);
+        const c1 = DMath.cos(th);
+        const s1 = DMath.sin(th);
+        const c2 = DMath.cos(th + 1.15);
+        const s2 = DMath.sin(th + 1.15);
         const per = 6.2 + w2.id * 2.6;
         const u1 = (fx * c1 + fy * s1) / per;
         const u2 = (fx * c2 + fy * s2) / (per * 1.3);
@@ -290,7 +291,7 @@ export function paintAsteroid(
       for (let x = Math.floor(c.x - R - 3); x <= Math.ceil(c.x + R + 3); x++) {
         const i = y * W + x;
         if (mask[i] === 0) continue;
-        const dd = Math.hypot(x + 0.5 - c.x, y + 0.5 - c.y);
+        const dd = DMath.hypot(x + 0.5 - c.x, y + 0.5 - c.y);
         const q = dd / R;
         if (q < 1) {
           cv.relief[i] = cv.relief[i]! - (1 - q * q) * (1.4 + R * 0.26);
@@ -332,8 +333,8 @@ export function paintAsteroid(
         if (mask[i] === 0) continue;
         const dx = x + 0.5 - o.x;
         const dy = y + 0.5 - o.y;
-        const c = Math.cos(o.rot);
-        const s = Math.sin(o.rot);
+        const c = DMath.cos(o.rot);
+        const s = DMath.sin(o.rot);
         const px = dx * c + dy * s;
         const py = -dx * s + dy * c;
         // hexagon-ish gem
@@ -342,7 +343,7 @@ export function paintAsteroid(
           cv.mat[i] = ids.olivine;
           cv.relief[i] = 7 + (o.r - hexd) * 0.8;
           // three cut facets: light upper-left, mid right, dark lower
-          const fa = Math.atan2(py, px);
+          const fa = DMath.atan2(py, px);
           cv.tone[i] = (fa < -0.4 ? 1.6 : fa < 1.9 ? 0.2 : -1.4) + (hexd > o.r - 1 ? -0.6 : 0);
         }
       }
@@ -354,7 +355,7 @@ export function paintAsteroid(
     for (let x = Math.floor(coreX - CR - 4); x <= Math.ceil(coreX + CR + 4); x++) {
       const i = y * W + x;
       if (mask[i] === 0) continue;
-      const r = Math.hypot(x + 0.5 - coreX, y + 0.5 - coreY);
+      const r = DMath.hypot(x + 0.5 - coreX, y + 0.5 - coreY);
       const rr = CR + fbm((x + 0.5) * 0.25, (y + 0.5) * 0.25, sA + 77, 2) * 1.3;
       if (r < rr) {
         cv.mat[i] = ids.dense;
@@ -427,7 +428,7 @@ function paintCore(
       if (cv.mat[i] !== ids.dense) continue;
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
-      const r = Math.hypot(dx, dy) / R;
+      const r = DMath.hypot(dx, dy) / R;
       // metallic sphere: light from the upper left, warm bounce below
       // sphere shading: key from the upper left, warm bounce from below right, dark limb
       const nz = Math.sqrt(Math.max(0, 1 - r * r));
@@ -439,7 +440,7 @@ function paintCore(
       const fl = Math.floor(k);
       const fr = k - fl;
       colors[i] = ramp[Math.min(5, fl + (fr > 0.5 + (bayer4(x, y) - 0.5) * 0.5 ? 1 : 0))]!;
-      if (nz > 0.72 && dx < 0 && dy < 0 && Math.hypot(dx + R * 0.32, dy + R * 0.36) < R * 0.17)
+      if (nz > 0.72 && dx < 0 && dy < 0 && DMath.hypot(dx + R * 0.32, dy + R * 0.36) < R * 0.17)
         colors[i] = ramp[5]!;
     }
   }

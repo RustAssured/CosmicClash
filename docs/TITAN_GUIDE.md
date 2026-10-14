@@ -129,6 +129,10 @@ npx tsx tools/titans/still.ts <id>         stills of it in a real fight + the se
 npx vitest run src/titans                  the fast checks for every titan
 ```
 
+**Online play needs identical maths on every browser:** in a titan's painter and behaviour, write `DMath.sin` / `cos` /
+`atan2` / `hypot` / `pow` / `exp` (from `@/contracts/dmath`) and `sq(x)` instead of `Math.sin` … and `x ** 2`; `npm run lint`
+flags any slip (docs/netplay/STEP0.md).
+
 ---
 
 ## 5. The commands
@@ -177,33 +181,39 @@ It does, in order:
      switched on;
    - its press card and the key-art lineup (only where the local `press/` folder exists);
    - the website's titan cards and the "Nine colossi…" count;
-4. prints what's left by hand: usually a ladder slot (§6, WJ's call), a hover-clip shot if there is none, a look at the
-   select screen and the website, and the commit.
+   It also stamps its ship date and catalogue number into its JSON (`kit.shippedAt`, `kit.catalogue`: §6);
+4. prints what's left by hand: usually a CLASSIC ladder slot (§6, WJ's call; COSMIC CLASH takes it by itself), a
+   hover-clip shot if there is none, a look at the select screen and the website, and the commit.
 
 Running it again on a shipped titan just regenerates its outputs. The Cradle was the first titan shipped this way.
 
 ---
 
-## 6. Adding it to the tournament ladder
+## 6. Adding it to the tournament
 
-The ladder is `src/ui/ladder.ts`.
+The tournament is `src/ui/ladder.ts`. It has two modes (and three difficulties, EASY / NORMAL / TITAN, for both):
 
-**What happens without any edit:**
+**COSMIC CLASH / 우주 대결 (no edit needed).** Every shipped titan is in it automatically. Shipping does it:
 
-- A new titan can already *climb* the ladder: pick it in TOURNAMENT. It meets the seven regulars, the Last One as
-  sub-boss, then the Mouth.
-- It is not yet one of the *opponents*.
+- `titan:ship` stamps `kit.shippedAt` (today) and `kit.catalogue` (the next number: ADK-010, ADK-011, …).
+- For its first four weeks (`NEW_TITAN_DAYS`) it wears a **NEW** tag in the COSMIC CLASH lineup.
+- Where it lands in the order depends on its **tier** (`kit.tier`, 1–5; the scaffold sets it from the size class):
+  - tier 1 titans open the ladder;
+  - everyone else is shuffled into the middle (a new order every run);
+  - the Last One and the Mouth always come last.
+- Set `kit.tier` in its JSON to move it: 1 = an opener, 2–3 = the middle, 4 = heavy.
+- The "N TITANS · GROWING" badge in the game and on the site counts it too.
 
-**How to make it an opponent:**
+**CLASSIC / 클래식 (WJ's curated ladder, a hand edit).** The story ladder, nine rungs in a set order. A new titan can
+already *climb* it (pick it under CLASSIC), but it is not one of its *opponents* until WJ gives it a slot:
 
-1. Add its id to `LADDER_ORDER`, in the place you want it (the order is easiest first).
-2. Give it a stage in `LADDER_STAGE`.
+1. Add its id to `LADDER_ORDER`, in the place you want it (the order is easiest first; the Last One stays last).
+2. Give it a stage in `LADDER_STAGE` (without one it fights on its own home stage, `kit.stage`).
 3. Optionally, give it a story line in `src/ui/ladderStory.ts` (`RUNG_LINES`), e.g. *"Then something crawled out of the
    dark."* Without one, it gets "Then another came."
 
-> **The ladder has eight rungs.** The regulars take the first six, then come the sub-boss and the Mouth. Adding a regular
-> means one of them must leave the order, or the ladder must get longer (more rungs, plus one more entry in `LADDER_AI`).
-> That is a design call: ask Claude for the trade-off.
+> Adding a CLASSIC regular makes that ladder one rung longer. The AI ramp stretches to fit by itself (`aiRamp`), and the
+> tower shrinks its rows to fit. Players' runs in progress keep going; a stored run is rebuilt from the new order.
 
 ---
 

@@ -4,6 +4,7 @@ import { breakBondD, breakBondR } from './cells';
 import type { WorldCore } from './core';
 import type { Launch } from './debris';
 import { localToWorldF } from './dmg';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * WOUNDS — "damage may count instantly, separation takes time" (SLICE_PLAN §6, D1).
@@ -225,7 +226,7 @@ export function woundSpeed(core: WorldCore, body: Body, w: number, mass: number)
   const E = b.energy[w]!;
   let v: number;
   if (E > 0) {
-    const sm = Math.pow(Math.max(0.3, b.sourceMass[w]!) / 5, 0.25);
+    const sm = DMath.pow(Math.max(0.3, b.sourceMass[w]!) / 5, 0.25);
     v = 190 * Math.sqrt(E / (mass + 25)) * sm * (0.92 + core.rng.next() * 0.16);
     v = Math.max(24, Math.min(430, v));
   } else v = 16 + core.rng.next() * 26;

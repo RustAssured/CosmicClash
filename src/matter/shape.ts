@@ -1,4 +1,5 @@
 import type { DamageShape } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 export const K_POINT = 0;
 export const K_LINE = 1;
@@ -121,17 +122,17 @@ export class ShapeQ {
         this.range = Math.max(0.5, s.range);
         this.range2 = this.range * this.range;
         this.halfAngle = Math.min(Math.PI, Math.max(0.02, s.halfAngle));
-        this.cosHalf = Math.cos(this.halfAngle);
+        this.cosHalf = DMath.cos(this.halfAngle);
         this.area = this.range2 * this.halfAngle;
         // Conservative but tight bbox: apex, arc end points and any axis extremes the arc passes through.
         let x0 = s.x;
         let x1 = s.x;
         let y0 = s.y;
         let y1 = s.y;
-        const a0 = Math.atan2(this.uy, this.ux);
+        const a0 = DMath.atan2(this.uy, this.ux);
         const ext = (a: number): void => {
-          const px = s.x + Math.cos(a) * this.range;
-          const py = s.y + Math.sin(a) * this.range;
+          const px = s.x + DMath.cos(a) * this.range;
+          const py = s.y + DMath.sin(a) * this.range;
           if (px < x0) x0 = px;
           if (px > x1) x1 = px;
           if (py < y0) y0 = py;
@@ -234,7 +235,7 @@ export class ShapeQ {
         if (d2 >= this.r2) return 0;
         const u = 1 - Math.sqrt(d2) / this.r;
         const f = this.falloff;
-        return f === 1 ? u : f === 2 ? u * u : Math.pow(u, f);
+        return f === 1 ? u : f === 2 ? u * u : DMath.pow(u, f);
       }
     }
   }

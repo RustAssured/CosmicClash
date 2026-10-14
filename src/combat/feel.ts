@@ -3,6 +3,7 @@ import type { AngularParams } from './pose';
 import { TUNING } from './tuning';
 import type { ParticleKind, TitanDef } from '@/contracts';
 import { hex } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Per-titan "body weight and presence" tuning. Everything has a default derived from the titan's MASS attribute, so a new titan needs
@@ -117,8 +118,8 @@ export function resolveFeel(def: TitanDef): Feel {
     };
   }
   return {
-    accelMul: j.accelMul ?? clamp(Math.pow(m, 0.55), 0.7, 1.9),
-    glideMul: j.glideMul ?? clamp(Math.pow(m, 0.35), 0.8, 1.5),
+    accelMul: j.accelMul ?? clamp(DMath.pow(m, 0.55), 0.7, 1.9),
+    glideMul: j.glideMul ?? clamp(DMath.pow(m, 0.35), 0.8, 1.5),
     zeta: j.zeta ?? clamp(0.9 - 0.045 * mass, 0.5, 0.85),
     bobAmp: j.bob?.amp ?? j.bobAmp ?? clamp(0.6 + 0.25 * mass, 0, 4),
     bobPeriod: j.bob?.period ?? j.bobPeriod ?? 3.6,

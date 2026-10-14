@@ -21,10 +21,13 @@ import { renderPortrait, type Portrait } from '@/titans/portrait';
 import { SITE_ROSTER } from '@/titans/roster';
 import { PixelCanvas } from '@/ui/pixel/canvas';
 import { logoSprite } from '@/ui/pixel/logo';
+import { COSMIC_STYLE, NEBULA_PERIOD, cosmicWordmark, cosmicWordmarkSize } from '@/ui/pixel/cosmicLogo';
 import { C, alpha } from '@/ui/pixel/palette';
 import { drawText, measureText } from '@/ui/pixel/text';
 
 const OUT = 'site/media/titans';
+/** Frames in the COSMIC CLASH wordmark's sprite sheet (one NEBULA_PERIOD; the site's CSS steps through them). */
+const COSMIC_FRAMES = 32;
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7);
 // D36: the colossus ('colossus') is The Last One (file 'lastone'); the tendril titan ('lastone') is The Witness ('witness')
 const TITANS: { file: string; id: TitanId; ko: string }[] = SITE_ROSTER.filter(
@@ -53,6 +56,12 @@ function write(
       png.data[o + 3] = v >>> 24;
     }
   writeFileSync(path, PNG.sync.write(png));
+}
+
+if (process.argv.includes('--cosmic')) {
+  // just the COSMIC CLASH wordmark (npx tsx tools/site/art.ts --cosmic)
+  cosmicArt();
+  process.exit(0);
 }
 
 mkdirSync(OUT, { recursive: true });
@@ -107,6 +116,25 @@ function everythingElse(): void {
   write('site/media/type/logo.png', { pixels: logo.pixels, w: logo.w, h: logo.h });
   console.log(`logo: ${logo.w}x${logo.h}`);
   koWords({ adeuk: '아득' });
+  cosmicArt();
+}
+
+/**
+ * The COSMIC CLASH wordmark (src/ui/pixel/cosmicLogo.ts), transparent, 1 px per game pixel: a still
+ * (site/media/type/cosmicclash.png) and its living loop as a vertical sprite sheet of COSMIC_FRAMES frames over one
+ * NEBULA_PERIOD (cosmicclash-sheet.png; the site steps through it in CSS). Its Korean, 우주 대결, as ko-cosmicclash.png.
+ */
+function cosmicArt(): void {
+  mkdirSync('site/media/type', { recursive: true });
+  const { w, h } = cosmicWordmarkSize(COSMIC_STYLE);
+  const still = cosmicWordmark(COSMIC_STYLE, 0);
+  write('site/media/type/cosmicclash.png', still);
+  const sheet = new PixelCanvas(w, h * COSMIC_FRAMES);
+  for (let f = 0; f < COSMIC_FRAMES; f++)
+    sheet.blit(cosmicWordmark(COSMIC_STYLE, (f * NEBULA_PERIOD) / COSMIC_FRAMES), 0, f * h);
+  write('site/media/type/cosmicclash-sheet.png', { pixels: sheet.pixels, w: sheet.w, h: sheet.h });
+  koWords({ cosmicclash: '우주 대결' });
+  console.log(`cosmic clash: ${w}x${h}, ${COSMIC_FRAMES} frames`);
 }
 
 /** The pupil: the centroid of the darkest opaque pixels within `r` of the eye's light centroid. */

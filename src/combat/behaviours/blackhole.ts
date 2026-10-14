@@ -14,6 +14,7 @@ import { Behaviour } from '../behaviour';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape } from '../shapes';
+import { DMath } from '@/contracts/dmath';
 
 interface WellCfg {
   radius: [number, number];
@@ -62,15 +63,15 @@ export class BlackHoleBehaviour extends Behaviour {
     this.disk = Int32Array.from(list);
     this.ang = new Float32Array(list.length);
     this.rad = new Float32Array(list.length);
-    const ct = Math.cos(this.rig.tilt);
-    const st = Math.sin(this.rig.tilt);
+    const ct = DMath.cos(this.rig.tilt);
+    const st = DMath.sin(this.rig.tilt);
     list.forEach((i, k) => {
       const x = (i % map.w) + 0.5 - this.rig.core.x;
       const y = Math.floor(i / map.w) + 0.5 - this.rig.core.y;
       const u = x * ct + y * st;
       const v = (-x * st + y * ct) / this.rig.squash;
-      this.ang[k] = Math.atan2(v, u);
-      this.rad[k] = Math.hypot(u, v);
+      this.ang[k] = DMath.atan2(v, u);
+      this.rad[k] = DMath.hypot(u, v);
     });
     this.fx = new Overlay('blackhole-fx', 20, 280, 240, 'add', true);
     this.well = (f.slotMoves.signature?.extra?.['well'] as WellCfg | undefined) ?? null;
@@ -162,7 +163,7 @@ export class BlackHoleBehaviour extends Behaviour {
       const foe = f.foe as unknown as { vx: number; vy: number; ko: boolean; view: { x: number; y: number } };
       const dx = t.x - foe.view.x;
       const dy = t.y - foe.view.y;
-      const d = Math.hypot(dx, dy);
+      const d = DMath.hypot(dx, dy);
       if (!foe.ko && d < radius && d > 20) {
         const a = cfg.pullFoe * (1 - d / radius) * grow * TICK_DT;
         foe.vx += (dx / d) * a;
@@ -199,8 +200,8 @@ export class BlackHoleBehaviour extends Behaviour {
       const added = f.world.grow(f.body.id, {
         cells,
         materialKey: this.matGrow,
-        nearX: t.x + Math.cos(a) * 70,
-        nearY: t.y + Math.sin(a) * 20,
+        nearX: t.x + DMath.cos(a) * 70,
+        nearY: t.y + DMath.sin(a) * 20,
       });
       this.lastGrow = tick;
       f.resource = Math.max(0, f.resource - added * 0.15);
@@ -210,7 +211,7 @@ export class BlackHoleBehaviour extends Behaviour {
     const low = clamp01((st.massFrac - 0.22) / 0.5);
     f.view.lensRadius = this.rig.horizon * (0.6 + 0.4 * low);
     f.view.lensStrength = clamp(0.35 + 0.5 * Math.max(0, st.massFrac - 1), 0, 1.5) * (0.3 + 0.7 * low);
-    this.lean = Math.sin(tick * 0.017 + f.slot) * 1.2;
+    this.lean = DMath.sin(tick * 0.017 + f.slot) * 1.2;
     this.draw(tick, st.massFrac, holding);
   }
 
@@ -231,9 +232,9 @@ export class BlackHoleBehaviour extends Behaviour {
       const i = this.disk[k]!;
       if (map.material[i] === 0) continue;
       const q = this.rad[k]!;
-      const w = spin * Math.pow(this.rig.diskIn / Math.max(20, q), 1.4);
-      const b = 0.5 + 0.5 * Math.cos(this.ang[k]! * 2 - w);
-      const dop = 0.5 - 0.5 * Math.cos(this.ang[k]! - 0.0);
+      const w = spin * DMath.pow(this.rig.diskIn / Math.max(20, q), 1.4);
+      const b = 0.5 + 0.5 * DMath.cos(this.ang[k]! * 2 - w);
+      const dop = 0.5 - 0.5 * DMath.cos(this.ang[k]! - 0.0);
       const e = b * b * (0.35 + 0.65 * (1 - dop)) * 46 * gain;
       if (e < 4) continue;
       const lx = i % map.w;
@@ -242,7 +243,7 @@ export class BlackHoleBehaviour extends Behaviour {
     }
     // photon ring flicker and a soft halo
     const hz = this.rig.horizon;
-    fx.glow(t.x, t.y, hz + 12, 255, 170, 70, 0.1 + 0.05 * Math.sin(tick * 0.31) + (holding ? 0.12 : 0));
+    fx.glow(t.x, t.y, hz + 12, 255, 170, 70, 0.1 + 0.05 * DMath.sin(tick * 0.31) + (holding ? 0.12 : 0));
     // jet knots travelling outward along the axis
     const jl = this.rig.jetLen;
     for (let s = 0; s < 2; s++) {
@@ -260,8 +261,8 @@ export class BlackHoleBehaviour extends Behaviour {
       const a = k * 1.9 + hash01(k, 1, 1) * 6;
       const r = hz + 6 + (1 - u) * 60;
       fx.add(
-        Math.round(t.x + Math.cos(a + u * 3) * r),
-        Math.round(t.y + Math.sin(a + u * 3) * r * 0.4),
+        Math.round(t.x + DMath.cos(a + u * 3) * r),
+        Math.round(t.y + DMath.sin(a + u * 3) * r * 0.4),
         200 * u,
         120 * u,
         50 * u,
@@ -283,7 +284,7 @@ export class BlackHoleBehaviour extends Behaviour {
       for (let k = 0; k < n; k++) {
         const a = hash01(tick, k, 5) * 6.2832;
         const r = hz * (0.9 + 0.5 * hash01(tick, k, 6));
-        fx.add(Math.round(t.x + Math.cos(a) * r), Math.round(t.y + Math.sin(a) * r), 255, 240, 200);
+        fx.add(Math.round(t.x + DMath.cos(a) * r), Math.round(t.y + DMath.sin(a) * r), 255, 240, 200);
       }
     }
     fx.end();

@@ -538,4 +538,9 @@ export interface MatterWorld {
   /* ---- determinism ---- */
   /** Stable 32-bit hash of all simulation state (bodies, debris, particles, rng). */
   hash(): number;
+  /**
+   * Cheap per-tick netplay checksum (docs/netplay/STEP0.md): every body's scalars, debris motion, RNG, ledger; no per-cell
+   * arrays. Optional so fakes need not implement it.
+   */
+  checksum?(): number;
 }

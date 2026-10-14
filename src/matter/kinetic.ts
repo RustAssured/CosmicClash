@@ -18,6 +18,7 @@ import {
   type DamageCtx,
 } from './dmg';
 import { PK } from './particles';
+import { DMath } from '@/contracts/dmath';
 
 const F_SHRAP = CellFlag.SHRAPNEL;
 const pt: WorldPoint = { x: 0, y: 0 };
@@ -238,8 +239,8 @@ function burst(core: WorldCore, body: Body, c: number, energy: number, dirX: num
       PK.spark,
       bx,
       by,
-      Math.cos(a) * sp,
-      Math.sin(a) * sp,
+      DMath.cos(a) * sp,
+      DMath.sin(a) * sp,
       10 + rng.int(14),
       1,
       255,

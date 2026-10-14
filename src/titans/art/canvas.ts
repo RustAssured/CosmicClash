@@ -14,6 +14,7 @@ import {
 import { blend } from './color';
 import { boxBlur, edt } from './field';
 import { bayer4, bayer8 } from './noise';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * The ArtCanvas is the working surface every titan generator paints on: per-cell material ids, a relief (height) field,
@@ -124,11 +125,11 @@ export class ArtCanvas {
     let lx = cfg.lighting.dir[0] * xb;
     let ly = cfg.lighting.dir[1];
     let lz = cfg.lighting.dir[2];
-    const ll = Math.hypot(lx, ly, lz) || 1;
+    const ll = DMath.hypot(lx, ly, lz) || 1;
     lx /= ll;
     ly /= ll;
     lz /= ll;
-    const l2 = Math.hypot(lx, ly) || 1;
+    const l2 = DMath.hypot(lx, ly) || 1;
     const l2x = lx / l2;
     const l2y = ly / l2;
     const rimCol = hex(cfg.lighting.rim);
@@ -181,7 +182,7 @@ export class ArtCanvas {
         if (di <= 2.6) {
           const bx = -(mb[y * w + xp]! - mb[y * w + xm]!) * 0.5;
           const by = -(mb[yp * w + x]! - mb[ym * w + x]!) * 0.5;
-          const bl = Math.hypot(bx, by);
+          const bl = DMath.hypot(bx, by);
           if (bl > 1e-4) {
             const nl = (bx * l2x + by * l2y) / bl;
             if (nl > 0.15 && P.rim > 0) {
@@ -239,8 +240,8 @@ export function buildLitRamps(
     out.push(
       base.map((c, k) => {
         const t = nr === 1 ? 0.5 : k / (nr - 1);
-        const sh = 0.32 * Math.pow(1 - t, 1.6) * strength;
-        const hi = 0.2 * Math.pow(t, 2.2) * strength;
+        const sh = 0.32 * DMath.pow(1 - t, 1.6) * strength;
+        const hi = 0.2 * DMath.pow(t, 2.2) * strength;
         return blend(blend(c, amb, sh), key, hi);
       }),
     );

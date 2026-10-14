@@ -5,6 +5,7 @@ import type { Wave, WorldCore } from './core';
 import { MODE_BURN, RAMP_EMBER, sprayCell, spawnMassParticle } from './debris';
 import { T_THERMAL, isImmune, localToWorldF } from './dmg';
 import { PK } from './particles';
+import { DMath } from '@/contracts/dmath';
 
 const pt: WorldPoint = { x: 0, y: 0 };
 
@@ -116,7 +117,7 @@ export function stepBlast(core: WorldCore, body: Body, wv: Wave): void {
   const nSpark = 5;
   for (let k = 0; k < nSpark; k++) {
     const a = rng.next() * Math.PI * 2;
-    localToWorldF(body, wv.cx + Math.cos(a) * r, wv.cy + Math.sin(a) * r, pt);
+    localToWorldF(body, wv.cx + DMath.cos(a) * r, wv.cy + DMath.sin(a) * r, pt);
     const sm = 1;
     spawnMassParticle(
       core,
@@ -124,8 +125,8 @@ export function stepBlast(core: WorldCore, body: Body, wv: Wave): void {
       body.rampIds[sm * 5 + RAMP_EMBER]!,
       pt.x,
       pt.y,
-      Math.cos(a) * body.transform.facing * 90,
-      Math.sin(a) * 90,
+      DMath.cos(a) * body.transform.facing * 90,
+      DMath.sin(a) * 90,
       0,
     );
   }

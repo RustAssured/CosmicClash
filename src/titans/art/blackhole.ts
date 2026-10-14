@@ -9,6 +9,7 @@ import {
 } from '@/contracts';
 import { blend } from './color';
 import { fbm, hash01 } from './noise';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * BLACK HOLE — a perfectly black event horizon (immune matter), a thin brilliant photon ring, a tilted accretion disk of gas cells
@@ -57,8 +58,8 @@ export function buildBlackHoleRig(def: TitanDef, _seed: number): BlackHoleRig {
     diskOut: p.diskOut,
     squash: p.squash,
     tilt: p.tilt,
-    jetX: Math.sin(p.tilt * 0.5),
-    jetY: -Math.cos(p.tilt * 0.5),
+    jetX: DMath.sin(p.tilt * 0.5),
+    jetY: -DMath.cos(p.tilt * 0.5),
     jetLen: p.jet.len,
     ids: {
       horizon: matId(def, 'horizon'),
@@ -94,8 +95,8 @@ export function paintBlackHole(
   const s1 = (seed & 0xfff) + 91;
   const cx = rig.core.x;
   const cy = rig.core.y;
-  const ct = Math.cos(p.tilt);
-  const st = Math.sin(p.tilt);
+  const ct = DMath.cos(p.tilt);
+  const st = DMath.sin(p.tilt);
   const hz = p.horizon;
   const set = (i: number, m: number, c: number, dens: number): void => {
     map.material[i] = m;
@@ -107,14 +108,14 @@ export function paintBlackHole(
     for (let x = 0; x < W; x++) {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
-      const r = Math.hypot(dx, dy);
+      const r = DMath.hypot(dx, dy);
       const i = y * W + x;
       const u = dx * ct + dy * st;
       const v = -dx * st + dy * ct;
-      const q = Math.hypot(u, v / p.squash);
+      const q = DMath.hypot(u, v / p.squash);
       const dopp = clamp01(0.5 - u / (2 * p.diskOut)); // 1 on the approaching (left) side
-      const swirl = fbm(q * 0.11 + s1, Math.atan2(v / p.squash, u) * 2.2, s1, 3);
-      const streak = 0.5 + 0.5 * Math.sin(q * 0.85 + swirl * 5);
+      const swirl = fbm(q * 0.11 + s1, DMath.atan2(v / p.squash, u) * 2.2, s1, 3);
+      const streak = 0.5 + 0.5 * DMath.sin(q * 0.85 + swirl * 5);
       let done = false;
       const frontBand =
         v > 0 && r < hz + p.ring && q >= p.diskIn - 1 && q <= p.diskIn + (p.diskOut - p.diskIn) * 0.28;
@@ -129,7 +130,7 @@ export function paintBlackHole(
       if (done) continue;
       // lensed far side of the disk: an arc hugging the horizon over the top (bright) and under the bottom (fainter)
       const rr = r - (hz + p.ring);
-      const taper = Math.sqrt(Math.max(0, 1 - (dx / (hz * 1.15)) ** 2));
+      const taper = Math.sqrt(Math.max(0, 1 - sq(dx / (hz * 1.15))));
       const upper = dy < 0 && rr >= 0.2 && rr < 12 * taper;
       const lower = dy > 0 && rr >= 0.2 && rr < 6 * taper;
       const inDisk = q >= p.diskIn && q <= p.diskOut && !(v < 0 && r < hz + p.ring + 1);
@@ -158,9 +159,9 @@ export function paintBlackHole(
       const start = hz + p.ring - 2;
       if (Math.abs(ax) > start && Math.abs(ax) < start + rig.jetLen + 4) {
         const t = (Math.abs(ax) - start) / rig.jetLen;
-        const w = p.jet.w * (1 - 0.55 * t) * (0.85 + 0.3 * Math.sin(t * 22 + (ax > 0 ? 0 : 2)));
+        const w = p.jet.w * (1 - 0.55 * t) * (0.85 + 0.3 * DMath.sin(t * 22 + (ax > 0 ? 0 : 2)));
         if (across < w && t < 1) {
-          const k = clamp(Math.round(4 - t * 3.4 - across * 0.5 + (Math.sin(t * 22) > 0.7 ? 1 : 0)), 0, 4);
+          const k = clamp(Math.round(4 - t * 3.4 - across * 0.5 + (DMath.sin(t * 22) > 0.7 ? 1 : 0)), 0, 4);
           set(i, ids.jet, R.jet[k]!, 40);
         }
       }

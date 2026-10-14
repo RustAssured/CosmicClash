@@ -3,7 +3,8 @@
  *
  *  1. runs its checks (`titan:check -- <id> --quick`: size, palette, AI coverage, replay); stops if one fails;
  *  2. deletes `"wip": true` from its JSON's `kit` block (src/titans/kit/<id>/<id>.json): it is now in the menus, the site,
- *     the press kit and the titan count;
+ *     the press kit, the titan count and the COSMIC CLASH tournament; stamps `kit.shippedAt` (today, or `--date=`; the
+ *     lineup's NEW tag) and `kit.catalogue` (the next catalogue number, ADK-0NN), unless it already has them;
  *  3. regenerates what is made from the roster:
  *     - its site portrait and Korean name (tools/site/art.ts --only), its MATTER count (tools/site/matter.ts --only);
  *     - its site hover clip, when it has a press shot `<id>-card` (tools/press/shots.ts) whose clip is rendered: the web
@@ -21,10 +22,19 @@
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { ROSTER_IDS, type TitanId } from '@/contracts';
+import { ROSTER_IDS, catalogueId, type TitanId } from '@/contracts';
+import { ROSTER } from '@/titans/roster';
 import { LADDER_ORDER } from '@/ui/ladder';
 import { RUNG_LINES } from '@/ui/ladderStory';
 import { cardShot } from '../press/shots';
+
+/** Today as YYYY-MM-DD in local time (`--date=YYYY-MM-DD` overrides it). */
+function shipDate(): string {
+  const given = process.argv.find((a) => a.startsWith('--date='))?.slice(7);
+  if (given && /^\d{4}-\d{2}-\d{2}$/.test(given)) return given;
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const args = process.argv.slice(2);
 const id = args.find((a) => !a.startsWith('--')) as TitanId | undefined;
@@ -67,6 +77,25 @@ if (json !== before) {
   writeFileSync(JSON_PATH, json);
   console.log(`${JSON_PATH}: "wip": true removed`);
 } else console.log(`${JSON_PATH}: no wip flag (already shipped): regenerating its outputs`);
+// the ship date (COSMIC CLASH's NEW tag) and the catalogue number (arrival order, ADK-001 …), once: a re-ship keeps them
+{
+  const k = (JSON.parse(json) as { kit?: { shippedAt?: string; catalogue?: number } }).kit ?? {};
+  const add: string[] = [];
+  const today = shipDate();
+  if (!k.shippedAt) add.push(`"shippedAt": "${today}"`);
+  if (!k.catalogue) {
+    const next = Math.max(0, ...ROSTER.filter((r) => r.id !== id).map((r) => r.catalogue ?? 0)) + 1;
+    add.push(`"catalogue": ${next}`);
+  }
+  if (add.length) {
+    json = json.replace(
+      /("kit":\s*\{)(\s*)/,
+      (_m, open: string, ws: string) => `${open}${ws}${add.join(`,${ws}`)},${ws}`,
+    );
+    writeFileSync(JSON_PATH, json);
+    console.log(`${JSON_PATH}: stamped ${add.join(', ')} (${catalogueId(JSON.parse(json).kit.catalogue)})`);
+  } else console.log(`${JSON_PATH}: shipped ${k.shippedAt}, ${catalogueId(k.catalogue!)} (kept)`);
+}
 const def = JSON.parse(json) as { kit?: { wip?: boolean; site: { file: string; clip?: boolean } } };
 if (!def.kit) throw new Error(`${JSON_PATH} has no kit block`);
 if (def.kit.wip) throw new Error(`${JSON_PATH}: could not remove the wip flag; delete it by hand and re-run`);
@@ -127,8 +156,9 @@ run('tools/site/roster.ts');
 const ladder = LADDER_ORDER.includes(id);
 if (!ladder)
   todo.push(
-    `Ladder slot (WJ decides): it can climb the tournament but is not an opponent. Add it to LADDER_ORDER and ` +
-      `LADDER_STAGE in src/ui/ladder.ts (docs/TITAN_GUIDE.md §6; eight rungs, so one regular leaves or the ladder grows).`,
+    `CLASSIC ladder slot (WJ decides): it is already an opponent in COSMIC CLASH (every shipped titan is), but not in ` +
+      `CLASSIC. To add it there: LADDER_ORDER and LADDER_STAGE in src/ui/ladder.ts (docs/TITAN_GUIDE.md §6; the ladder ` +
+      `grows by a rung).`,
   );
 else if (!(id in RUNG_LINES)) todo.push(`Story line for its rung: RUNG_LINES in src/ui/ladderStory.ts.`);
 todo.push(

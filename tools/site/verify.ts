@@ -10,6 +10,7 @@
 import { mkdirSync } from 'node:fs';
 import type { Browser, BrowserContextOptions, Page } from '@playwright/test';
 import { preview } from 'vite';
+import { SITE_ROSTER } from '@/titans/roster';
 import { launch } from '../lead/browser';
 
 const OUT = 'docs/gallery/site';
@@ -60,6 +61,36 @@ async function open(
 }
 
 const unique = (a: string[]): string[] => [...new Set(a)];
+
+/**
+ * The COSMIC CLASH banner: its live count is the roster's shipped titans, its wordmark loaded and drawn at a whole-number
+ * scale; a still into docs/gallery/cosmicclash/site-banner-<tag>.png.
+ */
+async function cosmicBanner(page: Page, tag: string): Promise<void> {
+  const el = page.locator('#cosmic-clash');
+  if (!(await el.count())) {
+    check(false, `${tag}: the COSMIC CLASH banner is on the page`);
+    return;
+  }
+  await el.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(700);
+  const count = Number(await el.locator('[data-cosmic-count]').getAttribute('data-cosmic-count'));
+  check(
+    count === SITE_ROSTER.length,
+    `${tag}: COSMIC CLASH counts ${count} titans (roster: ${SITE_ROSTER.length})`,
+  );
+  const mark = (await page.evaluate(`(() => {
+    const m = document.querySelector('#cosmic-clash .cc-mark');
+    const i = m.querySelector('img');
+    return { w: m.getBoundingClientRect().width, nat: i.naturalWidth, ok: i.complete && i.naturalWidth > 0 };
+  })()`)) as { w: number; nat: number; ok: boolean };
+  check(
+    mark.ok && Number.isInteger(mark.w / mark.nat),
+    `${tag}: the COSMIC CLASH wordmark draws at ×${mark.w / mark.nat}`,
+  );
+  mkdirSync('docs/gallery/cosmicclash', { recursive: true });
+  await el.screenshot({ path: `docs/gallery/cosmicclash/site-banner-${tag}.png` });
+}
 /** ONLY=story,play (comma list) runs a subset: desktop, story, mobile, reduced, play. */
 const want = (g: string): boolean => !process.env.ONLY || process.env.ONLY.split(',').includes(g);
 
@@ -110,6 +141,7 @@ if (want('desktop')) {
   await page.addStyleTag({ content: '.nav{display:none}' });
   await page.locator('#titans').screenshot({ path: `${OUT}/desktop-titans.png` });
   await page.locator('#press').screenshot({ path: `${OUT}/desktop-press.png` });
+  await cosmicBanner(page, 'desktop');
   await page.addStyleTag({ content: '.nav{display:flex}' });
 
   // the trailer lightbox
@@ -306,6 +338,7 @@ if (want('mobile')) {
   await page.addStyleTag({ content: '.nav{display:none}' });
   for (const id of ['titans', 'controls', 'press', 'follow'])
     await page.locator(`#${id}`).screenshot({ path: `${OUT}/mobile-${id}.png` });
+  await cosmicBanner(page, 'mobile');
   check(errors.length === 0, `mobile: no console errors${errors.length ? `: ${errors.join(' | ')}` : ''}`);
   await page.context().close();
 }

@@ -1,4 +1,5 @@
 import type { DamageShape, ShapeTemplate } from '@/contracts';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * Damage-shape geometry shared by the fighter (hitbox instantiation, part intercepts, threat telegraphs) and the test double.
@@ -170,7 +171,7 @@ export function shapeContains(s: DamageShape, px: number, py: number): boolean {
       if (d2 > s.range * s.range) return false;
       if (d2 < 1e-6) return true;
       const dl = Math.sqrt(d2);
-      return (dx * s.dirX + dy * s.dirY) / dl >= Math.cos(s.halfAngle);
+      return (dx * s.dirX + dy * s.dirY) / dl >= DMath.cos(s.halfAngle);
     }
     case 'ring': {
       const dx = px - s.x;
@@ -200,9 +201,9 @@ export function shapeIntersectsDisc(s: DamageShape, cx: number, cy: number, r: n
       if (d > s.range + r) return false;
       if (d <= r) return true;
       const cosA = (dx * s.dirX + dy * s.dirY) / d;
-      const ang = Math.acos(cosA < -1 ? -1 : cosA > 1 ? 1 : cosA);
+      const ang = DMath.acos(cosA < -1 ? -1 : cosA > 1 ? 1 : cosA);
       // widen the half angle by the disc's angular size
-      return ang <= s.halfAngle + Math.asin(Math.min(1, r / d));
+      return ang <= s.halfAngle + DMath.asin(Math.min(1, r / d));
     }
     case 'ring': {
       const dx = cx - s.x;
@@ -305,8 +306,8 @@ export function instantiateTemplate(
       out.x = wx(lx, ly);
       out.y = wy(lx, ly);
       const ang = L(tpl.angle, t2?.angle);
-      const dx = Math.cos(ang) * f;
-      const dy = Math.sin(ang);
+      const dx = DMath.cos(ang) * f;
+      const dy = DMath.sin(ang);
       out.dirX = rc * dx - rs * dy;
       out.dirY = rs * dx + rc * dy;
       out.range = L(tpl.range, t2?.range) * s;

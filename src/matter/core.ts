@@ -15,6 +15,7 @@ import { CutFinder } from './cuts';
 import { ParticlePool } from './particles';
 import { ShapeQ } from './shape';
 import { IntStack } from './util';
+import { DMath } from '@/contracts/dmath';
 
 export interface GravityState {
   active: boolean;
@@ -106,7 +107,7 @@ interface Agg {
 }
 
 function resolveLighting(l: StageLighting): ResolvedLighting {
-  const len2 = Math.hypot(l.dir[0], l.dir[1]) || 1;
+  const len2 = DMath.hypot(l.dir[0], l.dir[1]) || 1;
   return {
     lx: l.dir[0] / len2,
     ly: l.dir[1] / len2,

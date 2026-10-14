@@ -8,6 +8,7 @@ import {
   type MouthBeat,
   type MouthMoveName,
 } from './tuning';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * The Mouth's crane (Phase 3B): a deterministic port of the locked prototype's motion
@@ -114,8 +115,8 @@ export interface MouthStepOut {
 const NS = C.neckSamples;
 const TAU = Math.PI * 2;
 const ease = {
-  io: (u: number): number => (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2),
-  out4: (u: number): number => 1 - Math.pow(1 - u, 4),
+  io: (u: number): number => (u < 0.5 ? 2 * u * u : 1 - DMath.pow(-2 * u + 2, 2) / 2),
+  out4: (u: number): number => 1 - DMath.pow(1 - u, 4),
   out2: (u: number): number => 1 - (1 - u) * (1 - u),
 };
 const STRETCHED: readonly MouthBeat[] = ['strike', 'bite', 'hold', 'recover', 'sweep', 'release'];
@@ -277,7 +278,7 @@ export class MouthCore {
       nx = nx * (1 - k) + NX[e3]! * k;
       ny = ny * (1 - k) + NY[e3]! * k;
     }
-    const l = Math.hypot(nx, ny);
+    const l = DMath.hypot(nx, ny);
     out.nx = nx / l;
     out.ny = ny / l;
     return out;
@@ -302,10 +303,10 @@ export class MouthCore {
   private clampArc(E: MouthEdge, Xx: number, Xy: number, Px: number, Py: number, out: number[]): void {
     const dx = Px - Xx;
     const dy = Py - Xy;
-    let a = Math.atan2(E.nx * dy - E.ny * dx, E.nx * dx + E.ny * dy);
+    let a = DMath.atan2(E.nx * dy - E.ny * dx, E.nx * dx + E.ny * dy);
     a = Math.max(-C.arc, Math.min(C.arc, a));
-    const c = Math.cos(a);
-    const si = Math.sin(a);
+    const c = DMath.cos(a);
+    const si = DMath.sin(a);
     out[0] = E.nx * c - E.ny * si;
     out[1] = E.nx * si + E.ny * c;
   }
@@ -390,7 +391,7 @@ export class MouthCore {
     v: number,
     Dt: number[],
   ): number {
-    const dT = Math.hypot(tgX - Xx, tgY - Xy);
+    const dT = DMath.hypot(tgX - Xx, tgY - Xy);
     let reach = Math.max(
       80,
       Math.min(dT, C.maxReach * MOUTH_TUNE.reach * (v === -1 ? 1.12 : v === 1 ? 0.88 : 1)),
@@ -415,11 +416,11 @@ export class MouthCore {
     const t = this.t;
     const D = this.D;
     this.clampArc(E, Xx, Xy, this.oppX, this.oppY, D);
-    const dOpp = Math.hypot(this.oppX - Xx, this.oppY - Xy);
+    const dOpp = DMath.hypot(this.oppX - Xx, this.oppY - Xy);
     const idleL = Math.min(C.idleReachMax, dOpp * C.idleReachK);
-    let Hx = Xx + D[0]! * idleL + Math.sin(t * 0.8) * 8;
-    let Hy = Xy + D[1]! * idleL + Math.cos(t * 0.7) * 8;
-    let bend = Math.sin(t * 0.9) * 0.35 + 0.25;
+    let Hx = Xx + D[0]! * idleL + DMath.sin(t * 0.8) * 8;
+    let Hy = Xy + D[1]! * idleL + DMath.cos(t * 0.7) * 8;
+    let bend = DMath.sin(t * 0.9) * 0.35 + 0.25;
     let coilAmp = 0;
     let label: MouthBeat = 'watching';
     let spin = 1;
@@ -517,13 +518,13 @@ export class MouthCore {
         if (m.n === 'sweep') {
           const side = v === 0 ? 1 : v;
           const R_ = Math.min(reach, 420);
-          const base = Math.atan2(Dt[1]!, Dt[0]!);
+          const base = DMath.atan2(Dt[1]!, Dt[0]!);
           const a0 = base - 1.1 * side;
           const a1 = base + 1.1 * side;
           if (ph === 'load') {
             const e = ease.io(u);
-            const P0x = Xx + Math.cos(a0) * 150;
-            const P0y = Xy + Math.sin(a0) * 150;
+            const P0x = Xx + DMath.cos(a0) * 150;
+            const P0y = Xy + DMath.sin(a0) * 150;
             Hx = Hx + (P0x - Hx) * e;
             Hy = Hy + (P0y - Hy) * e;
             coilAmp = 18 * e;
@@ -535,17 +536,17 @@ export class MouthCore {
           if (ph === 'sweep') {
             const e = ease.io(u);
             const a = a0 + (a1 - a0) * e;
-            const r = 150 + (R_ - 150) * Math.sin(Math.min(1, e * 1.3) * Math.PI * 0.5);
-            Hx = Xx + Math.cos(a) * r;
-            Hy = Xy + Math.sin(a) * r;
+            const r = 150 + (R_ - 150) * DMath.sin(Math.min(1, e * 1.3) * Math.PI * 0.5);
+            Hx = Xx + DMath.cos(a) * r;
+            Hy = Xy + DMath.sin(a) * r;
             spin = 4;
             op = 1.5;
             stiff = 2;
             bend = -0.5 * side;
           }
           if (ph === 'bite') {
-            Hx = Xx + Math.cos(a1) * R_;
-            Hy = Xy + Math.sin(a1) * R_;
+            Hx = Xx + DMath.cos(a1) * R_;
+            Hy = Xy + DMath.sin(a1) * R_;
             cl = 1;
             op = 0.5;
             spin = 0.3;
@@ -553,8 +554,8 @@ export class MouthCore {
           }
           if (ph === 'recover') {
             const e = ease.io(u);
-            const P1x = Xx + Math.cos(a1) * R_;
-            const P1y = Xy + Math.sin(a1) * R_;
+            const P1x = Xx + DMath.cos(a1) * R_;
+            const P1y = Xy + DMath.sin(a1) * R_;
             Hx = P1x + (Hx - P1x) * e;
             Hy = P1y + (Hy - P1y) * e;
             stiff = 0.8;
@@ -577,9 +578,9 @@ export class MouthCore {
             const wr = Math.max(40, m.foeR + MOUTH_LIVE.wrapPad);
             const r = ph === 'coil' ? wr + 35 * (1 - u) : wr;
             const ang =
-              Math.atan2(Dt[1]!, Dt[0]!) + side * (Math.PI * 0.4 + (ph === 'coil' ? u : 1) * Math.PI * 1.7);
-            Hx = tgX + Math.cos(ang) * r;
-            Hy = tgY + Math.sin(ang) * r;
+              DMath.atan2(Dt[1]!, Dt[0]!) + side * (Math.PI * 0.4 + (ph === 'coil' ? u : 1) * Math.PI * 1.7);
+            Hx = tgX + DMath.cos(ang) * r;
+            Hy = tgY + DMath.sin(ang) * r;
             stiff = 1.6;
             spin = ph === 'crush' ? 0.3 : 2;
             cl = ph === 'crush' ? 1 : 0;
@@ -609,8 +610,8 @@ export class MouthCore {
       spin = k < 0.9 ? 6 : Math.max(0, 1 - k);
       if (dmg.ko.type === 'drag') {
         if (k < C.koConvulse) {
-          Hx = this.hdX + Math.sin(k * 40) * 6;
-          Hy = this.hdY + Math.cos(k * 33) * 6;
+          Hx = this.hdX + DMath.sin(k * 40) * 6;
+          Hy = this.hdY + DMath.cos(k * 33) * 6;
           stiff = 2;
         } else if (k < C.koSlack) {
           Hx = Xx + E.nx * 120;
@@ -639,9 +640,9 @@ export class MouthCore {
       I.op = k < 0.9 ? 1.6 : 1.3;
       I.cl = 0;
       I.stiff = stiff;
-      I.gp = k < 0.9 ? 1.2 + Math.sin(k * 30) * 0.5 : 1.5;
+      I.gp = k < 0.9 ? 1.2 + DMath.sin(k * 30) * 0.5 : 1.5;
       I.spr = k < 0.9 ? 0.8 : -1;
-      I.rollT = k < 0.9 ? Math.sin(k * 20) * 2 : 0;
+      I.rollT = k < 0.9 ? DMath.sin(k * 20) * 2 : 0;
       I.jt = k < 0.9 ? 3 : 0;
       I.gr = 0;
       return I;
@@ -658,9 +659,9 @@ export class MouthCore {
     }
     // how the head behaves in each beat: breathing and twitching at rest, an iris of rings opening in the wind-up, snapping
     // shut and grinding in the bite
-    let gp = 1 + 0.14 * Math.sin(t * 0.9) * Math.sin(t * 0.31 + 1) + (Math.sin(t * 4.1) > 0.985 ? 0.12 : 0);
-    let spr = 0.08 * Math.sin(t * 0.5);
-    let rollT = Math.sin(t * 0.32) * 0.25;
+    let gp = 1 + 0.14 * DMath.sin(t * 0.9) * DMath.sin(t * 0.31 + 1) + (DMath.sin(t * 4.1) > 0.985 ? 0.12 : 0);
+    let spr = 0.08 * DMath.sin(t * 0.5);
+    let rollT = DMath.sin(t * 0.32) * 0.25;
     let jt = 0.12;
     let gr = 0;
     if (label === 'load' || label === 'reach') {
@@ -732,7 +733,7 @@ export class MouthCore {
         const u = Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / l2));
         const qx = x0 + dx * u;
         const qy = y0 + dy * u;
-        const d = Math.hypot(x - qx, y - qy);
+        const d = DMath.hypot(x - qx, y - qy);
         if (d < best) {
           best = d;
           bx = qx;
@@ -763,7 +764,7 @@ export class MouthCore {
     const sp = this.coilSpine;
     for (let i = 0; i < 9; i++) {
       const e = this.edgeAt(this.s + OFFS[i]! * (1 - pay * 0.18), this.edgeTmp);
-      const dd = (depth[i]! - this.koDrag * 150) * (1 - pay * 0.35) + Math.sin(t * 0.32 + i * 1.3) * 12;
+      const dd = (depth[i]! - this.koDrag * 150) * (1 - pay * 0.35) + DMath.sin(t * 0.32 + i * 1.3) * 12;
       sp[i * 2] = e.px + e.nx * dd;
       sp[i * 2 + 1] = e.py + e.ny * dd;
     }
@@ -772,7 +773,7 @@ export class MouthCore {
   /** How far the neck has paid out (0..1): the coils tighten as it does (the prototype's `pay`). */
   pay(): number {
     const I = this.I;
-    return Math.min(1, Math.max(0, (Math.hypot(this.hdX - I.Xx, this.hdY - I.Xy) - 200) / 300));
+    return Math.min(1, Math.max(0, (DMath.hypot(this.hdX - I.Xx, this.hdY - I.Xy) - 200) / 300));
   }
 
   /** Place the crane at rest at arc length `s` (round start): head at its idle intent, neck laid along it. */
@@ -822,7 +823,7 @@ export class MouthCore {
     this.hdVx += (k * (I.Hx - this.hdX) - c * this.hdVx) * dt;
     this.hdVy += (k * (I.Hy - this.hdY) - c * this.hdVy) * dt;
     {
-      const vm = Math.hypot(this.hdVx, this.hdVy);
+      const vm = DMath.hypot(this.hdVx, this.hdVy);
       const cap =
         this.move && (this.prevLabel === 'strike' || this.prevLabel === 'sweep') ? C.capStrike : C.capRest;
       if (vm > cap) {
@@ -842,7 +843,7 @@ export class MouthCore {
     HB.roll += HB.rv * dt;
     HB.jit += (I.jt + (1 - hq) * 1.2 - HB.jit) * Math.min(1, dt * 6);
     HB.grind += (I.gr - HB.grind) * Math.min(1, dt * (I.gr > HB.grind ? 20 : 3));
-    HB.pulse = 0.018 * Math.sin(this.t * (2.2 + HB.jit * 3)) * (0.6 + HB.jit * 0.4);
+    HB.pulse = 0.018 * DMath.sin(this.t * (2.2 + HB.jit * 3)) * (0.6 + HB.jit * 0.4);
     this.ringSpin += dt * this.ringRate;
     this.ringRate += (I.spin - this.ringRate) * Math.min(1, dt * 6);
     this.open += (I.op - this.open) * Math.min(1, dt * 10);
@@ -865,7 +866,7 @@ export class MouthCore {
     const Xy = I.Xy;
     const hx = this.hdX;
     const hy = this.hdY;
-    const L = Math.hypot(hx - Xx, hy - Xy) || 1;
+    const L = DMath.hypot(hx - Xx, hy - Xy) || 1;
     const dx = (hx - Xx) / L;
     const dy = (hy - Xy) / L;
     const px = -dy;
@@ -885,8 +886,8 @@ export class MouthCore {
       let ty = q * q * q * Xy + 3 * q * q * f * c1y + 3 * q * f * f * c2y + f * f * f * hy;
       // bunching in the wind-up: the neck folds into tight waves
       const wv =
-        Math.sin(f * Math.PI * 3 - t * 2) * I.coilAmp * Math.sin(f * Math.PI) +
-        Math.sin(f * 7 - t * 1.7) * 5 * Math.sin(f * Math.PI);
+        DMath.sin(f * Math.PI * 3 - t * 2) * I.coilAmp * DMath.sin(f * Math.PI) +
+        DMath.sin(f * 7 - t * 1.7) * 5 * DMath.sin(f * Math.PI);
       tx += px * wv;
       ty += py * wv;
       // wrapping: the last third of the neck follows the circle round the opponent (Gate 3A §3: a 1.7 π sweep)
@@ -894,8 +895,8 @@ export class MouthCore {
         const [wx, wy, r, ang, side] = wrap;
         const a = ang - side * (1 - (f - 0.55) / 0.45) * Math.PI * 1.7;
         const k2 = Math.min(1, (f - 0.55) / 0.2);
-        tx = tx + (wx + Math.cos(a) * r - tx) * k2;
-        ty = ty + (wy + Math.sin(a) * r - ty) * k2;
+        tx = tx + (wx + DMath.cos(a) * r - tx) * k2;
+        ty = ty + (wy + DMath.sin(a) * r - ty) * k2;
       }
       const o = i * 4;
       if (!this.neckInit) {
@@ -905,7 +906,7 @@ export class MouthCore {
         nk[o + 3] = 0;
       }
       const ks =
-        (i < 2 ? 400 : 150 * (1 - 0.72 * Math.sin(f * Math.PI)) * (moving ? 1.5 : 1)) / MOUTH_TUNE.lag;
+        (i < 2 ? 400 : 150 * (1 - 0.72 * DMath.sin(f * Math.PI)) * (moving ? 1.5 : 1)) / MOUTH_TUNE.lag;
       const cs = 2 * 0.95 * Math.sqrt(ks);
       nk[o + 2] = nk[o + 2]! + (ks * (tx - nk[o]!) - cs * nk[o + 2]!) * dt;
       nk[o + 3] = nk[o + 3]! + (ks * (ty - nk[o + 1]!) - cs * nk[o + 3]!) * dt;

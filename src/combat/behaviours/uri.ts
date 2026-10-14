@@ -45,6 +45,7 @@ import type { UriBlow } from '@/titans/uri/def';
 import type { ActiveMove } from '../move';
 import { UriKinetics, type UriKineticView, type UriMoveName, type UriTune } from '../uri/kinetics';
 import type { FighterImpl } from '../fighter';
+import { DMath, sq } from '@/contracts/dmath';
 
 /**
  * 우리 (URI) in the game, Phase 2A (uri/docs/URI_SPEC.md §3–5): a multi-body fighter like the Witness.
@@ -679,8 +680,8 @@ export class UriBehaviour extends Behaviour {
     // are at rest; the whole body breathes with the oracle's slow idle bob (frame(): sin(t·0.37)·1.2, sin(t·0.53)·1.6 ref px)
     const pel = grid(URI_PRIMARY);
     const kt = this.kin ? this.kin.t : 0;
-    this.ox = this.rootX - pel.x0 - t.anchorX + Math.sin(kt * 0.37) * 1.2 * SC;
-    this.oy = this.rootY - pel.y0 - t.anchorY + Math.sin(kt * 0.53) * 1.6 * SC;
+    this.ox = this.rootX - pel.x0 - t.anchorX + DMath.sin(kt * 0.37) * 1.2 * SC;
+    this.oy = this.rootY - pel.y0 - t.anchorY + DMath.sin(kt * 0.53) * 1.6 * SC;
     // never mirrored (spec §5): the primary is drawn and hit as authored, whatever side the opponent is on
     this.writeTransform(t, this.places[URI_PRIMARY], pel.pivX, pel.pivY, t.anchorX, t.anchorY);
     t.facing = 1;
@@ -726,8 +727,8 @@ export class UriBehaviour extends Behaviour {
     ax: number,
     ay: number,
   ): void {
-    const c = Math.cos(pl.a);
-    const s = Math.sin(pl.a);
+    const c = DMath.cos(pl.a);
+    const s = DMath.sin(pl.a);
     const dx = ax - pivX;
     const dy = ay - pivY;
     bt.x = Math.round(this.ox + SC * pl.x + dx * c - dy * s);
@@ -749,8 +750,8 @@ export class UriBehaviour extends Behaviour {
       if (!pm || pm.m <= 0 || q <= 0) continue;
       const meta = grid(k);
       const pl = this.places[k];
-      const c = Math.cos(pl.a);
-      const s = Math.sin(pl.a);
+      const c = DMath.cos(pl.a);
+      const s = DMath.sin(pl.a);
       const lx = pm.cx - meta.pivX;
       const ly = pm.cy - meta.pivY;
       sx += pm.m * q * (this.ox + SC * pl.x + lx * c - ly * s);
@@ -767,14 +768,14 @@ export class UriBehaviour extends Behaviour {
       if (!pm || pm.m <= 0 || q <= 0) continue;
       const meta = grid(k);
       const pl = this.places[k];
-      const c = Math.cos(pl.a);
-      const s = Math.sin(pl.a);
+      const c = DMath.cos(pl.a);
+      const s = DMath.sin(pl.a);
       const lx = pm.cx - meta.pivX;
       const ly = pm.cy - meta.pivY;
       const wx = this.ox + SC * pl.x + lx * c - ly * s - cx;
       const wy = this.oy + SC * pl.y + lx * s + ly * c - cy;
       I += (pm.i2 + pm.m * (wx * wx + wy * wy)) * q;
-      R = Math.max(R, Math.hypot(wx, wy) + Math.sqrt(pm.i2 / pm.m) * 1.5);
+      R = Math.max(R, DMath.hypot(wx, wy) + Math.sqrt(pm.i2 / pm.m) * 1.5);
     }
     this.cm.x = cx;
     this.cm.y = cy;
@@ -879,7 +880,7 @@ export class UriBehaviour extends Behaviour {
     // pace (Short, where 우리 was balanced), less for the longer rounds. Matter does not take blows in proportion to the pace
     // (a blow's crater saturates), so the loop follows it at the power 0.7 that keeps 우리's rounds as long as the others'
     // (AI vs AI, tools/lead/roundlen.ts): × 0.71 at Normal, × 0.57 at Long
-    const paceK = Math.pow(f.pace / ROUND_LENGTH_PACE.short, ANALYTIC_PACE_EXP);
+    const paceK = DMath.pow(f.pace / ROUND_LENGTH_PACE.short, ANALYTIC_PACE_EXP);
     if (!same) {
       this.blowInst = mid === '' ? null : mid;
       this.blowAt = f.tickNo;
@@ -1091,8 +1092,8 @@ export class UriBehaviour extends Behaviour {
       const p = this.pylons[s === 'L' ? 0 : 1];
       const dx = meta.jb![0] - meta.pgX;
       const dy = meta.jb![1] - meta.pgY;
-      const c = Math.cos(pl.a);
-      const sn = Math.sin(pl.a);
+      const c = DMath.cos(pl.a);
+      const sn = DMath.sin(pl.a);
       p.x = this.ox + SC * (pl.x + dx * c - dy * sn);
       p.y = this.oy + SC * (pl.y + dx * sn + dy * c);
       p.a = Math.PI / 2 + pl.a + kv.pylon[s].ang;
@@ -1198,15 +1199,15 @@ export class UriBehaviour extends Behaviour {
     if (fv) {
       const tx = d.sx(fv.x) - mx;
       const ty = d.sy(fv.y) - my;
-      const l = Math.hypot(tx, ty) || 1;
+      const l = DMath.hypot(tx, ty) || 1;
       d.arrow(mx, my, (tx / l) * 40, (ty / l) * 40, DIAG.target);
     }
     d.text(mx + 6, my + 4, `CM R${Math.round(this.cm.radius)} G${Math.round(this.cm.gyration)}`, DIAG.text);
     // the attack cone (±36°) about the target vector
     if (fv) {
-      const a = Math.atan2(d.sy(fv.y) - my, d.sx(fv.x) - mx);
+      const a = DMath.atan2(d.sy(fv.y) - my, d.sx(fv.x) - mx);
       for (const s of [-1, 1])
-        d.line(mx, my, mx + Math.cos(a + s * 0.628) * 70, my + Math.sin(a + s * 0.628) * 70, DIAG.cone);
+        d.line(mx, my, mx + DMath.cos(a + s * 0.628) * 70, my + DMath.sin(a + s * 0.628) * 70, DIAG.cone);
     }
     // pylon thrust vectors
     const kv = this.kview;
@@ -1215,7 +1216,7 @@ export class UriBehaviour extends Behaviour {
       const x = d.sx(this.ox + SC * p.x);
       const y = d.sy(this.oy + SC * p.y) + 40 * SC;
       const a = Math.PI / 2 + p.a + kv.pylon[s].ang;
-      d.arrow(x, y, Math.cos(a) * kv.pylon[s].th * 30, Math.sin(a) * kv.pylon[s].th * 30, DIAG.pylon);
+      d.arrow(x, y, DMath.cos(a) * kv.pylon[s].th * 30, DMath.sin(a) * kv.pylon[s].th * 30, DIAG.pylon);
     }
     // readouts: angular velocities, torque, loop stress, fist spread; the move and its phase
     const L = this.kin.L;
@@ -1305,7 +1306,7 @@ export function uriNeckCells(k: UriPartKey, map: MatterMap): Int32Array | null {
   for (let iy = 0; iy < map.h; iy++)
     for (let ix = 0; ix < map.w; ix++) {
       const i = iy * map.w + ix;
-      if (map.material[i] !== 0 && Math.hypot(ix - lx, iy - ly) < R) out.push(i);
+      if (map.material[i] !== 0 && DMath.hypot(ix - lx, iy - ly) < R) out.push(i);
     }
   return out.length ? Int32Array.from(out) : null;
 }
@@ -1317,7 +1318,7 @@ function anchorPatch(map: MatterMap, ax: number, ay: number): Int32Array {
   for (let y = Math.max(0, ay - r); y <= Math.min(map.h - 1, ay + r); y++)
     for (let x = Math.max(0, ax - r); x <= Math.min(map.w - 1, ax + r); x++) {
       const i = y * map.w + x;
-      if (map.material[i] !== 0 && (x - ax) ** 2 + (y - ay) ** 2 <= r * r) out.push(i);
+      if (map.material[i] !== 0 && sq(x - ax) + sq(y - ay) <= r * r) out.push(i);
     }
   if (out.length === 0) out.push(map.coreY * map.w + map.coreX);
   return Int32Array.from(out);

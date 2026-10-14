@@ -42,7 +42,14 @@ import { createMatterWorld, warmUp } from '@/matter';
 import { TITAN_SKY, createRenderer, type DebuggableRenderer } from '@/render';
 import { createAiSource, createMatch, createScriptSource, type Match } from '@/sim';
 import { STAGES, isStageImplemented } from '@/stages';
-import { IMPLEMENTED_TITANS, TITAN_DEFS, getTitanDef, isTitanOffered, renderPortrait } from '@/titans';
+import {
+  IMPLEMENTED_TITANS,
+  TITAN_DEFS,
+  getTitanDef,
+  isTitanOffered,
+  ladderRoster,
+  renderPortrait,
+} from '@/titans';
 import { isMouthUnlocked, mouthBossDef, mouthDef, setMouthUnlocked } from '@/titans';
 import { mouthPortrait } from '@/titans/mouth/portrait';
 import { arenaForMatch } from '@/combat/mouth/arena';
@@ -274,6 +281,8 @@ export class App {
       },
       sound: (id) => this.audio.handle([{ t: 'ui', id }]),
       version: 'v0.1',
+      // the tournament's roster data: COSMIC CLASH deals every shipped titan, NEW tags from the ship dates
+      roster: ladderRoster(),
     });
     this.loop = createLoop({
       tick: () => this.tick(),

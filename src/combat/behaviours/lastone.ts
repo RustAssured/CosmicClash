@@ -29,6 +29,7 @@ import {
   type Posture,
   type TendrilPalette,
 } from './tendrils';
+import { DMath } from '@/contracts/dmath';
 
 const ALPHA_EYE = 0.75;
 const ease = (cur: number, target: number, rate: number): number => cur + (target - cur) * rate;
@@ -397,7 +398,7 @@ export class LastOneBehaviour extends Behaviour {
     }
     P.focus = ease(P.focus, focus, 0.08);
     P.limp = f.ko ? ease(P.limp, 1, 0.04) : 0;
-    const spd = Math.hypot(f.vx, f.vy);
+    const spd = DMath.hypot(f.vx, f.vy);
     P.agitation = ease(P.agitation, clamp01(spd / 260), 0.05);
 
     // ---- scripted whip targets ----
@@ -474,7 +475,7 @@ export class LastOneBehaviour extends Behaviour {
           // a lash: this hitbox's group of whips reaches for the far third of the line, bowing to one side, tips staggered
           const lx = sh.x1 - sh.x0;
           const ly = sh.y1 - sh.y0;
-          const ll = Math.hypot(lx, ly) || 1;
+          const ll = DMath.hypot(lx, ly) || 1;
           for (let i = 0; i < s.n; i++) {
             const kind = s.roots[i]!.kind;
             if ((kind === 'hem' || kind === 'front') && i % 4 === group % 4) {
@@ -492,15 +493,15 @@ export class LastOneBehaviour extends Behaviour {
           // a heavy blow: the veil fans across the whole cone, each whip on its own bearing and reach, bowing outward
           let total = 0;
           for (let i = 0; i < s.n; i++) if (s.roots[i]!.kind !== 'crown') total++;
-          const axis = Math.atan2(sh.dirY, sh.dirX);
+          const axis = DMath.atan2(sh.dirY, sh.dirX);
           let m2 = 0;
           for (let i = 0; i < s.n; i++) {
             if (s.roots[i]!.kind === 'crown') continue;
             const span = total > 1 ? (2 * m2) / (total - 1) - 1 : 0;
             const a = axis + sh.halfAngle * 0.9 * span;
             const reach = sh.range * (0.62 + 0.38 * (((m2 * 5) % 7) / 6));
-            const px = sh.x + Math.cos(a) * reach;
-            const py = sh.y + Math.sin(a) * reach;
+            const px = sh.x + DMath.cos(a) * reach;
+            const py = sh.y + DMath.sin(a) * reach;
             s.tx[i] = px;
             s.ty[i] = py;
             const cross = sh.dirX * (py - sh.y) - sh.dirY * (px - sh.x);
@@ -540,7 +541,7 @@ export class LastOneBehaviour extends Behaviour {
     // slow and the renderer interpolates the layer position), which halves the cost of the most expensive raster in the module.
     const calm =
       (f.state === 'idle' || f.state === 'move' || f.state === 'intro') &&
-      Math.hypot(f.vx, f.vy) < 60 &&
+      DMath.hypot(f.vx, f.vy) < 60 &&
       this.trailCount === 0;
     if (!calm || (tick & 1) === 0 || !this.back.layer.visible) {
       this.back.begin(t.x, t.y);
@@ -591,7 +592,7 @@ export class LastOneBehaviour extends Behaviour {
     const fv = f.foe.view;
     let gx = fv.x - f.px;
     let gy = fv.y - f.py - 20;
-    const gl = Math.hypot(gx, gy) || 1;
+    const gl = DMath.hypot(gx, gy) || 1;
     const reach = 0.16;
     gx = (gx / gl) * reach * clamp01(gl / 60);
     gy = (gy / gl) * reach * clamp01(gl / 60) * 0.8;
@@ -626,7 +627,7 @@ export class LastOneBehaviour extends Behaviour {
       const Ri = Math.ceil(R);
       for (let dy = -Ri; dy <= Ri; dy++) {
         for (let dx = -Ri; dx <= Ri; dx++) {
-          const q = Math.hypot(dx, dy);
+          const q = DMath.hypot(dx, dy);
           if (q > R + 0.5) continue;
           const lx0 = Math.round(ex) + dx;
           const ly0 = Math.round(ey) + dy;
@@ -637,7 +638,7 @@ export class LastOneBehaviour extends Behaviour {
           if (map.integrity[idx]! === 0) continue;
           let c = 0;
           // the map's pupil disc is re-painted as iris centre; the moving pupil is drawn on top
-          const pr = Math.hypot(dx - px, dy - py);
+          const pr = DMath.hypot(dx - px, dy - py);
           if (mat === ids.pupil || (mat === ids.iris && q < ringR)) {
             if (pr < pOut) c = pr < pIn ? this.cPupilD : this.cPupilM;
             else if (mat === ids.pupil)
@@ -681,7 +682,7 @@ export class LastOneBehaviour extends Behaviour {
     this.flare += (flare - this.flare) * 0.35;
     const [fr, fg, fb] = this.lFlare;
     if (this.flare > 0.02) {
-      const pulse = 1 + 0.12 * Math.sin(tick * 0.6);
+      const pulse = 1 + 0.12 * DMath.sin(tick * 0.6);
       fx.glow(this.post.eyeX, this.post.eyeY, (10 + 26 * this.flare) * pulse, fr, fg, fb, 0.55 * this.flare);
       if (this.flare > 0.6) fx.glow(this.post.eyeX, this.post.eyeY, 8 * this.flare, 255, 255, 240, 0.9);
       // the four lesser eyes kindle too, each a beat behind the lead eye
@@ -689,7 +690,7 @@ export class LastOneBehaviour extends Behaviour {
       for (let e = 1; e < eyes.length; e++) {
         const E = eyes[e]!;
         localToWorld(t, E.x + 0.5, E.y + 0.5, this.wp);
-        const k = this.flare * (0.6 + 0.4 * Math.sin(tick * 0.45 - e * 1.3));
+        const k = this.flare * (0.6 + 0.4 * DMath.sin(tick * 0.45 - e * 1.3));
         fx.glow(this.wp.x, this.wp.y, (3 + 12 * k) * (E.r / 6), fr, fg, fb, 0.5 * k);
       }
     }
@@ -700,8 +701,8 @@ export class LastOneBehaviour extends Behaviour {
         const a = k * 1.047 + tick * 0.11;
         const r = 34 * (1 - ((tick * 0.05 + k * 0.17) % 1)) * (0.5 + 0.5 * (1 - c * 0.3));
         fx.glow(
-          this.post.eyeX + Math.cos(a) * r,
-          this.post.eyeY + Math.sin(a) * r,
+          this.post.eyeX + DMath.cos(a) * r,
+          this.post.eyeY + DMath.sin(a) * r,
           2.6,
           fr,
           fg,
@@ -731,7 +732,7 @@ export class LastOneBehaviour extends Behaviour {
       }
     }
     // ---- halo ----
-    let halo = 0.16 + 0.05 * Math.sin(tick * 0.05 + f.slot);
+    let halo = 0.16 + 0.05 * DMath.sin(tick * 0.05 + f.slot);
     if (slot === 'ultimate')
       halo =
         m.phase === 'startup'
@@ -763,7 +764,7 @@ export class LastOneBehaviour extends Behaviour {
   ): void {
     const dx = x1 - x0;
     const dy = y1 - y0;
-    const len = Math.hypot(dx, dy) || 1;
+    const len = DMath.hypot(dx, dy) || 1;
     const ux = dx / len;
     const uy = dy / len;
     const halfW = Math.max(3, width * 0.5);
@@ -788,9 +789,9 @@ export class LastOneBehaviour extends Behaviour {
         const s = along > 0 ? along / len : 0;
         const w = halfW * (1 - s * 0.4);
         const u = perp / w;
-        const shimmer = 0.5 + 0.5 * Math.sin(along * 0.28 - phase);
+        const shimmer = 0.5 + 0.5 * DMath.sin(along * 0.28 - phase);
         // brightness along the beam: full at the eye, a little dimmer at the far end, a soft round cap behind the source
-        const cap = (along < 0 ? 1 + along / halfW : 1) * (s > 0.7 ? Math.pow((1 - s) / 0.3, 1.6) : 1);
+        const cap = (along < 0 ? 1 + along / halfW : 1) * (s > 0.7 ? DMath.pow((1 - s) / 0.3, 1.6) : 1);
         if (cap <= 0) continue;
         let r: number;
         let g: number;
@@ -824,16 +825,16 @@ export class LastOneBehaviour extends Behaviour {
     const t = f.body.transform;
     const map = f.body.map;
     const h = this.rig.halo;
-    const c = Math.cos(h.tilt);
-    const sn = Math.sin(h.tilt);
+    const c = DMath.cos(h.tilt);
+    const sn = DMath.sin(h.tilt);
     const gilt = this.rig.ids.gilt;
     const strength = this.haloGlow;
     const N = 120;
     const wpos = this.wp;
     for (let i = 0; i < N; i++) {
       const a = (i / N) * 6.2832;
-      const ex = Math.cos(a) * h.a;
-      const ey = Math.sin(a) * h.b;
+      const ex = DMath.cos(a) * h.a;
+      const ey = DMath.sin(a) * h.b;
       const lx = h.cx + ex * c - ey * sn;
       const ly = h.cy + ex * sn + ey * c;
       const ix = Math.floor(lx);
@@ -841,7 +842,7 @@ export class LastOneBehaviour extends Behaviour {
       if (ix < 0 || iy < 0 || ix >= map.w || iy >= map.h) continue;
       if (map.material[iy * map.w + ix] !== gilt) continue; // only where the halo still exists
       localToWorld(t, lx, ly, wpos);
-      const tw = 0.6 + 0.4 * Math.sin(a * 6 - tick * 0.12);
+      const tw = 0.6 + 0.4 * DMath.sin(a * 6 - tick * 0.12);
       const k = strength * tw;
       const [hr, hg, hb] = this.lHalo;
       fx.add(Math.floor(wpos.x), Math.floor(wpos.y), hr * k, hg * k, hb * k);

@@ -14,6 +14,7 @@ import { blend } from './color';
 import { ArtCanvas, buildLitRamps } from './canvas';
 import { keepLargestComponent } from './field';
 import { bayer8, fbm, hash01, makeWorley, valueNoise, worley } from './noise';
+import { DMath } from '@/contracts/dmath';
 
 /**
  * SUPERNOVA — a dying star in convulsions. One continuous gradient (violet shadow → crimson → orange → gold → white → a cool
@@ -98,7 +99,7 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   const R = p.radius;
 
   const rPhoto = (theta: number): number =>
-    R * (1 + 0.02 * fbm(Math.cos(theta) * 1.3 + 5, Math.sin(theta) * 1.3 + 5, s1, 2));
+    R * (1 + 0.02 * fbm(DMath.cos(theta) * 1.3 + 5, DMath.sin(theta) * 1.3 + 5, s1, 2));
 
   const streamers: Streamer[] = p.streamers.map(([a, len, hw], i) => ({
     a,
@@ -113,10 +114,10 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   for (let tries = 0; spots.length < p.spots && tries < 200; tries++) {
     const a = rng.range(0, Math.PI * 2);
     const rr = rng.range(0.42, 0.78) * R;
-    const x = cx + Math.cos(a) * rr;
-    const y = cy + Math.sin(a) * rr;
+    const x = cx + DMath.cos(a) * rr;
+    const y = cy + DMath.sin(a) * rr;
     const r = rng.range(3.4, 6.8);
-    if (spots.some((s) => Math.hypot(s.x - x, s.y - y) < s.r + r + 14)) continue;
+    if (spots.some((s) => DMath.hypot(s.x - x, s.y - y) < s.r + r + 14)) continue;
     spots.push({ x, y, r });
   }
 
@@ -125,14 +126,14 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   const arches: Layout['arches'] = [];
   for (const pr of p.prominences) {
     const rf = R * 0.93;
-    const ux0 = Math.cos(pr.a0);
-    const uy0 = Math.sin(pr.a0);
+    const ux0 = DMath.cos(pr.a0);
+    const uy0 = DMath.sin(pr.a0);
     const x0 = cx + ux0 * rf;
     const y0 = cy + uy0 * rf;
     let pts: number[];
     if (pr.kind === 'loop') {
-      const ux1 = Math.cos(pr.a1);
-      const uy1 = Math.sin(pr.a1);
+      const ux1 = DMath.cos(pr.a1);
+      const uy1 = DMath.sin(pr.a1);
       const x3 = cx + ux1 * rf;
       const y3 = cy + uy1 * rf;
       const k = pr.h * 1.34 + (R - rf);
@@ -239,14 +240,14 @@ export function paintSupernova(
       if (t <= 0 || t >= 1) continue;
       const ax = s.a + s.bend * t * t;
       const d = angDiff(th, ax);
-      const hw = s.hw * (1 - Math.pow(t, 1.35)) * (0.8 + 0.3 * valueNoise(t * 4 + s.id * 3.1, 2.7, sA + 3));
+      const hw = s.hw * (1 - DMath.pow(t, 1.35)) * (0.8 + 0.3 * valueNoise(t * 4 + s.id * 3.1, 2.7, sA + 3));
       const rag = 0.1 * (valueNoise(th * 46, t * 7 + s.id, sB + 17) - 0.5);
       if (Math.abs(d) >= hw + rag) continue;
       const u = Math.abs(d) / Math.max(1e-3, hw);
-      const stripe = 0.5 + 0.5 * Math.sin((d / hw) * 11 + 4 * valueNoise(t * 5, s.id * 5.5, sA + 29));
+      const stripe = 0.5 + 0.5 * DMath.sin((d / hw) * 11 + 4 * valueNoise(t * 5, s.id * 5.5, sA + 29));
       // beyond the first third the streamer parts into separate fibres: dark stripes become gaps
       if (t > 0.34 && stripe < 0.1 + 0.2 * t) continue;
-      const b = 0.92 - 0.44 * Math.pow(t, 0.85) - 0.14 * u * u + 0.28 * (stripe - 0.5);
+      const b = 0.92 - 0.44 * DMath.pow(t, 0.85) - 0.14 * u * u + 0.28 * (stripe - 0.5);
       if (b > v) v = b;
     }
     return v;
@@ -261,8 +262,8 @@ export function paintSupernova(
       const fy = y + 0.5;
       const dx = fx - cx;
       const dy = fy - cy;
-      const r = Math.hypot(dx, dy);
-      const th = Math.atan2(dy, dx);
+      const r = DMath.hypot(dx, dy);
+      const th = DMath.atan2(dy, dx);
       const rp = L.rPhoto(th);
       let m = 0;
       if (r <= rp) {
@@ -280,8 +281,8 @@ export function paintSupernova(
       if (r > rp - 4) {
         for (const a of L.arches) {
           const d = distToArch(a, fx, fy, arch);
-          const half = 0.5 * lerp(a.t0, a.t1, arch.t) * (1 + 0.12 * Math.sin(arch.t * 11 + a.strand * 2.1));
-          const rip = a.strand === 0 ? 0 : Math.sin(arch.t * 19 + a.strand * 2.3) * 0.7;
+          const half = 0.5 * lerp(a.t0, a.t1, arch.t) * (1 + 0.12 * DMath.sin(arch.t * 11 + a.strand * 2.1));
+          const rip = a.strand === 0 ? 0 : DMath.sin(arch.t * 19 + a.strand * 2.3) * 0.7;
           if (d - rip < half) {
             m = ids.prominence;
             hot[y * W + x] =
@@ -313,7 +314,7 @@ export function paintSupernova(
   const rim = hex(lighting.rim);
   const lx = lighting.dir[0];
   const ly = lighting.dir[1];
-  const ll = Math.hypot(lx, ly) || 1;
+  const ll = DMath.hypot(lx, ly) || 1;
 
   const pick = (ramp: readonly number[], v: number, x: number, y: number, spread = 0.85): number => {
     const s = clamp(v, 0, 1) * (ramp.length - 1);
@@ -332,15 +333,15 @@ export function paintSupernova(
       const fy = y + 0.5;
       const dx = fx - cx;
       const dy = fy - cy;
-      const r = Math.hypot(dx, dy);
-      const th = Math.atan2(dy, dx);
+      const r = DMath.hypot(dx, dy);
+      const th = DMath.atan2(dy, dx);
       const rp = L.rPhoto(th);
       const u = r / rp;
       let rel = Math.sqrt(Math.max(0, 1 - clamp01(u) * clamp01(u))) * 30;
 
       if (m === ids.photosphere || m === ids.inner || m === ids.core) {
         // depth profile: hottest (whitest) at the centre, limb-darkened toward the edge
-        let v = 0.72 - 0.4 * Math.pow(clamp01(u), 1.4);
+        let v = 0.72 - 0.4 * DMath.pow(clamp01(u), 1.4);
         // granulation: Voronoi polygons — dark lanes where two cells meet, per-cell brightness, a soft gradient inside each
         worley(fx / p.grain, fy / p.grain, sA + 40, w1, 0.94);
         worley(fx / p.innerGrain, fy / p.innerGrain, sA + 90, w2, 0.9);
@@ -359,9 +360,9 @@ export function paintSupernova(
           v += 0.22 * fac;
           // sunspots: umbra and a penumbra of radial filaments
           for (const s of L.spots) {
-            const d = Math.hypot(fx - s.x, fy - s.y);
+            const d = DMath.hypot(fx - s.x, fy - s.y);
             if (d > s.r * 2.4) continue;
-            const ang = Math.atan2(fy - s.y, fx - s.x);
+            const ang = DMath.atan2(fy - s.y, fx - s.x);
             const fil = 0.5 + 0.5 * valueNoise(ang * 7, d * 0.22, sA + 11);
             if (d < s.r) {
               v = 0.05 + 0.1 * fil;
@@ -450,13 +451,13 @@ export function supernovaGranules(def: TitanDef, seed: number): SupernovaGranule
       const fy = y + 0.5;
       const dx = fx - cx;
       const dy = fy - cy;
-      const r = Math.hypot(dx, dy);
-      const rp = L.rPhoto(Math.atan2(dy, dx));
+      const r = DMath.hypot(dx, dy);
+      const rp = L.rPhoto(DMath.atan2(dy, dx));
       if (r > rp || r < p.coreR * 0.9) continue;
       worley(fx / p.grain, fy / p.grain, sA + 40, w1, 0.94);
       const lane = smoothstep(0.02, 0.3, w1.f2 - w1.f1);
-      let k = lane * (0.35 + 0.65 * (1 - clamp01(r / rp) ** 1.4));
-      for (const s of rig.spots) if (Math.hypot(fx - s.x, fy - s.y) < s.r * 2.1) k = 0;
+      let k = lane * (0.35 + 0.65 * (1 - DMath.pow(clamp01(r / rp), 1.4)));
+      for (const s of rig.spots) if (DMath.hypot(fx - s.x, fy - s.y) < s.r * 2.1) k = 0;
       phase[y * W + x] = Math.round(w1.id * 255);
       weight[y * W + x] = Math.round(k * 255);
     }
