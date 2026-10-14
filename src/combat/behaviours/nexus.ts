@@ -1044,8 +1044,14 @@ export class NexusBehaviour extends Behaviour {
       this.nodeWX[n] = this.xy.x;
       this.nodeWY[n] = this.xy.y;
     }
-    this.draw(tick, m);
+    if (!f.ko || f.stateTicks < 40) this.latchStep(tick, m);
+    else this.latchReveal = 0;
+    // S19: the chains, the cage and the graph's light are rasterised at render time (`renderLayers`), once per drawn frame
+    this.drawStale = true;
+    this.drawTick = tick;
   }
+  private drawStale = false;
+  private drawTick = 0;
 
   private draw(tick: number, m: ActiveMove): void {
     const f = this.f;
@@ -1059,7 +1065,7 @@ export class NexusBehaviour extends Behaviour {
     this.fx.begin(t.x, t.y);
     if (!f.ko || f.stateTicks < 40) {
       this.drawGraphFx(tick, m);
-      this.drawLatch(tick, m);
+      this.drawLatch(tick);
       this.drawRoot(tick);
       this.drawWhips();
       this.drawCage(tick, m);
@@ -1140,7 +1146,13 @@ export class NexusBehaviour extends Behaviour {
   }
 
   /** The Latch chain: paid out along the hit line, then hooked into the foe until it lets go. */
-  private drawLatch(tick: number, m: ActiveMove): void {
+  /**
+   * The Latch's state for this tick (sim side, S19: the hook's state and tip feed the chain-latch cue, so they advance in
+   * the tick, not in the render-time drawing): where the chain runs and whether it shows (`latchReveal`).
+   */
+  private latchStep(tick: number, m: ActiveMove): void {
+    this.latchReveal = 0;
+    this.latchCoiled = false;
     const f = this.f;
     const id = m.def?.id;
     const fv = f.foe.view;
@@ -1152,7 +1164,9 @@ export class NexusBehaviour extends Behaviour {
         const u = clamp01(m.phaseTick / Math.max(1, m.startup));
         this.tip.x = this.xy.x + f.facing * 10 * u;
         this.tip.y = this.xy.y + 6 * u;
-        this.pen.span(this.front, this.xy.x, this.xy.y, this.tip.x, this.tip.y, 2, 0.4, tick * 0.2, 1);
+        this.latchCoiled = true;
+        this.latchFromX = this.xy.x;
+        this.latchFromY = this.xy.y;
         return;
       }
       const at = m.phaseTick - 1;
@@ -1191,8 +1205,34 @@ export class NexusBehaviour extends Behaviour {
       reveal = 1;
     }
     if (reveal <= 0) return;
-    const ox = this.xy.x;
-    const oy = this.xy.y;
+    this.latchReveal = reveal;
+    this.latchFromX = this.xy.x;
+    this.latchFromY = this.xy.y;
+  }
+  private latchReveal = 0;
+  private latchCoiled = false;
+  private latchFromX = 0;
+  private latchFromY = 0;
+
+  /** The Latch chain: paid out along the hit line, then hooked into the foe until it lets go (drawing only). */
+  private drawLatch(tick: number): void {
+    if (this.latchCoiled) {
+      this.pen.span(
+        this.front,
+        this.latchFromX,
+        this.latchFromY,
+        this.tip.x,
+        this.tip.y,
+        2,
+        0.4,
+        tick * 0.2,
+        1,
+      );
+      return;
+    }
+    if (this.latchReveal <= 0) return;
+    const ox = this.latchFromX;
+    const oy = this.latchFromY;
     this.pen.span(this.front, ox, oy, this.tip.x, this.tip.y, 3, 1.2, tick * 0.25, 1, this.xy2);
     // the hook
     this.front.disc(this.tip.x, this.tip.y, 2, this.chainRamp[6]!);
@@ -1303,7 +1343,12 @@ export class NexusBehaviour extends Behaviour {
    *  layers, debug
    * ---------------------------------------------------------------------------------------------- */
 
-  override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+  override renderLayers(view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+    // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
+    if ((this.fx.limitToView(view) || this.drawStale) && this.f.foe) {
+      this.drawStale = false;
+      this.draw(this.drawTick, this.f.mv);
+    }
     out.push(this.front.layer, this.cageOv.layer, this.fx.layer);
   }
 

@@ -57,6 +57,83 @@ import { debugOverlay } from './debug';
 import { impactBurst } from './blowfx';
 import { HAIRLINE, finishReleases, shearDelay, stepWounds } from './wound';
 import { extractChunk } from './debris';
+
+/** `MatterWorld.overlap`'s per-body memo (S19). */
+interface OverlapMemo {
+  valid: boolean;
+  epoch: number;
+  version: number;
+  /** transform x, y, facing, lean, rot, anchorX, anchorY */
+  key: Float64Array;
+  /** the shape's kind and up to 7 numbers */
+  shape: { kind: string; v: Float64Array };
+  out: { cells: number; x: number; y: number; nearestX: number; nearestY: number; coverage: number };
+}
+function overlapMemo(m: Map<number, OverlapMemo>, id: number): OverlapMemo {
+  let e = m.get(id);
+  if (!e) {
+    e = {
+      valid: false,
+      epoch: 0,
+      version: 0,
+      key: new Float64Array(7),
+      shape: { kind: '', v: new Float64Array(7) },
+      out: { cells: 0, x: NaN, y: NaN, nearestX: NaN, nearestY: NaN, coverage: 0 },
+    };
+    m.set(id, e);
+  }
+  return e;
+}
+/** The numbers that define a DamageShape, in a fixed order per kind (unused slots 0). */
+function shapeNums(s: DamageShape, v: Float64Array): void {
+  v.fill(0);
+  switch (s.kind) {
+    case 'point':
+      v[0] = s.x;
+      v[1] = s.y;
+      v[2] = s.r;
+      break;
+    case 'line':
+      v[0] = s.x0;
+      v[1] = s.y0;
+      v[2] = s.x1;
+      v[3] = s.y1;
+      v[4] = s.width;
+      break;
+    case 'cone':
+      v[0] = s.x;
+      v[1] = s.y;
+      v[2] = s.dirX;
+      v[3] = s.dirY;
+      v[4] = s.range;
+      v[5] = s.halfAngle;
+      break;
+    case 'ring':
+      v[0] = s.x;
+      v[1] = s.y;
+      v[2] = s.r0;
+      v[3] = s.r1;
+      break;
+    case 'field':
+      v[0] = s.x;
+      v[1] = s.y;
+      v[2] = s.r;
+      v[3] = s.falloff;
+      break;
+  }
+}
+const shapeScratch = new Float64Array(7);
+function sameShape(m: { kind: string; v: Float64Array }, s: DamageShape): boolean {
+  if (m.kind !== s.kind) return false;
+  shapeNums(s, shapeScratch);
+  // Object.is: NaN equals NaN, and +0 / -0 differ (a cached answer is reused only for the very same numbers)
+  for (let i = 0; i < 7; i++) if (!Object.is(m.v[i], shapeScratch[i])) return false;
+  return true;
+}
+function copyShape(m: { kind: string; v: Float64Array }, s: DamageShape): void {
+  m.kind = s.kind;
+  shapeNums(s, m.v);
+}
 import { hitTear, liveFraction, releaseBudgets, releaseGroups, tearCellList, tearGroup } from './groups';
 import { defineShell, finishShellSwap, restoreShell, stepShellSwap, swapShell, type FarFace } from './shell';
 import { DMath } from '@/contracts/dmath';
@@ -901,6 +978,61 @@ class MatterWorldImpl implements MatterWorldEx {
     const core = this.core;
     const body = core.bodyById[bodyId];
     if (!body) return r;
+    // S19: a blow probes the same body with the same shape several times a tick (the look-ahead, the probe, the damage
+    // routing over a many-region foe): the answer is a pure function of the shape, the body's transform and its cells, so
+    // it is memoised per body and reused while none of those changed (cellEpoch is bumped by every cell mutation).
+    const memo = overlapMemo(this.overlapMemos, bodyId);
+    const t0 = body.transform;
+    const key = memo.key;
+    if (
+      memo.valid &&
+      memo.epoch === body.cellEpoch &&
+      memo.version === body.map.version &&
+      key[0] === t0.x &&
+      key[1] === t0.y &&
+      key[2] === t0.facing &&
+      key[3] === t0.lean &&
+      key[4] === (t0.rot ?? 0) &&
+      key[5] === t0.anchorX &&
+      key[6] === t0.anchorY &&
+      sameShape(memo.shape, shape)
+    ) {
+      const m = memo.out;
+      r.cells = m.cells;
+      r.x = m.x;
+      r.y = m.y;
+      r.nearestX = m.nearestX;
+      r.nearestY = m.nearestY;
+      r.coverage = m.coverage;
+      return r;
+    }
+    this.overlapNow(body, shape, r);
+    memo.valid = true;
+    memo.epoch = body.cellEpoch;
+    memo.version = body.map.version;
+    key[0] = t0.x;
+    key[1] = t0.y;
+    key[2] = t0.facing;
+    key[3] = t0.lean;
+    key[4] = t0.rot ?? 0;
+    key[5] = t0.anchorX;
+    key[6] = t0.anchorY;
+    copyShape(memo.shape, shape);
+    const m = memo.out;
+    m.cells = r.cells;
+    m.x = r.x;
+    m.y = r.y;
+    m.nearestX = r.nearestX;
+    m.nearestY = r.nearestY;
+    m.coverage = r.coverage;
+    return r;
+  }
+
+  /** Per-body memo of the last `overlap` (S19). Not simulation state: a cache of a pure function of the state. */
+  private readonly overlapMemos = new Map<number, OverlapMemo>();
+
+  private overlapNow(body: Body, shape: DamageShape, r: OverlapResult): OverlapResult {
+    const core = this.core;
     const q = core.q.set(shape);
     core.covGen++;
     const n = body.collect(q, core.covIdx, core.covW);

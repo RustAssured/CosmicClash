@@ -28,6 +28,39 @@ export class Overlay {
   private pbx1 = 0;
   private pby1 = 0;
   private readonly dirtyRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  /**
+   * S19: an optional world rect (half-open) the drawing is limited to, e.g. the camera's view plus a margin when the overlay
+   * is drawn at render time: a nova ring or a membrane bigger than the screen is only rasterised where it can be seen.
+   * Set it before `begin`; null = the whole layer.
+   */
+  limit: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  /** The drawable world rect this frame (layer ∩ limit), half-open: pixel loops clip to it. Set by `begin`. */
+  cx0 = 0;
+  cy0 = 0;
+  cx1 = 0;
+  cy1 = 0;
+  /**
+   * Limit the drawing to a camera view plus `margin` px (render-time drawing). Returns true when the view has moved more
+   * than margin / 2 since the limit was last set, i.e. what was drawn under the old limit may show a cut edge: redraw.
+   */
+  limitToView(view: { x0: number; y0: number; w: number; h: number }, margin = 48): boolean {
+    const L = (this.limit ??= { x0: NaN, y0: NaN, x1: NaN, y1: NaN });
+    const moved = !(
+      Math.abs(L.x0 + margin - view.x0) <= margin / 2 && Math.abs(L.y0 + margin - view.y0) <= margin / 2
+    );
+    if (moved) {
+      L.x0 = view.x0 - margin;
+      L.y0 = view.y0 - margin;
+      L.x1 = view.x0 + view.w + margin;
+      L.y1 = view.y0 + view.h + margin;
+    }
+    return moved;
+  }
+  /** The same in layer-local cells. */
+  private lx0 = 0;
+  private ly0 = 0;
+  private lx1 = 0;
+  private ly1 = 0;
 
   constructor(
     id: string,
@@ -45,6 +78,8 @@ export class Overlay {
     if (emissive) this.layer.emissive = new Uint8Array(w * h);
     this.w = w;
     this.h = h;
+    this.lx1 = this.cx1 = w;
+    this.ly1 = this.cy1 = h;
     this.px = this.layer.pixels;
   }
 
@@ -54,6 +89,17 @@ export class Overlay {
     const cy = Math.round(ay);
     this.ox = cx - (this.w >> 1);
     this.oy = cy - (this.h >> 1);
+    const lim = this.limit;
+    this.cx0 = lim ? Math.max(this.ox, Math.floor(lim.x0)) : this.ox;
+    this.cy0 = lim ? Math.max(this.oy, Math.floor(lim.y0)) : this.oy;
+    this.cx1 = lim ? Math.min(this.ox + this.w, Math.ceil(lim.x1)) : this.ox + this.w;
+    this.cy1 = lim ? Math.min(this.oy + this.h, Math.ceil(lim.y1)) : this.oy + this.h;
+    if (this.cx1 < this.cx0) this.cx1 = this.cx0;
+    if (this.cy1 < this.cy0) this.cy1 = this.cy0;
+    this.lx0 = this.cx0 - this.ox;
+    this.ly0 = this.cy0 - this.oy;
+    this.lx1 = this.cx1 - this.ox;
+    this.ly1 = this.cy1 - this.oy;
     // clear only what was drawn last frame (layer-local coordinates are stable)
     this.clearBox(this.bx0, this.by0, this.bx1, this.by1);
     this.pbx0 = this.bx0;
@@ -145,7 +191,7 @@ export class Overlay {
   set(wx: number, wy: number, c: number, emissive = 0): void {
     const x = wx - this.ox;
     const y = wy - this.oy;
-    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    if (x < this.lx0 || y < this.ly0 || x >= this.lx1 || y >= this.ly1) return;
     const i = y * this.w + x;
     this.px[i] = c;
     if (emissive > 0 && this.layer.emissive) this.layer.emissive[i] = emissive;
@@ -171,10 +217,10 @@ export class Overlay {
    * counterpart of the per-pixel bookkeeping in `set`. `begin`, `end`, the dirty rect, clearing and hiding are unchanged.
    */
   markRect(x0: number, y0: number, x1: number, y1: number): void {
-    const a = x0 < 0 ? 0 : x0;
-    const b = y0 < 0 ? 0 : y0;
-    const c = x1 > this.w ? this.w : x1;
-    const d = y1 > this.h ? this.h : y1;
+    const a = x0 < this.lx0 ? this.lx0 : x0;
+    const b = y0 < this.ly0 ? this.ly0 : y0;
+    const c = x1 > this.lx1 ? this.lx1 : x1;
+    const d = y1 > this.ly1 ? this.ly1 : y1;
     if (c <= a || d <= b) return;
     if (a < this.bx0) this.bx0 = a;
     if (b < this.by0) this.by0 = b;
@@ -194,7 +240,7 @@ export class Overlay {
   add(wx: number, wy: number, r: number, g: number, b: number): void {
     const x = wx - this.ox;
     const y = wy - this.oy;
-    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    if (x < this.lx0 || y < this.ly0 || x >= this.lx1 || y >= this.ly1) return;
     const i = y * this.w + x;
     const c = this.px[i]!;
     const has = pa(c) !== 0;
@@ -257,14 +303,17 @@ export class Overlay {
     const y0 = Math.floor((ay < by ? ay : by) - rmax - 1);
     const y1 = Math.ceil((ay > by ? ay : by) + rmax + 1);
     const W = this.w;
-    const H = this.h;
     const em = this.layer.emissive;
+    const LX0 = this.lx0;
+    const LY0 = this.ly0;
+    const LX1 = this.lx1;
+    const LY1 = this.ly1;
     for (let y = y0; y <= y1; y++) {
       const ly = y - this.oy;
-      if (ly < 0 || ly >= H) continue;
+      if (ly < LY0 || ly >= LY1) continue;
       for (let x = x0; x <= x1; x++) {
         const lx = x - this.ox;
-        if (lx < 0 || lx >= W) continue;
+        if (lx < LX0 || lx >= LX1) continue;
         const px = x + 0.5 - ax;
         const py = y + 0.5 - ay;
         let t = (px * vx + py * vy) / l2;

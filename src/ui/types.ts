@@ -8,6 +8,7 @@ import type {
   UiSoundId,
 } from '@/contracts';
 import type { InputManager, KeyValueStore } from '@/input';
+import type { OnlineUiPort } from '@/net/types';
 import type { LadderTitan } from './ladder';
 
 /** What the select screen needs to know about a titan. Build it from a `TitanDef` with `titanInfoFromDef`. */
@@ -93,6 +94,8 @@ export interface UIDeps {
   roster?: readonly LadderTitan[];
   /** Today's date (epoch ms) for the NEW tags; default `Date.now`. */
   today?: () => number;
+  /** The online session (src/net/online.ts) the ONLINE screens drive; absent: the menu item says it is unavailable. */
+  online?: OnlineUiPort;
 }
 
 export type ImplementedSet = ReadonlySet<string>;

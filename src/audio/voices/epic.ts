@@ -402,24 +402,63 @@ export function grind(
   lfo.stop(t + g.dur + 0.05);
 }
 
-/** Embers, fracture grit and debris: sparse low-passed grains (no hiss), `count` of them over `dur`. */
+/** Shortest crackle grain, and the guard gap between two (s). */
+const CRACKLE_MIN = 0.004;
+const CRACKLE_GAP = 0.0005;
+
+/**
+ * Embers, fracture grit and debris: sparse low-passed grains (no hiss), `count` of them over `dur`.
+ *
+ * Granular, like `gravel`: ONE noise source through ONE band-pass (its centre hopped per grain) and a low-pass into ONE gain whose
+ * automation is stepped grain by grain, in time order and never overlapping (rule 1 in the README). It used to be one noise burst
+ * of five nodes PER GRAIN: a THERMAL blow with embers built ~90 nodes of crackle alone, and a beam ultimate's slices (a dozen a
+ * second) took the audio thread far past real time on the target laptop.
+ */
 export function crackle(
   c: VoiceCtx,
   o: Out,
   t: number,
   k: { dur: number; count: number; gain: number; f?: number },
 ): void {
+  const n = Math.max(0, Math.round(k.count));
+  if (n === 0 || !(k.dur > 0)) return;
   const f = k.f ?? 900;
-  for (let i = 0; i < k.count; i++) {
-    const at = t + Math.pow(c.rand(), 1.3) * k.dur;
-    noiseHit(c, o, at, {
-      dur: 0.012 + 0.03 * c.rand(),
-      gain: k.gain * (0.4 + 0.6 * c.rand()) * (1 - (0.5 * (at - t)) / Math.max(0.01, k.dur)),
-      filter: { type: 'bandpass', f0: f * (0.6 + 0.8 * c.rand()), q: 1.4 },
-      filter2: { type: 'lowpass', f0: 2200, q: 0.5 },
-      attack: 0.001,
-    });
+  const ac = c.ac;
+  const starts = new Float64Array(n);
+  for (let i = 0; i < n; i++) starts[i] = t + Math.pow(c.rand(), 1.3) * k.dur;
+  starts.sort();
+  const src = noiseSource(c, 'white', true);
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.Q.value = 1.4;
+  bp.frequency.value = f;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 2200;
+  lp.Q.value = 0.5;
+  const g = ac.createGain();
+  g.gain.value = 0;
+  let clear = t; // the earliest time the next grain may start
+  for (let i = 0; i < n; i++) {
+    const at = Math.max(starts[i]!, clear);
+    const next = i + 1 < n ? Math.max(starts[i + 1]!, at + CRACKLE_MIN) : Infinity;
+    const len = Math.min(0.012 + 0.03 * c.rand(), next - at - CRACKLE_GAP);
+    const amp = k.gain * (0.4 + 0.6 * c.rand()) * (1 - (0.5 * (at - t)) / Math.max(0.01, k.dur));
+    const hz = f * (0.6 + 0.8 * c.rand());
+    if (len < CRACKLE_MIN || !(amp > 0)) continue;
+    bp.frequency.setValueAtTime(hz, at);
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(amp, at + 0.001);
+    g.gain.exponentialRampToValueAtTime(1e-4, at + len);
+    clear = at + len + CRACKLE_GAP;
   }
+  g.gain.setValueAtTime(0, clear + 0.002);
+  src.connect(bp);
+  bp.connect(lp);
+  lp.connect(g);
+  g.connect(o.input);
+  src.start(t, c.rand() * 1.5);
+  src.stop(clear + 0.05);
 }
 
 /**

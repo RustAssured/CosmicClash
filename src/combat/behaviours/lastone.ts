@@ -430,8 +430,10 @@ export class LastOneBehaviour extends Behaviour {
     if (slot === 'surge' && (tick & 1) === 0) this.pushTrail();
     else if (slot !== 'surge' && this.trailCount > 0 && (tick & 1) === 0) this.trailCount--;
 
-    this.drawAll(tick, id, slot, m);
+    // S19: the tendrils, the eye and the beams are rasterised at render time (`renderLayers`), once per drawn frame
+    this.drawStale = true;
   }
+  private drawStale = false;
 
   /** Drive whip tips from the live hitbox shapes so the tendrils physically carry the blow. */
   private steerWhips(m: ActiveMove): void {
@@ -854,7 +856,13 @@ export class LastOneBehaviour extends Behaviour {
    *  Behaviour plumbing
    * ---------------------------------------------------------------------------------------------- */
 
-  override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+  override renderLayers(view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+    // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
+    if ((this.fx.limitToView(view) || this.drawStale) && this.f.foe) {
+      this.drawStale = false;
+      const m = this.f.mv;
+      this.drawAll(this.f.tickNo, m.def?.id ?? '', m.def?.slot, m);
+    }
     out.push(this.back.layer, this.front.layer, this.eye.layer, this.fx.layer);
   }
 

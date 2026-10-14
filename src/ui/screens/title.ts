@@ -28,6 +28,8 @@ export function createTitleScreen(): Screen {
     { id: 'howto', en: 'HOW TO PLAY', ko: '설명' },
     { id: 'controller', en: 'CONTROLLER CHECK', ko: '조작 확인' },
     { id: 'options', en: 'OPTIONS', ko: '설정' },
+    // last, so every older position (tests count downs from VERSUS) stays put; UP from VERSUS wraps straight to it
+    { id: 'online', en: 'ONLINE', ko: '온라인' },
   ]);
   const howto = createHowTo();
   return {
@@ -77,6 +79,11 @@ export function createTitleScreen(): Screen {
         case 'options':
           ctx.push('options');
           break;
+        case 'online':
+          // CHALLENGE A FRIEND (src/ui/screens/online.ts): its own screen, driven by the app's online session
+          ctx.deps.online?.openMenu();
+          ctx.push('online');
+          break;
       }
     },
     draw(ctx) {
@@ -105,7 +112,8 @@ export function createTitleScreen(): Screen {
         align: 'center',
         tracking: 1,
       });
-      drawCentreMenu(ctx, menu, LOGICAL_W / 2, 168, 22, ACCENT);
+      // eight rows: a little tighter than the original seven so the last clears the prompt bar
+      drawCentreMenu(ctx, menu, LOGICAL_W / 2, 162, 20, ACCENT);
       footer(ctx, confirmBack(ctx, 'SELECT', 'BACK'), ctx.deps.version);
     },
   };

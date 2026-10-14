@@ -22,14 +22,60 @@ const finite = (v: number, what: string): void => {
 };
 
 export class FakeParam {
-  value: number;
+  private v0: number;
   readonly events: { type: string; v: number; t: number; tc?: number }[] = [];
   constructor(
     private readonly ctx: FakeContext,
     readonly name: string,
     v = 0,
   ) {
-    this.value = v;
+    this.v0 = v;
+  }
+  /** The intrinsic value. Like the real `AudioParam.value` (a WebIDL `float`), a non-finite value throws a TypeError. */
+  get value(): number {
+    return this.v0;
+  }
+  set value(v: number) {
+    finite(v, `${this.name}.value`);
+    this.v0 = v;
+  }
+  /**
+   * The value the automation timeline gives at time `t` (s), evaluated the way the spec does for the event kinds the voices use
+   * (set, linear and exponential ramps, setTarget, value curves start value). Lets tests check where a param ENDS UP, e.g. that a
+   * duck comes back to 1, without rendering audio.
+   */
+  valueAt(t: number): number {
+    let v = this.v0;
+    let prevT = 0;
+    let prevV = this.v0;
+    const ev = this.events;
+    for (let i = 0; i < ev.length; i++) {
+      const e = ev[i]!;
+      if (e.type === 'lin' || e.type === 'exp') {
+        // a ramp runs from the previous event (time and value) to its own
+        if (t >= e.t) {
+          v = e.v;
+        } else {
+          const k = e.t > prevT ? Math.max(0, (t - prevT) / (e.t - prevT)) : 1;
+          if (e.type === 'lin') v = prevV + (e.v - prevV) * k;
+          else v = prevV > 0 && e.v > 0 ? prevV * Math.pow(e.v / prevV, k) : prevV;
+          return v;
+        }
+        prevT = e.t;
+        prevV = v;
+        continue;
+      }
+      if (e.t > t) return v;
+      if (e.type === 'target') {
+        const next = ev[i + 1];
+        const until = next && next.type !== 'lin' && next.type !== 'exp' ? Math.min(t, next.t) : t;
+        const start = v;
+        v = e.v + (start - e.v) * Math.exp(-(until - e.t) / Math.max(1e-9, e.tc ?? 0));
+      } else v = e.v;
+      prevT = e.t;
+      prevV = v;
+    }
+    return v;
   }
   private chk(v: number, t: number, what: string): void {
     finite(v, `${this.name}.${what} value`);
@@ -240,11 +286,17 @@ export class FakeCompressor extends FakeNode {
 }
 export class FakeAnalyser extends FakeNode {
   fftSize = 2048;
+  /**
+   * What the analyser "hears" (the fake renders no audio): silence unless a test sets this, e.g. `(a) => a.fill(NaN)` to stand
+   * for a filter upstream that has gone NaN, or a constant for a live mix.
+   */
+  feed: ((a: Float32Array) => void) | null = null;
   constructor(ctx: FakeContext) {
     super(ctx, 'analyser');
   }
   getFloatTimeDomainData(a: Float32Array): void {
     a.fill(0);
+    this.feed?.(a);
   }
 }
 export class FakeBuffer {

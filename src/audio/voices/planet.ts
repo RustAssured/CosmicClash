@@ -280,7 +280,7 @@ export function createPlanetVoice(): TitanVoice {
       if (ev.blocked > 0.3)
         noiseHit(c, makeOut(c, pan, 0.4), t, {
           dur: 0.4,
-          gain: 0.08 * ev.blocked,
+          gain: 0.08 * clamp01(ev.blocked),
           filter: { type: 'bandpass', f0: 900, f1: 300, q: 0.7 },
           attack: 0.02,
         });

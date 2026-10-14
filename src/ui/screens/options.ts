@@ -47,6 +47,7 @@ export function createOptionsScreen(): Screen {
     { id: 'reduced', en: 'REDUCED MOTION', ko: '움직임 줄이기', kind: 'preset' },
     { id: 'fill', en: 'FILL SCREEN', ko: '화면 채우기', kind: 'enum' },
     { id: 'roundLength', en: 'ROUND LENGTH', ko: '라운드 길이', kind: 'enum' },
+    { id: 'fps', en: 'SHOW FPS', ko: '프레임 표시', kind: 'enum' },
     { id: 'keys', en: 'CONTROLS & REMAP', ko: '조작 설정', kind: 'link' },
   ];
   const menu = new Menu(rows);
@@ -123,6 +124,13 @@ export function createOptionsScreen(): Screen {
         ctx.sound('tick');
         break;
       }
+      case 'fps': {
+        s.showFps = !s.showFps;
+        ctx.emit({ type: 'setFps', on: s.showFps });
+        ctx.saveSettings();
+        ctx.sound('tick');
+        break;
+      }
       case 'roundLength': {
         // read when the next match starts (the match config's pace), never during one
         const i = ROUND_LENGTHS.indexOf(s.roundLength);
@@ -163,6 +171,8 @@ export function createOptionsScreen(): Screen {
         return ctx.settings.fill ? 'ON (STRETCHED)' : 'OFF (SHARP)';
       case 'roundLength':
         return ctx.settings.roundLength.toUpperCase();
+      case 'fps':
+        return ctx.settings.showFps ? 'ON' : 'OFF';
       default:
         return '';
     }
@@ -227,7 +237,7 @@ export function createOptionsScreen(): Screen {
       const w = LOGICAL_W - 220;
       panel(cv, x0 - 16, 44, w + 32, 284, { accent: ACCENT.dim });
       rows.forEach((row, i) => {
-        const y = 54 + i * 19;
+        const y = 54 + i * 18; // 15 rows (SHOW FPS, S19) inside the panel
         const focus = i === menu.index;
         if (focus) {
           cv.rect(x0 - 10, y - 5, w + 20, 18, alpha(C.ink3, 0.9));

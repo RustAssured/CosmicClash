@@ -53,20 +53,37 @@ import {
 import { isMouthUnlocked, mouthBossDef, mouthDef, setMouthUnlocked } from '@/titans';
 import { mouthPortrait } from '@/titans/mouth/portrait';
 import { arenaForMatch } from '@/combat/mouth/arena';
-import { PixelCanvas, createUI, drawText, titanInfoFromDef, type TitanInfo } from '@/ui';
+import { PixelCanvas, createUI, drawText, showScreen, titanInfoFromDef, type TitanInfo } from '@/ui';
 import { FIXTURE_TITANS, fixturePortraitProvider } from '@/ui/fixtures';
 import { loadUISettings, resolveStore } from '@/ui/settings';
 import { AudioMeter } from '@/telemetry/audioMeter';
 import type { StripRecorder } from '@/telemetry/strips';
 import { Telemetry } from '@/telemetry/telemetry';
+import { FX_DETAIL } from '@/combat/fx/detail';
+import { FpsMeter } from './fpsMeter';
 import { fillHudState } from './announcer';
 import { createDebugLayer, drawDebugShapes } from './debugDraw';
 import { Aftermath } from './aftermath';
 import { FxState, buildAudioScene } from './fx';
 import { createGuardDummy, tapSource, type TappedSource } from './tap';
+import { tuning } from '@/debug/tuning';
+import { netOptions, normaliseRoomCode } from '@/net/config';
+import type { NetMatchDriver } from '@/net/driver';
+import { OnlineController, type OnlineAppPort } from '@/net/online';
+import { drawNetHud } from '@/ui/screens/online';
+
+/** An online (lockstep) match: the driver, and which slot this peer plays (docs/netplay/STEP1.md). */
+interface OnlineMatch {
+  driver: NetMatchDriver;
+  localSlot: 0 | 1;
+  /** Testing (`netai=N`): the local slot is played by the AI at this level; 0 = the player's device. */
+  autoAi: number;
+}
 
 /** Everything a running match needs besides the pure Match. */
 interface Session {
+  /** Set for an online match: every tick goes through the lockstep (src/net/driver.ts). */
+  net: OnlineMatch | null;
   match: Match;
   config: MatchConfig;
   taps: (TappedSource | null)[];
@@ -88,6 +105,7 @@ interface MatchOpts {
   attract?: boolean;
   skipIntro?: boolean;
   scripts?: [HarnessParams['script0'], HarnessParams['script1']];
+  online?: OnlineMatch;
 }
 const DEBUG_MODES: DebugOverlayMode[] = [
   'temperature',
@@ -110,6 +128,8 @@ export class App {
   readonly audio: AudioEngineExt = createAudioEngine();
   readonly camera = createCamera();
   readonly fx = new FxState();
+  /** SHOW FPS / F3 (S19). */
+  readonly fpsMeter = new FpsMeter();
   loop!: Loop;
   ui!: ReturnType<typeof createUI>;
   session: Session | null = null;
@@ -197,6 +217,10 @@ export class App {
   /** The debug tuning / diagnostics overlay (keyboard ` or pad R3), and its input frame. */
   readonly debug = new DebugOverlay();
   private readonly debugIn = emptyDebugInput();
+  /** CHALLENGE A FRIEND: the online session (src/net/online.ts). */
+  online!: OnlineController;
+  private readonly netLayer = makeLayer('netplay', 'screen', 105, LOGICAL_W, LOGICAL_H);
+  private readonly netCv = new PixelCanvas(LOGICAL_W, LOGICAL_H, this.netLayer.pixels);
 
   constructor() {
     const cam = this.camera.sample(0);
@@ -255,7 +279,15 @@ export class App {
     });
     this.input.attach();
     this.audio.autoUnlock(document);
+    // online play: the shipped roster (never a WIP or the locked boss) on the shipped stages
+    this.online = new OnlineController(
+      netOptions(location.search),
+      this.onlinePort(),
+      this.roster,
+      this.stageRoster,
+    );
     this.ui = createUI({
+      online: this.online,
       input: this.input,
       titans: (opts.full
         ? TITAN_IDS.filter((id) => (id !== 'mouth' || mouthOn) && isTitanOffered(id))
@@ -296,6 +328,48 @@ export class App {
     this.loop.start();
     // warm caches without blocking the first frames: JIT the matter world and generate the menu portraits
     void this.warm();
+  }
+
+  /** What the online session may ask of the shell (src/net/online.ts `OnlineAppPort`). */
+  private onlinePort(): OnlineAppPort {
+    return {
+      matchSettings: () => {
+        const length = loadUISettings(resolveStore(undefined)).roundLength;
+        return {
+          pace: ROUND_LENGTH_PACE[length],
+          roundSeconds: ROUND_LENGTH_SECONDS[length],
+          footwork: this.footwork,
+          zdepth: this.zdepth,
+        };
+      },
+      startOnline: (config, driver, localSlot, autoAi) =>
+        void this.startMatch(config, { online: { driver, localSlot, autoAi } }),
+      prepareStage: (stage) => void this.renderer.prepareStage(stage).catch(() => undefined),
+      endMatch: () => this.endMatch(),
+      showOnline: () => showScreen(this.ui, 'online'),
+      showHud: () => this.ui.showHud(),
+      showTitle: () => this.ui.showTitle(),
+      tuned: () => tuning.edits > 0,
+    };
+  }
+
+  /**
+   * Online links (docs/netplay/STEP1.md): `?room=CODE` joins that room straight away; `?net=local&host=CODE` opens a local
+   * test room with a fixed code (the two-tab test and the e2e).
+   */
+  openOnlineFromUrl(search: string): void {
+    const q = new URLSearchParams(search);
+    const room = q.get('room');
+    const host = q.get('host');
+    if (room !== null) {
+      showScreen(this.ui, 'online');
+      const code = normaliseRoomCode(room);
+      if (code) this.online.join(code);
+      else this.online.openCode();
+    } else if (host !== null && this.online.opts.mode === 'local') {
+      showScreen(this.ui, 'online');
+      this.online.host(normaliseRoomCode(host) ?? undefined);
+    }
   }
 
   private async warm(): Promise<void> {
@@ -449,6 +523,11 @@ export class App {
       this.loadingFraction = 0;
       await this.renderer.prepareStage(config.stage, (f) => (this.loadingFraction = f));
       await sleep0();
+      // an online match whose session stopped while the stage loaded (opponent left, link lost) is not built at all
+      if (opts.online?.driver.halted) {
+        if (this.online.view.phase === 'error') showScreen(this.ui, 'online');
+        return;
+      }
       this.buildSession(config, opts);
     } finally {
       this.starting = false;
@@ -485,6 +564,7 @@ export class App {
       lighting: TITAN_SKY,
     });
     const session: Session = {
+      net: opts.online ?? null,
       match,
       config,
       taps: [null, null],
@@ -501,7 +581,8 @@ export class App {
       if (config.slots[slot].controller === 'human' && assigned[slot] === null)
         this.input.assign(slot, slot === 0 ? 'kb:kb1' : 'kb:kb2');
     }
-    this.bindSources(session, defs, opts.scripts);
+    if (opts.online) this.bindOnline(session, defs, opts.online);
+    else this.bindSources(session, defs, opts.scripts);
     this.fx.reset();
     if (this.aftermath) this.exitAftermath();
     this.aftermathAt = -1;
@@ -544,6 +625,27 @@ export class App {
     s.srcs = srcs;
     s.match.setSources(srcs[0], srcs[1]);
     this.registerKnobs(s);
+  }
+
+  /**
+   * An online match: both of the match's sources read the lockstep log; this peer's own input comes from its first device
+   * (whichever game slot it plays) or, for testing, an AI. No debug knobs are registered: live tuning is locked online.
+   */
+  private bindOnline(s: Session, defs: [TitanDef, TitanDef], o: OnlineMatch): void {
+    let local: InputSource;
+    if (o.autoAi > 0) {
+      const ai = createAI(o.autoAi as Difficulty, defs[o.localSlot], s.config.seed * 7 + o.localSlot, {
+        footwork: s.config.footwork ?? 'classic',
+      });
+      local = createAiSource(s.match, o.localSlot, ai);
+    } else {
+      if (this.input.assignment()[0] === null) this.input.assign(0, 'kb:kb1');
+      const t = tapSource(this.input.source(0));
+      s.taps[o.localSlot] = t;
+      local = t;
+    }
+    o.driver.attach(s.match, local);
+    this.debug.mode = 'off';
   }
 
   /** The debug overlay's knobs and diagnostics for this match (they only read until a player moves a slider). */
@@ -605,9 +707,12 @@ export class App {
     // the aftermath freezes the arena: the match is simply not stepped until the player leaves it
     if (!s || this.paused || this.aftermath) return;
     const m = s.match;
+    // online: a tick runs only once both players' inputs for it are in (input-delay lockstep, no speed-up)
+    if (s.net && !s.net.driver.beforeStep()) return;
     const timed = this.measureSim || this.telemetry !== null;
     const t0 = timed ? performance.now() : 0;
     m.step();
+    s.net?.driver.afterStep();
     const simMs = timed ? performance.now() - t0 : 0;
     if (this.measureSim) this.simSamples.push(simMs);
     const ev = m.events;
@@ -624,8 +729,13 @@ export class App {
     for (let i = 0; i < ev.length; i++) {
       const e = ev[i]!;
       this.frameEvents.push(e);
-      if (e.t === 'rumble' && s.config.slots[e.slot].controller === 'human')
-        this.input.rumble(e.slot, e.strong, e.weak, e.ms);
+      if (e.t === 'rumble') {
+        // online: only this peer's own titan rumbles, on its own (first) device
+        if (s.net) {
+          if (e.slot === s.net.localSlot && !s.net.autoAi) this.input.rumble(0, e.strong, e.weak, e.ms);
+        } else if (s.config.slots[e.slot].controller === 'human')
+          this.input.rumble(e.slot, e.strong, e.weak, e.ms);
+      }
       this.eventLog.push(e);
       // the KO that decides the match opens the aftermath 1 s (sim time) later
       if (
@@ -633,6 +743,8 @@ export class App {
         e.phase === 'ko' &&
         e.winner !== -1 &&
         !s.attract &&
+        // online: no aftermath freeze (a peer that stops stepping would hold the other one)
+        !s.net &&
         this.aftermathEnabled &&
         !this.aftermathDone &&
         m.wins[e.winner] + 1 >= ROUNDS_TO_WIN
@@ -677,6 +789,10 @@ export class App {
   render(alpha: number, dtSec: number): void {
     const now = performance.now();
     this.nowMs = now;
+    // S19: the SHOW FPS readout, and the behaviours' render-time effect detail following the adaptive quality tier
+    // (render-only: the overlays drawn in renderLayers shed work on a machine that drops frames; the sim never reads it)
+    this.fpsMeter.frame(now, this.loop.stats.msPerTick, this.loop.stats.msPerFrame);
+    FX_DETAIL.level = this.renderer.stats.tier;
     this.timeSec += dtSec;
     const t0 = now;
     if (this.telemetry) {
@@ -687,7 +803,11 @@ export class App {
       if (this.meterState === 'none' && this.audio.ready) void this.attachMeters();
     }
     this.input.poll(now);
-    this.debug.handle(this.input.debugPoll(this.debugIn, now));
+    this.online.update();
+    const dbg = this.input.debugPoll(this.debugIn, now);
+    // online: the debug panels and live tuning are locked (a moved knob would change one peer's sim only)
+    if (this.session?.net) this.debug.mode = 'off';
+    else this.debug.handle(dbg);
     this.ui.update(dtSec);
     this.handleUiActions();
     const s = this.session;
@@ -698,6 +818,11 @@ export class App {
       for (const tap of s.taps) {
         if (!tap) continue;
         const e = tap.take();
+        // online nothing pauses (the friend is still playing): PAUSE asks whether to leave instead
+        if (s.net) {
+          if (e.pause && s.match.phase !== 'matchend') this.online.askLeave();
+          continue;
+        }
         if (e.pause && !this.paused && s.match.phase !== 'matchend') this.setPaused(true);
         if (e.training) this.cycleTraining();
       }
@@ -788,6 +913,13 @@ export class App {
     if (this.telemetry && this.teleOverlay && s) {
       this.drawTelemetry();
       this.layers.push(this.teleLayer);
+    }
+    if (s?.net && !this.hideUi && this.ui.screen === 'hud') {
+      // ping / input delay, and "waiting for opponent" or the reconnect countdown
+      drawNetHud(this.netCv, this.online.view);
+      this.netLayer.version++;
+      this.netLayer.dirty = null;
+      this.layers.push(this.netLayer);
     }
     if (s && !this.aftermath) {
       const dl = this.debug.draw(f.view);
@@ -952,10 +1084,18 @@ export class App {
       case 'setDisplay':
         this.renderer.setIntegerScale(!a.fill);
         break;
+      case 'setFps':
+        this.fpsMeter.set(a.on);
+        break;
       case 'startMatch':
         void this.startMatch(a.config);
         break;
       case 'rematch':
+        // online: both players must want it; they meet again in the online select
+        if (this.session?.net) {
+          this.online.rematch();
+          break;
+        }
         if (this.session)
           void this.startMatch({
             ...this.session.config,
@@ -973,6 +1113,11 @@ export class App {
         this.setPaused(false);
         break;
       case 'quitToTitle':
+        // online: say goodbye to the peer and close the link
+        if (this.session?.net) {
+          this.online.leave();
+          break;
+        }
         this.endMatch();
         this.ui.showTitle();
         break;

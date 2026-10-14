@@ -27,6 +27,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "perf": "tsx tools/lead/perf.ts",
+    "perf:ult": "tsx tools/perf/ultspikes.ts",
+    "perf:ultframes": "tsx tools/perf/ultframes.ts",
     "capture": "tsx tools/lead/capture.ts",
     "balance": "tsx tools/ai/balance.ts",
     "audio:verify": "tsx tools/ui/audio-verify.ts",

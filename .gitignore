@@ -12,3 +12,6 @@ evidence
 docs/gallery/wip
 *.scratch-audio-verify.json
 /press/
+# the netplay worker's local wrangler state and local secrets (never commit secrets)
+.wrangler
+.dev.vars

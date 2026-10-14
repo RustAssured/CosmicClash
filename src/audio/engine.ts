@@ -18,6 +18,7 @@ import {
   LIMITER_PROCESSOR,
   LIMITER_RELEASE,
   limiterWorkletSource,
+  type LimiterReport,
 } from './worklets/limiter';
 import { ScoreEngine } from './score/engine';
 import { presentationEnergy } from './balance';
@@ -67,6 +68,18 @@ export const CUE_TRIM: Readonly<Partial<Record<TitanId, number>>> = {};
 
 /** Concurrent one-shot cap (events, not nodes). Above it, low-priority sounds are dropped. */
 const POLYPHONY = 28;
+/** The cap on blows (prio 1) while the audio thread is behind real time; everything of prio 0 is dropped then. */
+const OVERLOAD_POLYPHONY = 6;
+/** Low-priority sounds (prio 0: cues, moves, matter) accepted from one `handle()` batch. */
+const BATCH_LOW = 10;
+/**
+ * The load governor (`watchLoad`): the audio clock is compared with the wall clock over windows of at least LOAD_WINDOW_SEC; below
+ * OVERLOAD_RATIO of real time the render thread is not keeping up (the output underruns: silence) and new sounds are shed for
+ * OVERLOAD_HOLD_MS after the last bad window.
+ */
+const LOAD_WINDOW_SEC = 0.5;
+const OVERLOAD_RATIO = 0.85;
+const OVERLOAD_HOLD_MS = 1500;
 
 /* ---- D6 mix constants (calibrated with tools/ui/audio-verify.ts --round: −20 LUFS integrated, ≤ −1 dBTP at default faders) ---- */
 /** Output high-pass (Hz, 24 dB/oct): laptop speakers cannot play below it, so it would only eat limiter headroom (D27). */
@@ -195,6 +208,8 @@ const HEAVY_BLOW = 700;
 const CUE_REPEAT = 0.3;
 /** Shortest gap (s) between two matter sounds of the same kind from the same fighter. */
 export const MATTER_REPEAT = 0.15;
+/** Shortest gap (s) between two LIGHT blows (presentation energy under DUCK_MIN_ENERGY) from the same attacker. */
+export const LIGHT_HIT_REPEAT = 0.2;
 
 /**
  * The automatic makeup gain (dB) a DynamicsCompressorNode applies (WebAudio spec: (1 / gain at 0 dBFS)^0.6). Approximates the
@@ -210,6 +225,79 @@ export function compressorMakeupDb(c: { threshold: number; knee: number; ratio: 
       : atKneeEnd + (0 - kneeEnd) / c.ratio;
   return -out0 * 0.6;
 }
+
+/** A finite number, or `fallback`. */
+const fin = (v: number, fallback = 0): number => (Number.isFinite(v) ? v : fallback);
+
+/** Event fields the contract defines as 0..1 (some voices scale a duration or a gain by them unclamped). */
+const UNIT_FIELDS: ReadonlySet<string> = new Set(['blocked', 'power', 'frac', 'strength', 'onDamaged']);
+
+/**
+ * `ev` with every non-finite number replaced (positions by the listener's x, everything else by 0) and the 0..1 fields clamped,
+ * or `ev` itself when it is clean (the common case: no copy). The sim can hand over a NaN (a centroid of nothing, 0/0) or an
+ * Infinity; a voice would throw on it half-way through a sound (an AudioParam rejects non-finite values), leaving whatever it
+ * had started alone. An out-of-range 0..1 field did worse (found by the stress test): the generic release whoosh lasted
+ * `0.2 + 0.1 × power` seconds, so a power of 1e9 left a noise source scheduled for three years.
+ */
+export function sanitizeEvent<T extends object>(ev: T, listenerX: number): T {
+  let out: Record<string, unknown> | null = null;
+  for (const k in ev) {
+    const v = (ev as Record<string, unknown>)[k];
+    if (typeof v !== 'number') continue;
+    let w = v;
+    if (!Number.isFinite(v)) w = k === 'x' ? listenerX : 0;
+    else if (UNIT_FIELDS.has(k)) w = clamp01(v);
+    if (w !== v) {
+      out ??= { ...(ev as Record<string, unknown>) };
+      out[k] = w;
+    }
+  }
+  return (out ?? ev) as T;
+}
+
+/** `s` with every number finite and in its contract range (a copy only when something had to change). */
+export function sanitizeScene(s: AudioScene): AudioScene {
+  const ok = (v: number): boolean => Number.isFinite(v);
+  const clean =
+    ok(s.intensity) &&
+    ok(s.listenerX) &&
+    ok(s.lowestIntegrity) &&
+    ok(s.timeScale) &&
+    (s.fighters ?? []).every(
+      (f) => ok(f.x) && ok(f.speed) && ok(f.massFrac) && ok(f.charge) && ok(f.resource) && ok(f.meter),
+    );
+  if (clean) return s;
+  const lx = fin(s.listenerX);
+  const f = (a: AudioFighterScene): AudioFighterScene => ({
+    ...a,
+    x: fin(a.x, lx),
+    speed: fin(a.speed),
+    massFrac: fin(a.massFrac, 1),
+    charge: fin(a.charge),
+    resource: fin(a.resource),
+    meter: fin(a.meter),
+  });
+  return {
+    ...s,
+    intensity: fin(s.intensity),
+    listenerX: lx,
+    lowestIntegrity: fin(s.lowestIntegrity, 1),
+    timeScale: fin(s.timeScale, 1),
+    fighters: s.fighters ? [f(s.fighters[0]), f(s.fighters[1])] : s.fighters,
+  };
+}
+
+/** Dev-only log (the guard's recoveries): silent in production builds and in plain Node. */
+function devLog(...a: unknown[]): void {
+  if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) console.warn('[audio]', ...a);
+}
+
+/**
+ * The guard (see `Engine.watch`): how many consecutive meter reads of a dead output (the mix carries signal, the output is
+ * silent) before the engine rebuilds its graph, and the shortest time (ms, wall clock) between two rebuilds.
+ */
+const DEAD_READS = 45;
+const RECOVER_GAP_MS = 1500;
 
 const workletReady = new WeakMap<BaseAudioContext, Promise<boolean>>();
 /** Load the limiter AudioWorklet module once per context. Resolves false where AudioWorklet is unavailable. */
@@ -242,6 +330,13 @@ export interface AudioEngineOptions {
    * Never set in the shipped app.
    */
   unsafeBypassLimiter?: boolean;
+  /**
+   * Run the load governor (shed new sounds while the audio clock falls behind the wall clock). Default: on for a real-time
+   * `AudioContext`, off for an OfflineAudioContext (it renders as fast as it can) and for test fakes.
+   */
+  governor?: boolean;
+  /** Wall clock in ms (default `performance.now`): tests drive the governor with it. */
+  wallClock?: () => number;
 }
 
 /** Diagnostics and offline hooks on top of the contract `AudioEngine`. */
@@ -263,6 +358,10 @@ export interface AudioEngineExt extends AudioEngine {
   taps(): { output: AudioNode; music: AudioNode; sfx: AudioNode } | null;
   /** Deepest true-peak limiter gain reduction (dB) since the last call (diagnostics). */
   limiterReductionDb(): number;
+  /** How many times the guard rebuilt the graph after finding the output poisoned (NaN) or dead (diagnostics). */
+  readonly recoveryCount: number;
+  /** The audio clock's speed over the last load window, 1 = real time (diagnostics; 1 when the governor is off). */
+  readonly renderSpeed: number;
 }
 
 /** The IR is deterministic per (sample rate, seed) and takes a noticeable moment to synthesise: build it once. */
@@ -304,6 +403,13 @@ interface Graph {
   duck: GainNode;
   /** The score's swell gain (thin at neutral, full on commitment), before the music fader. */
   scoreIn: GainNode;
+  /** The worklet limiter, if in use (a rebuild stops listening to the old one's reports). */
+  limiter: AudioWorkletNode | null;
+  /**
+   * The bus-level nodes a rebuild disconnects: every way into the old graph's stateful filters and out of it (to the speakers and
+   * to the analysers, which Chromium pulls even when nothing else does).
+   */
+  teardown: AudioNode[];
 }
 
 class Engine implements AudioEngineExt {
@@ -339,11 +445,35 @@ class Engine implements AudioEngineExt {
   private readonly cueAt = new Map<string, number>();
   private readonly bypass: boolean;
   private readonly trims = new Map<number, VoiceCtx>();
+  /* the guard (`watch`, `recover`) */
+  /** The limiter module loaded on this context (AudioWorklet available). */
+  private worklet = false;
+  /** The worklet limiter threw once: rebuild with the WaveShaper limiter from then on. */
+  private workletBroken = false;
+  /** Consecutive meter reads with signal in the mix and none at the output. */
+  private deadReads = 0;
+  /** No rebuild before this wall-clock time (ms). */
+  private recoverAt = 0;
+  private recoveries = 0;
+  /** Voice exceptions seen (only the first few are logged). */
+  private thrown = 0;
+  /* the load governor (`watchLoad`) */
+  private readonly governorOpt: boolean | undefined;
+  private readonly wall: () => number;
+  private loadWall = -1;
+  private loadAudio = 0;
+  private speed = 1;
+  private overloadUntil = -1;
+  /** Prio-0 sounds accepted in the current `handleAt` batch. */
+  private batchLow = 0;
 
   constructor(o: AudioEngineOptions) {
     this.ac = o.context ?? null;
     this.seed = o.seed ?? 7;
     this.bypass = !!o.unsafeBypassLimiter;
+    this.governorOpt = o.governor;
+    this.wall =
+      o.wallClock ?? ((): number => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
     // The reverb IR (≈ 40–50 ms of JS at 48 kHz) needs no AudioContext: synthesise it in idle time now, so the unlock (the first
     // user gesture, which may land during a fight) only pays for the context and the graph.
     const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
@@ -443,9 +573,11 @@ class Engine implements AudioEngineExt {
     // unsafeBypassLimiter (tests only) measures the mix as it ENTERS the limiter (calibrated), with no limiter and no clip
     hp2.connect(calib);
     let limiter: AudioNode;
+    let workletNode: AudioWorkletNode | null = null;
+    this.worklet = worklet;
     if (this.bypass) {
       limiter = ac.createGain();
-    } else if (worklet) {
+    } else if (worklet && !this.workletBroken) {
       const node = new AudioWorkletNode(ac, LIMITER_PROCESSOR, {
         numberOfInputs: 1,
         numberOfOutputs: 1,
@@ -461,10 +593,18 @@ class Engine implements AudioEngineExt {
           phases: designTruePeakFir().map((p) => Array.from(p)),
         },
       });
-      node.port.onmessage = (e: MessageEvent<number>): void => {
-        if (e.data < this.limiterMinGain) this.limiterMinGain = e.data;
+      node.port.onmessage = (e: MessageEvent<LimiterReport>): void => {
+        const r = e.data;
+        if (r.minGain < this.limiterMinGain) this.limiterMinGain = r.minGain;
+        // the limiter silenced non-finite samples: something upstream blew up (a poisoned filter stays NaN for good)
+        if (r.bad > 0) this.recover(`limiter saw ${r.bad} non-finite samples`);
       };
-      limiter = node;
+      // a worklet that throws outputs silence for the rest of the context's life: fall back to the WaveShaper limiter
+      node.onprocessorerror = (): void => {
+        this.workletBroken = true;
+        this.recover('limiter worklet error');
+      };
+      limiter = workletNode = node;
     } else {
       // no AudioWorklet (unit tests' fake context, very old browsers): a 4× oversampled soft clip to the same ceiling
       const soft = ac.createWaveShaper();
@@ -573,6 +713,28 @@ class Engine implements AudioEngineExt {
       bedSfx,
       duck,
       scoreIn,
+      limiter: workletNode,
+      teardown: [
+        sfx,
+        sfxWet,
+        ui,
+        uiLevel,
+        uiWet,
+        bedSfx,
+        bedIn,
+        music,
+        musicWet,
+        scoreIn,
+        duck,
+        mix,
+        hp2,
+        calib,
+        master,
+        limiter,
+        clip,
+        preAn,
+        postAn,
+      ],
     };
 
     // shared noise (white + brown), generated deterministically
@@ -615,15 +777,23 @@ class Engine implements AudioEngineExt {
    *  helpers
    * ------------------------------------------------------------------------------------------------ */
   private panOf(x: number): number {
-    const lx = this.scene?.listenerX ?? 0;
-    return clamp((x - lx) / 520, -1, 1) * 0.85;
+    const d = (x - (this.scene?.listenerX ?? 0)) / 520;
+    return Number.isFinite(d) ? clamp(d, -1, 1) * 0.85 : 0;
   }
 
   /** Polyphony gate: drop low-priority sounds when too many are still sounding. */
   private take(prio: number): boolean {
     const t = this.now;
     for (let i = this.ends.length - 1; i >= 0; i--) if (this.ends[i]! < t) this.ends.splice(i, 1);
+    // the audio thread is behind real time (`watchLoad`): every new sound makes it worse, and a late audio thread is silence.
+    // Only the critical sounds (KO, ultimate, rounds: prio 2) and a trickle of blows get in until it has caught up
+    if (this.isOverloaded() && (prio < 1 || (prio < 2 && this.ends.length >= OVERLOAD_POLYPHONY)))
+      return false;
+    // one frame's batch (an ultimate lands with its cues, matter and moves at once) gets a bounded share of the low-priority
+    // sounds: the burst is built in one go, before the governor could see the audio thread fall behind
+    if (prio < 1 && this.batchLow >= BATCH_LOW) return false;
     if (this.ends.length >= POLYPHONY && prio < 2) return false;
+    if (prio < 1) this.batchLow++;
     if (this.ends.length >= POLYPHONY * 2) return false;
     this.ends.push(t + 0.8); // an accepted sound counts against the cap for a typical tail
     return true;
@@ -682,13 +852,16 @@ class Engine implements AudioEngineExt {
 
   handleAt(events: readonly AudioEvent[], when: number): void {
     const c = this.sfxCtx;
-    if (!c || !this.g) return;
+    if (!c || !this.g || !Number.isFinite(when)) return;
     this.now = when;
+    this.batchLow = 0;
+    const lx = fin(this.scene?.listenerX ?? 0);
     for (const ev of events) {
       try {
-        this.dispatch(c, ev, when);
-      } catch {
+        this.dispatch(c, sanitizeEvent(ev, lx), when);
+      } catch (e) {
         /* a single misbehaving voice must never take the frame (or the game) down */
+        if (this.thrown++ < 5) devLog(`a voice threw on '${ev.t}'`, e);
       }
     }
   }
@@ -735,12 +908,26 @@ class Engine implements AudioEngineExt {
         return;
       }
       case 'hit': {
-        if (!c.take(1)) return;
         // the mix follows the MOVE, not the balance knobs: the attacker's balance.power comes out of the energy, and a blow
         // flagged heavy only because power pushed it over the sim's 700 line is not heavy here
         const atkTitan = this.titanOf(ev.attacker);
         const energy = presentationEnergy(ev.energy, atkTitan);
-        const hv = ev.heavy && ev.energy >= HEAVY_BLOW && energy < HEAVY_BLOW ? { ...ev, heavy: false } : ev;
+        // a LIGHT blow (under the heavy line telemetry and the duck use) is one slice of a beam, a field or a flurry: the sim emits
+        // one every 5 ticks for continuous damage, all flagged heavy when the move is an ultimate or a crush. Voiced at that rate
+        // with the heavy chain (≈ 200 nodes and 15 source-seconds each) it took the audio thread to 7–30 % of real time on the
+        // target laptop (measured: a 3 s beam muted the game for 8 s). One light blow per attacker per LIGHT_HIT_REPEAT, never
+        // with the heavy chain.
+        const light = energy < DUCK_MIN_ENERGY;
+        if (light) {
+          const key = `h${ev.attacker}`;
+          if (t < (this.cueAt.get(key) ?? -1) + LIGHT_HIT_REPEAT) return;
+          this.cueAt.set(key, t);
+        }
+        if (!c.take(1)) return;
+        const hv =
+          ev.heavy && (light || (ev.energy >= HEAVY_BLOW && energy < HEAVY_BLOW))
+            ? { ...ev, heavy: false }
+            : ev;
         const mag = magnitude(energy, hv.heavy);
         const pan = c.panOf(ev.x);
         playImpact(c, t, hv, mag, pan);
@@ -877,21 +1064,25 @@ class Engine implements AudioEngineExt {
   private duck(t: number, k: number, depthDb?: number, holdSec?: number): void {
     const g = this.g;
     if (!g) return;
-    const depth = depthDb ?? DUCK_DB[0] + (DUCK_DB[1] - DUCK_DB[0]) * clamp01(k);
-    const sec = holdSec ?? DUCK_SEC[0] + (DUCK_SEC[1] - DUCK_SEC[0]) * clamp01(k);
+    const depth = clamp(depthDb ?? DUCK_DB[0] + (DUCK_DB[1] - DUCK_DB[0]) * clamp01(k), 0, 40);
+    const sec = clamp(holdSec ?? DUCK_SEC[0] + (DUCK_SEC[1] - DUCK_SEC[0]) * clamp01(k), 0.05, 4);
+    if (!Number.isFinite(t)) return;
     if (t < this.duckUntil - 0.02 && depth <= this.duckDepth) {
       // already down at least this far: only stretch the hold if this one would end later
       if (t + sec <= this.duckUntil) return;
     }
-    this.duckUntil = t + sec;
-    this.duckDepth = depth;
+    // down in ~10 ms, held, then back with a 120 ms time constant (the hold ends early enough that the ≥ 3 dB-down time is `sec`);
+    // the KO hush falls a little softer (40 ms) and comes back slowly (0.5 s), under the decay. Every value is computed (and
+    // finite) BEFORE the cancel: a throw between the cancel and the restore would leave the bed down until the next heavy blow.
+    const hushed = depthDb !== undefined;
+    const down = dbToGain(-depth);
+    const back = t + Math.max(0.05, sec - 0.06);
     const p = g.duck.gain;
     p.cancelScheduledValues(t);
-    // down in ~10 ms, held, then back with a 120 ms time constant (the hold ends early enough that the ≥ 3 dB-down time is `sec`);
-    // the KO hush falls a little softer (40 ms) and comes back slowly (0.5 s), under the decay
-    const hushed = depthDb !== undefined;
-    p.setTargetAtTime(dbToGain(-depth), t, hushed ? 0.04 : 0.01);
-    p.setTargetAtTime(1, t + Math.max(0.05, sec - 0.06), hushed ? 0.5 : 0.12);
+    p.setTargetAtTime(down, t, hushed ? 0.04 : 0.01);
+    p.setTargetAtTime(1, back, hushed ? 0.5 : 0.12);
+    this.duckUntil = t + sec;
+    this.duckDepth = depth;
   }
 
   /* ------------------------------------------------------------------------------------------------ *
@@ -911,12 +1102,67 @@ class Engine implements AudioEngineExt {
       this.scene = scene;
       return;
     }
+    this.watchLoad();
     this.updateAt(scene, dtSec, this.ac.currentTime + 0.15);
   }
 
-  updateAt(scene: AudioScene, dtSec: number, horizon: number): void {
+  private governed(): boolean {
+    const ac = this.ac;
+    if (!ac) return false;
+    return this.governorOpt ?? (typeof AudioContext !== 'undefined' && ac instanceof AudioContext);
+  }
+
+  /**
+   * THE LOAD GOVERNOR. On the target laptop (Ryzen 5 5500U, Edge) the heavy moves built more audio graph than the audio thread
+   * can render in real time: measured in Edge with this engine, a beam ultimate's slices ran the audio clock at 7–33 % of real
+   * time and an ultimate's burst of cues at ~40 %; a late audio thread is an output that underruns, i.e. SILENCE, and every
+   * tail scheduled in audio time then lasts 3–10× longer in wall time (a 3 s beam muted the game for ~8 s: "comes back later").
+   * The audio clock is compared with the wall clock once per LOAD_WINDOW_SEC; while it runs slow, `take` sheds new sounds so it
+   * can catch up. Windows longer than 3 s (a hidden tab, a debugger) and a suspended context are not measured.
+   */
+  private watchLoad(): void {
+    const ac = this.ac;
+    // (the first second of a fresh context is its output device starting up, not load)
+    if (!ac || !this.governed() || ac.state !== 'running' || ac.currentTime < 1) {
+      this.loadWall = -1;
+      return;
+    }
+    const wall = this.wall();
+    if (this.loadWall < 0) {
+      this.loadWall = wall;
+      this.loadAudio = ac.currentTime;
+      return;
+    }
+    const dw = (wall - this.loadWall) / 1000;
+    if (dw < LOAD_WINDOW_SEC) return;
+    const da = ac.currentTime - this.loadAudio;
+    this.loadWall = wall;
+    this.loadAudio = ac.currentTime;
+    if (dw > 3) return;
+    this.speed = da / dw;
+    if (this.speed < OVERLOAD_RATIO) {
+      if (!this.isOverloaded())
+        devLog(
+          `load governor: the audio thread runs at ${Math.round(this.speed * 100)} % of real time; shedding new sounds`,
+        );
+      this.overloadUntil = wall + OVERLOAD_HOLD_MS;
+    }
+  }
+
+  private isOverloaded(): boolean {
+    return this.overloadUntil >= 0 && this.wall() < this.overloadUntil;
+  }
+
+  get renderSpeed(): number {
+    return this.governed() ? this.speed : 1;
+  }
+
+  updateAt(sceneIn: AudioScene, dtIn: number, horizon: number): void {
     const c = this.sfxCtx;
     if (!c || !this.g || !this.score) return;
+    // the game's numbers are not trusted: a NaN here used to stick in the score's and the bed's smoothing for good
+    const scene = sanitizeScene(sceneIn);
+    const dtSec = clamp(dtIn, 0, 1);
     this.scene = scene;
     this.timeScale = clamp(scene.timeScale, 0.3, 1);
     this.now = this.ac!.currentTime;
@@ -924,19 +1170,28 @@ class Engine implements AudioEngineExt {
     for (const slot of [0, 1] as const) {
       const f: AudioFighterScene | undefined = scene.fighters?.[slot];
       const prev = this.slotTitan[slot];
-      if (fighting && f) {
-        if (prev && prev !== f.titan) this.voiceFor(prev).stop?.(slot);
-        this.slotTitan[slot] = f.titan;
-        // continuous voices are the titans' BED (ducked under heavy blows), not impacts
-        this.voiceFor(f.titan).update?.(this.bedCtx ?? c, f, slot, dtSec);
-      } else if (prev) {
-        this.voiceFor(prev).stop?.(slot);
+      try {
+        if (fighting && f) {
+          if (prev && prev !== f.titan) this.voiceFor(prev).stop?.(slot);
+          this.slotTitan[slot] = f.titan;
+          // continuous voices are the titans' BED (ducked under heavy blows), not impacts
+          this.voiceFor(f.titan).update?.(this.bedCtx ?? c, f, slot, dtSec);
+        } else if (prev) {
+          this.voiceFor(prev).stop?.(slot);
+        }
+      } catch (e) {
+        // one titan's bed must not stop the score, the breathing and the guard below (nor throw into the game's frame)
+        if (this.thrown++ < 5) devLog(`a continuous voice threw (slot ${slot})`, e);
       }
     }
-    this.score.update(scene, dtSec);
-    this.score.scheduleUntil(horizon);
+    try {
+      this.score.update(scene, dtSec);
+      this.score.scheduleUntil(horizon);
+    } catch (e) {
+      if (this.thrown++ < 5) devLog('the score threw', e);
+    }
     this.breathe(scene, fighting, dtSec);
-    // meter the master
+    // meter the master, and guard it
     this.sample();
   }
 
@@ -960,7 +1215,7 @@ class Engine implements AudioEngineExt {
       want = Math.max(want, i * i * (3 - 2 * i));
     } else if (!fighting) want = 1; // menus and results: the score is the whole show
     const tau = want > this.commit ? 0.6 : 2;
-    this.commit += (want - this.commit) * (1 - Math.exp(-Math.max(0, dtSec) / tau));
+    this.commit = clamp01(this.commit + (want - this.commit) * (1 - Math.exp(-Math.max(0, dtSec) / tau)));
     g.scoreIn.gain.setTargetAtTime(dbToGain(-SCORE_NEUTRAL_DB * (1 - this.commit)), g.ac.currentTime, 0.08);
   }
 
@@ -977,8 +1232,89 @@ class Engine implements AudioEngineExt {
       a = Math.max(a, Math.abs(this.preBuf[i]!));
       b = Math.max(b, Math.abs(this.postBuf[i]!));
     }
+    // (Math.max carries a NaN through: a non-finite sample anywhere in either window shows up here at no extra cost)
+    if (!Number.isFinite(a) || !Number.isFinite(b)) {
+      this.recover('non-finite samples on the master');
+      return;
+    }
     this.peakPre = Math.max(this.peakPre, a);
     this.peakPost = Math.max(this.peakPost, b);
+    this.watch(a, b);
+  }
+
+  /**
+   * THE GUARD, run on every meter read (once a frame, on the analysers' existing 2048-sample windows: no per-sample work beyond
+   * the peak scan above). Three failure modes ended in "the sound disappears after a big move, and comes back later, or never":
+   *  1. a NaN / Infinity sample reached a stateful node: in Chromium one non-finite sample leaves a BiquadFilterNode's state NaN
+   *     FOREVER (measured in Edge: every sample after it is NaN) and a ConvolverNode's for its whole impulse response; the master's
+   *     high-pass, laptop EQ and weight filters are biquads, so the whole game went mute for good (`sample()` and the limiter's
+   *     report catch it);
+   *  2. the output is silent while the mix carries signal (a dead limiter worklet, a stuck gain): `deadReads`;
+   *  3. the bed's duck left down (a restore that never came): restored here once its hold is long over.
+   * 1 and 2 rebuild the whole graph on the same context (`recover`); the voices start over on the new buses.
+   */
+  private watch(pre: number, post: number): void {
+    const g = this.g;
+    if (!g) return;
+    if (!this.bypass && this.vol.master > 0.05 && pre > 1e-3 && post < 1e-6) {
+      if (++this.deadReads >= DEAD_READS) this.recover('silent output under a live mix');
+    } else this.deadReads = 0;
+    const t = g.ac.currentTime;
+    if (t > this.duckUntil + 1 && g.duck.gain.value < 0.7) {
+      devLog('the bed duck was left down: restored');
+      g.duck.gain.cancelScheduledValues(t);
+      g.duck.gain.setTargetAtTime(1, t, 0.1);
+      this.duckUntil = t;
+      this.duckDepth = 0;
+    }
+  }
+
+  /**
+   * Rebuild the graph on the same context: everything stateful (the master's filters, the reverbs, the glue, the limiter, the
+   * duck) starts fresh and silent, the continuous voices and the score start over on the new buses, and the old graph is cut off
+   * from the speakers and the analysers (its one-shots finish into nothing). At most once per RECOVER_GAP_MS.
+   */
+  private recover(why: string): void {
+    const ac = this.ac;
+    const old = this.g;
+    if (!ac || !old) return;
+    const wall = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (wall < this.recoverAt) return;
+    this.recoverAt = wall + RECOVER_GAP_MS;
+    this.recoveries++;
+    devLog(`guard: ${why}; rebuilding the audio graph (recovery #${this.recoveries})`);
+    for (const v of this.voices.values()) {
+      try {
+        v.stop?.('all');
+      } catch {
+        /* a voice that cannot stop is dropped with its old buses anyway */
+      }
+    }
+    this.voices.clear();
+    this.score?.dispose();
+    this.score = null;
+    if (old.limiter) old.limiter.port.onmessage = null;
+    for (const n of old.teardown) {
+      try {
+        n.disconnect();
+      } catch {
+        /* already disconnected */
+      }
+    }
+    this.g = null;
+    this.trims.clear();
+    this.ends.length = 0;
+    this.duckUntil = 0;
+    this.duckDepth = 0;
+    this.deadReads = 0;
+    this.preBuf = this.postBuf = null;
+    // (the continuous voices and the new score pick up on the next update(), on the scene's stage)
+    this.build(ac, this.worklet);
+  }
+
+  /** How many times the guard has rebuilt the graph (diagnostics, tests). */
+  get recoveryCount(): number {
+    return this.recoveries;
   }
 
   readPeak(): { pre: number; post: number } {
@@ -1037,7 +1373,8 @@ class Engine implements AudioEngineExt {
 }
 
 /** Titan-neutral "move goes live" whoosh for titans with no release handler. */
-function playImpactWhoosh(c: VoiceCtx, t: number, pan: number, power: number): void {
+function playImpactWhoosh(c: VoiceCtx, t: number, pan: number, powerIn: number): void {
+  const power = clamp01(powerIn);
   const o = makeOut(c, pan, 0.25);
   noiseHit(c, o, t, {
     dur: 0.2 + 0.1 * power,

@@ -39,6 +39,8 @@ export class LimiterCore {
   private m = 0;
   /** Smallest gain applied since the last `takeMinGain()` (diagnostics). */
   private minG = 1;
+  /** Non-finite input samples replaced by silence since the last `takeBad()`. */
+  private bad = 0;
 
   constructor(
     channels: number,
@@ -76,12 +78,21 @@ export class LimiterCore {
     const look = this.look;
     const cap = this.dqIdx.length;
     const win = look + 1;
+    // the state can only go bad through a bug (the input is sanitised below), but a limiter stuck at NaN is a mute game: reset
+    if (!(this.g >= 0 && this.g <= 2) || this.bsum !== this.bsum) this.reset();
     for (let i = 0; i < n; i++) {
       // 1. detection for the sample `half` frames back
       let pk = 0;
       for (let c = 0; c < this.nCh; c++) {
         const src = inp[c] ?? inp[0];
-        const v = src ? src[i]! : 0;
+        let v = src ? src[i]! : 0;
+        // a NaN / ±Infinity sample (a filter upstream blew up) is replaced by silence and counted: it must never reach the
+        // speakers, and the engine is told so it can rebuild whatever upstream is poisoned
+        if (v - v !== 0) {
+          v = 0;
+          this.bad++;
+        }
+        this.dline[c]![this.dpos] = v;
         const h = this.hist[c]!;
         h[this.hpos] = v;
         const centre = h[(this.hpos - half + taps) % taps]!;
@@ -131,12 +142,22 @@ export class LimiterCore {
       const rd = (this.dpos + 1) % (this.delayFrames + 1);
       for (let c = 0; c < out.length; c++) {
         const d = this.dline[Math.min(c, this.nCh - 1)]!;
-        const src = inp[c] ?? inp[0];
-        if (c < this.nCh) d[this.dpos] = src ? src[i]! : 0;
         out[c]![i] = d[rd]! * this.g;
       }
       this.dpos = rd;
     }
+  }
+
+  /** Back to the state of a fresh limiter (silence in every line, unity gain). */
+  reset(): void {
+    for (const h of this.hist) h.fill(0);
+    for (const d of this.dline) d.fill(0);
+    this.box.fill(1);
+    this.bsum = this.look;
+    this.dqHead = 0;
+    this.dqLen = 0;
+    this.g = 1;
+    this.minG = 1;
   }
 
   /** The smallest gain applied since the last call (1 = no limiting). */
@@ -145,6 +166,19 @@ export class LimiterCore {
     this.minG = this.g;
     return g;
   }
+
+  /** Non-finite input samples silenced since the last call. */
+  takeBad(): number {
+    const b = this.bad;
+    this.bad = 0;
+    return b;
+  }
+}
+
+/** What the worklet posts about ten times a second: the deepest gain since the last post and the non-finite samples it silenced. */
+export interface LimiterReport {
+  minGain: number;
+  bad: number;
 }
 
 export const LIMITER_PROCESSOR = 'adeuk-true-peak-limiter';
@@ -171,7 +205,7 @@ class AdeukTruePeakLimiter extends AudioWorkletProcessor {
     this.core.process(inp, out, out[0].length);
     if (++this.blocks >= this.every) {
       this.blocks = 0;
-      this.port.postMessage(this.core.takeMinGain());
+      this.port.postMessage({ minGain: this.core.takeMinGain(), bad: this.core.takeBad() });
     }
     return true;
   }

@@ -29,6 +29,8 @@ export interface UISettings {
   fill: boolean;
   /** Gameplay: ROUND LENGTH (S11) — the match config's pace (`ROUND_LENGTH_PACE`), fixed when a match starts. */
   roundLength: RoundLength;
+  /** Display: SHOW FPS (S19), a small frame-rate / frame-time readout in the corner (also toggled by F3). */
+  showFps: boolean;
 }
 
 const ROUND_LENGTHS: readonly RoundLength[] = ['short', 'normal', 'long'];
@@ -50,6 +52,7 @@ export const defaultUISettings = (): UISettings => ({
   matches: 0,
   fill: false,
   roundLength: 'normal',
+  showFps: false,
 });
 
 const int = (v: unknown, lo: number, hi: number, d: number): number =>
@@ -85,6 +88,7 @@ export function parseUISettings(raw: string | null): UISettings {
     roundLength: ROUND_LENGTHS.includes(o.roundLength as RoundLength)
       ? (o.roundLength as RoundLength)
       : d.roundLength,
+    showFps: o.showFps === true,
   };
 }
 

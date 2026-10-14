@@ -2,6 +2,8 @@ import type { MatterMap } from '@/contracts';
 import type { Overlay } from '../../../fx/overlay';
 import { fbm, ridged } from '@/titans/art/noise';
 import { DMath } from '@/contracts/dmath';
+import { fasin, fatan2, fcos, fsin } from '@/contracts/ftrig';
+import { FX_DETAIL } from '../../../fx/detail';
 
 /**
  * FALSE BIRTH (Gate 4, the brief's signature set-piece; the Ultimate button):
@@ -52,31 +54,90 @@ export function drawVeil(
   tick: number,
   seed: number,
 ): void {
-  const x0 = Math.floor(cx - rx - 3);
-  const x1 = Math.ceil(cx + rx + 3);
-  const y0 = Math.floor(cy - ry - 3);
-  const y1 = Math.ceil(cy + ry + 3);
+  // only what lands on the overlay; presentation trig (S19: this ran through DMath for every pixel of the spreading sheet)
+  const x0 = Math.max(Math.floor(cx - rx - 3), fx.cx0);
+  const x1 = Math.min(Math.ceil(cx + rx + 3), fx.cx1 - 1);
+  const y0 = Math.max(Math.floor(cy - ry - 3), fx.cy0);
+  const y1 = Math.min(Math.ceil(cy + ry + 3), fx.cy1 - 1);
   const SPOKES = 9;
-  for (let y = y0; y <= y1; y++)
-    for (let x = x0; x <= x1; x++) {
+  // the lobed edge as a function of the angle, tabulated once per call (it was two sines a pixel)
+  const ET = tabulate(
+    TAB_EDGE,
+    -Math.PI,
+    Math.PI,
+    (a) => 1 - 0.07 * fsin(a * 7 + seed) - 0.04 * fsin(a * 13 - tick * 0.05 + seed * 2),
+  );
+  // a big sheet: the angle fields (the edge's angle round the centre, the angle and distance round the hub) on a lattice
+  // every S px, interpolated; cells near the hub (where the angle turns fast) or across its ±π seam are exact
+  const S = (x1 - x0 + 1) * (y1 - y0 + 1) > latticeArea() ? LATTICE_STEP : 1;
+  const L = S > 1 ? lattice(x0, y0, x1, y1, S, 3) : null;
+  if (L) {
+    const f = L.f;
+    for (let j = 0; j < L.ny; j++)
+      for (let i = 0; i < L.nx; i++) {
+        const k = (j * L.nx + i) * 3;
+        const nx = x0 + i * S + 0.5;
+        const ny = y0 + j * S + 0.5;
+        f[k] = lookup(ET, fatan2((ny - cy) / ry, (nx - cx) / rx));
+        f[k + 1] = fatan2(ny - vy, nx - vx);
+        f[k + 2] = Math.sqrt((nx - vx) * (nx - vx) + (ny - vy) * (ny - vy));
+      }
+    for (let j = 0; j + 1 < L.ny; j++)
+      for (let i = 0; i + 1 < L.nx; i++) {
+        const k = (j * L.nx + i) * 3;
+        const v00 = f[k + 1]!;
+        const v10 = f[k + 4]!;
+        const v01 = f[k + L.nx * 3 + 1]!;
+        const v11 = f[k + L.nx * 3 + 4]!;
+        const hi = Math.max(v00, v10, v01, v11);
+        const lo = Math.min(v00, v10, v01, v11);
+        L.ok[j * L.nx + i] = hi - lo < 0.2 ? 1 : 0;
+      }
+  }
+  // render-only detail (FX_DETAIL, S19): below full detail the sheet is shaded in 2 × 2 blocks (dithered per pixel)
+  const B = FX_DETAIL.level === 2 ? 1 : 2;
+  for (let y = y0; y <= y1; y += B)
+    for (let x = x0; x <= x1; x += B) {
       const px = (x + 0.5 - cx) / rx;
       const py = (y + 0.5 - cy) / ry;
-      const a = DMath.atan2(py, px);
-      // a torn, lobed edge that breathes
-      const edge = 1 - 0.07 * DMath.sin(a * 7 + seed) - 0.04 * DMath.sin(a * 13 - tick * 0.05 + seed * 2);
-      const d = DMath.hypot(px, py) / edge;
-      if (d >= 1) continue;
-      // the disc opened out: ribs run from its hub, membrane panels between them pool the light
+      const r2 = px * px + py * py;
+      if (r2 >= 1.2322) continue; // the lobed edge never reaches past 1.11
+      let edge: number;
+      let hr: number;
+      let va: number;
       const ax = x + 0.5 - vx;
       const ay = y + 0.5 - vy;
-      const hr = Math.max(6, DMath.hypot(ax, ay));
-      const va = DMath.atan2(ay, ax) + seed * 0.01;
-      const q = ((((va / (Math.PI * 2)) * SPOKES) % 1) + 1) % 1;
-      const across = DMath.sin(Math.PI * q);
+      const ci = L ? Math.floor((x - x0) / S) : 0;
+      const cj = L ? Math.floor((y - y0) / S) : 0;
+      if (L && L.ok[cj * L.nx + ci]) {
+        const f = L.f;
+        const k = (cj * L.nx + ci) * 3;
+        const k2 = k + L.nx * 3;
+        const u = (x - x0 - ci * S) / S;
+        const v = (y - y0 - cj * S) / S;
+        const w00 = (1 - u) * (1 - v);
+        const w10 = u * (1 - v);
+        const w01 = (1 - u) * v;
+        const w11 = u * v;
+        edge = f[k]! * w00 + f[k + 3]! * w10 + f[k2]! * w01 + f[k2 + 3]! * w11;
+        va = f[k + 1]! * w00 + f[k + 4]! * w10 + f[k2 + 1]! * w01 + f[k2 + 4]! * w11;
+        hr = f[k + 2]! * w00 + f[k + 5]! * w10 + f[k2 + 2]! * w01 + f[k2 + 5]! * w11;
+      } else {
+        // a torn, lobed edge that breathes
+        edge = lookup(ET, fatan2(py, px));
+        va = fatan2(ay, ax);
+        hr = Math.sqrt(ax * ax + ay * ay);
+      }
+      const d = Math.sqrt(r2) / edge;
+      if (d >= 1) continue;
+      // the disc opened out: ribs run from its hub, membrane panels between them pool the light
+      if (hr < 6) hr = 6;
+      va += seed * 0.01;
+      const qv = (va / (Math.PI * 2)) * SPOKES;
+      const q = qv - Math.floor(qv); // (a float `%` is a libm call: floor instead)
+      const across = fsin(Math.PI * q);
       const ribW = 1.3 / ((hr * Math.PI * 2) / SPOKES);
       const rib = q < ribW || q > 1 - ribW;
-      const vein = Math.abs(DMath.sin(va * 31 + DMath.sin(hr * 0.045 + seed) * 2.5)) < 0.05 && across > 0.25;
-      const ring = pulse > 0 && Math.abs(DMath.sin(d * 7 + tick * 0.2)) < 0.12 * pulse;
       const hem = d > 0.965 && bayer(x + 2, y + 1) < 0.75;
       // translucent: the panels thin toward the ribs and the rim; ribs, hem and veins are solid tissue
       // (opacity above 1 closes it: a contracted sac hides what it holds)
@@ -84,16 +145,88 @@ export function drawVeil(
         hem || rib
           ? 1
           : Math.min(1, opacity * (0.3 + 0.55 * across) * (1.1 - 0.4 * d) + Math.max(0, opacity - 1) * 2);
-      if (!rib && !hem && !vein && bayer(x, y) >= dens) continue;
+      // the veins only matter where the dither would drop the pixel or its colour is chosen: evaluated lazily
+      const thin = B === 1 && !rib && !hem && bayer(x, y) >= dens;
+      if (thin && across <= 0.25) continue;
+      const vein = across > 0.25 && Math.abs(fsin(va * 31 + fsin(hr * 0.045 + seed) * 2.5)) < 0.05;
+      if (thin && !vein) continue;
+      const ring = pulse > 0 && Math.abs(fsin(d * 7 + tick * 0.2)) < 0.12 * pulse;
       let c = across > 0.75 && d < 0.85 ? VEIL_LIT : across > 0.4 ? VEIL_MID : VEIL_DARK;
       if (ring) c = VEIL_LIT;
       if (vein) c = VEIL_DARK;
       if (across > 0.88 && d > 0.25 && d < 0.75 && bayer(x + 1, y) < 0.25) c = VEIL_VEIN;
       if (rib) c = d < 0.97 ? VEIL_HEM : VEIL_LIT;
       if (hem) c = VEIL_HEM;
-      fx.set(x, y, c, c === VEIL_VEIN ? 40 : 0);
+      const em = c === VEIL_VEIN ? 40 : 0;
+      if (B === 1) fx.set(x, y, c, em);
+      else {
+        const solid = rib || hem || vein;
+        for (let sy = y; sy < y + B && sy <= y1; sy++)
+          for (let sx = x; sx < x + B && sx <= x1; sx++)
+            if (solid || bayer(sx, sy) < dens) fx.set(sx, sy, c, em);
+      }
     }
 }
+/**
+ * Per-call tables (S19): a smooth function of one variable that a pixel loop would otherwise evaluate per pixel (sines of
+ * the angle, of the latitude …), sampled TAB_N + 1 times over [lo, hi] and read back with linear interpolation.
+ */
+const TAB_N = 1024;
+interface Tab {
+  v: Float64Array;
+  lo: number;
+  inv: number;
+}
+const mkTab = (): Tab => ({ v: new Float64Array(TAB_N + 2), lo: 0, inv: 0 });
+const TAB_EDGE = mkTab();
+const TAB_BULGE = mkTab();
+const TAB_FOLD = mkTab();
+const TAB_VEIN = mkTab();
+const TAB_TWIG = mkTab();
+const TAB_KNUCKLE = mkTab();
+function tabulate(t: Tab, lo: number, hi: number, fn: (x: number) => number): Tab {
+  const step = (hi - lo) / TAB_N;
+  for (let k = 0; k <= TAB_N; k++) t.v[k] = fn(lo + k * step);
+  t.v[TAB_N + 1] = t.v[TAB_N]!;
+  t.lo = lo;
+  t.inv = 1 / step;
+  return t;
+}
+function lookup(t: Tab, x: number): number {
+  let u = (x - t.lo) * t.inv;
+  if (u < 0) u = 0;
+  else if (u > TAB_N) u = TAB_N;
+  const i = Math.floor(u);
+  const a = t.v[i]!;
+  return a + (t.v[i + 1]! - a) * (u - i);
+}
+
+/**
+ * Lattice of smooth per-pixel fields for big sheets (S19): above LATTICE_AREA pixels the angle fields (atan2 / asin: the
+ * bulk of a pixel's cost) are evaluated every LATTICE_STEP px and bilinearly interpolated; the thin features (ribs, veins,
+ * hem) are still tested per pixel on the interpolated fields, so they stay one pixel crisp. `ok[cell]` = interpolation is
+ * safe there (else the cell is computed exactly).
+ */
+/** Above this many pixels a sheet uses the lattice; lower at a lighter render detail (FX_DETAIL, render-only). */
+const latticeArea = (): number => (FX_DETAIL.level === 2 ? 30000 : FX_DETAIL.level === 1 ? 12000 : 3000);
+const LATTICE_STEP = 4;
+interface Lattice {
+  nx: number;
+  ny: number;
+  f: Float64Array;
+  ok: Uint8Array;
+}
+const LAT: Lattice = { nx: 0, ny: 0, f: new Float64Array(0), ok: new Uint8Array(0) };
+function lattice(x0: number, y0: number, x1: number, y1: number, S: number, nf: number): Lattice {
+  LAT.nx = Math.floor((x1 - x0) / S) + 2;
+  LAT.ny = Math.floor((y1 - y0) / S) + 2;
+  const n = LAT.nx * LAT.ny;
+  if (LAT.f.length < n * nf) LAT.f = new Float64Array(Math.ceil(n * nf * 1.25));
+  if (LAT.ok.length < n) LAT.ok = new Uint8Array(Math.ceil(n * 1.25));
+  LAT.ok.fill(0, 0, n);
+  return LAT;
+}
+
 /** Torn flaps of membrane flung out from (cx, cy), `u` 0..1 through the tear. */
 export function drawTear(fx: Overlay, cx: number, cy: number, r: number, u: number, seed: number): void {
   const n = 11;
@@ -110,8 +243,11 @@ export function drawTear(fx: Overlay, cx: number, cy: number, r: number, u: numb
   }
 }
 
-/** What lies inside the sac at a world point: the foe's displayed colour there, or 0 (sampled from its live matter). */
-export type Inside = (wx: number, wy: number) => number;
+/**
+ * What lies inside the sac: fill the grid (gw × gh cells, cell (x, y) centred on world (gx0 + x + 0.5, gy0 + y + 0.5))
+ * with the foe's displayed colour there, or 0 (sampled from its live matter).
+ */
+export type Inside = (grid: Uint32Array, gx0: number, gy0: number, gw: number, gh: number) => void;
 
 const mixc = (a: number, b: number, t: number): number => {
   const u = 1 - t;
@@ -144,47 +280,137 @@ export function drawSac(
   seed: number,
   inside: Inside,
 ): void {
-  const x0 = Math.floor(cx - rx - 3);
-  const x1 = Math.ceil(cx + rx + 3);
-  const y0 = Math.floor(cy - ry - 3);
-  const y1 = Math.ceil(cy + ry + 3);
+  // only what lands on the overlay (the sac can be wider than the layer while it is still spreading)
+  const x0 = Math.max(Math.floor(cx - rx - 3), fx.cx0);
+  const x1 = Math.min(Math.ceil(cx + rx + 3), fx.cx1 - 1);
+  const y0 = Math.max(Math.floor(cy - ry - 3), fx.cy0);
+  const y1 = Math.min(Math.ceil(cy + ry + 3), fx.cy1 - 1);
+  if (x1 < x0 || y1 < y0) return;
   const RIBS = 7;
-  const veinPulse = 0.5 + 0.5 * DMath.sin((tick / 140) * Math.PI * 2);
-  for (let y = y0; y <= y1; y++)
-    for (let x = x0; x <= x1; x++) {
+  const veinPulse = 0.5 + 0.5 * fsin((tick / 140) * Math.PI * 2);
+  const veinC = mixc(VEIL_DARK, VEIL_LIT, 0.15 + 0.45 * veinPulse);
+  const twigC = mixc(VEIL_DARK, VEIL_MID, 0.4);
+  // S19: what lies inside, sampled ONCE per cell into a grid with a 3-cell margin (the pressure ridge and the crease read
+  // neighbours 2 and 3 cells away: through the sampler that was up to nine body walks a pixel)
+  const M = 3;
+  const gx0 = x0 - M;
+  const gy0 = y0 - M;
+  const gw = x1 - x0 + 1 + 2 * M;
+  const gh = y1 - y0 + 1 + 2 * M;
+  if (insideGrid.length < gw * gh) insideGrid = new Uint32Array(Math.ceil(gw * gh * 1.25));
+  const g = insideGrid;
+  inside(g, gx0, gy0, gw, gh);
+  const rx2 = 1.09 * 1.09;
+  // functions of one variable, tabulated once per call (S19: they were a dozen sines per pixel)
+  const BT = tabulate(TAB_BULGE, -Math.PI, Math.PI, (a) => {
+    // stretched to bursting: the outline bulges between the ribs
+    const ribV = (a / (Math.PI * 2)) * RIBS + 100;
+    const ribA = ribV - Math.floor(ribV);
+    return 1 + 0.05 * fsin(Math.PI * ribA) - 0.03 * fsin(a * 11 - tick * 0.04 + seed);
+  });
+  const HALF = Math.PI / 2;
+  const FT = tabulate(TAB_FOLD, -HALF, HALF, (lat) => fsin(lat * 2 + seed) * 1.5 + squeeze * 2.5);
+  const VT = tabulate(TAB_VEIN, -HALF, HALF, (lat) => fsin(lat * 5 + seed * 1.3) * 3 + lat * 4);
+  const TT = tabulate(TAB_TWIG, -HALF, HALF, (lon) => fsin(lon * 6 + seed) * 2.5);
+  const KT = tabulate(TAB_KNUCKLE, -HALF, HALF, (lat) => {
+    const kc = fcos(lat * 6 + seed);
+    const kc2 = kc * kc;
+    return kc2 * kc2 * kc2;
+  });
+  // a big sac: the angle fields on a lattice, interpolated (exact near the rim, where the sphere's coordinates turn fast)
+  const S = (x1 - x0 + 1) * (y1 - y0 + 1) > latticeArea() ? LATTICE_STEP : 1;
+  const L = S > 1 ? lattice(x0, y0, x1, y1, S, 4) : null;
+  if (L) {
+    const f = L.f;
+    for (let j = 0; j < L.ny; j++)
+      for (let i = 0; i < L.nx; i++) {
+        const k = (j * L.nx + i) * 4;
+        const px = (x0 + i * S + 0.5 - cx) / rx;
+        const py = (y0 + j * S + 0.5 - cy) / ry;
+        const a = fatan2(py, px);
+        const bulge = lookup(BT, a);
+        const d = Math.sqrt(px * px + py * py) / bulge;
+        const z = Math.sqrt(Math.max(0, 1 - d * d));
+        f[k] = bulge;
+        f[k + 1] = fcos(a + 2.35);
+        f[k + 2] = fatan2(px, z);
+        f[k + 3] = fasin(Math.max(-1, Math.min(1, py / Math.max(0.2, bulge))));
+        // a node marks its own cell and its neighbours' as unsafe when it lies near or past the rim
+        if (d >= 0.9) L.ok[j * L.nx + i] = 2;
+      }
+    for (let j = 0; j + 1 < L.ny; j++)
+      for (let i = 0; i + 1 < L.nx; i++) {
+        const c = j * L.nx + i;
+        const bad = L.ok[c] === 2 || L.ok[c + 1] === 2 || L.ok[c + L.nx] === 2 || L.ok[c + L.nx + 1] === 2;
+        if (L.ok[c] !== 2) L.ok[c] = bad ? 0 : 1;
+      }
+  }
+  const B = FX_DETAIL.level === 2 ? 1 : 2; // render-only detail: 2 × 2 blocks below full detail (S19)
+  for (let y = y0; y <= y1; y += B)
+    for (let x = x0; x <= x1; x += B) {
       const px = (x + 0.5 - cx) / rx;
       const py = (y + 0.5 - cy) / ry;
-      const a = DMath.atan2(py, px);
-      // stretched to bursting: the outline bulges between the ribs
-      const ribA = ((a / (Math.PI * 2)) * RIBS + 100) % 1;
-      const bulge = 1 + 0.05 * DMath.sin(Math.PI * ribA) - 0.03 * DMath.sin(a * 11 - tick * 0.04 + seed);
-      const d = DMath.hypot(px, py) / bulge;
+      const r2 = px * px + py * py;
+      if (r2 >= rx2) continue; // past any bulge (≤ 1.08)
+      let bulge: number;
+      let hc: number;
+      let lon: number;
+      let lat: number;
+      const ci = L ? Math.floor((x - x0) / S) : 0;
+      const cj = L ? Math.floor((y - y0) / S) : 0;
+      const lattice1 = L !== null && L.ok[cj * L.nx + ci] === 1;
+      if (lattice1) {
+        const f = L.f;
+        const k = (cj * L.nx + ci) * 4;
+        const k2 = k + L.nx * 4;
+        const u = (x - x0 - ci * S) / S;
+        const v = (y - y0 - cj * S) / S;
+        const w00 = (1 - u) * (1 - v);
+        const w10 = u * (1 - v);
+        const w01 = (1 - u) * v;
+        const w11 = u * v;
+        bulge = f[k]! * w00 + f[k + 4]! * w10 + f[k2]! * w01 + f[k2 + 4]! * w11;
+        hc = f[k + 1]! * w00 + f[k + 5]! * w10 + f[k2 + 1]! * w01 + f[k2 + 5]! * w11;
+        lon = f[k + 2]! * w00 + f[k + 6]! * w10 + f[k2 + 2]! * w01 + f[k2 + 6]! * w11;
+        lat = f[k + 3]! * w00 + f[k + 7]! * w10 + f[k2 + 3]! * w01 + f[k2 + 7]! * w11;
+      } else {
+        const a = fatan2(py, px);
+        bulge = lookup(BT, a);
+        // cos(a + 2.35), only read on the hem
+        let ha = a + 2.35;
+        if (ha > Math.PI) ha -= 2 * Math.PI;
+        hc = ha > -1.2661036727794992 && ha < 1.2661036727794992 ? 1 : 0;
+        lon = 0;
+        lat = 0;
+      }
+      const d = Math.sqrt(r2) / bulge;
       if (d >= 1) continue;
-      const wx = x + 0.5;
-      const wy = y + 0.5;
       // sphere-ish surface coordinates (z out of the screen): folds and ribs wrap round it
       const z = Math.sqrt(Math.max(0, 1 - d * d));
-      const lon = DMath.atan2(px, z);
-      const lat = DMath.asin(Math.max(-1, Math.min(1, py / Math.max(0.2, bulge))));
+      if (!lattice1) {
+        lon = fatan2(px, z);
+        lat = fasin(Math.max(-1, Math.min(1, py / Math.max(0.2, bulge))));
+      }
       // the membrane: dried burgundy, thinner (more see-through) where it is stretched over the middle
       let c = d > 0.6 ? VEIL_DARK : VEIL_MID;
       let dens = Math.min(1, 0.42 + 0.35 * close + 0.35 * d * d);
-      const foe = inside(wx, wy);
+      const gi = (y - gy0) * gw + (x - gx0);
+      const foe = g[gi]!;
       if (foe) {
         // the foe inside, seen through the tissue, and where it presses, the membrane is taut over it
-        const edge = !inside(wx + 2, wy) || !inside(wx - 2, wy) || !inside(wx, wy + 2) || !inside(wx, wy - 2);
+        const edge = !g[gi + 2] || !g[gi - 2] || !g[gi + 2 * gw] || !g[gi - 2 * gw];
         c = mixc(foe, VEIL_MID, 0.45 + 0.25 * close);
         if (edge) c = mixc(c, VEIL_HEM, 0.55);
         dens = Math.min(1, dens + 0.35);
       } else {
         // a dark crease just outside its outline (the tissue drawn in round the body)
-        if (inside(wx + 3, wy) || inside(wx - 3, wy) || inside(wx, wy + 3) || inside(wx, wy - 3)) {
+        if (g[gi + 3] || g[gi - 3] || g[gi + 3 * gw] || g[gi - 3 * gw]) {
           c = VEIL_DARK;
           dens = 1;
         }
       }
       // contraction folds toward the poles, squeezing in pulses: troughs dark, crests wet and lit on the upper left
-      const fold = DMath.sin(lon * 9 + DMath.sin(lat * 2 + seed) * 1.5 + squeeze * 2.5);
+      const fold = fsin(lon * 9 + lookup(FT, lat));
       if (fold > 0.8) {
         c = mixc(c, x + y < cx + cy ? VEIL_HEM : VEIL_LIT, 0.55);
         dens = Math.max(dens, 0.9);
@@ -193,18 +419,19 @@ export function drawSac(
         dens = Math.max(dens, 0.85);
       }
       // the vascular web over it: veins branching out from the seams, pulsing
-      const vein = Math.abs(DMath.sin(lon * 11 + DMath.sin(lat * 5 + seed * 1.3) * 3 + lat * 4)) < 0.09;
-      const twig = Math.abs(DMath.sin(lat * 17 + DMath.sin(lon * 6 + seed) * 2.5)) < 0.05 && fold > -0.2;
+      const vein = Math.abs(fsin(lon * 11 + lookup(VT, lat))) < 0.09;
+      const twig = fold > -0.2 && Math.abs(fsin(lat * 17 + lookup(TT, lon))) < 0.05;
       if (vein || twig) {
         // dark, blood-filled vessels; a slow pulse runs warm light through the main ones
-        c = vein ? mixc(VEIL_DARK, VEIL_LIT, 0.15 + 0.45 * veinPulse) : mixc(VEIL_DARK, VEIL_MID, 0.4);
+        c = vein ? veinC : twigC;
         dens = 1;
       }
       // calcified ribs straining round it like meridians, knuckled, pale bone with a dark seat
-      const ribLon = ((lon / Math.PI + 1) * RIBS * 0.5) % 1;
-      const ribW = 0.022 + 0.022 * DMath.pow(Math.abs(DMath.cos(lat * 6 + seed)), 6);
+      const ribLv = (lon / Math.PI + 1) * RIBS * 0.5;
+      const ribLon = ribLv - Math.floor(ribLv);
+      const knuckle = lookup(KT, lat);
+      const ribW = 0.022 + 0.022 * knuckle;
       if (z > 0.08 && (ribLon < ribW || ribLon > 1 - ribW)) {
-        const knuckle = DMath.pow(Math.abs(DMath.cos(lat * 6 + seed)), 6);
         c = mixc(RIB_BONE, VEIL_DARK, 0.25 - 0.2 * knuckle + (x + y > cx + cy ? 0.25 : 0));
         dens = 1;
       } else if (z > 0.08 && (ribLon < ribW + 0.015 || ribLon > 0.985 - ribW)) {
@@ -213,13 +440,20 @@ export function drawSac(
       }
       // the hem: a thick wet lip, sheen on the lit side
       if (d > 0.965) {
-        c = DMath.cos(a + 2.35) > 0.3 ? VEIL_HEM : VEIL_LIT;
+        c = hc > 0.3 ? VEIL_HEM : VEIL_LIT; // cos(a + 2.35) > 0.3
         dens = 1;
       }
-      if (bayer(x, y) >= dens) continue;
-      fx.set(x, y, c, c === VEIL_VEIN ? 30 : 0);
+      const em = c === VEIL_VEIN ? 30 : 0;
+      if (B === 1) {
+        if (bayer(x, y) >= dens) continue;
+        fx.set(x, y, c, em);
+      } else
+        for (let sy = y; sy < y + B && sy <= y1; sy++)
+          for (let sx = x; sx < x + B && sx <= x1; sx++) if (bayer(sx, sy) < dens) fx.set(sx, sy, c, em);
     }
 }
+/** drawSac's inside grid (reused; presentation scratch). */
+let insideGrid = new Uint32Array(0);
 
 /** Pale calcified bone of the ribs (ABGR). */
 const RIB_BONE = 0xff9ab8d2;
@@ -249,13 +483,13 @@ export function drawRupture(
     const steps = 18;
     for (let s = 0; s < steps; s++) {
       const t = s / steps;
-      const w = span * (1 - t) * (0.6 + 0.4 * DMath.sin(t * 9 + k)); // ragged edge
+      const w = span * (1 - t) * (0.6 + 0.4 * fsin(t * 9 + k)); // ragged edge
       const ang = a + curl * t;
       const rr = root + len * t * (0.4 + 0.6 * e);
       for (let q = -8; q <= 8; q++) {
         const aa = ang + (q / 8) * w * 0.5;
-        const wx = cx + DMath.cos(aa) * rr;
-        const wy = cy + DMath.sin(aa) * rr;
+        const wx = cx + fcos(aa) * rr;
+        const wy = cy + fsin(aa) * rr;
         const edge = Math.abs(q) >= 7;
         const vein = Math.abs(q) < 2 || (q + s) % 6 === 0;
         const c = edge ? VEIL_HEM : vein ? VEIL_VEIN : t < 0.5 ? VEIL_MID : VEIL_DARK;
@@ -327,7 +561,27 @@ const PEARL = 0xffbad0e6;
  *  - TORN UMBILICAL STRANDS trail from it, ringed and ragged at the ends.
  * The behaviour adds what moves: the veins pulse slowly and fluid seeps from the rim as beads (CradleBehaviour.organFx).
  */
-export function growPseudoOrgan(src: MatterMap, size: number, seed: number): PseudoOrgan | null {
+export function growPseudoOrgan(src: OrganSource, size: number, seed: number): PseudoOrgan | null {
+  const g = growPseudoOrganSteps(src, size, seed);
+  for (;;) {
+    const r = g.next();
+    if (r.done) return r.value;
+  }
+}
+
+/** What the organ is grown from: the foe's map (only its shape and its pristine colours are read). */
+export type OrganSource = Pick<MatterMap, 'w' | 'h' | 'material' | 'baseColor'>;
+
+/**
+ * `growPseudoOrgan` in slices (S19: grown in one tick it cost 40–150 ms): a generator that yields after every row of its two
+ * per-pixel passes, the value yielded being the rows still to go. Driven to the end it returns exactly what
+ * `growPseudoOrgan` returns; the caller must hand it a source that does not change while it runs (a snapshot).
+ */
+export function* growPseudoOrganSteps(
+  src: OrganSource,
+  size: number,
+  seed: number,
+): Generator<number, PseudoOrgan | null> {
   let x0 = src.w;
   let y0 = src.h;
   let x1 = -1;
@@ -363,7 +617,8 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
   const cx = w / 2;
   const cy = h / 2;
   const R = Math.max(bw, bh) / 2;
-  for (let y = 0; y < h; y++)
+  for (let y = 0; y < h; y++) {
+    yield 2 * h - y;
     for (let x = 0; x < w; x++) {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
@@ -394,10 +649,12 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
       else c = mix(c, FLESH, 0.18);
       px[i] = c;
     }
+  }
   // shading: a swollen mass lit from the upper left; wet folds with a sheen on their crests; troughs in shadow
   let cells = 0;
   const rim: { x: number; y: number }[] = [];
-  for (let y = 0; y < h; y++)
+  for (let y = 0; y < h; y++) {
+    yield h - y;
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       if (!mask[i]) continue;
@@ -433,6 +690,7 @@ export function growPseudoOrgan(src: MatterMap, size: number, seed: number): Pse
       }
       px[i] = c;
     }
+  }
   // the vascular web: trees branching in from the rim, thick at the root, in its darkest tone and the Cradle's vessel red
   const veins: { x: number; y: number }[] = [];
   const trees = 5;

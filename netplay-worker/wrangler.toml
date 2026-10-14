@@ -1,0 +1,22 @@
+# ADEUK: TITANS netplay signalling worker. Deploy steps for WJ: README.md in this folder.
+name = "adeuk-netplay"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# The two sites that may use the worker (localhost and 127.0.0.1 on any port are always allowed, for testing).
+# Add a line here (comma-separated) if the game moves; then run `npx wrangler deploy` again.
+[vars]
+ALLOWED_ORIGINS = "https://adeuk-titans.vercel.app,https://rustassured.github.io"
+
+# One Durable Object per room (the free plan needs the SQLite-backed kind: `new_sqlite_classes`).
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+# Secrets are NOT here. They are set once with:
+#   npx wrangler secret put TURN_KEY_ID
+#   npx wrangler secret put TURN_KEY_API_TOKEN

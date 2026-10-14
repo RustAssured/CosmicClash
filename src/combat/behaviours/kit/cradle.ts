@@ -20,12 +20,20 @@ import type { FatShape } from '../../shapes';
 import { massFromCells, wrapAngle, type MassProps } from '../../rig/xpbd';
 import { KitBehaviour } from './base';
 import { CRADLE_RIG, buildCradleRig, densityTable, type CradleRigBuild } from './cradle/rig';
-import { Gestation, bodyLocal } from './cradle/gestate';
+import { Gestation, bodyLocal, bodyWorld } from './cradle/gestate';
 import { Chambers } from './cradle/chambers';
 import { Differentiation } from './cradle/wrong';
 import { SailSkin } from './cradle/sail';
 import { Overlay } from '../../fx/overlay';
-import { drawRupture, drawSac, drawVeil, growPseudoOrgan } from './cradle/falsebirth';
+import { FX_DETAIL } from '../../fx/detail';
+import {
+  drawRupture,
+  drawSac,
+  drawVeil,
+  growPseudoOrgan,
+  growPseudoOrganSteps,
+  type PseudoOrgan,
+} from './cradle/falsebirth';
 import type { ActiveMove } from '../../move';
 import { DMath, sq } from '@/contracts/dmath';
 
@@ -93,6 +101,8 @@ const BIRTH_AT = 72;
 const ORGAN_TICKS = 300;
 /** The pseudo-organ's size (px across the foe's swollen silhouette): planetary, the size of a titan's head. */
 const ORGAN_SIZE = 60;
+/** The organ grows over this many ticks before the birth (S19: a slice a tick instead of one 40–150 ms tick). */
+const ORGAN_GROW_TICKS = 16;
 /** The escape window: the first ticks of the contraction, while the sac is still closing (a Surge breaks out). */
 const ESCAPE_TICKS = 30;
 /** Mass per cell of the pseudo-organ (its throw is one uncapped blow: mass × speed). */
@@ -157,6 +167,13 @@ export class CradleBehaviour extends KitBehaviour {
   private latchX = 0;
   private latchY = 0;
   private fx!: Overlay;
+  /**
+   * S19: the filaments and the False Birth membrane are rasterised at RENDER time (`renderLayers`), once per drawn frame,
+   * not inside the sim tick: the sac is per-pixel work over up to 2·10⁵ pixels, and in the tick it cost 30–500 ms (×5 in
+   * the loop's catch-up). The tick only flags it; everything the sim needs (the seeping beads) stays in the tick.
+   */
+  private fxStale = false;
+  private readonly drawPt = { x: 0, y: 0 };
   /** FALSE BIRTH: the pseudo-organs on the field (chunk id, tick to retire it) and whether this move's birth happened. */
   private organs: {
     id: number;
@@ -181,6 +198,9 @@ export class CradleBehaviour extends KitBehaviour {
     temp: 0,
   };
   private born = false;
+  /** False Birth: the pseudo-organ growing (sliced over ORGAN_GROW_TICKS), and the grown result waiting for the birth. */
+  private grower: Generator<number, PseudoOrgan | null> | null = null;
+  private grown: PseudoOrgan | null | undefined = undefined;
   /** The foe broke out of this False Birth's sac (the escape window). */
   private escaped = false;
   private readonly ov: OverlapResult = { cells: 0, x: 0, y: 0, nearestX: 0, nearestY: 0, coverage: 0 };
@@ -944,7 +964,61 @@ export class CradleBehaviour extends KitBehaviour {
     )
       this.cue('wrong-growth');
     this.organsLive();
-    this.drawFx();
+    this.sacSeep();
+    this.fxStale = true;
+  }
+
+  /**
+   * The sac's geometry this tick (False Birth, CONTRACT): centre, radius, squeeze and how far it has closed. Shared by the
+   * sim side (the seeping beads) and the drawing.
+   */
+  private sacShape(out: { cx: number; cy: number; r: number; squeeze: number; u: number }): void {
+    const f = this.f;
+    const m = f.mv;
+    const fv = f.foe.view;
+    const hubX = f.view.x;
+    const hubY = f.view.y - 34;
+    const dx = fv.x - hubX;
+    const dy = fv.y - hubY;
+    const dist = DMath.hypot(dx, dy);
+    const foeR = clamp(Math.max(fv.boundsX1 - fv.boundsX0, fv.boundsY1 - fv.boundsY0) * 0.55, 24, 72);
+    const u = clamp(m.phaseTick / 18, 0, 1);
+    const big = 40 + dist * 0.62 + foeR;
+    out.r = big + (foeR * 1.25 - big) * (u * u * (3 - 2 * u));
+    out.squeeze = 1 - 0.06 * Math.max(0, DMath.sin(m.phaseTick * 0.16));
+    out.cx = hubX + dx * (0.55 + 0.45 * u);
+    out.cy = hubY + dy * (0.55 + 0.45 * u);
+    out.u = u;
+  }
+  private readonly sac = { cx: 0, cy: 0, r: 0, squeeze: 0, u: 0 };
+
+  /** The sim side of the sac: fluid seeps at its seams (the ribs' feet on the rim) as beads (matter particles). */
+  private sacSeep(): void {
+    const f = this.f;
+    const m = f.mv;
+    if (m.def?.id !== 'cradle.falsebirth' || f.state === 'ko' || this.escaped) return;
+    if (m.phase !== 'active' || m.phaseTick >= BIRTH_AT) return;
+    const s = this.sac;
+    this.sacShape(s);
+    if (s.u > 0.6 && m.phaseTick % 5 === 0) {
+      const k = (m.phaseTick / 5) % 7;
+      const a = (k / 7) * Math.PI * 2 + 0.4;
+      f.world.spawnParticles({
+        kind: 'mote',
+        x: s.cx + DMath.cos(a) * s.r * s.squeeze,
+        y: s.cy + DMath.sin(a) * s.r * 0.92 * s.squeeze,
+        vx: DMath.cos(a) * 10,
+        vy: DMath.sin(a) * 10 + 8,
+        spread: 5,
+        count: 2,
+        ramp: [0xff6ab4e6, 0xff3a6ab0, 0xff241650],
+        life: [60, 110],
+        fieldScale: 0.2,
+        emissive: 26,
+        size: 2,
+        drag: 0.4,
+      });
+    }
   }
 
   /**
@@ -1118,26 +1192,56 @@ export class CradleBehaviour extends KitBehaviour {
       fx.layer.z = 0.6;
     } else if (m.phase === 'active' && m.phaseTick < BIRTH_AT) {
       // CONTRACT: it closes round the foe and squeezes in slow pulses; the foe is gone behind it
-      const u = clamp(m.phaseTick / 18, 0, 1);
-      const big = 40 + dist * 0.62 + foeR;
-      const r = big + (foeR * 1.25 - big) * (u * u * (3 - 2 * u));
-      const squeeze = 1 - 0.06 * Math.max(0, DMath.sin(m.phaseTick * 0.16));
-      const cx = hubX + dx * (0.55 + 0.45 * u);
-      const cy = hubY + dy * (0.55 + 0.45 * u);
+      const s = this.sac;
+      this.sacShape(s);
+      const { u, r, squeeze, cx, cy } = s;
       // the sac: stretched to bursting round the foe, the foe pressing against it from inside
       const bodies = this.foeBodies();
-      const loc = this.pt;
-      const inside = (wx: number, wy: number): number => {
+      const loc = this.drawPt;
+      // what lies inside, per grid cell (cell centres): the front-most body with matter there, in its displayed colour.
+      // Each body only visits the cells of its own world box (S19: a per-pixel walk over every body of a many-limbed foe
+      // cost more than the membrane itself).
+      const inside = (g: Uint32Array, gx0: number, gy0: number, gw: number, gh: number): void => {
+        g.fill(0, 0, gw * gh);
         for (const b of bodies) {
           const mm = b.map;
-          bodyLocal(b, wx, wy, loc);
-          const ix = Math.floor(loc.x);
-          const iy = Math.floor(loc.y);
-          if (ix < 0 || iy < 0 || ix >= mm.w || iy >= mm.h) continue;
-          const i = iy * mm.w + ix;
-          if (mm.material[i] !== 0) return mm.pixels[i]! | 0xff000000;
+          let wx0 = Infinity;
+          let wy0 = Infinity;
+          let wx1 = -Infinity;
+          let wy1 = -Infinity;
+          for (let c = 0; c < 4; c++) {
+            bodyWorld(b, c & 1 ? mm.w : 0, c & 2 ? mm.h : 0, loc);
+            if (loc.x < wx0) wx0 = loc.x;
+            if (loc.x > wx1) wx1 = loc.x;
+            if (loc.y < wy0) wy0 = loc.y;
+            if (loc.y > wy1) wy1 = loc.y;
+          }
+          const ax0 = Math.max(0, Math.floor(wx0) - 2 - gx0);
+          const ax1 = Math.min(gw - 1, Math.ceil(wx1) + 2 - gx0);
+          const ay0 = Math.max(0, Math.floor(wy0) - 2 - gy0);
+          const ay1 = Math.min(gh - 1, Math.ceil(wy1) + 2 - gy0);
+          // `bodyLocal` is affine along a grid row: map the row's first cell and step (no call per cell)
+          for (let y = ay0; y <= ay1; y++) {
+            const wy = gy0 + y + 0.5;
+            const wxa = gx0 + ax0 + 0.5;
+            bodyLocal(b, wxa, wy, loc);
+            const lx0 = loc.x;
+            const ly0 = loc.y;
+            bodyLocal(b, wxa + 1, wy, loc);
+            const dlx = loc.x - lx0;
+            const dly = loc.y - ly0;
+            for (let x = ax0; x <= ax1; x++) {
+              const gi = y * gw + x;
+              if (g[gi] !== 0) continue; // a body in front already has it
+              const s = x - ax0;
+              const ix = Math.floor(lx0 + dlx * s);
+              const iy = Math.floor(ly0 + dly * s);
+              if (ix < 0 || iy < 0 || ix >= mm.w || iy >= mm.h) continue;
+              const i = iy * mm.w + ix;
+              if (mm.material[i] !== 0) g[gi] = mm.pixels[i]! | 0xff000000;
+            }
+          }
         }
-        return 0;
       };
       drawSac(
         fx,
@@ -1151,26 +1255,7 @@ export class CradleBehaviour extends KitBehaviour {
         seed,
         inside,
       );
-      // fluid seeps at the seams (the ribs' feet on the rim) as beads
-      if (u > 0.6 && m.phaseTick % 5 === 0) {
-        const k = (m.phaseTick / 5) % 7;
-        const a = (k / 7) * Math.PI * 2 + 0.4;
-        f.world.spawnParticles({
-          kind: 'mote',
-          x: cx + DMath.cos(a) * r * squeeze,
-          y: cy + DMath.sin(a) * r * 0.92 * squeeze,
-          vx: DMath.cos(a) * 10,
-          vy: DMath.sin(a) * 10 + 8,
-          spread: 5,
-          count: 2,
-          ramp: [0xff6ab4e6, 0xff3a6ab0, 0xff241650],
-          life: [60, 110],
-          fieldScale: 0.2,
-          emissive: 26,
-          size: 2,
-          drag: 0.4,
-        });
-      }
+      // (the beads seeping at its seams are sim state: spawned in the tick, `sacSeep`)
       // it hides the foe: in front of everything it has
       fx.layer.z = u > 0.5 ? 25 : 0.6;
     } else if (m.phase === 'active' && m.phaseTick < BIRTH_AT + 18) {
@@ -1209,6 +1294,8 @@ export class CradleBehaviour extends KitBehaviour {
     if (m.def?.id !== 'cradle.falsebirth') {
       this.born = false;
       this.escaped = false;
+      this.grower = null;
+      this.grown = undefined;
       return;
     }
     // THE ESCAPE WINDOW (WJ feedback 1): while the sac is still closing, a foe that dashes (Surge) tears out of it; the
@@ -1223,15 +1310,38 @@ export class CradleBehaviour extends KitBehaviour {
       this.escaped = true;
       this.cue('false-birth-torn');
     }
-    if (this.escaped) return;
-    if (this.born || m.phase !== 'active' || m.phaseTick < BIRTH_AT) return;
-    this.born = true;
+    if (this.escaped) {
+      this.grower = null;
+      return;
+    }
+    if (this.born || m.phase !== 'active') return;
     const foe = this.f.foe as unknown as { body?: MatterBody };
+    // S19: the organ is GROWN over the last ticks before the birth (a slice a tick, from a snapshot of the foe's matter
+    // taken when it starts), not all on the birth tick, where it cost 40–150 ms
+    if (m.phaseTick >= BIRTH_AT - ORGAN_GROW_TICKS && m.phaseTick < BIRTH_AT) {
+      if (!this.grower && foe.body && m.phaseTick === BIRTH_AT - ORGAN_GROW_TICKS) {
+        const src = foe.body.map;
+        this.grower = growPseudoOrganSteps(
+          { w: src.w, h: src.h, material: src.material.slice(), baseColor: src.baseColor.slice() },
+          ORGAN_SIZE,
+          f.seed + f.tickNo,
+        );
+        this.grown = undefined;
+      }
+      this.growSlice(BIRTH_AT - m.phaseTick);
+      return;
+    }
+    if (m.phaseTick < BIRTH_AT) return;
+    this.born = true;
     const fv = f.foe.view;
     this.cue('false-birth');
     f.events.push({ t: 'shake', dirX: this.facing, dirY: 0, amp: 7 });
+    // whatever is left of the growing (a sac that started late) finishes now
+    this.growSlice(1);
     if (!foe.body) return;
-    const organ = growPseudoOrgan(foe.body.map, ORGAN_SIZE, f.seed + f.tickNo);
+    const organ =
+      this.grown !== undefined ? this.grown : growPseudoOrgan(foe.body.map, ORGAN_SIZE, f.seed + f.tickNo);
+    this.grown = undefined;
     if (!organ) return;
     const s = this.facing;
     const id = world.spawnChunk({
@@ -1254,6 +1364,27 @@ export class CradleBehaviour extends KitBehaviour {
     if (this.organs.length > 3) {
       world.retireChunk?.(this.organs[0]!.id);
       this.organs.shift();
+    }
+  }
+
+  /**
+   * Advance the organ's growing by this tick's share: `ticksLeft` ticks remain before the birth, so a 1/ticksLeft share of
+   * the rows still to go (all of them when 1). Deterministic: the work is cut by rows, never by time.
+   */
+  private growSlice(ticksLeft: number): void {
+    const g = this.grower;
+    if (!g) return;
+    let budget = -1;
+    for (;;) {
+      const r = g.next();
+      if (r.done) {
+        this.grown = r.value;
+        this.grower = null;
+        return;
+      }
+      if (ticksLeft <= 1) continue; // the last tick: to the end
+      if (budget < 0) budget = Math.ceil(r.value / ticksLeft);
+      if (--budget <= 0) return;
     }
   }
 
@@ -1291,9 +1422,9 @@ export class CradleBehaviour extends KitBehaviour {
     const spokes = this.R.spokes.length;
     for (let k = 0; k < spokes; k++) {
       if (k % 2 === 1 && this.latch <= 0) continue;
-      if (!this.rimPoint(k, this.pt)) break;
-      const ax = this.pt.x;
-      const ay = this.pt.y;
+      if (!this.rimPoint(k, this.drawPt)) break;
+      const ax = this.drawPt.x;
+      const ay = this.drawPt.y;
       const tx = tx0 + (((k * 37) % 11) - 5) * 1.6;
       const ty = ty0 + (((k * 53) % 11) - 5) * 1.6;
       const bx = ax + (tx - ax) * grow;
@@ -1321,7 +1452,19 @@ export class CradleBehaviour extends KitBehaviour {
     const L = this.atlas;
     let changed = false;
     const f = this.f;
-    const redrawSkin = this.skin.ready && f.tickNo !== this.skinTick && f.tickNo % 2 === 0;
+    // the atlas rect that changed (S19: the sail redraws every other frame; upload only its part, not the whole atlas)
+    let dx0 = Infinity;
+    let dy0 = Infinity;
+    let dx1 = -Infinity;
+    let dy1 = -Infinity;
+    const grow = (x0: number, y0: number, w: number, h: number): void => {
+      if (x0 < dx0) dx0 = x0;
+      if (y0 < dy0) dy0 = y0;
+      if (x0 + w > dx1) dx1 = x0 + w;
+      if (y0 + h > dy1) dy1 = y0 + h;
+    };
+    const redrawSkin =
+      this.skin.ready && f.tickNo !== this.skinTick && f.tickNo % (FX_DETAIL.level === 0 ? 4 : 2) === 0;
     for (const r of this.regions) {
       if (r.lost) continue;
       const m = r.body.map;
@@ -1339,11 +1482,13 @@ export class CradleBehaviour extends KitBehaviour {
         this.skinTick = f.tickNo;
         r.version = m.version;
         changed = true;
+        grow(pl.sx, pl.sy, m.w, m.h);
         continue;
       }
       if (m.version === r.version) continue;
       r.version = m.version;
       changed = true;
+      grow(pl.sx, pl.sy, m.w, m.h);
       for (let y = 0; y < m.h; y++) {
         const src = y * m.w;
         const dst = (pl.sy + y) * L.w + pl.sx;
@@ -1353,7 +1498,15 @@ export class CradleBehaviour extends KitBehaviour {
     }
     if (changed) {
       L.version++;
-      L.dirty = null;
+      // the renderer nulls `dirty` once uploaded; until then keep growing the rect (the Overlay protocol)
+      const d = L.dirty;
+      if (d === null) L.dirty = { x0: dx0, y0: dy0, x1: dx1, y1: dy1 };
+      else {
+        if (dx0 < d.x0) d.x0 = dx0;
+        if (dy0 < d.y0) d.y0 = dy0;
+        if (dx1 > d.x1) d.x1 = dx1;
+        if (dy1 > d.y1) d.y1 = dy1;
+      }
     }
     const t = this.f.body.transform;
     L.x = L.prevX = t.x;
@@ -1361,6 +1514,13 @@ export class CradleBehaviour extends KitBehaviour {
     L.facing = this.facing;
     L.visible = true;
     out.push(L);
+    // the filaments and the membrane: drawn here, once per rendered frame, for the latest tick (S19)
+    // (limited to the view: the membrane is wider than the screen while it spreads; redrawn if the camera moved far)
+    // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
+    if ((this.fx.limitToView(_view) || this.fxStale) && this.f.foe) {
+      this.fxStale = false;
+      this.drawFx();
+    }
     if (this.fx.layer.visible) out.push(this.fx.layer);
     if (this.organFx.layer.visible) out.push(this.organFx.layer);
   }

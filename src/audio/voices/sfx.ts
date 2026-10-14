@@ -34,7 +34,7 @@ export function playImpact(c: VoiceCtx, t: number, ev: HitEvent, mag: number, pa
   noiseHit(c, body, t, {
     dur: 0.12 + 0.2 * mag,
     gain: 0.36 * (0.5 + mag) * open,
-    filter: { type: 'lowpass', f0: 1600 - 600 * ev.blocked, f1: 220, q: 0.8 },
+    filter: { type: 'lowpass', f0: 1600 - 600 * clamp01(ev.blocked), f1: 220, q: 0.8 },
     attack: 0.001,
   });
   // the deep drop for the big ones; the cavern answering for seconds only for the truly heavy (a dense exchange of medium blows

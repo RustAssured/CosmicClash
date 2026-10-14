@@ -1,7 +1,8 @@
-import { clamp01 } from '@/contracts';
+import { clamp01, rgba } from '@/contracts';
 import { hash01 } from '@/titans/art/noise';
 import type { Overlay } from './overlay';
 import { DMath, sq } from '@/contracts/dmath';
+import { fcos, fsin } from '@/contracts/ftrig';
 
 /**
  * Drawing helpers shared by the Phase 2 titans' effects: a tiling noise table that is cheap to sample per pixel (flames, plasma
@@ -158,22 +159,47 @@ export function ringBand(
   const steps = Math.max(24, Math.ceil(Math.abs(arc[1] - arc[0]) * r1 * 1.15));
   const width = r1 - r0;
   const lead = Math.min(width, 9);
+  // S19: the wake's density depends only on the distance behind the edge: tabulated once per call (it was a DMath.pow per
+  // pixel, over up to ~10⁶ pixels of a thick nova ring)
+  const nk = Math.floor(width) + 1;
+  if (RING_W.length < nk) {
+    RING_W = new Float64Array(nk * 2);
+    RING_D = new Float64Array(nk * 2);
+  }
+  for (let k = 0; k < nk; k++) {
+    const fromEdge = width - k;
+    const w = 1 - (fromEdge - lead) / Math.max(1, width - lead);
+    RING_W[k] = w;
+    RING_D[k] = fromEdge > lead ? DMath.pow(Math.max(0, w), 2.2) * 0.8 * gain : 0;
+  }
+  const ox0 = ov.cx0;
+  const oy0 = ov.cy0;
+  const ox1 = ov.cx1;
+  const oy1 = ov.cy1;
+  const rmax = r1 + lead; // + the ragged rim
   for (let s = 0; s < steps; s++) {
     const a = arc[0] + ((arc[1] - arc[0]) * s) / steps;
-    const ca = DMath.cos(a);
-    const sa = DMath.sin(a);
+    const ca = fcos(a);
+    const sa = fsin(a);
+    // a ray that misses the overlay altogether (most of a ring grown past the layer) costs nothing
+    const ex0 = cx + ca * Math.max(0, r0 - lead);
+    const ex1 = cx + ca * rmax;
+    const ey0 = cy + sa * Math.max(0, r0 - lead) * squash;
+    const ey1 = cy + sa * rmax * squash;
+    if (Math.max(ex0, ex1) < ox0 - 1 || Math.min(ex0, ex1) >= ox1 + 1) continue;
+    if (Math.max(ey0, ey1) < oy0 - 1 || Math.min(ey0, ey1) >= oy1 + 1) continue;
     const n = tn(a * 26 + tick * 0.35, tick * 0.6);
     const ragged = 0.14 * lead * (n - 0.5) * 2;
     for (let k = 0; k <= width; k++) {
       const rr = r0 + k + ragged;
       const x = Math.round(cx + ca * rr);
       const y = Math.round(cy + sa * rr * squash);
-      if (x < ov.ox || y < ov.oy || x >= ov.ox + ov.w || y >= ov.oy + ov.h) continue;
+      if (x < ox0 || y < oy0 || x >= ox1 || y >= oy1) continue;
       const fromEdge = width - k; // 0 at the leading edge
       if (fromEdge > lead) {
         // wake: sparse, cooling
-        const w = 1 - (fromEdge - lead) / Math.max(1, width - lead); // 1 just behind the edge → 0 at the trailing edge
-        const dens = DMath.pow(w, 2.2) * 0.8 * gain;
+        const w = RING_W[k]!; // 1 just behind the edge → 0 at the trailing edge
+        const dens = RING_D[k]!;
         if (dens <= (BAYER[((y & 3) << 2) | (x & 3)]! + 0.5) / 16) continue;
         ov.set(x, y, rampDither(ramp, 0.12 + 0.5 * w + 0.2 * (n - 0.5), x, y), Math.round(150 * w));
       } else {
@@ -184,6 +210,10 @@ export function ringBand(
     }
   }
 }
+
+/** ringBand's per-call tables (presentation scratch). */
+let RING_W = new Float64Array(0);
+let RING_D = new Float64Array(0);
 
 /** A soft additive streak (comet tail / motion smear) from (x0, y0) to (x1, y1): brightest at the head, fading along its length. */
 export function streak(
@@ -222,19 +252,53 @@ export function glowD(
 ): void {
   const r2 = r * r;
   const L = 6;
-  for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++)
-    for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+  // S19: only the disc where a level can light at all (t must beat the smallest dither threshold, 1/32), row spans
+  // instead of a box test, clipped to the overlay's drawable rect, and the additive write inlined
+  const sL = strength * L;
+  if (!(sL > 1 / 32) || !(r > 0)) return;
+  const reach2 = r2 * (1 - Math.sqrt(1 / 32 / sL));
+  const px = ov.pixels;
+  const W = ov.w;
+  let mx0 = Infinity;
+  let my0 = Infinity;
+  let mx1 = -Infinity;
+  let my1 = -Infinity;
+  const ya = Math.max(Math.floor(cy - r), ov.cy0);
+  const yb = Math.min(Math.ceil(cy + r), ov.cy1 - 1);
+  for (let y = ya; y <= yb; y++) {
+    const dy = y + 0.5 - cy;
+    const rem = reach2 - dy * dy;
+    if (rem < 0) continue;
+    const half = Math.sqrt(rem);
+    const xa = Math.max(Math.floor(cx - 0.5 - half), ov.cx0);
+    const xb = Math.min(Math.ceil(cx - 0.5 + half), ov.cx1 - 1);
+    const row = (y - ov.oy) * W - ov.ox;
+    for (let x = xa; x <= xb; x++) {
       const dx = x + 0.5 - cx;
-      const dy = y + 0.5 - cy;
       const d2 = dx * dx + dy * dy;
       if (d2 > r2) continue;
-      const t = sq(1 - d2 / r2) * strength * L;
+      const t = sq(1 - d2 / r2) * sL;
       const fl = Math.floor(t);
       const lvl = fl + (t - fl > (BAYER[((y & 3) << 2) | (x & 3)]! + 0.5) / 16 ? 1 : 0);
       if (lvl <= 0) continue;
       const k = Math.min(1, lvl / L);
-      ov.add(x, y, cr * k, cg * k, cb * k);
+      // Overlay.add, inlined
+      const i = row + x;
+      const c = px[i]!;
+      const has = c >>> 24 !== 0;
+      px[i] = rgba(
+        Math.min(255, (has ? c & 255 : 0) + cr * k),
+        Math.min(255, (has ? (c >>> 8) & 255 : 0) + cg * k),
+        Math.min(255, (has ? (c >>> 16) & 255 : 0) + cb * k),
+        255,
+      );
+      if (x < mx0) mx0 = x;
+      if (x > mx1) mx1 = x;
+      if (y < my0) my0 = y;
+      if (y > my1) my1 = y;
     }
+  }
+  if (mx1 >= mx0) ov.markRect(mx0 - ov.ox, my0 - ov.oy, mx1 + 1 - ov.ox, my1 + 1 - ov.oy);
 }
 
 /**

@@ -470,8 +470,12 @@ export class AsteroidBehaviour extends Behaviour {
     if (spd > 150 && this.trailClock % 2 === 0 && !f.ko) this.spawnTrail(spd);
     if (this.rubble && tick % 9 === 0) this.spawnCrumbs();
 
-    this.draw(tick, id, m);
+    // S19: the orbiting rocks, the storm and the flares are rasterised at render time (`renderLayers`)
+    this.drawStale = true;
+    this.drawTick = tick;
   }
+  private drawStale = false;
+  private drawTick = 0;
 
   private spawnTrail(spd: number): void {
     const f = this.f;
@@ -720,7 +724,13 @@ export class AsteroidBehaviour extends Behaviour {
     }
   }
 
-  override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+  override renderLayers(view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+    // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
+    if ((this.fx.limitToView(view) || this.drawStale) && this.f.foe) {
+      this.drawStale = false;
+      const m = this.f.mv;
+      this.draw(this.drawTick, m.def?.id ?? '', m);
+    }
     out.push(this.back.layer, this.front.layer, this.fx.layer);
   }
 

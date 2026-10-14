@@ -15,6 +15,7 @@ import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape } from '../shapes';
 import { DMath } from '@/contracts/dmath';
+import { fcos } from '@/contracts/ftrig';
 
 interface WellCfg {
   radius: [number, number];
@@ -39,6 +40,12 @@ export class BlackHoleBehaviour extends Behaviour {
   private disk = new Int32Array(0);
   private ang = new Float32Array(0);
   private rad = new Float32Array(0);
+  /** Per disk cell: (diskIn / max(20, rad))^1.4, how much faster it orbits (constant: S19, was a DMath.pow per cell per tick). */
+  private orbitK = new Float32Array(0);
+  private drawStale = false;
+  private drawTick = 0;
+  private drawMass = 1;
+  private drawHolding = false;
   private well: WellCfg | null = null;
   private ult: WellCfg | null = null;
   private wellOn = false;
@@ -63,6 +70,7 @@ export class BlackHoleBehaviour extends Behaviour {
     this.disk = Int32Array.from(list);
     this.ang = new Float32Array(list.length);
     this.rad = new Float32Array(list.length);
+    this.orbitK = new Float32Array(list.length);
     const ct = DMath.cos(this.rig.tilt);
     const st = DMath.sin(this.rig.tilt);
     list.forEach((i, k) => {
@@ -72,6 +80,7 @@ export class BlackHoleBehaviour extends Behaviour {
       const v = (-x * st + y * ct) / this.rig.squash;
       this.ang[k] = DMath.atan2(v, u);
       this.rad[k] = DMath.hypot(u, v);
+      this.orbitK[k] = DMath.pow(this.rig.diskIn / Math.max(20, this.rad[k]!), 1.4);
     });
     this.fx = new Overlay('blackhole-fx', 20, 280, 240, 'add', true);
     this.well = (f.slotMoves.signature?.extra?.['well'] as WellCfg | undefined) ?? null;
@@ -212,7 +221,21 @@ export class BlackHoleBehaviour extends Behaviour {
     f.view.lensRadius = this.rig.horizon * (0.6 + 0.4 * low);
     f.view.lensStrength = clamp(0.35 + 0.5 * Math.max(0, st.massFrac - 1), 0, 1.5) * (0.3 + 0.7 * low);
     this.lean = DMath.sin(tick * 0.017 + f.slot) * 1.2;
-    this.draw(tick, st.massFrac, holding);
+    // the Hawking cue is sim output: it stays in the tick; the drawing is done at render time (S19)
+    if (st.massFrac < 0.5 && tick % 45 === 0 && !f.ko)
+      f.events.push({
+        t: 'cue',
+        slot: f.slot,
+        titan: f.def.id,
+        id: 'hawking',
+        x: t.x,
+        y: t.y,
+        amount: 0.5 - st.massFrac,
+      });
+    this.drawStale = true;
+    this.drawTick = tick;
+    this.drawMass = st.massFrac;
+    this.drawHolding = holding;
   }
 
   private draw(tick: number, massFrac: number, holding: boolean): void {
@@ -231,10 +254,9 @@ export class BlackHoleBehaviour extends Behaviour {
     for (let k = 0; k < this.disk.length; k++) {
       const i = this.disk[k]!;
       if (map.material[i] === 0) continue;
-      const q = this.rad[k]!;
-      const w = spin * DMath.pow(this.rig.diskIn / Math.max(20, q), 1.4);
-      const b = 0.5 + 0.5 * DMath.cos(this.ang[k]! * 2 - w);
-      const dop = 0.5 - 0.5 * DMath.cos(this.ang[k]! - 0.0);
+      const w = spin * this.orbitK[k]!;
+      const b = 0.5 + 0.5 * fcos(this.ang[k]! * 2 - w);
+      const dop = 0.5 - 0.5 * fcos(this.ang[k]! - 0.0);
       const e = b * b * (0.35 + 0.65 * (1 - dop)) * 46 * gain;
       if (e < 4) continue;
       const lx = i % map.w;
@@ -270,17 +292,6 @@ export class BlackHoleBehaviour extends Behaviour {
     }
     if (massFrac < 0.5) {
       const n = Math.round((0.5 - massFrac) * 30);
-      if (tick % 45 === 0 && !f.ko) {
-        f.events.push({
-          t: 'cue',
-          slot: f.slot,
-          titan: f.def.id,
-          id: 'hawking',
-          x: t.x,
-          y: t.y,
-          amount: 0.5 - massFrac,
-        });
-      }
       for (let k = 0; k < n; k++) {
         const a = hash01(tick, k, 5) * 6.2832;
         const r = hz * (0.9 + 0.5 * hash01(tick, k, 6));
@@ -290,7 +301,12 @@ export class BlackHoleBehaviour extends Behaviour {
     fx.end();
   }
 
-  override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+  override renderLayers(view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+    // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
+    if ((this.fx.limitToView(view) || this.drawStale) && this.f.foe) {
+      this.drawStale = false;
+      this.draw(this.drawTick, this.drawMass, this.drawHolding);
+    }
     out.push(this.fx.layer);
   }
 

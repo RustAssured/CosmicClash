@@ -16,6 +16,8 @@ export type UIAction =
   | { type: 'setAccessibility'; shake: number; flash: number }
   /** Display: fill = stretch to the screen (non-integer nearest fit); false = crisp whole-number scale (default). */
   | { type: 'setDisplay'; fill: boolean }
+  /** Display: the SHOW FPS readout (S19). */
+  | { type: 'setFps'; on: boolean }
   /** Training: what the dummy does. */
   | { type: 'setDummy'; mode: 'idle' | 'guard' | 'ai' }
   | { type: 'resetPositions' }
@@ -41,7 +43,9 @@ export type UIScreenId =
   /** The tournament ladder (src/ui/screens/ladder.ts): the tower, the story cards, the ending. */
   | 'ladder'
   /** The tournament's mode (CLASSIC / COSMIC CLASH) and difficulty choice (src/ui/screens/tourney.ts). */
-  | 'tourney';
+  | 'tourney'
+  /** Online play, CHALLENGE A FRIEND (src/ui/screens/online.ts, src/net/, docs/netplay/STEP1.md). */
+  | 'online';
 
 /** Pixel-art UI/HUD. Renders into ONE screen-space layer at logical resolution (crisp, composited last). */
 export interface GameUI {

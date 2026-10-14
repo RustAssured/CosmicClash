@@ -33,6 +33,8 @@ async function main(): Promise<void> {
     witness: params.witness,
     aftermath: params.aftermath,
   });
+  // a CHALLENGE A FRIEND link (`?room=CODE`) goes straight into joining that room (docs/netplay/STEP1.md)
+  app.openOnlineFromUrl(location.search);
   await installHarness(app, params);
 }
 

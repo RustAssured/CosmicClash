@@ -4,8 +4,13 @@ export const dbToGain = (db: number): number => Math.pow(10, db / 20);
 export const gainToDb = (g: number): number => 20 * Math.log10(Math.max(1e-9, g));
 export const midiToHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 export const centsToRatio = (c: number): number => Math.pow(2, c / 1200);
-export const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
-export const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+/**
+ * Clamp `v` into [lo, hi]. NaN clamps to `lo`: a NaN that slips through a clamp reaches an AudioParam (which throws, dropping the
+ * rest of the sound) or a filter (whose state then stays NaN for good: in Chromium one NaN sample mutes a BiquadFilterNode
+ * forever). Every value the voices compute from game data goes through one of these, so this is where NaN stops.
+ */
+export const clamp = (v: number, lo: number, hi: number): number => (v > lo ? (v > hi ? hi : v) : lo);
+export const clamp01 = (v: number): number => (v > 0 ? (v > 1 ? 1 : v) : 0);
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 /** Perceptual volume: slider 0..1 → linear gain (a squared taper feels linear to the ear). */

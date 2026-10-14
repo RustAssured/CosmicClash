@@ -614,8 +614,11 @@ export class SupernovaBehaviour extends Behaviour {
     this.lastTick = tick;
 
     this.chargeParticles();
-    this.draw(tick, m);
+    // S19: the star's overlays (granulation, prominences, the nova's rings and glows) are rasterised at render time, once
+    // per drawn frame (`renderLayers`), not in the sim tick: drawing is presentation only
+    this.drawStale = true;
   }
+  private drawStale = false;
 
   private windParticles(): void {
     const f = this.f;
@@ -1244,6 +1247,12 @@ export class SupernovaBehaviour extends Behaviour {
 
   override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
     const f = this.f;
+    // limited to the view (a nova ring outgrows the screen); redrawn if the camera moved far since
+    // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
+    if ((this.fx.limitToView(_view) || this.drawStale) && this.f.foe) {
+      this.drawStale = false;
+      this.draw(this.lastTick, f.mv);
+    }
     const body = out[out.length - 1]!;
     this.shimmer.follow(body);
     // the halo follows the star (interpolated like the body) and shrinks with it

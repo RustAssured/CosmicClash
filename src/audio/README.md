@@ -127,6 +127,34 @@ Found by running the real engine in headless Chromium (the strict fake in Node c
    test). Voices are now created on their pitch through `.value`, and the fake context rejects that pattern.
 6. **Two renders of one seed differ by float noise** (about −83 dB) in Chromium's offline graph, so the verification compares RMS of
    the difference, not samples.
+7. **One non-finite sample mutes a `BiquadFilterNode` forever** (measured in headless Edge: one NaN or ±Infinity sample into a
+   50 Hz high-pass, and every later sample is NaN; Chromium only logs "BiquadFilterNode: state is bad"). A `ConvolverNode` stays NaN
+   for its impulse response, a WaveShaper / gain / panner / compressor / the limiter only for the bad sample itself. The master's
+   high-pass, laptop EQ and weight stage are biquads, so ONE bad sample anywhere in the mix silenced the game until a reload: "the
+   sound disappears after a heavy move and never comes back". Hence the guard below, and: `clamp` / `clamp01` map NaN to their
+   low end (they used to pass it through, `NaN < 0` and `NaN > 1` both being false); every event and scene number is sanitised at
+   the engine's door (`sanitizeEvent`, `sanitizeScene`), since an `AudioParam` throws on a non-finite value half-way through a sound.
+
+8. **An audio thread that falls behind real time is silence.** Measured in real-time Edge on the target laptop (Ryzen 5 5500U):
+   the idle engine renders at 100 % of real time, but a beam ultimate (the sim emits a `hit` slice every 5 ticks for continuous
+   damage, all flagged heavy when the move is an ultimate; each was voiced with the full heavy chain, ~190 nodes and 15
+   source-seconds) ran the audio clock at 7–33 % of real time, and a 3 s beam muted the game for ~8 s (every tail scheduled in
+   audio time lasts 3–10× longer in wall time when the clock crawls). Now: a light blow (presentation energy under
+   `DUCK_MIN_ENERGY`) never gets the heavy chain and sounds at most once per `LIGHT_HIT_REPEAT` per attacker; `crackle` is
+   granular (one chain, not five nodes per grain); one `handle()` batch gets at most `BATCH_LOW` low-priority sounds; and the
+   **load governor** (`Engine.watchLoad`, real-time contexts only) compares the audio clock with the wall clock every 0.5 s and,
+   below 85 %, sheds new low-priority sounds and caps blows until it has caught up (`renderSpeed` reports it). After the fix, on the
+   same machine, the same beam kept the clock at 100 % of real time and an ultimate's burst of cues at ~80 % (was 30–45 %).
+
+### The guard (`Engine.watch` / `Engine.recover`)
+
+Cheap, main-thread work only on what the engine already reads once a frame: the two analysers' 2048-sample windows (the peak scan
+also catches a NaN, since `Math.max` carries it), plus the limiter worklet's ~10 Hz report, which now also counts the non-finite input
+samples it replaced with silence (`LimiterCore.takeBad`). On a non-finite sample, a silent output under a live mix for ~0.75 s
+(a dead limiter, a stuck gain; not when the master fader is at 0), or a worklet `processorerror` (then the WaveShaper limiter is used
+from then on), the engine rebuilds its whole graph on the same context (at most once per 1.5 s): voices and score start over on the
+new buses, the old graph is cut off from the speakers and the analysers. A bed duck still down a second after its hold is put back
+up. Recoveries are logged in dev builds (`[audio] guard: …`) and counted (`recoveryCount`). Tests: `robustness.test.ts`.
 
 The strict fake (`testing/fakeContext.ts`) throws AND records every Web Audio rule it enforces (`takeViolations()`), because the
 engine deliberately swallows exceptions from a misbehaving voice: tests must assert the record is empty, not that nothing threw.

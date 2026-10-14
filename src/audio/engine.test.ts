@@ -567,7 +567,17 @@ describe('event handling', () => {
         0,
       ),
     ).not.toThrow();
-    expect(takeViolations().length).toBeGreaterThan(0); // contained, but recorded
+    // the non-finite numbers never reach a voice now (sanitised at the engine's door, see robustness.test.ts)
+    expect(takeViolations()).toEqual([]);
+    // a voice that throws anyway (here: the context refuses to build an oscillator) is contained
+    const real = ctx.createOscillator.bind(ctx);
+    ctx.createOscillator = () => {
+      throw new WebAudioViolation('no oscillator');
+    };
+    expect(() =>
+      eng.handleAt([{ t: 'ultimate', slot: 0, titan: 'supernova', phase: 'start', x: 800, y: 300 }], 1),
+    ).not.toThrow();
+    ctx.createOscillator = real;
   });
   it('every UI sound builds and every source it starts is also stopped (no leaks)', async () => {
     const { eng, ctx } = await ready();

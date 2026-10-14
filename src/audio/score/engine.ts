@@ -225,8 +225,10 @@ export class ScoreEngine {
     this.timeScale = clamp(scene.timeScale, 0.3, 1);
     // smooth intensity up quickly, down slowly: a fight should stay tense for a moment after the last exchange
     const target = scene.phase === 'fight' || scene.phase === 'attract' ? clamp01(scene.intensity) : 0;
-    const k = target > this.intensity ? 1 - Math.exp(-dt / 0.35) : 1 - Math.exp(-dt / 2.2);
-    this.intensity += (target - this.intensity) * k;
+    const step = clamp(dt, 0, 1);
+    const k = target > this.intensity ? 1 - Math.exp(-step / 0.35) : 1 - Math.exp(-step / 2.2);
+    // clamped (NaN-safe): a NaN here would stick in the smoothing and silence every layer of the score for good
+    this.intensity = clamp01(this.intensity + (target - this.intensity) * k);
     // tension ramps in below ~32% integrity and is full at ~10% (lowestIntegrity is the weaker titan's 0..1 integrity)
     this.lowIntegrity =
       scene.phase === 'fight' || scene.phase === 'attract'

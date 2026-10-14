@@ -3180,8 +3180,10 @@ export class PlanetBehaviour extends Behaviour {
   }
   private readonly rootTmp = { x: 0, y: 0, lean: 0, angle: 0 };
 
-  override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+  override renderLayers(view: ViewRect, _alpha: number, out: RenderLayer[]): void {
     const f = this.f;
+    // the fx overlay is limited to the view (S19); a camera that moved far since the last paint repaints it
+    if (this.fx.limitToView(view)) this.paintedTick = -1;
     this.paint();
     const body = out[out.length - 1]!;
     this.skin.follow(body);

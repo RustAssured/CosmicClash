@@ -23,6 +23,7 @@ import { createHudScreen } from './screens/hudscreen';
 import { type MatchSetup, type Screen, type TrainingState, type UICtx } from './screens/kit';
 import { createLadderScreen } from './screens/ladder';
 import { createModeScreen } from './screens/mode';
+import { createOnlineScreen } from './screens/online';
 import { createOptionsScreen } from './screens/options';
 import { createPauseScreen } from './screens/pause';
 import { createResultsScreen } from './screens/results';
@@ -144,6 +145,7 @@ class UIRuntime implements GameUI, UICtx {
       // the stored comfort settings reach the shell on the very first frame, before any options screen is opened
       this.comfortSent = true;
       this.emit({ type: 'setAccessibility', shake: this.settings.shake / 4, flash: this.settings.flash / 4 });
+      if (this.settings.showFps) this.emit({ type: 'setFps', on: true });
     }
     if (this.fade < 1) this.fade = Math.min(1, this.fade + dtSec / FADE_SEC);
     if (this.pendingResults !== null) {
@@ -381,6 +383,8 @@ class UIRuntime implements GameUI, UICtx {
         return createLadderScreen();
       case 'tourney':
         return createTourneyScreen();
+      case 'online':
+        return createOnlineScreen();
     }
   }
 
