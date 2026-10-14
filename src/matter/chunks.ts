@@ -955,9 +955,10 @@ export interface ChunkTargets {
   frontEmi: Uint8Array;
   nearPix: Uint32Array;
   nearEmi: Uint8Array;
-  backRange: { a: number; b: number };
-  frontRange: { a: number; b: number };
-  nearRange: { a: number; b: number };
+  /** Rows (a..b) and, when present, columns (l..r) each layer touched (render-only upload bookkeeping). */
+  backRange: { a: number; b: number; l?: number; r?: number };
+  frontRange: { a: number; b: number; l?: number; r?: number };
+  nearRange: { a: number; b: number; l?: number; r?: number };
 }
 
 /** Cap on 2x chunks drawn per frame (they are large: keeps fill cost and clutter bounded). */
@@ -1035,6 +1036,12 @@ export function rasterChunks(
     const inv = 1 / sc;
     if (y0 < range.a) range.a = y0;
     if (y1 > range.b) range.b = y1;
+    if (range.l !== undefined) {
+      const xa = Math.max(0, Math.floor(sx - R));
+      const xb = Math.min(W - 1, Math.ceil(sx + R));
+      if (xa < range.l) range.l = xa;
+      if (xb > range.r!) range.r = xb;
+    }
     for (let dy = y0; dy <= y1; dy++) {
       const ry = dy + 0.5 - sy;
       // chord of the bounding circle limits x extent

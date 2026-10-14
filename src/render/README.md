@@ -28,6 +28,7 @@ frameRT [MRT] colour(+occlusion α) · emissive        ◄── 2D layers, z-so
 post @ 640×360: shockwave + local wound refraction ─► lens fringe ─► + bloom + rays ─► vignette ─► grain
    ▼
 luminance governor: 40×23 block sums ─► 1×1 state (300 ms average, rise cap 0.12) ─► gain for the final pass; async PBO read-back
+                    only once telemetry / verification asks (`drainLuma`): polling it made the main thread wait for the GPU (S21)
    ▼
 final @ canvas: nearest integer upscale (push=1: sharp-bilinear zoom ≤ 1.10) + roll ─► governor gain ─► UI composited last, un-zoomed, never bloomed
 ```
@@ -65,6 +66,18 @@ final @ canvas: nearest integer upscale (push=1: sharp-bilinear zoom ≤ 1.10) +
 * Textures wrap the layer's own typed arrays (no copies). Cache key = `layer.id`; **unchanged `version` ⇒ nothing uploaded**; a changed `version` uploads only the `dirty` rect
   (`texSubImage2D` with `UNPACK_ROW_LENGTH`) or the whole layer if `dirty` is null / ≥ 60 % of it; `layer.dirty` is set to `null` after upload (see docs/proposals/001). A layer whose size or
   backing arrays change gets a new texture; layers not drawn for 240 frames are freed.
+* S21: the big 640×360 screen layers follow it too: the matter world's four debris / particle layers hand over the rectangle
+  drawn now ∪ drawn last time (and leave an empty layer's version alone), the UI diffs its pixels against a shadow copy and
+  hands over the changed rectangle. `npm run perf:uploads` (tools/perf/uploadcheck.ts) reads every texture back after every
+  frame and compares it with its layer (`?layercheck=1`).
+
+## Performance (S21)
+
+* `npm run perf:frames` (tools/perf/frameprof.ts): the real game in a headed Edge window, vsync on, ×2 (maximised window) and
+  ×3 (full screen); rAF intervals, the loop's CPU per frame, double-tick frames. `--prof=1` adds `?prof=1`
+  (`passProfiler.ts`): CPU and GPU (timer queries) per section, app and renderer passes, the slowest frames whole with their
+  texture uploads and garbage collections. `npm run perf:budget` checks every run against `tools/perf/budget.json`.
+* Rarely used passes are drawn once at load (`warmPasses`): a compiled program's first real draw still stalled 10–20 ms.
 
 ## `FrameFx` (contracts/render.ts)
 

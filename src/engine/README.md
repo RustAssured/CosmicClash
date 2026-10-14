@@ -16,7 +16,8 @@ A rAF-driven accumulator that turns real time into **fixed 60 Hz simulation tick
 const loop = createLoop({
   tick: () => match.step(),                       // exactly one fixed tick
   frame: (alpha, dtSec) => draw(alpha, dtSec),    // alpha ∈ [0,1): fraction of a tick since the last tick
-  // optional: tickHz = 60, maxCatchUp = 5, now, requestFrame, cancelFrame, onVisibility (injected in tests)
+  // optional: tickHz = 60, maxCatchUp = 5, maxTicksPerFrame = 2, now, requestFrame, cancelFrame, onVisibility (injected in
+  // tests), onTiming (profiling: ms of every tick and frame)
 });
 loop.start();
 loop.timeScale = 0.3;      // KO slow-mo = fewer ticks per second, clamped to [0.05, 1]; never a variable dt
@@ -27,7 +28,11 @@ loop.stats;                // { msPerTick, msPerFrame, ticksPerFrame, droppedFra
 
 Guarantees (all unit-tested in `loop.test.ts`):
 
-- at most `maxCatchUp` (5) ticks per frame; any further backlog is **dropped** (`stats.droppedFrames`) — no spiral of death;
+- at most `maxTicksPerFrame` (2) ticks per frame; a backlog after a hitch is caught up over the next frames, never more than
+  `maxCatchUp` (5) ticks of it; anything beyond is **dropped** (`stats.droppedFrames`) — no spiral of death, and no 5-tick
+  burst that makes the next frame long too (S21);
+- vsync snap: a frame interval within ±0.6 ms of a whole number of ticks counts as exactly that many, so a 60 Hz panel's rAF
+  jitter never turns into alternating 0- and 2-tick frames (S21);
 - a frame longer than 250 ms (debugger, GC, slow device) is treated as a stall and clamped;
 - a hidden tab pauses the clock and resumes without a burst of ticks;
 - `pause()` freezes ticking but keeps calling `frame(0, dt)` so the harness can still screenshot;

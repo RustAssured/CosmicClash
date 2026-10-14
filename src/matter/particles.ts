@@ -356,10 +356,10 @@ export function rasterParticles(
   alpha: number,
   pix: Uint32Array,
   emi: Uint8Array,
-  yRange: { a: number; b: number },
+  yRange: { a: number; b: number; l?: number; r?: number },
   nearPix?: Uint32Array,
   nearEmi?: Uint8Array,
-  nearRange?: { a: number; b: number },
+  nearRange?: { a: number; b: number; l?: number; r?: number },
   /** false (default): every particle but the PF_BACK ones; true: only the PF_BACK ones (into the back layer's `pix`). */
   back = false,
 ): void {
@@ -374,6 +374,9 @@ export function rasterParticles(
   const rl = pool.rampLen;
   let minY = yRange.a;
   let maxY = yRange.b;
+  // columns touched (render-only upload bookkeeping, S21: the renderer uploads just this rectangle)
+  let minX = yRange.l ?? 0;
+  let maxX = yRange.r ?? W - 1;
   for (let s = 0; s < hi; s++) {
     const l = life[s]!;
     if (l === 0) continue;
@@ -433,6 +436,8 @@ export function rasterParticles(
         if (se > emi[o]!) emi[o] = q === 0 ? se : se >> 1;
         if (qy < minY) minY = qy;
         if (qy > maxY) maxY = qy;
+        if (qx < minX) minX = qx;
+        if (qx > maxX) maxX = qx;
       }
       continue;
     }
@@ -444,11 +449,15 @@ export function rasterParticles(
       if (e8 > emi[o]!) emi[o] = e8;
       if (py < minY) minY = py;
       if (py > maxY) maxY = py;
+      if (px < minX) minX = px;
+      if (px > maxX) maxX = px;
     } else {
       const r = sz >> 1;
       const x0 = px - r;
       const y0 = py - r;
       const w2 = sz;
+      if (x0 < minX) minX = Math.max(0, x0);
+      if (x0 + w2 - 1 > maxX) maxX = Math.min(W - 1, x0 + w2 - 1);
       for (let yy = 0; yy < w2; yy++) {
         const sy = y0 + yy;
         if (sy < 0 || sy >= H) continue;
@@ -474,6 +483,10 @@ export function rasterParticles(
   }
   yRange.a = minY;
   yRange.b = maxY;
+  if (yRange.l !== undefined) {
+    yRange.l = minX;
+    yRange.r = maxX;
+  }
 }
 
 /** A big soft puff in the near (2x) layer: pixel-doubled, dither-faded, growing with age. */
@@ -484,7 +497,7 @@ function drawNearPuff(
   ext: number,
   pix: Uint32Array,
   emi: Uint8Array,
-  range: { a: number; b: number },
+  range: { a: number; b: number; l?: number; r?: number },
 ): void {
   const W = LOGICAL_W;
   const H = LOGICAL_H;
@@ -504,6 +517,10 @@ function drawNearPuff(
   const y1 = Math.min(H - 1, Math.ceil(sy + r));
   if (y0 < range.a) range.a = y0;
   if (y1 > range.b) range.b = y1;
+  if (range.l !== undefined) {
+    range.l = Math.min(range.l, Math.max(0, Math.floor(sx - r)));
+    range.r = Math.max(range.r!, Math.min(W - 1, Math.ceil(sx + r)));
+  }
   for (let y = y0; y <= y1; y++) {
     for (let x = Math.max(0, Math.floor(sx - r)); x <= Math.min(W - 1, Math.ceil(sx + r)); x++) {
       const dx = x + 0.5 - sx;

@@ -55,6 +55,7 @@ import { bayerTexels } from './dither';
 import { FullscreenPass, dataTexture, disposeSharedGeometry, makeRT, resetSharedGeometry } from './gl';
 import { LayerTextures } from './layerTextures';
 import { GpuTimer } from './gpuTimer';
+import { PROF } from './passProfiler';
 import { LutBuilder, PALETTE_TEX_W, paletteTextures, preparePalette, type DitherLut } from './palette';
 import { QualityController, type Tier as QualityTier } from './quality';
 import { animationFrame, runSliced, runToEnd, scaled } from './slicer';
@@ -168,7 +169,7 @@ export interface RenderStatsEx extends RenderStats {
   /**
    * Newest luminance-governor reading (1–3 frames old: read back asynchronously through a PBO + fence, never stalling the
    * frame). Null until the first read completes or where float read-back is unavailable. Every frame's sample is also kept
-   * for `drainLuma()`.
+   * for `drainLuma()`. The read-back starts with the first `drainLuma()` / `debugLumaReadback()` call (off in normal play).
    */
   luma: LumaStats | null;
 }
@@ -495,7 +496,8 @@ class PixelRenderer implements DebuggableRenderer {
     if (this.haloLift === 0) this.compositor.glowFloor.value = 0.13;
     this.captureRT = null;
     // the timer-query extension object belongs to the dead context: ask the new one
-    this.gpuTimer = GpuTimer.create(this.three.getContext() as WebGL2RenderingContext);
+    this.gpuTimer = PROF.on ? null : GpuTimer.create(this.three.getContext() as WebGL2RenderingContext);
+    if (PROF.on) PROF.attach(this.three.getContext() as WebGL2RenderingContext);
     this.stats.gpuMs = null;
     // the pixel-pack buffers and fences died with the old context too (dropped, never deleted)
     this.lumaRead = null;
@@ -559,9 +561,17 @@ class PixelRenderer implements DebuggableRenderer {
     r.extensions.get('EXT_color_buffer_half_float');
     r.extensions.get('OES_texture_float_linear');
     this.gpuTimer = GpuTimer.create(r.getContext() as WebGL2RenderingContext);
+    // the per-pass profiler (?prof=1) owns the timer queries then: they may not nest
+    if (PROF.on) {
+      PROF.attach(r.getContext() as WebGL2RenderingContext);
+      this.gpuTimer = null;
+    }
     this.lumaRead = this.makeLumaReadback();
 
     this.layers = new LayerTextures(r);
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('layercheck') === '1')
+      (window as unknown as { __ADEUK_LAYERCHECK__: () => unknown }).__ADEUK_LAYERCHECK__ = () =>
+        this.layers.debugVerify();
     this.compositor = new LayerCompositor(this.layers, this.emisGain);
     this.buildTargets();
     this.buildPasses();
@@ -570,6 +580,7 @@ class PixelRenderer implements DebuggableRenderer {
     this.registerKnobs();
     // Our own programs compile now (in parallel where the browser can), so the first frame does not pay for them.
     await this.compileOwnPasses();
+    this.warmPasses();
     // Scenery (shader compile, palette LUT, pillar bakes ≈ seconds) is built by the first setStage()/prepareStage()/draw().
     if (this.stageRequested) this.setStage(this.wantedStage);
   }
@@ -648,6 +659,37 @@ class PixelRenderer implements DebuggableRenderer {
       this.vfx.compile(r),
       this.margin.compile(r),
     ]);
+  }
+
+  /**
+   * S21: draw every pass that is used only now and then (the shared VFX at the first impact, the margin when the window is
+   * not full screen, the classic bloom and layer composite off the unified path) once into its own target at load. A program
+   * that is compiled but never drawn still costs its first draw a 10–20 ms stall (the driver finishes it for the real
+   * target and state then): measured as `r.vfx` 11–21 ms at a fight's first impact on the Vega 7. Nothing here is visible:
+   * every target is cleared or overwritten before its next use, and the canvas is redrawn by the first frame.
+   */
+  private warmPasses(): void {
+    const r = this.three;
+    this.vfx.data.fill(0);
+    this.vfx.draw(r, this.layerRT, 1);
+    this.vfx.drawn = 0;
+    this.blurCoverage(DEFAULT_SPRITE_HALO.radius);
+    this.layerComposite.render(r, this.frameRT);
+    this.finishPass.render(r, this.frameRT);
+    this.runBloom();
+    this.runSharedBloom();
+    this.margin.update(r, this.postRT.texture);
+    this.margin.reset();
+    r.setRenderTarget(null);
+    const L = this.layout;
+    r.setViewport(0, 0, L.physW, L.physH);
+    this.margin.draw(r, L, 0);
+    r.setRenderTarget(this.frameRT);
+    r.setClearColor(0x000000, 0);
+    r.clear(true, false, false);
+    r.setRenderTarget(this.layerRT);
+    r.clear(true, false, false);
+    r.setRenderTarget(null);
   }
 
   private buildTargets(): void {
@@ -1277,11 +1319,14 @@ class PixelRenderer implements DebuggableRenderer {
       else if (!this.jobs.has(frame.stage)) void this.prepareStage(frame.stage).catch(() => undefined);
     }
     const scenery = this.active?.scenery ?? null;
+    PROF.mark('r.luma');
     this.collectLuma();
+    PROF.mark('r.begin');
     r.info.reset();
     this.frameNo++;
     this.layers.beginFrame();
     this.gpuTimer?.begin();
+    PROF.mark('r.scenery');
     const fx = frame.fx;
     const view = frame.view;
 
@@ -1319,6 +1364,7 @@ class PixelRenderer implements DebuggableRenderer {
     // ---- 2D layers first, into their own target: their coverage shapes the scenery grade beneath them ----
     // (unified path: emissives enter the shared bloom at their own colour, as in the oracles)
     // uni: the unified layer path (outline, seams, 우리's shading, shared VFX); snap / sb: the parts D34 made switches (UNIFIED_LOOK)
+    PROF.mark('r.layers');
     const L = UNIFIED_LOOK;
     const uni = this.unified && (this.master !== null || !L.snapFinal);
     const snap = uni && L.snapFinal;
@@ -1331,6 +1377,7 @@ class PixelRenderer implements DebuggableRenderer {
     this.shockE.fill(1);
     let nShock = this.forces.nShock;
     const impacts = (fx as FrameFxVfx).vfx;
+    PROF.mark('r.vfx');
     if (uni && impacts && impacts.length > 0) {
       const b = buildVfxInstances(impacts, view.x0, view.y0, this.vfx.data, {
         data: this.postShock,
@@ -1345,7 +1392,9 @@ class PixelRenderer implements DebuggableRenderer {
     this.vfxDrawn = nVfx;
     const hasLayers = drawn > 0 || nVfx > 0;
     const halo = look.spriteHalo ?? DEFAULT_SPRITE_HALO;
+    PROF.mark('r.halo');
     if (hasLayers) this.blurCoverage(halo.radius);
+    PROF.mark('r.dither');
 
     // ---- resolve: lens → tone map → readability grade → dither into the stage palette ----
     const du = this.ditherPass.uniforms;
@@ -1373,7 +1422,9 @@ class PixelRenderer implements DebuggableRenderer {
       r.setRenderTarget(this.frameRT);
       r.clear(true, false, false);
     }
+    PROF.mark('r.finish');
     if (hasLayers) (uni ? this.finishPass : this.layerComposite).render(r, this.frameRT);
+    PROF.mark('r.foreground');
     // ---- foreground: soft dust and small rocks drifting in front of the fighters (before bloom and post) ----
     if (this.foreground?.active && this.tierNow > 0) {
       const fu = this.fgShared;
@@ -1390,8 +1441,10 @@ class PixelRenderer implements DebuggableRenderer {
     }
 
     // ---- bloom: the shared two-pass bloom on the unified path, the classic pyramid otherwise ----
+    PROF.mark('r.bloom');
     if (sb) this.runSharedBloom();
     else this.runBloom();
+    PROF.mark('r.god');
 
     // ---- god rays (half res) ----
     if (scenery) scenery.lightScreenPos(this.lightPos);
@@ -1404,6 +1457,7 @@ class PixelRenderer implements DebuggableRenderer {
     this.godPass.render(r, this.godRT);
 
     // ---- post ----
+    PROF.mark('r.post');
     const pu = this.postPass.uniforms;
     // the unified path lights titans by the one sky only (UNIFICATION §1): no relighting of a body by the other bodies' lights
     // (stepped and then snapped, it read as a checker over the stone)
@@ -1446,11 +1500,13 @@ class PixelRenderer implements DebuggableRenderer {
     this.postPass.render(r, this.postRT);
 
     // ---- luminance governor: measure the frame, hold back any full-frame brightening beyond the limit ----
+    PROF.mark('r.govern');
     this.govern(frame.tick, Math.min(0.1, elapsed));
 
     // ---- present ----
     this.present(frame);
 
+    PROF.mark('r.tail');
     const t2 = now();
     this.stats.drawCalls = r.info.render.calls;
     this.avgFrame.push(t2 - t0);
@@ -1463,6 +1519,7 @@ class PixelRenderer implements DebuggableRenderer {
     this.drawnOnce = true;
     this.gpuTimer?.end();
     this.adaptQuality(t0);
+    PROF.mark(null);
   }
 
   /** Feed the frame pacing to the adaptive controller and apply the tier it asks for. */
@@ -1675,7 +1732,7 @@ class PixelRenderer implements DebuggableRenderer {
     fu.uGov!.value = next.texture;
     fu.uHasGov!.value = 1;
     const rb = this.lumaRead;
-    if (rb) {
+    if (rb && this.lumaWanted) {
       // `next` is still the bound framebuffer: queue its 16 bytes into a pack buffer, collect the ones that have landed
       rb.capture(this.frameNo, tick);
     }
@@ -1687,7 +1744,7 @@ class PixelRenderer implements DebuggableRenderer {
    */
   private collectLuma(): void {
     const rb = this.lumaRead;
-    if (!rb) return;
+    if (!rb || !this.lumaWanted) return;
     const a = now();
     const q = this.lumaQueue;
     const before = q.length;
@@ -1697,6 +1754,11 @@ class PixelRenderer implements DebuggableRenderer {
     this.lumaPollMs = Math.max(this.lumaPollMs * 0.98, now() - a);
   }
 
+  /**
+   * S21: the read-back runs only once someone reads it (telemetry's drainLuma, verification). Polling its fences forced the
+   * main thread to wait for the GPU: 6 ms a frame on the Vega 7 at ×3 (p95 11 ms), for numbers nobody read in normal play.
+   */
+  private lumaWanted = false;
   /** Slowly decaying maximum CPU ms of collectLuma (verification). */
   private lumaPollMs = 0;
 
@@ -1707,6 +1769,7 @@ class PixelRenderer implements DebuggableRenderer {
   }
 
   drainLuma(): LumaStats[] {
+    this.lumaWanted = true;
     const out = this.lumaQueue.slice();
     this.lumaQueue.length = 0;
     return out;
@@ -1726,6 +1789,7 @@ class PixelRenderer implements DebuggableRenderer {
     errors: string[];
     pollMs: number;
   } {
+    this.lumaWanted = true;
     const rb = this.lumaRead;
     if (rb) rb.diag = diag;
     return {
@@ -1760,6 +1824,7 @@ class PixelRenderer implements DebuggableRenderer {
     fu.uPush!.value = push ? 1 : 0;
     fu.uSharp!.value = this.layout.scale * zoom;
     fu.uRoll!.value = this.inspect ? cam.roll : Math.max(-ROLL_LIMIT, Math.min(ROLL_LIMIT, cam.roll));
+    PROF.mark('r.uiUpload');
     if (frame.ui && frame.ui.visible) {
       fu.uUi!.value = this.layers.acquire(frame.ui).tex;
       fu.uHasUi!.value = 1;
@@ -1768,6 +1833,7 @@ class PixelRenderer implements DebuggableRenderer {
     }
     const L = this.layout;
     const margin = MarginFill.needed(L);
+    PROF.mark('r.margin');
     if (margin) this.margin.update(r, this.postRT.texture);
     r.setRenderTarget(null);
     r.setScissorTest(false);
@@ -1780,6 +1846,7 @@ class PixelRenderer implements DebuggableRenderer {
     }
     // three's viewport origin is bottom-left; the letterbox is symmetric so y needs no flip.
     r.setViewport(L.x, L.y, L.w, L.h);
+    PROF.mark('r.final');
     this.finalPass.render(r, null);
     r.setViewport(0, 0, L.physW, L.physH);
   }

@@ -1,0 +1,18 @@
+{
+  "about": "S21 frame budget on WJ's laptop (Ryzen 5 5500U, Vega 7, Edge, 60 Hz panel), checked by `npm run perf:budget` (tools/perf/frameprof.ts --budget). Per run (a 12 s AI fight or one Ultimate): rAF frame intervals and the main thread's CPU per rendered frame. A missed vsync is an interval over 20 ms (any cause: the OS and the browser's compositor hitch now and then, so up to 2 a run pass); the max-frame limit applies when our own frame CPU went over it too. Judder = rendered frames that ran 2+ sim ticks (a skipped and then doubled tick; 0-tick frames are the sim's slow motion).",
+  "maxFrameMs": 25,
+  "missedPerRun": 2,
+  "p99FrameMs": 17.5,
+  "cpuP95Ms": 12,
+  "cpuMaxMs": 30,
+  "judderPerRun": 6,
+  "gpuMeanMs": 8,
+  "known": [
+    {
+      "run": "fight colossus v nexus",
+      "reason": "one 50 ms frame at the KO → next round reset: the colossus's nextRound (world.heal of its 1024×181 body ≈ 18 ms + behaviour reset; 25 ms in Node, ≈ 50 ms in Edge). Sim work at a round transition, not render; left for a sim-side pass (S21 report).",
+      "maxFrameMs": 60,
+      "cpuMaxMs": 60
+    }
+  ]
+}

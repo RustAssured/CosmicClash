@@ -144,6 +144,34 @@ describe('layer contract', () => {
     r.ui.draw(null);
     expect(r.ui.layer.version).toBeGreaterThan(v);
   });
+
+  it('hands the renderer only what changed (S21): same pixels keep the version, a change comes with its rectangle', () => {
+    const r = rig();
+    r.ui.draw(null);
+    const prev = r.ui.layer.pixels.slice();
+    r.ui.layer.dirty = null; // the renderer consumed it
+    const v = r.ui.layer.version;
+    r.ui.draw(null);
+    expect(r.ui.layer.version).toBe(v);
+    expect(r.ui.layer.dirty).toBeNull();
+    // advance until the screen changes (the boot prompt animates), then every changed pixel lies inside the rectangle
+    let changed = false;
+    for (let i = 0; i < 240 && !changed; i++) {
+      r.step(1);
+      r.ui.draw(null);
+      changed = r.ui.layer.version !== v;
+    }
+    expect(changed).toBe(true);
+    const d = r.ui.layer.dirty!;
+    expect(d).not.toBeNull();
+    const px = r.ui.layer.pixels;
+    for (let i = 0; i < px.length; i++) {
+      if (px[i] === prev[i]) continue;
+      const x = i % LOGICAL_W;
+      const y = (i / LOGICAL_W) | 0;
+      expect(x >= d.x0 && x < d.x1 && y >= d.y0 && y < d.y1).toBe(true);
+    }
+  });
 });
 
 describe('boot → title', () => {

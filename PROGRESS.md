@@ -185,6 +185,25 @@ the blob placeholder's; not in the ladder's opponents.
 - Dev: `?ladder=modes|difficulty|select|N&lmode=cosmic&diff=titan&seed=5`. Stills: docs/gallery/cosmicclash/
   (`npx tsx tools/ladder/shots.ts --set=cosmic`, `npx tsx tools/ui/cosmic-wordmark.ts`).
 
+## S21: a 60 fps floor on WJ's laptop (Ryzen 5 5500U, Vega 7, Edge)
+- **Measured for real** (`npm run perf:frames`, tools/perf/frameprof.ts): a production build in a headed Edge window, vsync on,
+  ×2 (maximised window) and ×3 (full screen), 4 AI fights + all 9 Ultimates. `--prof=1` = CPU and GPU (timer queries) per
+  section (src/render/passProfiler.ts, `?prof=1`). The GPU was never the problem: ≈ 4–5 ms a frame at ×3 (scenery 2.2,
+  final 0.5, layers 0.5–1, the rest ≤ 0.3 each). S19's "40 ms GPU-synced" was its own read-back (tools/perf/ultframes.ts).
+- **Fixed:** (1) the luminance governor's read-back made the main thread wait for the GPU every frame (6 ms mean, p95 11 ms):
+  now off until telemetry / verification asks (`drainLuma`); (2) the 640×360 debris / particle layers and the UI were
+  re-uploaded whole every frame (≈ 1.2–1.5 M texels): they hand over dirty rectangles now (`npm run perf:uploads` reads
+  every texture back and proves them exact); (3) rarely used passes (the shared VFX, margin, classic bloom) are drawn once at
+  load: the first impact's VFX draw stalled 11–21 ms; (4) the titans' big moves are rehearsed on a throwaway match in the
+  menus (src/app/rehearsal.ts; ≈ 7 s for the roster, 8 ms a frame), or behind the loading bar if a match starts first
+  (≈ 2 s): cold code made each Ultimate's first moments 20–30 ms; (5) the loop snaps vsync jitter (no more 0/2-tick
+  judder: 46–113 double-tick frames per 12 s fight → 0–2) and spreads catch-up at 2 ticks a frame (src/engine/loop.ts).
+- **Result:** main-thread CPU per frame p95 6–10 ms (was 11–22), every Ultimate and three of four fights with no missed
+  vsync at ×2 and ×3 (was 1–3 per Ultimate). Tier stays 1 (auto); tier 2 (opt-in) costs 8.5 ms GPU of scenery.
+  `npm run perf:budget` checks it all against tools/perf/budget.json.
+- **Left:** one 50 ms frame at the colossus's KO → next round (`nextRound`: world.heal of its 1024×181 body; sim work, in the
+  budget's known exceptions).
+
 ## Next
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.
 - Then a full balance pass.

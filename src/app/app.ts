@@ -61,6 +61,9 @@ import type { StripRecorder } from '@/telemetry/strips';
 import { Telemetry } from '@/telemetry/telemetry';
 import { FX_DETAIL } from '@/combat/fx/detail';
 import { FpsMeter } from './fpsMeter';
+import { rehearse, rehearseRoster } from './rehearsal';
+import { animationFrame } from '@/render/slicer';
+import { PROF } from '@/render/passProfiler';
 import { fillHudState } from './announcer';
 import { createDebugLayer, drawDebugShapes } from './debugDraw';
 import { Aftermath } from './aftermath';
@@ -319,6 +322,8 @@ export class App {
     this.loop = createLoop({
       tick: () => this.tick(),
       frame: (alpha, dt) => this.render(alpha, dt),
+      // S21 perf tooling (`?prof=lite|1`): whole-loop CPU per rendered frame
+      onTiming: PROF.lite ? (frame, ms) => (frame ? PROF.loopFrame(ms) : PROF.loopTick(ms)) : undefined,
     });
     // the stored display choice (Options › FILL SCREEN) applies from the very first frame
     this.renderer.setIntegerScale(!loadUISettings(resolveStore(undefined)).fill);
@@ -381,6 +386,27 @@ export class App {
       else renderPortrait(id, 1, TITAN_SKY);
     }
     this.ready = true;
+    // S21: rehearse the roster's big moves while the menus are up (8 ms of a frame; the whole roster in ≈ 7 s on WJ's
+    // laptop), so a match rarely has to do it behind its loading bar; stops for good when a match starts (rehearsal.ts)
+    if (!this.rehearse) return;
+    const length = loadUISettings(resolveStore(undefined)).roundLength;
+    void rehearseRoster(
+      this.roster,
+      this.menuStage,
+      {
+        footwork: this.footwork,
+        zdepth: this.zdepth,
+        witness: this.witness,
+        pace: ROUND_LENGTH_PACE[length],
+        roundSeconds: ROUND_LENGTH_SECONDS[length],
+      },
+      {
+        defOf: getTitanDef,
+        nextFrame: animationFrame,
+        budgetMs: 8,
+        cancelled: () => this.session !== null || this.starting,
+      },
+    ).catch(() => undefined);
   }
 
   /* ------------------------------------------------------------------------------------------------ *
@@ -522,6 +548,11 @@ export class App {
       this.loadingText = 'LOADING';
       this.loadingFraction = 0;
       await this.renderer.prepareStage(config.stage, (f) => (this.loadingFraction = f));
+      // S21: a titan the menus have not rehearsed yet runs its Ultimate and heavy moves once on a throwaway match behind the
+      // loading bar (cold code and empty caches made their first moments hitch 20–30 ms mid-fight); never the real match,
+      // see rehearsal.ts. `?rehearse=0` skips it.
+      if (this.rehearse)
+        await rehearse(config, { defOf: this.defOfConfig(config), nextFrame: animationFrame });
       await sleep0();
       // an online match whose session stopped while the stage loaded (opponent left, link lost) is not built at all
       if (opts.online?.driver.halted) {
@@ -534,6 +565,16 @@ export class App {
       this.loadingText = null;
     }
   }
+
+  /** The definitions a match plays: the tournament's final boss is the Mouth's boss variant (D35) for a slot flagged `boss`. */
+  private defOfConfig(config: MatchConfig): (id: TitanId) => TitanDef {
+    const bossMouth = config.slots.some((s) => s.titan === 'mouth' && s.boss);
+    return (id) => (id === 'mouth' && bossMouth ? mouthBossDef() : getTitanDef(id));
+  }
+
+  /** Rehearse the titans' big moves in the menus and before a match (rehearsal.ts); `?rehearse=0` turns it off (A/B). */
+  private readonly rehearse =
+    typeof location === 'undefined' || new URLSearchParams(location.search).get('rehearse') !== '0';
 
   /** Synchronous core of startMatch (the stage must already be prepared). Also used by the benchmark to chain fights. */
   buildSession(cfg: MatchConfig, opts: MatchOpts = {}): Session {
@@ -548,9 +589,7 @@ export class App {
       pace: cfg.pace ?? ROUND_LENGTH_PACE[length],
       roundSeconds: cfg.roundSeconds ?? ROUND_LENGTH_SECONDS[length],
     };
-    // the tournament's final boss: the Mouth's boss variant (D35) for a slot flagged `boss`
-    const bossMouth = config.slots.some((s) => s.titan === 'mouth' && s.boss);
-    const defOf = (id: TitanId): TitanDef => (id === 'mouth' && bossMouth ? mouthBossDef() : getTitanDef(id));
+    const defOf = this.defOfConfig(config);
     // the AI reads the definition the fighter really plays (D36: the colossus is its own titan, so that is getTitanDef)
     const defs: [TitanDef, TitanDef] = [defOf(config.slots[0].titan), defOf(config.slots[1].titan)];
     const stage = STAGES[config.stage];
@@ -711,7 +750,9 @@ export class App {
     if (s.net && !s.net.driver.beforeStep()) return;
     const timed = this.measureSim || this.telemetry !== null;
     const t0 = timed ? performance.now() : 0;
+    PROF.mark('a.sim');
     m.step();
+    PROF.mark('a.tickRest');
     s.net?.driver.afterStep();
     const simMs = timed ? performance.now() - t0 : 0;
     if (this.measureSim) this.simSamples.push(simMs);
@@ -755,6 +796,7 @@ export class App {
     this.loop.timeScale = m.timeScale;
     if (this.aftermathAt >= 0 && m.tick >= this.aftermathAt) this.enterAftermath(m);
     if (m.phase === 'matchend' && m.phaseTick === 1) this.onMatchEnd(s);
+    PROF.mark(null);
   }
 
   /** Events for the camera with comfort scaling applied to shake/zoom/roll (the sim's own events are never modified). */
@@ -788,6 +830,7 @@ export class App {
    * ------------------------------------------------------------------------------------------------ */
   render(alpha: number, dtSec: number): void {
     const now = performance.now();
+    PROF.mark('a.pre');
     this.nowMs = now;
     // S19: the SHOW FPS readout, and the behaviours' render-time effect detail following the adaptive quality tier
     // (render-only: the overlays drawn in renderLayers shed work on a machine that drops frames; the sim never reads it)
@@ -874,6 +917,7 @@ export class App {
       }
       f.stage = s.config.stage;
       const m = s.match;
+      PROF.mark('a.layers');
       for (const fighter of m.fighters) {
         const ls = fighter.renderLayers(f.view, f.alpha);
         for (let i = 0; i < ls.length; i++) this.layers.push(ls[i]!);
@@ -881,7 +925,9 @@ export class App {
       const wl = m.world.renderLayers(f.view, f.alpha);
       for (let i = 0; i < wl.length; i++) this.layers.push(wl[i]!);
       this.addTrainingLayers(s, f.view);
+      PROF.mark('a.fx');
       f.fx = this.fx.sample(f.alpha);
+      PROF.mark('a.hud');
       const hudPaused = this.paused;
       const hudState = fillHudState(this.hud, m, this.trainingFrameData, hudPaused);
       this.ui.draw(
@@ -930,7 +976,9 @@ export class App {
       const hint = this.aftermath.drawHints();
       f.ui = this.aftermath.hud ? this.ui.layer : hint ? this.aftermath.layer : null;
     }
+    PROF.mark('a.overlays');
     this.renderer.draw(f);
+    PROF.mark('a.post');
     if (this.saveNext) {
       // toBlob snapshots the canvas NOW (same task as the draw), so no preserveDrawingBuffer is needed
       this.saveNext = false;
@@ -949,6 +997,7 @@ export class App {
       this.frameEvents.length = 0;
     }
     this.audio.update(this.audioScene(s), dtSec);
+    PROF.end();
     this.lastFrameMs = performance.now() - t0;
   }
 

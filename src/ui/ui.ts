@@ -180,8 +180,63 @@ class UIRuntime implements GameUI, UICtx {
     cv.clear(0);
     this.currentScreen().draw(this, hud ?? this.hud);
     if (this.fade < 1) ditherFade(cv, this.fade);
+    this.markChanged();
+  }
+
+  /** What the GPU copy of the layer holds (the pixels as last handed over), for `markChanged`. */
+  private shadow: Uint32Array | null = null;
+  private readonly dirtyRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
+
+  /**
+   * S21: hand the renderer only the rectangle that changed since the last draw (the HUD redraws every frame, but most of its
+   * 640×360 layer is the same transparent nothing: uploading it whole cost ≈ 0.9 MB a frame). One pass compares the new
+   * pixels with a shadow copy; an unchanged frame keeps its version (no upload at all). Exactly the same pixels reach the GPU.
+   */
+  private markChanged(): void {
+    const px = this.layer.pixels;
+    const W = LOGICAL_W;
+    const H = LOGICAL_H;
+    if (!this.shadow) {
+      this.shadow = px.slice();
+      this.layer.version++;
+      this.layer.dirty = null;
+      return;
+    }
+    const sh = this.shadow;
+    let y0 = -1;
+    let y1 = -1;
+    let x0 = W;
+    let x1 = -1;
+    for (let y = 0; y < H; y++) {
+      const o = y * W;
+      const e = o + W;
+      let i = o;
+      while (i < e && px[i] === sh[i]) i++;
+      if (i === e) continue;
+      let j = e - 1;
+      while (px[j] === sh[j]) j--;
+      if (y0 < 0) y0 = y;
+      y1 = y;
+      if (i - o < x0) x0 = i - o;
+      if (j - o > x1) x1 = j - o;
+      sh.set(px.subarray(i, j + 1), i);
+    }
+    if (y0 < 0) return;
+    const r = this.dirtyRect;
+    const d = this.layer.dirty;
+    if (d) {
+      // not uploaded since the last draw (the UI was hidden): keep that area too
+      x0 = Math.min(x0, d.x0);
+      y0 = Math.min(y0, d.y0);
+      x1 = Math.max(x1, d.x1 - 1);
+      y1 = Math.max(y1, d.y1 - 1);
+    }
+    r.x0 = x0;
+    r.y0 = y0;
+    r.x1 = x1 + 1;
+    r.y1 = y1 + 1;
     this.layer.version++;
-    this.layer.dirty = null;
+    this.layer.dirty = r;
   }
 
   drainActions(out: UIAction[]): void {

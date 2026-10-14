@@ -181,6 +181,7 @@ export class LayerCompositor {
         uPart: { value: null },
         uEmis: { value: null },
         uHasEmis: { value: 0 },
+        // two-element arrays, written in place every frame (no per-part garbage: S21)
         uPartOrigin: { value: [0, 0] },
         uPartSize: { value: [0, 0] },
         uPivot: { value: [0, 0] },
@@ -380,14 +381,14 @@ export class LayerCompositor {
           u.uPart!.value = gpu.tex;
           u.uEmis!.value = gpu.emis;
           u.uHasEmis!.value = gpu.emis ? 1 : 0;
-          u.uPartOrigin!.value = [part.sx, part.sy];
-          u.uPartSize!.value = [part.sw, part.sh];
-          u.uPivot!.value = [part.px, part.py];
+          set2(u.uPartOrigin!.value as number[], part.sx, part.sy);
+          set2(u.uPartSize!.value as number[], part.sw, part.sh);
+          set2(u.uPivot!.value as number[], part.px, part.py);
           const st = ((part.step % ROT_LUT.cos.length) + ROT_LUT.cos.length) % ROT_LUT.cos.length;
-          u.uRotCS!.value = [ROT_LUT.cos[st]!, ROT_LUT.sin[st]!];
+          set2(u.uRotCS!.value as number[], ROT_LUT.cos[st]!, ROT_LUT.sin[st]!);
           u.uFacing!.value = layer.facing === -1 ? -1 : 1;
           u.uRotMode!.value = part.sampler === 'majority4' ? 1 : 0; // proposal 174
-          u.uDest!.value = [qx, qy];
+          set2(u.uDest!.value as number[], qx, qy);
           u.uAlpha!.value = layer.alpha;
           setId(u, layer, order, gpu, this.unified);
           u.uLight!.value = gpu.light;
@@ -496,6 +497,11 @@ function setId(
   (u.uId!.value as Vector4).set(titan ? shadeCls : 0, Math.min(255, order) / 255, exempt, glow);
   u.uWet!.value = gpu.wet;
   u.uHasWet!.value = gpu.wet && titan ? 1 : 0;
+}
+
+function set2(a: number[], x: number, y: number): void {
+  a[0] = x;
+  a[1] = y;
 }
 
 function setLayerBlend(m: RawShaderMaterial, blend: 'normal' | 'add'): void {

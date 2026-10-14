@@ -10,6 +10,9 @@
  * Per frame: `cpu` = the harness `step(1)` (one tick + camera + layers + renderer.draw + UI: everything on the main thread),
  * `sync` = the same plus a read-back of the final frame, which waits for the GPU to finish it (an upper bound of what the
  * frame costs with the GPU's share). Reported: p50 / p95 / p99 / max per titan.
+ * S21: `sync` is a loose upper bound: the read-back itself drains the whole GPU pipeline and copies a 640×360 frame to the
+ * page, which no real frame does (it read ≈ 40 ms p95 on the Vega 7 while the real frames' GPU work is ≈ 4–5 ms). For the
+ * real thing (vsynced frames, GPU time per pass) use tools/perf/frameprof.ts (`npm run perf:frames`).
  */
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';

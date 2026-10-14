@@ -488,11 +488,13 @@ describe('render layers, particles, chunks and gravity', () => {
     const xs0 = all0.map((i) => i % LOGICAL_W);
     expect(Math.min(...xs0)).toBeGreaterThanOrEqual(316);
     expect(Math.max(...xs0)).toBeLessThanOrEqual(324);
-    const v0 = layers[0]!.version;
+    // the layer holding the chunk changes version; an empty layer is left alone (S21: nothing to upload)
+    const holder = layers.find((l) => find(l).length > 0)!;
+    const v0 = holder.version;
     // half a tick of extrapolation moves it by vx * dt * alpha = 60/60*0.9 ~ 1px
     const l1 = world.renderLayers(view, 0.99);
     expect(l1).toBe(l0); // same array, pooled
-    expect(l1[0]!.version).toBeGreaterThan(v0);
+    expect(holder.version).toBeGreaterThan(v0);
     for (const l of l1) {
       expect(l.space).toBe('screen');
       expect(l.w).toBe(LOGICAL_W);

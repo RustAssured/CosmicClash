@@ -10,6 +10,7 @@ import {
 import type { RenderLayer } from '@/contracts';
 import type { RenderLayerLit } from './unified';
 import { planUpload, StaleRegistry, type CachedLayerState } from './layerCache';
+import { PROF } from './passProfiler';
 
 /**
  * GPU side of the layer cache: one RGBA8 texture (and an optional R8 emissive texture) per RenderLayer id.
@@ -25,6 +26,7 @@ export const STALE_FRAMES = 240;
 const SWEEP_EVERY = 8;
 
 interface Entry {
+  id?: string;
   tex: DataTexture;
   emis: DataTexture | null;
   state: CachedLayerState;
@@ -75,9 +77,13 @@ export class LayerTextures {
     if (plan.kind === 'create') {
       if (e) this.destroy(e);
       e = this.create(layer);
+      e.id = layer.id;
       this.entries.set(layer.id, e, this.frame);
       this.uploads.create++;
       this.uploads.texels += layer.w * layer.h;
+      PROF.count('create');
+      PROF.count('createTexels', layer.w * layer.h);
+      PROF.count(`create:${layer.id}:${layer.w}x${layer.h}`);
       layer.dirty = null;
     } else if (e) {
       if (plan.kind === 'full') {
@@ -89,9 +95,14 @@ export class LayerTextures {
         if (e.chunk) e.chunk.needsUpdate = true;
         this.uploads.full++;
         this.uploads.texels += layer.w * layer.h;
+        PROF.count('full');
+        PROF.count('fullTexels', layer.w * layer.h);
+        PROF.count(`full:${layer.id}:${layer.w}x${layer.h}`);
       } else if (plan.kind === 'rect') {
         this.uploadRect(e, layer, plan.x0, plan.y0, plan.x1, plan.y1);
         this.uploads.rect++;
+        PROF.count('rect');
+        PROF.count('rectTexels', (plan.x1 - plan.x0) * (plan.y1 - plan.y0));
         this.uploads.texels += (plan.x1 - plan.x0) * (plan.y1 - plan.y0);
       }
       if (plan.kind !== 'none') {
@@ -101,6 +112,60 @@ export class LayerTextures {
       }
     }
     return e!;
+  }
+
+  /**
+   * Verification (`?layercheck=1`, tools/perf/uploadcheck.ts): read back every colour / emissive texture used this frame and
+   * compare it with the layer's own pixels, so partial uploads (dirty rectangles, skipped unchanged layers) are proven exact.
+   * Returns the number of textures checked and a line per mismatch. Slow (a read-back each): never in normal play.
+   */
+  debugVerify(): { checked: number; bad: string[] } {
+    const r = this.renderer;
+    const gl = r.getContext() as WebGL2RenderingContext;
+    const fb = gl.createFramebuffer();
+    const bad: string[] = [];
+    let checked = 0;
+    r.state.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    for (const { value: e, lastUsed } of this.entries.values()) {
+      if (lastUsed !== this.frame) continue;
+      const { w, h } = e.state;
+      const buf = new Uint8Array(w * h * 4);
+      const pairs: [DataTexture | null, Uint8Array | null, 4 | 1][] = [
+        [e.tex, e.bytes, 4],
+        [e.emis, e.emisBytes, 1],
+      ];
+      for (const [tex, want, ch] of pairs) {
+        if (!tex || !want) continue;
+        const t = (r.properties.get(tex) as { __webglTexture?: WebGLTexture }).__webglTexture;
+        if (!t) continue;
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+        checked++;
+        let n = 0;
+        let first = -1;
+        for (let i = 0; i < w * h; i++) {
+          const same =
+            ch === 4
+              ? buf[i * 4] === want[i * 4] &&
+                buf[i * 4 + 1] === want[i * 4 + 1] &&
+                buf[i * 4 + 2] === want[i * 4 + 2] &&
+                buf[i * 4 + 3] === want[i * 4 + 3]
+              : buf[i * 4] === want[i];
+          if (!same) {
+            if (first < 0) first = i;
+            n++;
+          }
+        }
+        if (n)
+          bad.push(
+            `${e.id}${ch === 1 ? ' (emissive)' : ''}: ${n} texels differ, first at (${first % w}, ${(first / w) | 0})`,
+          );
+      }
+    }
+    r.state.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fb);
+    r.setRenderTarget(null);
+    return { checked, bad };
   }
 
   /** Free textures of layers that were not drawn recently. Call once per frame after drawing. */

@@ -7,7 +7,11 @@ import { TICK_HZ } from '@/contracts';
  * (`timeScale`), never as a variable dt. Rendering interpolates between ticks with `alpha ∈ [0,1)`.
  *
  * Guarantees
- *  - at most `maxCatchUp` ticks per frame; any further backlog is DROPPED (no spiral of death),
+ *  - at most `maxTicksPerFrame` (2) ticks per frame; a backlog after a hitch is caught up over the next frames, but never
+ *    more than `maxCatchUp` (5) ticks of it: anything beyond is DROPPED (no spiral of death). S21: a 5-tick burst in one
+ *    frame made that frame long too (a cascade on a slow machine); spreading it keeps every frame's CPU bounded,
+ *  - vsync snap: a frame interval within ±`VSYNC_SNAP_MS` of a whole number of ticks counts as exactly that many ticks, so
+ *    a 60 Hz panel's rAF jitter (±0.5 ms) never turns into alternating 0- and 2-tick frames (judder),
  *  - a hidden tab pauses the clock and resumes without a burst of catch-up ticks,
  *  - `stepTicks(n)` runs exactly n ticks (deterministic harness) and never touches the real clock,
  *  - the clock, rAF and visibility source are injectable so the loop is fully unit-testable in Node.
@@ -19,8 +23,10 @@ export interface LoopOptions {
   /** Render one frame. `alpha` is the fraction of a tick elapsed since the last tick; `dtSec` real seconds since the last frame. */
   frame: (alpha: number, dtSec: number) => void;
   tickHz?: number;
-  /** Max ticks executed per frame before the remainder is dropped. Default 5. */
+  /** Most ticks of backlog ever caught up (beyond it time is dropped). Default 5. */
   maxCatchUp?: number;
+  /** Most ticks run in one frame (the rest of the backlog waits for the next frames). Default 2. */
+  maxTicksPerFrame?: number;
   /** Monotonic millisecond clock. Default `performance.now`. */
   now?: () => number;
   /** rAF-alike. Default `requestAnimationFrame`. */
@@ -28,6 +34,8 @@ export interface LoopOptions {
   cancelFrame?: (handle: number) => void;
   /** Subscribe to page visibility. Returns an unsubscribe. Default: `document.visibilitychange`. */
   onVisibility?: (visibleCb: (visible: boolean) => void) => () => void;
+  /** Profiling hook: main-thread ms of every tick (`frame` false) and every rendered frame (`frame` true). */
+  onTiming?: (frame: boolean, ms: number) => void;
 }
 
 export interface LoopStats {
@@ -64,6 +72,8 @@ export interface Loop {
 export const MIN_TIME_SCALE = 0.05;
 /** A frame longer than this is treated as a stall (debugger, GC, slow device) and clamped. */
 const MAX_FRAME_MS = 250;
+/** A frame interval this close to a whole number of ticks is snapped to it (rAF timestamp jitter on a vsynced display). */
+export const VSYNC_SNAP_MS = 0.6;
 /** Smoothing factor of the rolling averages (≈ 1/60: about one second of history). */
 const SMOOTH = 1 / 60;
 
@@ -77,6 +87,7 @@ const defaultVisibility = (cb: (visible: boolean) => void): (() => void) => {
 export function createLoop(opts: LoopOptions): Loop {
   const tickMs = 1000 / (opts.tickHz ?? TICK_HZ);
   const maxCatchUp = Math.max(1, opts.maxCatchUp ?? 5);
+  const perFrame = Math.max(1, Math.min(maxCatchUp, opts.maxTicksPerFrame ?? 2));
   const now = opts.now ?? ((): number => performance.now());
   const requestFrame = opts.requestFrame ?? ((cb: (t: number) => void): number => requestAnimationFrame(cb));
   const cancelFrame = opts.cancelFrame ?? ((h: number): void => cancelAnimationFrame(h));
@@ -103,39 +114,46 @@ export function createLoop(opts: LoopOptions): Loop {
   function runTick(): void {
     const t0 = now();
     opts.tick();
-    stats.msPerTick = avg(stats.msPerTick, now() - t0, nTick++);
+    const ms = now() - t0;
+    stats.msPerTick = avg(stats.msPerTick, ms, nTick++);
+    opts.onTiming?.(false, ms);
   }
 
   function runFrame(a: number, dtSec: number): void {
     const t0 = now();
     opts.frame(a, dtSec);
-    stats.msPerFrame = avg(stats.msPerFrame, now() - t0, nFrame++);
+    const ms = now() - t0;
+    stats.msPerFrame = avg(stats.msPerFrame, ms, nFrame++);
+    opts.onTiming?.(true, ms);
   }
 
   function step(t: number): void {
     handle = 0;
     if (!running) return;
     handle = requestFrame(step);
-    const realMs = Math.min(MAX_FRAME_MS, Math.max(0, t - last));
+    let realMs = Math.min(MAX_FRAME_MS, Math.max(0, t - last));
     last = t;
+    const k = Math.round(realMs / tickMs);
+    if (k >= 1 && k <= maxCatchUp && Math.abs(realMs - k * tickMs) < VSYNC_SNAP_MS) realMs = k * tickMs;
     if (paused || hidden) {
       alpha = 0;
       runFrame(0, realMs / 1000);
       return;
     }
     acc += realMs * scale;
+    if (acc >= (maxCatchUp + 1) * tickMs) {
+      // Further behind than we ever catch up: drop the excess rather than chase it (keep the fraction for interpolation).
+      acc = maxCatchUp * tickMs + (acc % tickMs);
+      stats.droppedFrames++;
+    }
     let n = 0;
-    while (acc >= tickMs && n < maxCatchUp) {
+    while (acc >= tickMs && n < perFrame) {
       runTick();
       acc -= tickMs;
       n++;
     }
-    if (acc >= tickMs) {
-      // Still behind after the cap: drop the backlog rather than chase it.
-      acc %= tickMs;
-      stats.droppedFrames++;
-    }
-    alpha = acc / tickMs;
+    // a backlog left for the next frames still renders at the newest tick (alpha < 1)
+    alpha = Math.min(acc / tickMs, 0.999);
     stats.ticksPerFrame = avg(stats.ticksPerFrame, n, nTpf++);
     runFrame(alpha, realMs / 1000);
   }

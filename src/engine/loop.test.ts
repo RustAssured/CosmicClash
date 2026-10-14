@@ -71,15 +71,35 @@ describe('fixed-timestep loop', () => {
     }
   });
 
-  it('caps catch-up at 5 ticks per frame and drops the remainder (no spiral of death)', () => {
+  it('catches up at most 5 ticks of backlog, 2 per frame, and drops the rest (no spiral of death)', () => {
     const h = harness();
     h.loop.start();
-    h.advance(240); // 14.4 ticks of debt
-    expect(h.log.ticks).toBe(5);
+    h.advance(240); // 14.4 ticks of debt: 5 are kept, the rest dropped
+    expect(h.log.ticks).toBe(2);
     expect(h.loop.stats.droppedFrames).toBe(1);
-    h.advance(1000 / 60);
-    // debt was dropped, so the next normal frame does not owe extra ticks
-    expect(h.log.ticks).toBeLessThanOrEqual(7);
+    for (let i = 0; i < 3; i++) h.advance(1000 / 60);
+    // the kept backlog is spread over the next frames (2 a frame) on top of their own tick each
+    expect(h.log.ticks).toBe(8);
+    for (let i = 0; i < 10; i++) h.advance(1000 / 60);
+    // caught up: back to one tick a frame; in all the 5 kept ticks of the long frame + one per later frame (3 + 10)
+    expect(h.log.ticks).toBe(5 + 13);
+    expect(h.log.frames.at(-1)!.alpha).toBeLessThan(1);
+  });
+
+  it('snaps vsync jitter: a 60 Hz display with ±0.5 ms rAF jitter runs exactly one tick per frame', () => {
+    const h = harness();
+    h.loop.start();
+    const counts: number[] = [];
+    for (let i = 0; i < 600; i++) {
+      const before = h.log.ticks;
+      h.advance(1000 / 60 + (i % 2 ? 0.5 : -0.5) * ((i * 7) % 3 === 0 ? 1 : 0.4));
+      counts.push(h.log.ticks - before);
+    }
+    expect(counts.every((c) => c === 1)).toBe(true);
+    // a missed vsync (≈ 33.4 ms) is two ticks, still exact
+    const before = h.log.ticks;
+    h.advance(2000 / 60 + 0.3);
+    expect(h.log.ticks - before).toBe(2);
   });
 
   it('clamps stalls: a 10 s frame never produces more than the catch-up cap', () => {
