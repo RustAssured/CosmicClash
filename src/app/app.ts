@@ -55,6 +55,7 @@ import { mouthPortrait } from '@/titans/mouth/portrait';
 import { arenaForMatch } from '@/combat/mouth/arena';
 import { PixelCanvas, createUI, drawText, showScreen, titanInfoFromDef, type TitanInfo } from '@/ui';
 import { FIXTURE_TITANS, fixturePortraitProvider } from '@/ui/fixtures';
+import { WORDMARK_BEADS } from '@/ui/pixel/wordmark';
 import { loadUISettings, resolveStore } from '@/ui/settings';
 import { AudioMeter } from '@/telemetry/audioMeter';
 import type { StripRecorder } from '@/telemetry/strips';
@@ -138,6 +139,8 @@ export class App {
   session: Session | null = null;
   paused = false;
   ready = false;
+  /** The wordmark's bead portraits are generated (the boot and title screens draw its beads from now on). */
+  wordmarkWarm = false;
   /** Harness: draw no UI/HUD layer at all (clean screenshots). */
   hideUi = false;
 
@@ -304,6 +307,7 @@ export class App {
         if (TITAN_DEFS[id]) return renderPortrait(id, 1, TITAN_SKY);
         return fixturePortraitProvider(id);
       },
+      portraitsWarm: () => this.wordmarkWarm,
       stages: (opts.full ? STAGE_IDS : this.stageRoster).map((id) => STAGES[id]),
       implementedTitans: this.roster,
       implementedStages: this.stageRoster,
@@ -380,10 +384,19 @@ export class App {
   private async warm(): Promise<void> {
     await sleep0();
     warmUp();
-    for (const id of this.roster) {
+    // the wordmark's bead titans first, so the boot and title screens' logo gets its beads soonest
+    const order = [
+      ...WORDMARK_BEADS.filter((id) => this.roster.includes(id)),
+      ...this.roster.filter((id) => !WORDMARK_BEADS.includes(id)),
+    ];
+    const done = new Set<TitanId>();
+    for (const id of order) {
       await sleep0();
       if (id === 'mouth') mouthPortrait();
       else renderPortrait(id, 1, TITAN_SKY);
+      done.add(id);
+      if (!this.wordmarkWarm)
+        this.wordmarkWarm = WORDMARK_BEADS.every((b) => !this.roster.includes(b) || done.has(b));
     }
     this.ready = true;
     // S21: rehearse the roster's big moves while the menus are up (8 ms of a frame; the whole roster in ≈ 7 s on WJ's

@@ -156,6 +156,31 @@ function letter(ch: string): Mask {
   }
 }
 
+/**
+ * The logotype's letter shapes alone (softened, no shading) for `text`, packed 1/0 row-major: the emblem's title type
+ * (titleType.ts) restyles the same letters.
+ */
+export function logotypeMask(text: string, gap = 4): { d: Uint8Array; w: number; h: number } {
+  const masks = [...text].map((ch) => {
+    if (ch === ' ') return null;
+    const m = letter(ch);
+    m.soften();
+    return m;
+  });
+  const w = masks.reduce((a, m) => a + (m ? m.w + gap : 14), 0) - gap;
+  const d = new Uint8Array(w * H);
+  let cx = 0;
+  for (const m of masks) {
+    if (!m) {
+      cx += 14;
+      continue;
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < m.w; x++) if (m.d[y * m.w + x]) d[y * w + cx + x] = 1;
+    cx += m.w + gap;
+  }
+  return { d, w, h: H };
+}
+
 const RAMP = [hex('#f4fbf7'), hex('#d6e8de'), hex('#a8bdb2'), hex('#7c9c94'), hex('#4a6b73'), hex('#2c4451')];
 const OUTLINE = hex('#08110e');
 const EDGE_LIGHT = hex('#ffffff');

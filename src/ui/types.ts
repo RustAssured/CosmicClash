@@ -64,6 +64,11 @@ export interface UIDeps {
   input: InputManager;
   titans: readonly TitanInfo[];
   portrait: PortraitProvider;
+  /**
+   * Are the wordmark's bead portraits generated yet (src/ui/pixel/wordmark.ts)? Until then the boot and title screens draw
+   * the wordmark without its beads, so they never wait on the titan generator. Absent: always (fixture portraits are cheap).
+   */
+  portraitsWarm?: () => boolean;
   stages: readonly StageInfo[];
   /** Titans / stages that can actually be played right now. Others are shown greyed as "coming soon". */
   implementedTitans: readonly TitanId[];

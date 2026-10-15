@@ -2,13 +2,16 @@
  * The landing page's pixel art, drawn by the game's own code:
  *  - titan portraits from the titan painters (src/titans/portrait.ts): pristine, transparent, one PNG pixel per game pixel
  *    (the page scales them up with `image-rendering: pixelated`);
- *  - the ADEUK: TITANS logotype (src/ui/pixel/logo.ts) and 아득, and each titan's Korean name, in the game's Hangeul face;
+ *  - the ADEUK: TITANS wordmark (logo D, src/ui/pixel/wordmark.ts) in three sizes, the old one-line logotype
+ *    (src/ui/pixel/logo.ts) and 아득, and each titan's Korean name, in the game's Hangeul face;
  *  - the favicon, cut from the Last One's eye (the colossus; D36).
  *
  *   npx tsx tools/site/art.ts              # every roster titan + the logotype + the favicon
  *   npx tsx tools/site/art.ts --only=<id>  # one titan's portrait and Korean name (the titan kit uses this)
+ *   npx tsx tools/site/art.ts --wordmark   # just the wordmark
  *
  * Writes site/media/titans/<file>.png (+ sizes.json), site/media/type/ko-<file>.png, site/media/type/logo.png,
+ * site/media/type/wordmark[-medium|-small].png,
  * site/media/favicon-180.png. The titans and their file names come from the roster (src/titans/roster.ts).
  *
  * Deterministic (seed 1, default lighting). Re-run when a titan's art changes. S5's press-kit character cards can replace
@@ -21,6 +24,7 @@ import { renderPortrait, type Portrait } from '@/titans/portrait';
 import { SITE_ROSTER } from '@/titans/roster';
 import { PixelCanvas } from '@/ui/pixel/canvas';
 import { logoSprite } from '@/ui/pixel/logo';
+import { wordmarkSprite } from '@/ui/pixel/wordmark';
 import { COSMIC_STYLE, NEBULA_PERIOD, cosmicWordmark, cosmicWordmarkSize } from '@/ui/pixel/cosmicLogo';
 import { C, alpha } from '@/ui/pixel/palette';
 import { drawText, measureText } from '@/ui/pixel/text';
@@ -56,6 +60,12 @@ function write(
       png.data[o + 3] = v >>> 24;
     }
   writeFileSync(path, PNG.sync.write(png));
+}
+
+if (process.argv.includes('--wordmark')) {
+  // just the wordmark (npx tsx tools/site/art.ts --wordmark)
+  wordmarkArt();
+  process.exit(0);
 }
 
 if (process.argv.includes('--cosmic')) {
@@ -116,7 +126,28 @@ function everythingElse(): void {
   write('site/media/type/logo.png', { pixels: logo.pixels, w: logo.w, h: logo.h });
   console.log(`logo: ${logo.w}x${logo.h}`);
   koWords({ adeuk: '아득' });
+  wordmarkArt();
   cosmicArt();
+}
+
+/**
+ * The wordmark (logo D, src/ui/pixel/wordmark.ts) with its roster beads, transparent, 1 px per game pixel, in its three
+ * stacked sizes and its one-line lockup: site/media/type/wordmark.png (large: the press download), wordmark-medium.png
+ * (the hero and the game's loading page), wordmark-small.png, wordmark-inline.png (the nav bar).
+ */
+function wordmarkArt(): void {
+  mkdirSync('site/media/type', { recursive: true });
+  const portraits = (id: TitanId): Portrait => renderPortrait(id, 1, DEFAULT_LIGHTING);
+  for (const [size, file] of [
+    ['large', 'wordmark'],
+    ['medium', 'wordmark-medium'],
+    ['small', 'wordmark-small'],
+    ['inline', 'wordmark-inline'],
+  ] as const) {
+    const s = wordmarkSprite(size, portraits);
+    write(`site/media/type/${file}.png`, s);
+    console.log(`${file}: ${s.w}x${s.h}`);
+  }
 }
 
 /**

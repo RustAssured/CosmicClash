@@ -18,6 +18,7 @@ import { C, accentRamp, alpha, type AccentRamp } from '../pixel/palette';
 import { alphaBounds, samplePortrait } from '../portrait';
 import { chip, drawIcon, iconSize, meterBar } from '../pixel/shapes';
 import { drawText, measureText } from '../pixel/text';
+import type { WordmarkPortraits } from '../pixel/wordmark';
 import type { UISettings } from '../settings';
 import type { TitanInfo, UIDeps } from '../types';
 
@@ -379,6 +380,11 @@ export { iconSize };
  *  portraits
  * ------------------------------------------------------------------------------------------------ */
 const portraitCache = new Map<string, Sprite | null>();
+
+/** The portraits the wordmark's beads are cut from, once they are warm (null before: the wordmark goes without beads). */
+export function wordmarkPortraits(ctx: UICtx): WordmarkPortraits | null {
+  return ctx.deps.portraitsWarm && !ctx.deps.portraitsWarm() ? null : ctx.deps.portrait;
+}
 
 /** Area-sampled, outlined pristine portrait of a titan at `size`×`size` (cached). Null if the provider has none. */
 export function portraitSprite(ctx: UICtx, id: TitanId, size: number, flip = false, grey = 0): Sprite | null {

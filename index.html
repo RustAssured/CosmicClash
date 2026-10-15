@@ -79,18 +79,18 @@
         image-rendering: crisp-edges;
         filter: drop-shadow(0 0 18px rgba(168, 189, 178, 0.35)) drop-shadow(0 6px 30px rgba(0, 0, 0, 0.8));
       }
-      /* integer scales of the 285×35 logotype and the 30×14 hangeul mark */
+      /* integer scales of the 324×128 wordmark and the 30×14 hangeul mark */
       #boot .logo-en {
-        width: 570px;
+        width: 648px;
         height: auto;
       }
       #boot .logo-ko {
         width: 90px;
         height: auto;
       }
-      @media (max-width: 640px) {
+      @media (max-width: 700px) {
         #boot .logo-en {
-          width: 285px;
+          width: 324px;
         }
         #boot .logo-ko {
           width: 60px;
@@ -214,7 +214,13 @@
   <body>
     <div id="stage"><canvas id="game" width="640" height="360" tabindex="0"></canvas></div>
     <div id="boot" role="status" aria-live="polite">
-      <img class="px logo-en" src="/site/media/type/logo.png" width="285" height="35" alt="ADEUK: TITANS" />
+      <img
+        class="px logo-en"
+        src="/site/media/type/wordmark-medium.png"
+        width="324"
+        height="128"
+        alt="ADEUK: TITANS"
+      />
       <img
         class="px logo-ko"
         src="/site/media/type/ko-adeuk.png"

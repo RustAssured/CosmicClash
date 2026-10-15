@@ -1,8 +1,7 @@
 import { LOGICAL_W } from '@/contracts';
-import { drawLogo } from '../pixel/logo';
 import { C, accentRamp, alpha } from '../pixel/palette';
-import { rule } from '../pixel/shapes';
 import { drawText } from '../pixel/text';
+import { drawWordmark } from '../pixel/wordmark';
 import { createHowTo } from './howto';
 import {
   Menu,
@@ -14,11 +13,12 @@ import {
   vignette,
   type Screen,
   backdrop,
+  wordmarkPortraits,
 } from './kit';
 
 const ACCENT = accentRamp('#a8bdb2');
 
-/** Title: logotype, 아득, and the five-item menu. Idle time here starts the AI-vs-AI attract mode (see runtime). */
+/** Title: the wordmark, 아득, and the menu. Idle time here starts the AI-vs-AI attract mode (see runtime). */
 export function createTitleScreen(): Screen {
   const menu = new Menu([
     { id: 'versus', en: 'VERSUS', ko: '대전' },
@@ -97,16 +97,15 @@ export function createTitleScreen(): Screen {
         vignette(bg);
         pillar(bg, 96, 18, 544, 300, 0.74, 70);
       });
-      drawLogo(cv, LOGICAL_W / 2, 44, ctx.t);
-      drawText(cv, '아득', LOGICAL_W / 2, 92, {
+      // the wordmark (logo D) fills the top; 아득 sits under it, then the tagline, then the menu
+      drawWordmark(cv, LOGICAL_W / 2, 6, ctx.t, { size: 'medium', portraits: wordmarkPortraits(ctx) });
+      drawText(cv, '아득', LOGICAL_W / 2, 135, {
         color: C.celadon,
         align: 'center',
-        scale: 2,
-        tracking: 6,
+        tracking: 4,
         shadow: alpha(C.void, 0.85),
       });
-      rule(cv, LOGICAL_W / 2 - 110, 130, 220, C.line1);
-      drawText(cv, 'COLOSSAL ENTITIES  ·  WORN DOWN PIXEL BY PIXEL', LOGICAL_W / 2, 137, {
+      drawText(cv, 'COLOSSAL ENTITIES  ·  WORN DOWN PIXEL BY PIXEL', LOGICAL_W / 2, 150, {
         color: C.dim,
         font: 'micro',
         align: 'center',

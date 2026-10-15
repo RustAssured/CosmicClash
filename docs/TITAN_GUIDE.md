@@ -51,6 +51,10 @@ Name (English / Korean):      e.g. The Gloop / 글룹
 One-word essence:             e.g. appetite   (the Planet is "gravity", the Nexus "possession")
 Silhouette:                   the shape in one line. What do you recognise at 64 px?
 Size class:                   small (~120 px, like the Planet) / medium (~150-180) / large (~240, like the Last One)
+Where its scale lives:        what tells you it's bigger than the screen (the Planet: its gravity and moons; the Mouth:
+                              its bulk off-screen). Lore size can be absurd; the body stays in its size class.
+Unfair at / open to:          the one thing it gets to be unfair at, and the opening it leaves (balance is allowed to be
+                              imperfect, D35, but every titan knows where its edge and its gap are)
 Materials:                    what it's made of, outside to inside (skin, shell, flesh, crystal, magma, core...)
 Palette mood:                 colours and feeling (it must not look like another titan; the checks will say if it does)
 How it destroys matter:       crush, burn, shatter, infect, devour, tear... what do its wounds look like?

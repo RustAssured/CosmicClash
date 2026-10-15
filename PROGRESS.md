@@ -218,7 +218,24 @@ the blob placeholder's; not in the ladder's opponents.
   (`https://adeuk-netplay.wj-games.workers.dev`, set as `NETPLAY_URL`), and both its rooms and TURN answer.
   `?net=local` still gives two-tab local play.
 
+## S22: the new logo (logo D, D38) and the Cradle Child brief
+- **Wordmark:** src/ui/pixel/wordmark.ts. ADEUK in cracked gold over TITANS in star-filled chrome (src/ui/pixel/titleType.ts:
+  the logotype's letters doubled or tripled before shading), a horizon line of light, the Last One's eye at the centre and
+  six beads cut from the original roster's own portraits (Supernova, Nexus, Asteroid | Planet, Black Hole, 우리's moon).
+  Sizes: large (press, download), medium (boot and title screens, site hero, /play/ loading page), small (attract
+  watermark), inline (one line, the eye as the colon: the site's nav).
+- **In the game:** boot, title (아득 under it, then the tagline) and attract. The beads appear once their portraits are warm
+  (`UIDeps.portraitsWarm`; the app warms those six titans first), so the first frames never wait on the titan generator.
+- **On the site:** hero, nav and the press download (site/media/type/wordmark*.png: `npx tsx tools/site/art.ts --wordmark`).
+  Press PNGs: `npx tsx tools/press/wordmark.ts`. Explorations (local, press/ is git-ignored): tools/press/emblem.ts,
+  banner.ts, mockup-kit.ts (the kit WJ gave ChatGPT).
+- **Kept on the old one-line logotype** (logo.ts): the trailer (src/cinema, tools/press/trailer), the key-art lineup and the
+  social card (site/media/og.jpg, tools/site/media.ts). Switch them when those are next re-rendered.
+- **The Cradle Child / 요람의 아이:** creature brief docs/titans/cradlechild/BRIEF.md (not built). The titan guide's creature
+  brief gained two lines: *where its scale lives* and *unfair at / open to*.
+
 ## Next
+- **The Cradle Child:** WJ answers the brief's three open questions, then Gate 1 (body and palette).
 - **Netplay:** after WJ pushes and the site redeploys, run a two-machine test (ONLINE › host › send the link to a friend).
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.
 - Then a full balance pass.

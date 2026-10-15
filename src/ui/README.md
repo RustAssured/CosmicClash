@@ -58,7 +58,9 @@ decoded hat, the actions currently held), **Remap** (press the input you want fo
 | `canvas.ts` | `PixelCanvas`: integer-only rects, frames, lines, blits, clip, ordered dither, `fillAlpha` (a monomorphic int path: keep it that way, see Performance) |
 | `font-data.ts`, `text.ts` | 5×7 body face and 3×5 micro face; `drawText`, `measureText`, `wrapText`; mixed Latin + Hangeul on one baseline |
 | `hangeul.ts` | **All 11,172 syllables composed at runtime** from jamo on a 12×12 grid: layout by vowel class (vertical / horizontal / mixed) and final consonant; each jamo drawn with a stroke recipe fitted to its box |
-| `logo.ts` | procedural logotype (Latin + 아득), integer-upscaled |
+| `logo.ts` | procedural logotype (Latin + 아득), integer-upscaled: the letters, and the old one-line mark (trailer, key art) |
+| `titleType.ts` | the wordmark's metals: the logotype's letters ×k in cracked gold or star-filled chrome |
+| `wordmark.ts` | THE logo (D38): ADEUK over TITANS, the horizon line, the Last One's eye and the roster beads; four sizes |
 | `controller-art.ts` | the drawn Pro Controller, Joy-Con and keyboard pictures for the Controller Check |
 | `palette.ts`, `shapes.ts` | shared ramps (hue-shifted), panels, plates, pillars, chips, vignette |
 

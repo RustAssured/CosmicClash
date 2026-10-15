@@ -183,3 +183,14 @@ answers are the proposal's recommendations. Built by S10 (Phases 3B–3E, see PR
 - **Look:** the LOCKED renderer ported to the GPU (src/render/mouthPass.ts: instanced capsule impostors with the flesh shading,
   annuli, stamps; a depth stage then a shade stage), lit by the one titan sky (the oracle's rig turned 180°; the oracle's own
   light for parity stills, a debug knob). Its own impact visuals are replaced by the shared VFX (hit events).
+
+**D38 — The logo is logo D, the wordmark (WJ, 2026-10-15).** After an emblem, a titan banner (from WJ's ChatGPT mockup) and
+three type-only variants, WJ: "Yes, D is the logo. Put it on the site and in the game."
+- **What it is:** ADEUK (cracked gold) over TITANS (chrome with stars), a horizon line of light between them, the Last One's
+  eye at its centre, and six beads made from the original roster's own pixels, shrinking outward. Type, not titan art: the
+  titans appear as tokens, so it reads at every size. src/ui/pixel/wordmark.ts.
+- **Where:** the boot, title and attract screens, the site's hero and nav, the /play/ loading page and the press download.
+  The old one-line logotype (logo.ts) stays where re-rendering is expensive (trailer, key art, social card) until those
+  are next made.
+- **Rule:** the beads are cut from the live portraits, so they follow the titans' art. A bead whose titan is missing is left
+  out.

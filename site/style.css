@@ -161,9 +161,9 @@ kbd {
 }
 
 .nav-brand img {
-  width: 143px;
+  width: 138px;
   height: auto;
-  /* 1/2 of the logotype: on 2× screens it is exactly one device pixel per art pixel */
+  /* 1/2 of the one-line wordmark: on 2× screens it is exactly one device pixel per art pixel */
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -390,9 +390,10 @@ kbd {
   filter: drop-shadow(0 0 18px rgba(168, 189, 178, 0.35)) drop-shadow(0 6px 30px rgba(0, 0, 0, 0.8));
 }
 
-/* integer scales of the 285×35 logotype */
+/* integer scales of the 324×128 wordmark (the game's title-screen size) */
 .logo-en {
-  width: 855px;
+  width: 648px;
+  max-width: 100%;
   height: auto;
 }
 
@@ -1214,7 +1215,7 @@ tbody th {
 
 @media (max-width: 960px) {
   .logo-en {
-    width: 570px;
+    width: 648px;
   }
 
   .logo-ko {
@@ -1300,7 +1301,7 @@ tbody th {
 
   /* 1 CSS px per art pixel: on 2× and 3× phones that is exactly 2 or 3 device pixels */
   .logo-en {
-    width: 285px;
+    width: 324px;
   }
 
   .logo-ko {
