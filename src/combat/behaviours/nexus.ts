@@ -16,7 +16,9 @@ import { groupNexusCells, hash01, type NexusGroups, type NexusRig } from '@/tita
 import { Behaviour, type HitInfo, type InterceptResult } from '../behaviour';
 import type { FighterImpl } from '../fighter';
 import { ChainPen } from '../fx/chain';
+import { idleSeed } from '../fx/idle';
 import { Overlay } from '../fx/overlay';
+import { NexusIdle, type NexusIdleInput } from './nexusIdle';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
 import { DMath } from '@/contracts/dmath';
@@ -72,6 +74,9 @@ export class NexusBehaviour extends Behaviour {
   private front!: Overlay;
   private cageOv!: Overlay;
   private fx!: Overlay;
+  /** The living idle (idle handover, specs/nexus.md): staccato gems, chains forged anew, thoughts, the decision. */
+  private idle!: NexusIdle;
+  private idleIn!: NexusIdleInput;
   private nN = 0;
   private nE = 0;
 
@@ -208,6 +213,16 @@ export class NexusBehaviour extends Behaviour {
     for (let m = 0; m < f.body.materials.length; m++) this.emissiveOf[m] = f.body.materials[m]?.emissive ?? 0;
     this.nodeWX = new Float32Array(nN);
     this.nodeWY = new Float32Array(nN);
+    this.idle = new NexusIdle(map, rig, this.groups, this.origBase, f.seed, idleSeed(f.seed, f.slot), f.slot);
+    this.idleIn = {
+      rest: 1,
+      ko: false,
+      harvest: false,
+      growing: false,
+      d: 1,
+      live: new Uint8Array(nN).fill(1),
+      edges: new Uint8Array(nE).fill(1),
+    };
 
     const chain = f.def.materials.find((m) => m.key === 'chain')!.visual.ramp.map(hex);
     this.chainRamp = chain;
@@ -233,6 +248,7 @@ export class NexusBehaviour extends Behaviour {
     this.whipHead = 0;
     this.wLife.fill(0);
     this.evaluate(true);
+    this.idle.reset();
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -1049,9 +1065,31 @@ export class NexusBehaviour extends Behaviour {
     // S19: the chains, the cage and the graph's light are rasterised at render time (`renderLayers`), once per drawn frame
     this.drawStale = true;
     this.drawTick = tick;
+    this.recordIdle(tick);
   }
   private drawStale = false;
   private drawTick = 0;
+
+  /**
+   * The living idle's inputs this tick (at rest, KO, harvesting, really growing, the prey side, which gems are live and which
+   * chains are intact): handed over once per tick (render-side data; the sim never reads it back).
+   */
+  private recordIdle(tick: number): void {
+    const f = this.f;
+    const inp = this.idleIn;
+    const s = f.state;
+    inp.rest = !f.mv.def && (s === 'idle' || s === 'move' || s === 'intro') ? 1 : 0;
+    inp.ko = f.ko;
+    inp.harvest = this.harvesting;
+    inp.growing = tick - this.lastGrow < 45;
+    const t = f.body.transform;
+    inp.d = (f.foe.view.x >= t.x ? 1 : -1) * t.facing;
+    for (let n = 0; n < this.nN; n++) inp.live[n] = this.lit[n] && !this.dark[n] ? 1 : 0;
+    for (let e = 0; e < this.nE; e++)
+      inp.edges[e] =
+        this.edgeOk[e] && !this.darkEdge[e] && this.edgeLive[e]! >= 0.95 * this.edgeInit[e]! ? 1 : 0;
+    this.idle.record(tick, inp);
+  }
 
   private draw(tick: number, m: ActiveMove): void {
     const f = this.f;
@@ -1064,7 +1102,7 @@ export class NexusBehaviour extends Behaviour {
     this.cageOv.begin(this.cage.cx || fv.x, this.cage.cy || fv.y);
     this.fx.begin(t.x, t.y);
     if (!f.ko || f.stateTicks < 40) {
-      this.drawGraphFx(tick, m);
+      // the graph's own light (thoughts, flashing gems, the heart's facets) is the living idle's: drawn into the body
       this.drawLatch(tick);
       this.drawRoot(tick);
       this.drawWhips();
@@ -1073,76 +1111,6 @@ export class NexusBehaviour extends Behaviour {
     this.front.end();
     this.cageOv.end();
     this.fx.end();
-  }
-
-  /** Light running along the chains toward the hub, breathing nodes, the crystal's shimmer. */
-  private drawGraphFx(tick: number, m: ActiveMove): void {
-    const fx = this.fx;
-    const rig = this.rig;
-    const t = this.f.body.transform;
-    const harvesting = m.def?.id === 'nexus.harvest' && (m.phase === 'active' || m.phase === 'charge');
-    const speed = harvesting ? 0.03 : 0.011;
-    for (let e = 0; e < this.nE; e++) {
-      if (!this.edgeOk[e] || this.darkEdge[e]) continue;
-      const ed = rig.edges[e]!;
-      const pts = ed.pts;
-      const cnt = pts.length / 2;
-      if (cnt < 3) continue;
-      // flow runs from the outer node toward the inner one (toward the hub)
-      const outward = rig.nodes[ed.a]!.ring >= rig.nodes[ed.b]!.ring;
-      for (let p = 0; p < 2; p++) {
-        let s = (tick * speed + e * 0.37 + p * 0.5) % 1;
-        if (!outward) s = 1 - s;
-        const fi = s * (cnt - 1);
-        const i0 = Math.floor(fi);
-        const fr = fi - i0;
-        const i1 = Math.min(cnt - 1, i0 + 1);
-        const lx = pts[i0 * 2]! + (pts[i1 * 2]! - pts[i0 * 2]!) * fr;
-        const ly = pts[i0 * 2 + 1]! + (pts[i1 * 2 + 1]! - pts[i0 * 2 + 1]!) * fr;
-        localToWorld(t, lx, ly, this.xy);
-        fx.glow(this.xy.x, this.xy.y, harvesting ? 3.6 : 2.6, 255, 120, 150, harvesting ? 0.95 : 0.7);
-      }
-    }
-    for (let n = 1; n < this.nN; n++) {
-      if (!this.lit[n]) continue;
-      const N = rig.nodes[n]!;
-      const br = 0.2 + 0.1 * DMath.sin(tick * 0.06 + n * 1.9);
-      fx.glow(this.nodeWX[n]!, this.nodeWY[n]!, N.r * 1.25, 255, 40, 80, br + (harvesting ? 0.15 : 0));
-    }
-    // the hub: a breathing heart and a slow diagonal shimmer through the crystal
-    const H = rig.hub;
-    fx.glow(
-      this.nodeWX[0]!,
-      this.nodeWY[0]!,
-      14 + 2 * DMath.sin(tick * 0.05),
-      255,
-      110,
-      170,
-      0.28 + (harvesting ? 0.2 : 0),
-    );
-    const map = this.f.body.map;
-    const W = map.w;
-    const crystal = rig.ids.crystal;
-    const phase = tick * 0.32;
-    const R = Math.ceil(H.r);
-    for (let dy = -R; dy <= R; dy++) {
-      for (let dx = -R; dx <= R; dx++) {
-        const lx = Math.round(H.x) + dx;
-        const ly = Math.round(H.y) + dy;
-        if (map.material[ly * W + lx] !== crystal) continue;
-        const band = (((lx + ly * 0.7 - phase) % 13) + 13) % 13;
-        if (band < 1.6) {
-          localToWorld(t, lx + 0.5, ly + 0.5, this.xy);
-          fx.add(
-            Math.floor(this.xy.x),
-            Math.floor(this.xy.y),
-            70 * (1 - band / 1.6),
-            95 * (1 - band / 1.6),
-            130 * (1 - band / 1.6),
-          );
-        }
-      }
-    }
   }
 
   /** The Latch chain: paid out along the hit line, then hooked into the foe until it lets go. */
@@ -1349,7 +1317,11 @@ export class NexusBehaviour extends Behaviour {
       this.drawStale = false;
       this.draw(this.drawTick, this.f.mv);
     }
-    out.push(this.front.layer, this.cageOv.layer, this.fx.layer);
+    // the living idle: the body composited where the gems are this tick, the buds on a layer of their own
+    const body = out[out.length - 1]!;
+    this.idle.advance(this.drawTick);
+    this.idle.render(body, this.f.body.map);
+    out.push(this.idle.buds.layer, this.front.layer, this.cageOv.layer, this.fx.layer);
   }
 
   override debugShapes(out: DebugShape[]): void {

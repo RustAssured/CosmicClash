@@ -69,3 +69,57 @@ stays outside the repo (about 10 MB); its specs are the source of truth for each
 4. **Bob and sway.** The fighter's whole-body bob (3.2 px, 5 s) and sway are kept, as the spec defaults. The prototype
    has none. Dropping them changes replay hashes.
 5. **Embers.** `feel.fx` embers (`idleRate 8`) overlap the idle's sparks. Lower them? That is a JSON change.
+
+## 2. The Nexus 넥서스 (ported 2026-10-17, waiting for WJ's side-by-side)
+
+`src/combat/behaviours/nexusIdle.ts`, wired into `nexus.ts`. It replaces `drawGraphFx`: the sliding glow dots, the node
+breathing, the hub glow and the crystal shimmer. Evidence:
+- `docs/gallery/idle/nexus-compare.png` (row 1 prototype, row 2 game, every 40 ticks, Tussenruimte);
+- `evidence/idle/nexus-side-by-side.mp4` (12 s; covers a decision and a lean).
+
+**What is in:** the full spec (§3–§5).
+- **Gem ticks:** staccato keyframes in whole pixels: a 1 px pull-back, an overshoot, a settle. One gem moves at a time,
+  every 0.18–0.6 s.
+- **Chains forged anew every frame:** they slacken when the gems close in, pull taut when they part, and rattle when a gem
+  moves. They use the painter's link geometry and tone hash.
+- **Thoughts:** signals run along the chains as heat and pass from gem to gem.
+- **The heart:** its facets light in turn, and a pupil slit watches the prey during a lean.
+- **The decision** (every 7–11 s): clench, fire every spoke, snap the rim out, reset gem by gem.
+- **The hunting lean:** ring by ring toward the prey, and the nearest gem twitches.
+- **Sinew:** pendulums kicked by the gems' own motion.
+- **Veins and buds:** veins of assimilation creep and withdraw; buds of crystal push out of the rim and crumble.
+- **Yielding:** a clockwork snap home within 5 ticks on any move or hit; on KO everything stops. Thoughts keep running in
+  a fight, faster during a harvest.
+
+**Changed from the spec, and why:**
+- **State lives render-side.** The spec put the scheduler in `update()`. Instead, each tick's inputs (at rest, KO, harvest,
+  real growth, prey side, live gems, intact chains) are recorded in `update()` and the idle steps once per tick from them
+  at render time. That is the same as the Supernova: deterministic at any frame rate (tested), and no cost added to sim
+  ticks (rollback, AI runs).
+- **Chain colours come from the painted body.** Each forged link knows where it sits at rest and takes the painted colour
+  of the cell under it, so a resting chain is the painted one: 32 of 10,121 cells differ at rest, apart from the heart's
+  facets, which are the animation. Heat still steps up the prototype's ladder.
+- **Sparse glow.** The Nexus's materials carry strong emissive (gems 84, cores 230, crystal 46), so in game the whole graph
+  bloomed far past the prototype. The composite now sets the gems' emissive itself, as the prototype does: cores faint at
+  rest, flaring with a thought; hot links, vein tips and bud cores. Cells the fight changed keep their own (heat glow).
+- **Off-palette colours.** The prototype's white-hot is the heart's own brightest painted colour, and the pupil is the
+  darkest painted crystal colour (spec §6).
+- **Not ported:** cut-chain debris (the game already makes real debris and whips), dark-gem sag and fade (`goDark` greys
+  them), and the sky.
+
+**Numbers** (`npm run perf:gate -- --only=nexus`):
+- **Mirror storm:** 60.0 fps mean, 1 % low 58.1–58.3, 0 frames over 25 ms. GATE PASS.
+- **GC:** V8 pauses max 1.0 ms.
+- **Idle line:** 4.6 ms CPU and 3.8 ms GPU a frame for two Nexuses, up from 3.4 ms CPU.
+- **A note:** one sim tick in the storm reaches about 20 ms. That is the fight's sim; the idle is render-side.
+- Tests: render purity green, four idle tests (the same at any frame rate, the map never written, chains at rest are the
+  painted ones, a hole stays a hole), full suite green.
+
+**Decisions for WJ:**
+1. **Pupil colour:** the darkest painted crystal colour. Check it in the clip.
+2. **Sway and bob.** The prototype has no smooth whole-body sway (`lean` ±1.8 px) or bob (2.2 px, 4.2 s). Both are kept
+   (sim side; dropping them changes replay hashes).
+3. **Lean triggers.** The lean comes on the random 8–14 s timer only. The spec suggests also when the foe starts a move or
+   comes into reach.
+4. **Glow.** It is now the prototype's (sparse). Today's strong whole-graph bloom is gone at rest; say if you want some
+   of it back.
