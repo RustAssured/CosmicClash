@@ -53,9 +53,10 @@ export type RenderLayerLit = RenderLayer & LitLayerFields;
  * Which layers are TITAN bodies (outlined, seamed, highlight-capped): world layers drawn normally in the body band z ∈ [−1, 10)
  * (the Witness's and 우리's rig atlases sit just behind their primary body, at z −0.5).
  * The contract reserves z ≥ 10 for effects (10 front debris / particles, 20 per-titan FX); additive glows never count.
+ * A body that sets `outline: false` (WJ's call per titan) is drawn without the outline and seams.
  */
-export function isTitanLayer(l: Pick<RenderLayer, 'space' | 'blend' | 'z'>): boolean {
-  return l.space === 'world' && l.blend !== 'add' && l.z >= -1 && l.z < 10;
+export function isTitanLayer(l: Pick<RenderLayer, 'space' | 'blend' | 'z' | 'outline'>): boolean {
+  return l.space === 'world' && l.blend !== 'add' && l.z >= -1 && l.z < 10 && l.outline !== false;
 }
 
 /** The shared bloom (UNIFICATION §5): two additive blurred passes of the emissives, σ ≈ 3 px and ≈ 10 px (CSS blur radii in the

@@ -21,7 +21,9 @@ import type { FighterImpl } from '../fighter';
 import { BodyOverlay } from '../fx/bodyOverlay';
 import { GlowSprite } from '../fx/glowSprite';
 import { flameColumn, glowD, plasmaBall, rampAt, rampDither, ribbon, ringBand, streak, tn } from '../fx/lib';
+import { idleSeed } from '../fx/idle';
 import { Overlay } from '../fx/overlay';
+import { SupernovaIdle, type NovaIdleInput } from './supernovaIdle';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
 import { DMath, sq } from '@/contracts/dmath';
@@ -66,15 +68,6 @@ interface WallCfg {
   energy: number;
 }
 
-interface Arc {
-  /** Period, offset (ticks), base limb angle, footpoint half-separation (rad), height (px). */
-  period: number;
-  offset: number;
-  angle: number;
-  sep: number;
-  h: number;
-}
-
 /**
  * THE SUPERNOVA. Fuel is the resource and the clock of the fight: moves burn it (the star shrinks as it burns), a quiet star
  * cools and regains a little, blows of heat and force it absorbs are turned into fuel (Radiance). At zero fuel it collapses
@@ -88,7 +81,9 @@ export class SupernovaBehaviour extends Behaviour {
   private gran!: SupernovaGranules;
   private shimmer!: BodyOverlay;
   private halo!: GlowSprite;
-  private prom!: Overlay;
+  /** The living idle (idle handover, specs/supernova.md): heartbeat, boiling disc, corona fire, living prominences. */
+  private idle!: SupernovaIdle;
+  private readonly idleIn: NovaIdleInput = { fuel: 1, hurt: false, rest: 1, live: 1 };
   private fx!: Overlay;
   private flame: number[] = [];
   private ember: number[] = [];
@@ -127,11 +122,6 @@ export class SupernovaBehaviour extends Behaviour {
   private trailHead = 0;
   /* per-frame draw state */
   private haloA = 0;
-  private readonly arcs: Arc[] = [
-    { period: 331, offset: 40, angle: -0.34, sep: 0.2, h: 34 },
-    { period: 397, offset: 190, angle: 1.5, sep: 0.17, h: 28 },
-    { period: 359, offset: 275, angle: -2.05, sep: 0.19, h: 31 },
-  ];
   private readonly tmp = makeFatShape();
   private readonly xy = { x: 0, y: 0 };
   private readonly dmg = {
@@ -191,13 +181,25 @@ export class SupernovaBehaviour extends Behaviour {
     const map = f.body.map;
     this.shimmer = new BodyOverlay('supernova-shimmer', 0.2, map.w, map.h, 'add', true);
     this.halo = new GlowSprite('supernova-halo', -0.5, 132, [120, 60, 26], 0.22);
-    this.prom = new Overlay('supernova-prom', 0.4, 400, 360, 'normal', true);
+    this.idle = new SupernovaIdle(
+      map,
+      this.rig,
+      (f.def.art.params as { gradient: string[] }).gradient,
+      this.gran,
+      idleSeed(f.seed, f.slot),
+      f.slot,
+    );
     this.fx = new Overlay('supernova-fx', 20, 800, 560, 'add', true);
     this.collapseDef = f.movesById.get('supernova.collapse');
     const wall = f.slotMoves.signature?.extra?.['wall'] as WallCfg | undefined;
     if (wall) this.wallCfg = wall;
     f.resourceMax = f.def.resource.max;
     f.resource = f.def.resource.start;
+  }
+
+  /** WJ (idle port review): the star's burning edge is its silhouette, so the body takes no unified outline. */
+  override decorateBodyLayer(layer: RenderLayer): void {
+    layer.outline = false;
   }
 
   override reset(_heal: number): void {
@@ -215,6 +217,7 @@ export class SupernovaBehaviour extends Behaviour {
     this.hurt = 0;
     this.trailN = 0;
     this.lastAct = f.tickNo;
+    this.idle.reset();
   }
 
   /** Test/AI access. */
@@ -612,6 +615,7 @@ export class SupernovaBehaviour extends Behaviour {
       this.windParticles();
     } else if (this.trailN > 0 && (tick & 1) === 0) this.trailN--;
     this.lastTick = tick;
+    this.recordIdle(tick);
 
     this.chargeParticles();
     // S19: the star's overlays (granulation, prominences, the nova's rings and glows) are rasterised at render time, once
@@ -619,6 +623,27 @@ export class SupernovaBehaviour extends Behaviour {
     this.drawStale = true;
   }
   private drawStale = false;
+
+  /**
+   * The living idle's inputs this tick (fuel, hurt, at rest, fading): handed over once per tick so a frame that catches up
+   * two ticks steps each with its own (render-side data; the sim never reads it back).
+   */
+  private recordIdle(tick: number): void {
+    const f = this.f;
+    const m = f.mv;
+    const id = m.def?.id ?? '';
+    const collapsing = (id === 'supernova.nova' || id === 'supernova.collapse') && m.phase === 'startup';
+    const cq = collapsing ? clamp01(m.phaseTick / Math.max(1, m.startup)) : 0;
+    const inp = this.idleIn;
+    inp.fuel = this.fuelFrac();
+    inp.hurt = this.hurt > 0.3 || f.state === 'hitstun';
+    inp.rest =
+      !m.def && (f.state === 'idle' || f.state === 'move' || f.state === 'intro' || f.state === 'guard')
+        ? 1
+        : 0;
+    inp.live = (1 - cq) * (f.ko ? clamp01(1 - f.stateTicks / 70) : 1);
+    this.idle.record(tick, inp);
+  }
 
   private windParticles(): void {
     const f = this.f;
@@ -699,16 +724,25 @@ export class SupernovaBehaviour extends Behaviour {
     const collapsing = (id === 'supernova.nova' || id === 'supernova.collapse') && m.phase === 'startup';
     const cq = collapsing ? clamp01(m.phaseTick / Math.max(1, m.startup)) : 0;
     if (collapsing) pulse = 0.6 + 0.4 * DMath.sin(tick * (0.2 + 0.6 * cq));
+    // the living idle's breathing halo (its heartbeat and fuel, supernovaIdle.ts), the collapse's glow on top
     this.haloA = clamp01(
-      (0.34 + 0.2 * pulse) * (0.35 + 0.65 * k) * (0.5 + 0.5 * massK) * dying + 0.35 * cq + 0.22 * this.hurt,
+      0.5 * this.idle.halo * (0.5 + 0.5 * massK) * dying * (1 - cq) + 0.35 * cq + 0.22 * this.hurt,
     );
 
-    // the granulation churns every second tick
-    if ((tick & 1) === 0) this.drawShimmer(tick, k, pulse, dying, cq);
+    // the living idle draws the disc, corona and prominences; the old granulation churn stays only for the collapse
+    // startup, whose whitening it carries
+    if (cq > 0) {
+      if ((tick & 1) === 0) this.drawShimmer(tick, k, pulse, dying, cq);
+      this.shimmerOn = true;
+    } else if (this.shimmerOn) {
+      this.shimmer.clear();
+      this.shimmer.commit();
+      this.shimmerOn = false;
+    }
 
-    this.drawProminences(tick, k, dying, cq);
     this.drawFx(tick, m, id);
   }
+  private shimmerOn = false;
 
   private drawShimmer(tick: number, k: number, pulse: number, dying: number, cq: number): void {
     const f = this.f;
@@ -773,113 +807,6 @@ export class SupernovaBehaviour extends Behaviour {
     }
     if (any) S.mark();
     S.commit();
-  }
-
-  /** Prominence arcs that launch from the limb, hold, and fall back: cosmetic, and only where the limb is still there. */
-  private drawProminences(tick: number, k: number, dying: number, cq: number): void {
-    const f = this.f;
-    const t = f.body.transform;
-    const P = this.prom;
-    const calm = f.state === 'idle' || f.state === 'move' || f.state === 'intro';
-    const moving = DMath.hypot(f.vx, f.vy) > 50;
-    if (!calm || moving || (tick & 1) === 0 || !P.layer.visible) {
-      P.begin(t.x, t.y);
-      const map = f.body.map;
-      const massK = clamp01(f.view.bodyStats.massFrac);
-      const ids = this.rig.ids;
-      const R = this.rig.radius * (0.75 + 0.25 * massK);
-      // in a collapse the arcs are drawn back into the star; a dying star lets them fall
-      const live = (1 - cq) * dying * (0.4 + 0.6 * k);
-      if (live > 0.05) {
-        for (let ai = 0; ai < this.arcs.length; ai++) {
-          const A = this.arcs[ai]!;
-          const u = ((tick + A.offset) % A.period) / A.period;
-          let s0 = 0;
-          let s1 = 0;
-          if (u < 0.28) {
-            s1 = smoothstep(0, 0.28, u);
-          } else if (u < 0.56) {
-            s1 = 1;
-          } else if (u < 0.86) {
-            s0 = smoothstep(0.56, 0.86, u);
-            s1 = 1;
-          } else continue;
-          const drift = (Math.floor((tick + A.offset) / A.period) * 1.7 + ai) % 6.283;
-          const a0 = A.angle + 0.35 * DMath.sin(drift) - A.sep;
-          const a1 = A.angle + 0.35 * DMath.sin(drift) + A.sep;
-          const h = A.h * live * (0.6 + 0.4 * DMath.sin(u * Math.PI));
-          this.drawArch(P, map, ids, R, a0, a1, h, s0, s1, tick, ai, live);
-        }
-      }
-      P.end();
-    }
-  }
-
-  private drawArch(
-    P: Overlay,
-    map: FighterImpl['body']['map'],
-    ids: SupernovaRig['ids'],
-    R: number,
-    a0: number,
-    a1: number,
-    h: number,
-    s0: number,
-    s1: number,
-    tick: number,
-    seed: number,
-    live: number,
-  ): void {
-    const f = this.f;
-    const t = f.body.transform;
-    const rf = R * 0.93;
-    // footpoints in map cells must still be plasma
-    const c0x = this.rig.core.x + DMath.cos(a0) * rf;
-    const c0y = this.rig.core.y + DMath.sin(a0) * rf;
-    const c1x = this.rig.core.x + DMath.cos(a1) * rf;
-    const c1y = this.rig.core.y + DMath.sin(a1) * rf;
-    const alive = (x: number, y: number): boolean => {
-      const ix = Math.floor(x);
-      const iy = Math.floor(y);
-      if (ix < 0 || iy < 0 || ix >= map.w || iy >= map.h) return false;
-      const m = map.material[iy * map.w + ix]!;
-      return m === ids.photosphere || m === ids.inner || m === ids.prominence || m === ids.corona;
-    };
-    if (!alive(c0x, c0y) || !alive(c1x, c1y)) return;
-    const face = t.facing;
-    const wx = (lx: number, ly: number, out: { x: number; y: number }): void => {
-      out.x = t.x + (lx - this.rig.core.x) * face;
-      out.y = t.y + (ly - this.rig.core.y);
-    };
-    const ca = DMath.cos(a0);
-    const sa = DMath.sin(a0);
-    const cb2 = DMath.cos(a1);
-    const sb = DMath.sin(a1);
-    const kk = h * 1.34;
-    const x0 = c0x;
-    const y0 = c0y;
-    const x3 = c1x;
-    const y3 = c1y;
-    const x1 = x0 + ca * kk;
-    const y1 = y0 + sa * kk;
-    const x2 = x3 + cb2 * kk;
-    const y2 = y3 + sb * kk;
-    const N = 40;
-    const p = this.xy;
-    for (let i = 0; i <= N; i++) {
-      const s = i / N;
-      if (s < s0 || s > s1) continue;
-      const u = 1 - s;
-      const bx = u * u * u * x0 + 3 * u * u * s * x1 + 3 * u * s * s * x2 + s * s * s * x3;
-      const by = u * u * u * y0 + 3 * u * u * s * y1 + 3 * u * s * s * y2 + s * s * s * y3;
-      wx(bx, by, p);
-      const flow = 0.5 + 0.5 * DMath.sin(s * 15 - tick * 0.14 + seed * 2);
-      const edge = Math.min(smoothstep(s0, s0 + 0.12, s), smoothstep(s1, s1 - 0.12, s));
-      const thick = (1.1 + 1.5 * DMath.sin(Math.PI * s)) * (0.6 + 0.4 * edge) * (0.6 + 0.4 * live);
-      const v = (0.42 + 0.5 * flow) * (0.5 + 0.5 * edge);
-      const col = rampDither(this.flame, v, Math.round(p.x), Math.round(p.y));
-      P.disc(p.x, p.y, thick, col, 210);
-      if (thick > 1.9) P.disc(p.x, p.y, thick * 0.45, rampAt(this.flame, 0.85 + 0.15 * flow), 255);
-    }
   }
 
   private drawFx(tick: number, m: ActiveMove, id: string): void {
@@ -1254,13 +1181,18 @@ export class SupernovaBehaviour extends Behaviour {
       this.draw(this.lastTick, f.mv);
     }
     const body = out[out.length - 1]!;
+    // the living idle: its skin is presented as the body this frame, its flames and prominences ride a layer of their own
+    this.idle.advance(this.lastTick);
+    this.idle.render(body, f.body.map);
     this.shimmer.follow(body);
     // the halo follows the star (interpolated like the body) and shrinks with it
     const t = f.body.transform;
     this.halo.place(t.x, t.y, body.prevX, body.prevY, this.haloA);
     this.halo.layer.anchorX = this.halo.layer.w >> 1;
     this.halo.layer.anchorY = this.halo.layer.h >> 1;
-    out.push(this.halo.layer, this.shimmer.layer, this.prom.layer, this.fx.layer);
+    out.push(this.halo.layer);
+    if (this.shimmerOn) out.push(this.shimmer.layer);
+    out.push(this.idle.layer.layer, this.fx.layer);
   }
 
   override debugShapes(out: DebugShape[]): void {

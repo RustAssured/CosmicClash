@@ -186,6 +186,11 @@ export interface RenderLayer {
   blend: 'normal' | 'add';
   visible: boolean;
   /**
+   * `false`: a titan body drawn WITHOUT the unified look's dark outline (and depth seams): WJ's call per titan, e.g. the
+   * Supernova's living idle, whose burning edge is the silhouette (docs/idle/PORT.md). Omitted = outlined as usual.
+   */
+  outline?: boolean;
+  /**
    * Rig parts (D27, proposal 151): when present the layer's pixels are an atlas and each part is drawn rotated by the shared
    * sampler (contracts/rotation.ts) instead of the whole layer being placed with facing/lean. `facing` mirrors each part about
    * its pivot before rotating; `lean` does not apply.

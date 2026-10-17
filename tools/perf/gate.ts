@@ -87,6 +87,8 @@ const CLASH_PAIRS: [string, string][] = [
   ['uri', 'cradle'],
 ];
 const pick = (p: [string, string]): boolean => !only.length || p.some((t) => only.includes(t));
+// a titan being ported that no pairing covers yet gets its own mirror storm (the worst case of its idle: two of it)
+for (const t of only) if (!STORM_PAIRS.some((p) => p.includes(t)) && t !== 'mouth') STORM_PAIRS.push([t, t]);
 for (const [a, b] of STORM_PAIRS.filter(pick))
   storms.push({
     name: `storm ${a} v ${b}`,
