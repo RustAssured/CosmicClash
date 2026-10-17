@@ -9,7 +9,7 @@ import {
 } from 'three';
 import type { RenderLayer } from '@/contracts';
 import type { RenderLayerLit } from './unified';
-import { planUpload, StaleRegistry, type CachedLayerState } from './layerCache';
+import { LayerKeys, planUpload, StaleRegistry, type CachedLayerState } from './layerCache';
 import { PROF } from './passProfiler';
 
 /**
@@ -54,6 +54,8 @@ export interface LayerGpu {
 
 export class LayerTextures {
   private readonly entries = new StaleRegistry<Entry>();
+  /** Ids are not unique across fighters (layerCache.ts `LayerKeys`): entries are keyed by id + pixel buffer. */
+  private readonly keys = new LayerKeys();
   private frame = 0;
   /** Frames without use before a layer's texture is freed (tests lower it). */
   staleFrames = STALE_FRAMES;
@@ -72,13 +74,14 @@ export class LayerTextures {
   }
 
   acquire(layer: RenderLayer & Partial<RenderLayerLit>): LayerGpu {
-    let e = this.entries.get(layer.id, this.frame);
+    const key = this.keys.key(layer);
+    let e = this.entries.get(key, this.frame);
     const plan = planUpload(e?.state, layer);
     if (plan.kind === 'create') {
       if (e) this.destroy(e);
       e = this.create(layer);
       e.id = layer.id;
-      this.entries.set(layer.id, e, this.frame);
+      this.entries.set(key, e, this.frame);
       this.uploads.create++;
       this.uploads.texels += layer.w * layer.h;
       PROF.count('create');

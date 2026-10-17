@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { planUpload, StaleRegistry, type CachedLayerState } from './layerCache';
+import { LayerKeys, planUpload, StaleRegistry, type CachedLayerState } from './layerCache';
+
+describe('LayerKeys', () => {
+  it('gives two fighters that share a layer id their own key (a mirror match never evicts the other texture)', () => {
+    const k = new LayerKeys();
+    const a = { id: 'planet-fx', pixels: new Uint32Array(4) };
+    const b = { id: 'planet-fx', pixels: new Uint32Array(4) };
+    const ka = k.key(a);
+    const kb = k.key(b);
+    expect(ka).not.toBe(kb);
+    // stable across frames, and for a copy of the layer object that shares the buffer
+    expect(k.key(a)).toBe(ka);
+    expect(k.key({ ...b })).toBe(kb);
+  });
+
+  it('gives a layer that reallocates its buffer a new key', () => {
+    const k = new LayerKeys();
+    const l = { id: 'x', pixels: new Uint32Array(4) };
+    const k1 = k.key(l);
+    l.pixels = new Uint32Array(8);
+    expect(k.key(l)).not.toBe(k1);
+  });
+});
 
 const mk = (w = 64, h = 64) => ({
   version: 1,

@@ -1,0 +1,7 @@
+{
+  "about": "Phase 0 perf gate (tools/perf/gate.ts) on WJ's laptop (Ryzen 5 5500U, Vega 7, Edge, 1920x1080 at 125 %, full screen x3, tier auto). Judged per worst-case run (storm = AI vs AI level 5 with full meters, clash = both Ultimates at once then a scripted barrage) and over all runs pooled. 'under30' counts rAF intervals over 34 ms: worse than 30 fps (one missed vsync is 33.3 ms = exactly 30 fps and does not count). Every titan port must pass it before it ships.",
+  "meanFpsMin": 58,
+  "p1LowMin": 30,
+  "under30PerRunMax": 1,
+  "under30Ms": 34
+}

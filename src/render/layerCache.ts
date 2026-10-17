@@ -60,6 +60,26 @@ export function planUpload(
   return { kind: 'rect', x0, y0, x1, y1 };
 }
 
+/**
+ * Cache keys: a layer's id plus the identity of its pixel buffer. Layer ids are not unique: most behaviours name their
+ * overlays without the slot (`planet-fx`, `witness-fx`, …), so in a mirror match both fighters drew under one id and each
+ * evicted the other's texture: two fresh 1024×640 textures every frame for the colossus (Phase 0 perf gate, 20–40 ms frames).
+ * Keyed by buffer too, every layer keeps its own texture; one that reallocates its buffer gets a new key (its old texture
+ * is swept as stale). No allocation per frame once a buffer has been seen.
+ */
+export class LayerKeys {
+  private readonly keys = new WeakMap<Uint32Array, { id: string; key: string }>();
+  private next = 0;
+
+  key(layer: { id: string; pixels: Uint32Array }): string {
+    const k = this.keys.get(layer.pixels);
+    if (k && k.id === layer.id) return k.key;
+    const fresh = { id: layer.id, key: `${layer.id}#${this.next++}` };
+    this.keys.set(layer.pixels, fresh);
+    return fresh.key;
+  }
+}
+
 /** Frame-stamped registry: touch what you draw, sweep what you stopped drawing. */
 export class StaleRegistry<T> {
   private readonly items = new Map<string, { value: T; lastUsed: number }>();

@@ -41,19 +41,32 @@ export class PassProfiler {
   private readonly loopFrames: number[] = [];
   /** Sim ticks run before each rendered frame (1 at a steady 60 Hz; 0 / 2 = judder). */
   private readonly loopTickCounts: number[] = [];
+  /** Phase 0 perf gate (tools/perf/gate.ts): every tick's ms (`app.tick`: sim + fx + camera) and every frame's own ms. */
+  private readonly tickMs: number[] = [];
+  private readonly frameOnlyMs: number[] = [];
 
   /** The app reports each sim tick's and each rendered frame's main-thread ms (no-op unless profiling). */
   loopTick(ms: number): void {
     if (!this.lite) return;
     this.loopAcc += ms;
     this.loopTicks++;
+    this.tickMs.push(ms);
   }
   loopFrame(ms: number): void {
     if (!this.lite) return;
     this.loopFrames.push(this.loopAcc + ms);
     this.loopTickCounts.push(this.loopTicks);
+    this.frameOnlyMs.push(ms);
     this.loopAcc = 0;
     this.loopTicks = 0;
+  }
+  /** Main-thread ms of every tick since the last reset. */
+  tickReport(): number[] {
+    return this.tickMs.slice();
+  }
+  /** Main-thread ms of every rendered frame alone (layers, draw, UI; no ticks) since the last reset. */
+  frameReport(): number[] {
+    return this.frameOnlyMs.slice();
   }
   /** CPU ms per rendered frame recorded since the last reset (ticks folded into the frame they precede). */
   loopReport(): number[] {
@@ -178,6 +191,8 @@ export class PassProfiler {
     this.curFrame.length = 0;
     this.loopFrames.length = 0;
     this.loopTickCounts.length = 0;
+    this.tickMs.length = 0;
+    this.frameOnlyMs.length = 0;
     this.loopAcc = 0;
     this.loopTicks = 0;
   }

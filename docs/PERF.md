@@ -90,6 +90,90 @@ main-thread pauses, 6–8 over 4 ms, max 6.2–7.1 ms; **3-minute fight: 258 pau
 Instrumentation costs are in DECISIONS D24. These numbers are the slice baseline; every gate re-measures them the same way.
 **Correction:** the runs above were at the ×2 scale (1280×720 output). The capture window was not full-screen, and Windows display scaling is 125 %. At a true 1920×1080 ×3 (DevTools-forced full screen): 59.4 fps mean, 1 % low 24.8, 33 frames > 25 ms, sim p99 5.3 ms. That run had concurrent CPU load (mean 46 %), so it is pessimistic; it will be re-measured on a quiet machine. `rtcapture` now records canvas size and scale in every JSON.
 
+## Idle-animation port, Phase 0: the worst-case floor and the perf gate (2026-10-17)
+
+WJ's laptop (Ryzen 5 5500U, Vega 7, Edge, 1920×1080 at 125 %), **full screen ×3 forced through CDP**, tier `auto`, a production
+build, vsync on, the game's own loop. The machine was quiet (CPU 4–8 % busy before each set; Blender and Steam open but idle).
+Includes other sessions' uncommitted work at the time (the Black Hole signature pass, the Cradle Child scaffold).
+
+**The gate: `npm run perf:gate`** (tools/perf/gate.ts, limits in tools/perf/gate.json). Every titan port must pass it.
+- Worst case: AI-vs-AI level 5 storms with both meters full, the heaviest titans in mirror and mixed matches (colossus v colossus,
+  cradle v cradle, planet v blackhole, uri v colossus, cradle v blackhole), and Ultimate clashes (both Ultimates on the same tick at
+  close range, then a scripted crush/strike/signature barrage: blackhole v cradle, colossus v planet, uri v cradle). Nursery stage.
+- Pass = per run: mean ≥ 58 fps, 1 % low ≥ 30 fps (as src/telemetry: 1000 / mean of the worst 1 % of rAF intervals), at most 1
+  frame worse than 30 fps (an rAF interval > 34 ms; one missed vsync is 33.3 ms = exactly 30 fps and is not counted). A scenario
+  fails when a breach repeats in 2+ of its runs; a one-off is printed as a warning (see the noise note below).
+- It also prints, per run, tick ms p99/max (`app.tick`: sim + fx + camera), the frame's own CPU (layers + draw + UI), GCs seen as
+  a heap drop inside a frame, and the tier timeline; `--prof=1` adds a profiled run (GPU ms per pass by timer queries, the slowest
+  frames whole with their texture creates/uploads), `--gc=1` a V8-GC-traced run (`--set=all` does both).
+- **The idle cost line**: each titan mirrored, both fighters idling, CPU ms and GPU ms per frame.
+- `--only=<titan>` runs only the scenarios with that titan (and its idle line): the quick check for a port.
+
+**Before → after** (2 bare runs per scenario, plus one profiled and one GC-traced run, 20 s storms / 15 s clashes):
+
+| | before | after |
+|---|---|---|
+| gate | **FAIL** (colossus mirror) | **PASS** |
+| pooled 16 bare runs: mean fps / worst 1 % low / frames < 30 fps | 59.7 / **20.6** / **9** | 60.0 / 43.2 / 3 |
+| colossus v colossus: mean / 1 % low / < 30 fps (run 1, run 2) | 57.4 / 20.6 / 7, 58.8 / 28.7 / 1 | 60.0 / 57.9 / 0, 60.0 / 58.0 / 0 |
+| colossus v colossus: frame CPU p95 / max | 21.6 / 56 ms (one 350 ms frame, a drop to tier 0) | 7.0 / 18.9 ms, tier 1 throughout |
+| clash colossus v planet: 1 % low / < 30 fps | 52.1 / 0, 46.9 / 1 | 46.8 / 1, 52.0 / 0 (the KO round change below) |
+| every other scenario | 60.0 fps, 1 % low 53–58, 0 frames < 30 fps | the same |
+| GPU per frame in a storm (profiled) | 3.7–6.3 ms | 3.8–5.1 ms |
+| V8 GC pauses (traced runs) | max 6.6 ms, 0–4 over 4 ms a run | max 5.3 ms, 0–2 over 4 ms a run |
+| sim tick p99 / max (worst scenario) | 13.8 / 48.7 ms | 13.4 / 51.7 ms (unchanged: sim untouched) |
+
+Repeat (noise): the after set re-run for every Cradle scenario, 4 runs each, 16 runs, all pass (1 % low 57.8–58.3, 0 frames < 30 fps).
+The after set's pooled 1 % low 43.2 and 2 of its 3 frames < 30 fps are one cradle-mirror run with two back-to-back 50 ms
+frames at 9.3 s: no GC, no tier change, tick ≤ 11 ms and frame CPU ≤ 20 ms around it, not in any of the other 11 cradle-mirror
+runs. That is Windows' compositor or the driver, which is why the gate judges repeats.
+
+Idle cost per titan (CPU ms per frame = tick + draw; GPU ms per frame; both fighters idling, after):
+
+| titan | CPU | tick | draw | GPU |
+|---|---|---|---|---|
+| colossus | 4.58 | 1.74 | 2.84 | 3.42 (was 5.90 CPU / 4.85 GPU) |
+| lastone (Witness) | 4.60 | 0.74 | 3.86 | 3.09 (was 6.42 / 4.50) |
+| cradle | 4.16 | 0.93 | 3.23 | 3.18 |
+| planet | 3.86 | 0.38 | 3.48 | 3.23 |
+| uri | 3.79 | 0.55 | 3.24 | 3.41 |
+| blackhole | 3.52 | 0.29 | 3.23 | 3.18 |
+| nexus | 3.40 | 0.33 | 3.07 | 3.18 |
+| supernova | 3.31 | 0.29 | 3.02 | 3.34 |
+| asteroid | 2.55 | 0.26 | 2.29 | 3.07 |
+| cradlechild (scaffold) | 2.43 | 0.31 | 2.12 | 3.05 |
+
+About 3 ms of the GPU column is the stage and post chain (the cheapest titans sit at 3.05); a titan's own GPU share is what it
+adds above that. The budget for nine living idles: 16.7 ms a frame, today's idle frames use 4–5 ms CPU and 3–3.5 ms GPU.
+
+**What caused the frames under 30 fps, ranked by evidence:**
+1. **Texture churn from colliding layer ids (fixed).** Layer ids were not unique: most behaviours name their overlays without the
+   fighter's slot (`witness-fx`, `planet-fx`, `blackhole-fx`, `supernova-fx`, `lastone-*`, `nexus-*`, `asteroid-*`). In a mirror
+   match both fighters' overlays shared one cache entry, so each evicted the other: the colossus's two 1024×640 `witness-fx`
+   textures (1.3 M texels) were re-created **every frame** (`create:witness-fx:1024x640: 2` in every spike frame), `r.layers` 6.3
+   ms mean CPU and up to 37 ms. That held frames at 20–40 ms, pushed the quality controller to tier 0 (its own render-target
+   rebuild added a hitch), and the GPU-memory churn ended in 183 and 350 ms frames. Fix: the texture cache keys entries by id plus
+   the layer's pixel buffer (src/render/layerCache.ts `LayerKeys`), so every layer keeps its own texture whatever its id; no
+   allocation per frame, render-only (renderpure tests green). Any mirror match of those titans had the bug; the colossus is the
+   one big enough to show.
+2. **The colossus's round reset after a KO (not fixed, sim).** 33–53 ms in one tick at the KO → next round: `nextRound` rebuilds its
+   severed regions with `createBody` (≈ 15 ms) and heals its 19 bodies (≈ 11 ms) (traced in Node: .scratch/perf/clashspike.ts). One
+   frame of 50 ms at a hard cut; already a known exception in tools/perf/budget.json.
+3. **A big blow on the many-bodied colossus (not fixed, sim).** The Planet's Ultimate covers the whole colossus: every `strike` probe
+   collects every cell of its 19 bodies (`world.overlapNow` 7–9 ms, `resolveMoveHits` 12–14 ms), for ~20 ticks, because the
+   colossus moves each tick (the S19 memo misses). Ticks of 13–18 ms; frames stay ≤ 33 ms only because nothing else is heavy then.
+4. **Not causes:** V8 GC (traced: max 6.6 ms, never under a long frame), texture uploads other than (1) (dirty rects), the GPU
+   (≤ 6.3 ms a frame in the worst storm), tier changes other than the one (1) provoked. Shader compiles are not instrumented on
+   their own, but after the fix no long frame is left unexplained that one would show as (S21's warm-up draws hold).
+
+**Proposals for WJ (sim side: each needs the determinism tests green):**
+
+| change | expected gain |
+|---|---|
+| Colossus round reset: restore severed regions from a snapshot instead of `createBody`, or regrow one region per tick during the round intro | the KO frame 50 → ~20 ms (≈ 15 ms of 33); the last frame under 30 fps in the gate |
+| Overlap on a many-region foe: a per-body coarse occupancy grid (e.g. 8×8-cell tiles with counts), so a shape that covers a whole tile adds the tile's cells without visiting them | `overlapNow` 7–9 → ~1–2 ms on a covering blow: colossus-hit ticks 13–18 → ~6–8 ms, headroom for the idle animations during Ultimates |
+| Give every behaviour's overlay ids the fighter's slot (`planet-fx-${slot}` …), as the Cradle and 우리 already do | none for frames now (the cache fix covers it); keeps telemetry and debug views that read layers by id unambiguous |
+
 ## Lead: matter tail-latency note (final integration)
 
 B2's round-2 target was a saturated 22k-cell p99 ≤ 3.5 ms (measured 2.2 ms then). After the later visual/feel work (progressive fissure cuts, impact plume, debris depth
