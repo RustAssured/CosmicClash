@@ -25,6 +25,9 @@ describe('render layers: dirty protocol and coverage', () => {
     const m = makeMatch({ createWorld: (s) => createMatterWorld(s) });
     skipIntro(m);
     const f1 = m.fighters[1] as FighterImpl;
+    // the fighter's own protocol: a titan's living idle presents a skin of its own in place of the map afterwards
+    // (src/combat/fx/idle.ts BodySkin), so the behaviour's layers are left out here
+    (f1 as unknown as { behaviour: { renderLayers: () => void } }).behaviour.renderLayers = () => {};
     m.setSources(
       createScriptSource(parseScript('0:right*90,80:crush'), m.tick + 1),
       createScriptSource([], m.tick + 1),

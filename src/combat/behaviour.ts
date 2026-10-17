@@ -113,6 +113,13 @@ export abstract class Behaviour {
   leanBias(): number {
     return 0;
   }
+  /**
+   * The body's own pose this tick (the Asteroid's living idle, WJ 2026-10-17): `ox`/`oy` whole-pixel world offsets added like
+   * the bob and sway, and `rot` a rotation step (contracts/rotation.ts) for the primary body, or −1 to leave the transform's
+   * rotation alone. Called once per tick from the fighter's transform, before this tick's hits: what is drawn is what is hit,
+   * so this is SIM state (deterministic, in `hash()`). Default: no pose.
+   */
+  bodyPose(_out: { ox: number; oy: number; rot: number }): void {}
   /** Hit-stop began (visual freeze). */
   onFreeze(_ticks: number): void {}
   /**

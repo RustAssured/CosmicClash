@@ -418,7 +418,7 @@ export class FighterImpl implements Fighter {
   /** Reusable particle request (behaviours mutate it and hand it to `world.spawnParticles`). */
   readonly particleSpawn: ParticleSpawn;
   /** Cached live bounds: refreshed from the world when the matter changed / the body flipped / every few ticks, else shifted with the transform. */
-  private readonly bbCache = { tx: 0, ty: 0, lean: 0, facing: 1, version: -1, stamp: -1e9 };
+  private readonly bbCache = { tx: 0, ty: 0, lean: 0, facing: 1, rot: 0, version: -1, stamp: -1e9 };
   private readonly bodyDirty = { x0: 0, y0: 0, x1: 0, y1: 0 };
   private lastEventTick = -1e9;
   private readonly bnd: Bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
@@ -2278,8 +2278,14 @@ export class FighterImpl implements Fighter {
     this.followY *= T.followDecay;
     if (Math.abs(this.followX) < 0.05) this.followX = 0;
     if (Math.abs(this.followY) < 0.05) this.followY = 0;
-    this.offX = sway + ox;
-    this.offY = bob + oy;
+    // the behaviour's own pose (the Asteroid's darts and head turn): whole pixels and a rotation step, hit where drawn
+    const pose = this.pose;
+    pose.ox = 0;
+    pose.oy = 0;
+    pose.rot = -1;
+    this.behaviour.bodyPose(pose);
+    this.offX = sway + ox + pose.ox;
+    this.offY = bob + oy + pose.oy;
     // whole pixels: what you see is what is hit (space.ts maps integer transforms 1:1 onto cells)
     t.x = Math.round(this.px + this.offX);
     t.y = Math.round(this.py + this.offY);
@@ -2287,7 +2293,9 @@ export class FighterImpl implements Fighter {
     const mirrors = this.behaviour.mirrors();
     t.facing = mirrors ? this.facing : 1;
     t.lean = mirrors ? this.composeLean() : 0;
+    if (pose.rot >= 0) t.rot = pose.rot;
   }
+  private readonly pose = { ox: 0, oy: 0, rot: -1 };
 
   /**
    * World AABB of live matter (returns a reused object), from `world.liveBounds`. The world scans the whole cell map, so the result is
@@ -2297,7 +2305,14 @@ export class FighterImpl implements Fighter {
     const t = this.body.transform;
     const c = this.bbCache;
     const o = this.bnd;
-    if (this.body.map.version !== c.version || t.facing !== c.facing || this.tickNo - c.stamp > 8) {
+    // a rotated body (the Asteroid's head turn) is rescanned whenever its rotation changes
+    const rot = t.rot ?? 0;
+    if (
+      this.body.map.version !== c.version ||
+      t.facing !== c.facing ||
+      rot !== c.rot ||
+      this.tickNo - c.stamp > 8
+    ) {
       if (!this.world.liveBounds(this.body.id, o)) {
         o.x0 = t.x;
         o.x1 = t.x;
@@ -2306,6 +2321,7 @@ export class FighterImpl implements Fighter {
       }
       c.version = this.body.map.version;
       c.facing = t.facing;
+      c.rot = rot;
       c.stamp = this.tickNo;
     } else {
       const dx = t.x - c.tx;

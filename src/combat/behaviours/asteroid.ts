@@ -15,8 +15,11 @@ import {
 import { hash01, type AsteroidRig } from '@/titans';
 import { Behaviour, type HitInfo, type InterceptResult } from '../behaviour';
 import type { FighterImpl } from '../fighter';
+import { idleSeed } from '../fx/idle';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
+import { AsteroidIdle, type RockIdleInput } from './asteroidIdle';
+import { AsteroidPose } from './asteroidPose';
 import { asShape, makeFatShape, shapeIntersectsDisc } from '../shapes';
 import { DMath } from '@/contracts/dmath';
 
@@ -26,7 +29,6 @@ const RUBBLE_EXIT = 0.42;
 const MOMENTUM_MAX = 5;
 const MOMENTUM_HOLD = 150;
 const MAX_FRAGS = 12;
-const PEBBLES = 6;
 
 interface SwarmCfg {
   count: number;
@@ -90,6 +92,26 @@ export class AsteroidBehaviour extends Behaviour {
   private lean = 0;
   private readonly xy = { x: 0, y: 0 };
   private trailClock = 0;
+  /**
+   * The living idle (idle handover, specs/asteroid.md). `pose` is SIM state (WJ 2026-10-17: the head turn is a real body
+   * rotation, the darts real offsets): head snaps, darts, the feint, the spin. `idle` draws what rides on it.
+   */
+  private pose!: AsteroidPose;
+  private idle!: AsteroidIdle;
+  /** Real momentum reached 3: the idle spins at its next calm moment (idle feints add no momentum). */
+  private spinWanted = false;
+  private readonly poseCtx = {
+    state: 'idle',
+    inMove: false,
+    facing: 1 as 1 | -1,
+    x: 0,
+    y: 0,
+    preyX: 0,
+    preyY: 0,
+    foeNear: false,
+    wantSpin: false,
+  };
+  private idleIn!: RockIdleInput;
 
   constructor(f: FighterImpl) {
     super(f);
@@ -111,6 +133,46 @@ export class AsteroidBehaviour extends Behaviour {
     this.cfg = sw ?? null;
     f.resourceMax = f.def.resource.max;
     f.resource = f.def.resource.start;
+    const rig = this.rig;
+    const prow = DMath.atan2(rig.prow.y - (rig.core.y + 0.5), rig.prow.x - (rig.core.x + 0.5));
+    const seed = idleSeed(f.seed, f.slot);
+    this.pose = new AsteroidPose(prow, rig.radius, seed);
+    this.pose.reset(f.facing);
+    const map = f.body.map;
+    const t = f.body.transform;
+    this.idle = new AsteroidIdle(
+      map,
+      rig as unknown as { core: { x: number; y: number }; radius: number; ids: Record<string, number> },
+      { x: t.anchorX, y: t.anchorY },
+      map.baseColor.slice(),
+      (seed ^ 0x5a5a) >>> 0,
+    );
+    this.idleIn = {
+      pt: 0,
+      x: 0,
+      y: 0,
+      ox: 0,
+      oy: 0,
+      rot: 0,
+      facing: 1,
+      dir: 0,
+      charge: 0,
+      lockAge: 999,
+      spinning: false,
+      dartAt: -1,
+      dartAng: 0,
+      dartN: 0,
+      hitAt: -1,
+      hitX: 0,
+      hitY: 0,
+      spinEndAt: -1,
+      rest: true,
+      frags: 0,
+      hidden: false,
+      guard: false,
+      rubble: false,
+      ko: false,
+    };
   }
 
   override reset(_heal: number): void {
@@ -121,6 +183,46 @@ export class AsteroidBehaviour extends Behaviour {
     this.f.resource = this.f.resourceMax;
     this.rubble = false;
     this.f.body.cohesionScale = 1;
+    this.pose.reset(this.f.facing);
+    this.idle.reset();
+    this.spinWanted = false;
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  the living idle's pose (sim): asked once per tick, before this tick's hits
+   * ---------------------------------------------------------------------------------------------- */
+
+  override bodyPose(out: { ox: number; oy: number; rot: number }): void {
+    const f = this.f;
+    const t = f.body.transform;
+    const c = this.poseCtx;
+    const fv = f.foe?.view;
+    c.state = f.state;
+    c.inMove = !!f.mv.def;
+    c.facing = f.facing;
+    c.x = t.x;
+    c.y = t.y;
+    c.preyX = fv ? fv.x : t.x + f.facing * 200;
+    c.preyY = fv ? fv.y : t.y;
+    // the lunge never reaches the foe: no auto-feint while its live bounds are within reach of the horn
+    if (fv) {
+      const reach = this.rig.radius * 1.3 + 15 + 8;
+      const tx = t.x + DMath.cos(this.pose.dir) * reach;
+      const ty = t.y + DMath.sin(this.pose.dir) * reach;
+      c.foeNear =
+        tx >= fv.boundsX0 - 8 && tx <= fv.boundsX1 + 8 && ty >= fv.boundsY0 - 8 && ty <= fv.boundsY1 + 8;
+    } else c.foeNear = false;
+    c.wantSpin = this.spinWanted;
+    this.pose.step(c);
+    if (this.pose.spinStarted) this.spinWanted = false;
+    out.ox = this.pose.ox;
+    out.oy = this.pose.oy;
+    out.rot = this.pose.rot;
+  }
+
+  override hash(h: number): number {
+    h = this.pose.hash(h);
+    return Math.imul(h ^ (this.spinWanted ? 1 : 0), 0x01000193) >>> 0;
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -167,6 +269,8 @@ export class AsteroidBehaviour extends Behaviour {
     const f = this.f;
     if (this.momentum < MOMENTUM_MAX) {
       this.momentum++;
+      // three in a row: the living idle spins at its next calm moment (WJ: on real momentum, idle feints add none)
+      if (this.momentum === 3) this.spinWanted = true;
       f.events.push({
         t: 'cue',
         slot: f.slot,
@@ -455,9 +559,10 @@ export class AsteroidBehaviour extends Behaviour {
     if (f.resource > cap) f.resource = cap;
     f.view.parts = Math.floor(f.resource);
 
-    // tumble: a slow idle sway, a fast spin during the Tumble surge, a heave when ramming
+    // tumble: a fast spin during the Tumble surge, a heave when ramming (the old slow idle sway is the living idle's darts now)
     this.leanPhase += m.def?.extra?.['spin'] ? 0.5 : 0.028;
-    let lean = DMath.sin(this.leanPhase) * (m.def?.extra?.['spin'] ? 13 : 2.6);
+    const calm = !m.def && (f.state === 'idle' || f.state === 'move' || f.state === 'guard');
+    let lean = DMath.sin(this.leanPhase) * (m.def?.extra?.['spin'] ? 13 : calm ? 0 : 2.6);
     if (id === 'asteroid.meteor' && m.phase === 'startup') lean = -6 * clamp01(m.phaseTick / 10);
     if (m.def?.slot === 'ultimate' && m.phase === 'startup')
       lean += DMath.sin(tick * 1.9) * 2.2 * clamp01(m.phaseTick / m.startup);
@@ -473,6 +578,40 @@ export class AsteroidBehaviour extends Behaviour {
     // S19: the orbiting rocks, the storm and the flares are rasterised at render time (`renderLayers`)
     this.drawStale = true;
     this.drawTick = tick;
+    this.recordIdle(tick);
+  }
+
+  /** The living idle's inputs this tick: the pose and its events, the fragments, guard, rubble (render-side data). */
+  private recordIdle(tick: number): void {
+    const f = this.f;
+    const p = this.pose;
+    const t = f.body.transform;
+    const inp = this.idleIn;
+    inp.pt = p.pt;
+    inp.x = t.x;
+    inp.y = t.y;
+    inp.ox = p.ox;
+    inp.oy = p.oy;
+    inp.rot = t.rot ?? 0;
+    inp.facing = t.facing;
+    inp.dir = p.dir;
+    inp.charge = p.charge;
+    inp.lockAge = p.lockAge;
+    inp.spinning = p.spinning;
+    inp.dartAt = p.dartAt;
+    inp.dartAng = p.dartAng;
+    inp.dartN = p.dartN;
+    inp.hitAt = p.hitAt;
+    inp.hitX = p.hitX;
+    inp.hitY = p.hitY;
+    inp.spinEndAt = p.spinEndAt;
+    inp.rest = !f.mv.def && (f.state === 'idle' || f.state === 'move' || f.state === 'guard');
+    inp.frags = Math.floor(f.resource);
+    inp.hidden = this.swarmOut > 0;
+    inp.guard = f.guardUp;
+    inp.rubble = this.rubble;
+    inp.ko = f.ko && f.stateTicks > 50;
+    this.idle.record(tick, inp);
   }
   private drawStale = false;
   private drawTick = 0;
@@ -527,7 +666,8 @@ export class AsteroidBehaviour extends Behaviour {
     this.front.begin(t.x, t.y);
     this.fx.begin(t.x, t.y);
     if (!f.ko || f.stateTicks < 50) {
-      this.drawPebbles(tick, id);
+      // the living idle: the spring swarm, smears and afterimages, the horn, gas, dust, rings
+      this.idle.drawOverlays(this.back, this.front, this.fx, f.body.map);
       this.drawSwarm(tick);
       if (m.def?.tags.includes('storm')) this.drawStorm(tick, m);
       if (id === 'asteroid.meteor') this.drawRamFlare(tick, m);
@@ -537,27 +677,6 @@ export class AsteroidBehaviour extends Behaviour {
     this.back.end();
     this.front.end();
     this.fx.end();
-  }
-
-  /** Small rocks in orbit: they tighten around the body under Guard, speed up with momentum, scatter when rubble. */
-  private drawPebbles(tick: number, id: string): void {
-    const f = this.f;
-    const t = f.body.transform;
-    const R = this.rig.radius;
-    const guard = f.guardUp ? 1 : 0;
-    const spinUp = 1 + 0.25 * this.momentum + (id === 'asteroid.tumble' ? 2 : 0);
-    const n = PEBBLES + (this.rubble ? 3 : 0);
-    for (let i = 0; i < n; i++) {
-      const r0 =
-        R * (1.12 + 0.11 * (i % 3)) * (guard ? 0.72 : 1) * (this.rubble ? 1.15 + 0.1 * hash01(i, 1, 1) : 1);
-      const w = (0.017 + 0.006 * (i % 4)) * spinUp * (i % 2 === 0 ? 1 : -0.8);
-      const a = i * 1.7 + tick * w + f.slot;
-      const cx = t.x + 2 + DMath.cos(a) * r0 * 1.05;
-      const cy = t.y - 2 + DMath.sin(a) * r0 * (0.32 + 0.06 * (i % 3));
-      const behind = DMath.sin(a) < 0;
-      const size = 2 + (i % 3 === 0 ? 1 : 0) + (i % 5 === 0 ? 1 : 0);
-      this.pebble(behind ? this.back : this.front, cx, cy, size, i, behind ? 0.75 : 1);
-    }
   }
 
   private pebble(ov: Overlay, cx: number, cy: number, size: number, seed: number, light: number): void {
@@ -725,12 +844,15 @@ export class AsteroidBehaviour extends Behaviour {
   }
 
   override renderLayers(view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+    const body = out[out.length - 1]!;
+    const advanced = this.idle.advance(this.drawTick);
     // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
-    if ((this.fx.limitToView(view) || this.drawStale) && this.f.foe) {
+    if ((this.fx.limitToView(view) || this.drawStale || advanced) && this.f.foe) {
       this.drawStale = false;
       const m = this.f.mv;
       this.draw(this.drawTick, m.def?.id ?? '', m);
     }
+    this.idle.renderBody(body, this.f.body.map, advanced);
     out.push(this.back.layer, this.front.layer, this.fx.layer);
   }
 

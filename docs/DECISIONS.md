@@ -194,3 +194,16 @@ three type-only variants, WJ: "Yes, D is the logo. Put it on the site and in the
   are next made.
 - **Rule:** the beads are cut from the live portraits, so they follow the titans' art. A bead whose titan is missing is left
   out.
+
+**D39 — The Asteroid's living idle turns and steps its body for real (WJ, 2026-10-17; docs/idle/PORT.md §3).** Amends D4 for
+one titan. WJ took the three recommendations:
+- **Real rotation:** the Asteroid's head snaps turn its whole body (`transform.rot`, the shared quantised sampler, as 우리's
+  pelvis), so what is drawn is what is hit. Idle angles are within ±45° of the facing horizontal, in 4-step (5.6°)
+  increments; the momentum spin is a full turn.
+- **Real offsets, full range:** darts (±10 px x, ±8 px y), the feint's 15 px lunge and the hops move the body, as the bob
+  and sway do (`Behaviour.bodyPose`, applied before each tick's hits). The lunge never reaches the foe (no auto-feint while
+  its live bounds are within reach).
+- **No momentum from idle:** the spin plays at the next idle moment after real momentum reaches 3. Idle feints add none.
+- **Rules that keep moves exact:** the tick a move starts, the offset and rotation are 0. Hitstun, guard and the intro send
+  the body home in 2 ticks. The pose is sim state (deterministic, in the hash); the smears, swarm and glints are drawn
+  render-side.

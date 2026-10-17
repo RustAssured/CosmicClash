@@ -123,3 +123,55 @@ breathing, the hub glow and the crystal shimmer. Evidence:
    comes into reach.
 4. **Glow.** It is now the prototype's (sparse). Today's strong whole-graph bloom is gone at rest; say if you want some
    of it back.
+
+## 3. The Asteroid 소행성 (ported 2026-10-17, waiting for WJ's side-by-side)
+
+`src/combat/behaviours/asteroidPose.ts` (sim) and `asteroidIdle.ts` (render), wired into `asteroid.ts`. WJ's choices,
+recorded as D39 (`docs/DECISIONS.md`): real rotation, real darts at full range, the spin on real momentum. Evidence:
+- `docs/gallery/idle/asteroid-compare.png` (row 1 prototype, row 2 game, every 20 ticks);
+- `evidence/idle/asteroid-side-by-side.mp4` (12 s).
+
+**What is in:**
+- **Sim (the pose), stepped in the new `Behaviour.bodyPose` hook** (`fighter.ts` adds its offset like the bob and sway, and
+  writes its rotation):
+  - head snaps: 2 ticks of travel, 2 ticks a notch past, dead still, a lock;
+  - darts: 1 tick back, ease-out travel, 2 ticks a pixel past, a dead stop;
+  - the feint: crouch, charge, tremble, lunge, dust ring, two hops home;
+  - the spin.
+  - It is deterministic and folded into the hash.
+- **Render:**
+  - the spring swarm: its count is the real fragment resource, and it is hidden while the fragments are out;
+  - travel smears with speed lines, rotation smears, and afterimages cooled toward ice;
+  - the copper heart's lub-dub, light running along the ice veins (all lit while charging), and olivine winks, drawn in a
+    skin that the renderer rotates with the body;
+  - the horn's glint on a lock and while charging, sniffs at the horn, gas jets for every dart, dust and rings.
+
+**Changed from the spec, and why:**
+- **Prey.** It is the opponent's anchor (`foe.view`), not the pointer.
+- **Smears and afterimages trace a cheap silhouette.** They sample the rotated body with one nearest texel per pixel,
+  cached per angle, instead of the engine's 3×3 vote. They are dithered and darkened, so the difference does not show, and
+  it keeps a new angle under 0.5 ms. They come only from the pose's own motion (darts, lunge, turns), not from walking or
+  knockback.
+- **Off-palette colours are mapped onto the rock's own ramps** (spec §6): white-hot is the brightest ice, the afterimage
+  is the ice ramp by brightness, and the gas and ring tails are ice and regolith.
+- **The old idle is replaced.** The slow tumble sway is gone at rest (the darts replace it; a rotated body ignores lean
+  anyway), and so are the six orbiting pebbles. The Tumble surge's fast spin lean and the momentum embers are kept.
+- **Live bounds.** `Fighter.liveBounds()` now also rescans when the rotation changes (spec §6).
+- **One existing test changed.** `src/combat/layers.test.ts` checks the fighter's own dirty-rect protocol. It now stubs the
+  behaviour's layers, because a living idle presents its own skin afterwards.
+
+**Numbers** (`npm run perf:gate -- --only=asteroid`):
+- **Mirror storm:** 60.0 fps mean, 1 % low 57.9–58.3, 0 frames over 25 ms, worst sim tick 8.1 ms. GATE PASS.
+- **GC:** V8 pauses max 1.1 ms.
+- **Idle line:** 4.0 ms CPU and 3.1 ms GPU a frame for two Asteroids, up from 2.6 ms CPU.
+- Tests:
+  - five idle tests: the horn lands where the head points (facing ±1); no offset or rotation in any move tick;
+    deterministic hashes; a crater stays a hole in the turned body;
+  - render purity green, and the full suite green.
+
+**Decisions for WJ:**
+1. **The engine's rotation sampler versus the prototype's RotSprite.** The body turns with the game's shared 3×3 sampler,
+   not the prototype's Scale2x×8 RotSprite. Look at the horn tip and the 1 px ice veins in the clip. If they are not
+   right, a third sampler mode can reproduce RotSprite (in both the CPU contract and its GLSL twin).
+2. **The ±45° idle range.** The spec suggested it and asked you to verify. A wider range lets the horn follow a foe above
+   or below.

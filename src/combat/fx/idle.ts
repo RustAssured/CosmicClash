@@ -136,6 +136,10 @@ export class IdleRng {
   reseed(seed: number): void {
     this.s = seed >>> 0;
   }
+  /** The generator's state (a sim user folds it into its hash). */
+  get state(): number {
+    return this.s;
+  }
 }
 
 /** A per-fighter idle seed (the prototypes used one fixed seed; the slot keeps a mirror match's two idles apart). */
