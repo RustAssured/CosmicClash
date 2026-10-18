@@ -27,6 +27,8 @@ import type { FighterImpl } from '../fighter';
 import { BodyOverlay } from '../fx/bodyOverlay';
 import { TrackedBodyLayer } from '../fx/bodyLayer';
 import { GlowSprite } from '../fx/glowSprite';
+import { idleSeed } from '../fx/idle';
+import { PlanetIdle, type PlanetIdleInput } from './planetIdle';
 import { bayer, glowD, rampAt, ribbon, ringBand, streak, tn } from '../fx/lib';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
@@ -104,12 +106,13 @@ const GUARD_OMEGA = 3;
 /** Cloud-texture px of smear per rad/s of atmospheric spin (bands streak), capped. */
 const SMEAR_PER_SPIN = 2.6;
 const SMEAR_MAX = 14;
+/** The cloud deck's edge while the air is whole (the middle of the dithered band a thinning deck uses). */
+const CLOUD_EDGE = 0.395;
 /** Debris ring: motes (more as the crust breaks), radius (planet radii) slack and tight, flattening, tilt (the moons' plane). */
 const RING_MOTES = 44;
 const RING_LOOSE = 2.05;
 const RING_TIGHT = 1.3;
 const RING_FLAT = 0.26;
-const RING_TILT = -0.12;
 /** Aurora ovals: angular radius about each pole and samples around the oval. */
 const AURORA_BETA = 0.4;
 const AURORA_STEPS = 72;
@@ -126,7 +129,6 @@ const AURORA_TOP = AURORA_RAMP.length - 1;
 const PHASE_POWER = [1, 1, 1.01, 1.05, 1.08];
 const PHASE_BRACE = [1, 1, 0.94, 0.8, 0.64];
 const PHASE_GRAVITY = [12, 12, 18, 22, 26];
-const PHASE_MOTES = [44, 44, 64, 72, 84];
 /** Axis wander (precession wobble of aurora/ring, rad) per phase: a fractured world no longer turns true. */
 const PHASE_WANDER = [0, 0, 0.05, 0.08, 0.12];
 /** Most extra ticks a Moon Slam whip may run past its windup while it waits for its path to point at the foe. */
@@ -423,6 +425,11 @@ export class PlanetBehaviour extends Behaviour {
   private halo!: GlowSprite;
   private haloCore!: GlowSprite;
   private fx!: Overlay;
+  /** The living idle (planetIdle.ts): the turning, living face, the gravity pull, the ring of rubble behind and before the globe. */
+  private idle!: PlanetIdle;
+  private idleIn!: PlanetIdleInput;
+  private rubBack!: Overlay;
+  private rubFront!: Overlay;
   private cfg!: SlamCfg;
   private cometCfg!: CometCfg;
   private driftCfg: DriftCfg = { curve: 760, spin: 1.2 };
@@ -573,7 +580,9 @@ export class PlanetBehaviour extends Behaviour {
     this.skin = new BodyOverlay('planet-skin', 0.2, map.w, map.h, 'normal', true);
     this.glow = new BodyOverlay('planet-glow', 0.3, map.w, map.h, 'add', true);
     this.sc = (f.def.art.params as { scale?: number }).scale ?? 1;
-    this.halo = new GlowSprite('planet-halo', -0.5, Math.round(118 * this.sc), [40, 90, 150], 0.5, 6);
+    // the prototype's halo at 80 % (WJ 2026-10-18): out to 1.7 R, full at the limb, its colour [90,170,255] × 0.16 × 0.8
+    // over the alpha the halo rests at (≈ 0.78)
+    this.halo = new GlowSprite('planet-halo', -0.5, Math.round(1.7 * r.radius * this.sc), [15, 28, 42], 0.59, 6);
     this.haloCore = new GlowSprite(
       'planet-halo-core',
       -0.4,
@@ -614,6 +623,49 @@ export class PlanetBehaviour extends Behaviour {
     this.atmoCells0 = Math.max(1, a);
     this.oceanCells0 = Math.max(1, o);
     this.lastOcean = 1;
+    // the living idle: the rubble ring's two halves on either side of the globe (normal blend), the idle on the skin
+    const rw = Math.ceil(r.radius * 7.4) + 16;
+    const rh = Math.ceil(r.radius * 5.6) + 16;
+    this.rubBack = new Overlay('planet-rubble-back', -0.6, Math.max(rw, 480), Math.max(rh, 360), 'normal', false);
+    this.rubFront = new Overlay('planet-rubble-front', 0.6, Math.max(rw, 480), Math.max(rh, 360), 'normal', true);
+    // loose rocks, as the prototype draws them: no titan outline round each pebble
+    this.rubBack.layer.outline = false;
+    this.rubFront.layer.outline = false;
+    this.idle = new PlanetIdle(
+      f.def,
+      f.seed,
+      f.lighting,
+      map,
+      r,
+      { x: f.def.art.coreX + 0.5, y: f.def.art.coreY + 0.5 },
+      { magma: this.magma, crust: this.crustR },
+      idleSeed(f.seed, f.slot),
+    );
+    this.idleIn = {
+      omega: 0,
+      turnRate: 0,
+      omegaAir: 0,
+      facing: 1,
+      rest: true,
+      ko: false,
+      swapping: false,
+      phase: 1,
+      ringTight: 0,
+      ringGlow: 0,
+      coreOut: 0,
+      x: 0,
+      y: 0,
+      m0x: 0,
+      m0y: 0,
+      m0back: false,
+      m0on: false,
+      m0r: 12,
+      m1x: 0,
+      m1y: 0,
+      m1back: false,
+      m1on: false,
+      m1r: 12,
+    };
     // the two-face world: the shell outside the magma exists twice; its far face is the far side of the world, painted (other
     // continents, the same sun). The census of the near face as it was made is the Brace's reference.
     this.wx = f.world as unknown as WorldExtras;
@@ -688,6 +740,7 @@ export class PlanetBehaviour extends Behaviour {
     this.clearRing();
     this.resetSpin();
     this.updateOrbit(f.tickNo, true);
+    this.idle.reset();
   }
 
   /** A new round: the world turns at its own day rate, its near face toward the foe, ring slack. */
@@ -2486,6 +2539,52 @@ export class PlanetBehaviour extends Behaviour {
     f.view.parts = this.moonsAlive;
 
     this.drawGate(tick);
+    this.recordIdle(tick);
+  }
+
+  /** The living idle's inputs this tick (render-side data: nothing here is read back by the sim). */
+  private recordIdle(tick: number): void {
+    const f = this.f;
+    const t = f.body.transform;
+    const inp = this.idleIn;
+    inp.omega = this.omega;
+    inp.turnRate = this.turnRate;
+    inp.omegaAir = this.omegaAir;
+    inp.facing = t.facing;
+    inp.rest =
+      (f.state === 'idle' || f.state === 'intro') &&
+      !f.mv.def &&
+      !f.guardUp &&
+      this.drawT < 0.05 &&
+      this.turnTick < 0 &&
+      this.failT < 0 &&
+      this.comet.mode === C_NONE;
+    inp.ko = f.ko;
+    inp.swapping = this.turnTick >= SWAP_AT && this.turnTick <= SWAP_AT + SWAP_TICKS;
+    inp.phase = this.phase;
+    inp.ringTight = this.ringTight;
+    inp.ringGlow = this.ringGlow;
+    inp.coreOut = this.coreOut;
+    inp.x = t.x;
+    inp.y = t.y;
+    for (let i = 0; i < 2; i++) {
+      const mo = this.moons[i];
+      const on = !!mo && (mo.mode === ORBIT || mo.mode === RETURN);
+      if (i === 0) {
+        inp.m0on = on;
+        inp.m0x = mo?.x ?? 0;
+        inp.m0y = mo?.y ?? 0;
+        inp.m0back = mo?.back ?? false;
+        inp.m0r = mo?.radius ?? 12;
+      } else {
+        inp.m1on = on;
+        inp.m1x = mo?.x ?? 0;
+        inp.m1y = mo?.y ?? 0;
+        inp.m1back = mo?.back ?? false;
+        inp.m1r = mo?.radius ?? 12;
+      }
+    }
+    this.idle.record(tick, inp);
   }
 
   private monitor(): void {
@@ -2569,6 +2668,11 @@ export class PlanetBehaviour extends Behaviour {
     this.forceSkin = false;
   }
   private skinDue = true;
+  private faceVer = -1;
+  private readonly faceDraw = (): void => {
+    this.faceVer = this.f.body.map.version;
+    this.idle.drawFace(this.f.body.map, this.expo);
+  };
   private glowDue = true;
   private paintedTick = -1;
 
@@ -2577,6 +2681,16 @@ export class PlanetBehaviour extends Behaviour {
     const tick = this.tickLast;
     if (tick === this.paintedTick) return;
     this.paintedTick = tick;
+    // the living idle steps once per sim tick and redraws its face on even steps (planetIdle `advance`), and at once when
+    // the map changed under it (only pristine cells take the idle's colours); otherwise the skin reuses the face it has
+    const idle = this.idle;
+    const map = this.f.body.map;
+    if (idle.advance(tick, this.faceDraw)) this.skinDue = true;
+    if (map.version !== this.faceVer) {
+      this.faceVer = map.version;
+      idle.drawFace(map, this.expo);
+      this.skinDue = true;
+    }
     if (this.skinDue) this.drawSkin(tick);
     if (this.glowDue) this.drawGlow(tick);
     this.skinDue = false;
@@ -2627,7 +2741,9 @@ export class PlanetBehaviour extends Behaviour {
     const em = S.emis!;
     // the cloud deck turns with the atmosphere's phase (+ = toward local +x); it streaks along the motion when the world spins hard,
     // and during a half-turn it closes over the face (the cover under which the far face comes round)
-    const phase = (this.thetaAir * 256) / (Math.PI * 2);
+    const phase = ((this.thetaAir - this.idle.cloudLag) * 256) / (Math.PI * 2);
+    const faceBuf = this.idle.faceBuf;
+    const faceEm = this.idle.faceEm;
     const ws = this.cloudSpin * this.airSense;
     const smear = Math.min(SMEAR_MAX, Math.abs(ws) * SMEAR_PER_SPIN);
     const sdir = ws >= 0 ? 1 : -1;
@@ -2699,6 +2815,13 @@ export class PlanetBehaviour extends Behaviour {
           any = true;
           continue;
         }
+        // the living idle's face (the turning world, its quakes, tides and craters), under the cloud deck
+        const fc = faceBuf[i]!;
+        if (fc !== 0) {
+          px[i] = fc;
+          em[i] = faceEm[i]!;
+          any = true;
+        }
         if (!clouded || nzT[i] === 0) continue;
         if (mm === atmo || mm === cloud) continue;
         // drifting clouds over the face, lit like the surface, thinning as the atmosphere is stripped
@@ -2723,7 +2846,9 @@ export class PlanetBehaviour extends Behaviour {
         }
         if (cover > 0) d += (1 - d) * cover * (0.55 + 0.35 * tn(lx * 0.07, latT[i]! * 0.21));
         const a = d * density * foreT[i]! * 0.72;
-        if (a <= 0.12 + 0.55 * bay[i]!) continue;
+        // solid cloud shapes, as the prototype draws them (WJ 2026-10-18: "not so jittery"): one threshold, the middle of the
+        // old dithered band, so a drifting deck no longer crawls with checkerboard; a thinning deck still breaks up at the edge
+        if (a <= (density < 0.95 ? 0.12 + 0.55 * bay[i]! : CLOUD_EDGE)) continue;
         const v = 0.2 + 0.75 * (lit[i]! / 255) * (0.6 + 0.4 * a);
         const vc = v < 0 ? 0 : v > 1 ? 1 : v;
         px[i] = 0xff000000 | (cn[Math.min(cTop, Math.round(vc * cTop))]! & 0xffffff);
@@ -2747,7 +2872,6 @@ export class PlanetBehaviour extends Behaviour {
     const em = G.emis!;
     // a hotter world (exposed mantle, core crisis) glows harder through its cracks; a dead one not at all
     const gain = (this.phase >= 3 ? 1.25 : 1) * (1 - this.coreOut);
-    const slow = tick >> 5;
     let any = false;
     const rowAll = this.rowAll.length === H ? this.rowAll : null;
     if (gain > 0.01)
@@ -2768,64 +2892,10 @@ export class PlanetBehaviour extends Behaviour {
               Math.min(255, 130 * a);
             em[i] = Math.min(255, 130 * a);
             any = true;
-          } else if (mm === ids.atmosphere && ((i * 2654435761) ^ (slow * 40503)) % 23 === 0) {
-            px[i] = 0xff000000 | (90 << 16) | (70 << 8) | 40;
-            em[i] = 90;
-            any = true;
           }
         }
     if (any) G.mark();
     G.commit();
-  }
-
-  /**
-   * The debris ring: motes on a flattened, tilted ellipse (the moons' plane, wandering with the broken axis), each drawn as a short
-   * arc that curves along the ring — longer the faster the world turns. Slack it is a faint dotted halo; commitment and Tidal Draw
-   * draw it in; a command brightens it at once. A broken world has more debris (PHASE_MOTES). The half behind the globe is hidden.
-   */
-  private drawRing(X: Overlay): void {
-    const t = this.f.body.transform;
-    const R = this.rig.radius;
-    const tight = this.ringTight;
-    const vis = (0.18 + 0.82 * Math.max(tight, this.ringGlow * 0.8)) * (1 - this.coreOut);
-    if (vis < 0.03) return;
-    const a = R * (RING_LOOSE + (RING_TIGHT - RING_LOOSE) * tight);
-    const b = a * RING_FLAT;
-    const tilt = RING_TILT + PHASE_WANDER[this.phase]! * DMath.sin(this.wander);
-    const ct = DMath.cos(tilt);
-    const st = DMath.sin(tilt);
-    const hide = (R + this.rig.atmo) * (R + this.rig.atmo);
-    const arc = Math.min(0.5, 0.05 + 0.06 * Math.abs(this.omega) * (0.6 + 0.4 * tight));
-    // the ring lies in the moons' (world-fixed) plane; each mote trails an arc behind its motion (see `stepSpin`)
-    const sense = this.omega >= 0 ? 1 : -1;
-    const ramp = this.crustR;
-    const motes = PHASE_MOTES[this.phase] ?? RING_MOTES;
-    for (let k = 0; k < motes; k++) {
-      const h = ((k * 2654435761) >>> 0) / 4294967296;
-      // each mote keeps its own slot and drifts a little in and out of the band
-      const phi0 = (k / motes) * Math.PI * 2 + this.ringPhase + h * 0.4;
-      const bright = vis * (0.55 + 0.45 * h);
-      const segs = 1 + Math.round(arc * a * 0.5);
-      for (let s = 0; s < segs; s++) {
-        const phi = phi0 + (sense * arc * s) / Math.max(1, segs);
-        const sp = DMath.sin(phi);
-        const rr = 1 + 0.05 * (h - 0.5);
-        const ex = DMath.cos(phi) * a * rr;
-        const ey = sp * b * rr;
-        const lx = ex * ct - ey * st;
-        const ly = ex * st + ey * ct;
-        if (sp < 0 && lx * lx + ly * ly < hide) continue;
-        const fade = bright * (1 - s / (segs + 1));
-        // the dither is a property of the mote, not of the screen pixel: it never twinkles as it moves
-        if (fade <= ((k * 7 + s * 3) % 16) / 17) continue;
-        X.set(
-          Math.round(t.x + lx),
-          Math.round(t.y + ly),
-          rampAt(ramp, 0.35 + 0.6 * fade),
-          Math.round(40 * tight),
-        );
-      }
-    }
   }
 
   /**
@@ -2836,7 +2906,7 @@ export class PlanetBehaviour extends Behaviour {
     const t = this.f.body.transform;
     const R = this.rig.radius;
     const level =
-      clamp01(0.08 + (0.55 * Math.abs(this.spin)) / SPIN_MAX + this.auroraPulse) *
+      clamp01(0.08 + (0.55 * Math.abs(this.spin)) / SPIN_MAX + this.auroraPulse + 0.2 * this.idle.aurora) *
       (0.35 + 0.65 * this.atmoFrac) *
       (1 - this.coreOut);
     if (level < 0.06) return;
@@ -2938,7 +3008,12 @@ export class PlanetBehaviour extends Behaviour {
     const id = m.def?.id ?? '';
     const at = m.phase === 'active' ? m.phaseTick - 1 : -1;
     const R = this.rig.radius;
-    this.drawRing(X);
+    // the ring of rubble (the living idle): its far half behind the globe, its near half before it
+    this.rubBack.begin(t.x, t.y);
+    this.rubFront.begin(t.x, t.y);
+    this.idle.drawRubble(this.rubBack, this.rubFront);
+    this.rubBack.end();
+    this.rubFront.end();
     this.drawAurora(X, tick);
     this.drawComet(X);
     // Tidal Draw: debris lanes spiralling in from the ring to the world
@@ -3186,22 +3261,44 @@ export class PlanetBehaviour extends Behaviour {
     if (this.fx.limitToView(view)) this.paintedTick = -1;
     this.paint();
     const body = out[out.length - 1]!;
+    const idle = this.idle;
+    // the impact jolt (WJ: 1 px, drawn only): the body and everything on it
+    if (idle.joltX !== 0) {
+      body.x += idle.joltX;
+      body.prevX += idle.joltX;
+    }
+    // the body as drawn: the atmosphere thin and calm, as in the prototype (render only: the matter keeps its air)
+    idle.presentBody(f.body.map, body);
     this.skin.follow(body);
     this.glow.follow(body);
     const t = f.body.transform;
     const alive = 1 - this.coreOut;
-    this.halo.place(t.x, t.y, body.prevX, body.prevY, (0.28 + 0.5 * this.atmoFrac) * (0.15 + 0.85 * alive));
+    this.halo.place(
+      t.x,
+      t.y,
+      body.prevX,
+      body.prevY,
+      (0.28 + 0.5 * this.atmoFrac) * (0.15 + 0.85 * alive) * (1 + 1.9 * idle.yank),
+    );
     // Exposed Mantle warms the halo; Core Crisis makes it an apocalyptic glow that breathes; it dies with the core
     const core = this.phase >= 4 ? 0.3 + 0.1 * DMath.sin(this.tickLast * 0.025) : this.phase === 3 ? 0.12 : 0;
     this.haloCore.place(t.x, t.y, body.prevX, body.prevY, core * alive);
-    out.push(this.haloCore.layer, this.halo.layer, this.skin.layer, this.glow.layer);
-    for (const mo of this.moons) {
+    out.push(this.rubBack.layer, this.haloCore.layer, this.halo.layer, this.skin.layer, this.glow.layer);
+    for (let i = 0; i < this.moons.length; i++) {
+      const mo = this.moons[i]!;
       if (mo.mode === GONE) continue;
       mo.layer.flush(mo.back ? -1 : 1);
-      mo.layer.layer.visible = true;
-      out.push(mo.layer.layer);
+      const L = mo.layer.layer;
+      // the pull's lurch (drawn only): the orbit dips toward the world and springs back
+      const k = mo.mode === ORBIT ? 0.07 * (idle.lurch[i] ?? 0) : 0;
+      if (k > 0) {
+        L.x -= (L.x - t.x) * k;
+        L.y -= (L.y - t.y) * k;
+      }
+      L.visible = true;
+      out.push(L);
     }
-    out.push(this.fx.layer);
+    out.push(this.rubFront.layer, this.fx.layer);
   }
 
   override debugShapes(out: DebugShape[]): void {

@@ -255,6 +255,43 @@ export function paintPlanet(
   lighting: StageLighting,
   lonShift = 0,
 ): { map: MatterMap; rig: PlanetRig } {
+  const { colors, real, rig } = paintPlanetImpl(def, seed, lighting, lonShift, false);
+  const I = rig.ids;
+  // ---- 4. the map -----------------------------------------------------------------------------------------------------------
+  const map = createMatterMap(def.art.w, def.art.h);
+  const dens = (m: number): number =>
+    m === I.core ? 170 : m === I.magma ? 140 : m === I.atmosphere ? 120 : m === I.cloud ? 120 : 128;
+  real.writeTo(map, colors, dens);
+  map.coreX = def.art.coreX;
+  map.coreY = def.art.coreY;
+  map.coreRadius = def.art.coreRadius;
+  return { map, rig };
+}
+
+/**
+ * The planet's FACE only, turned by `lonShift`: the colours `paintPlanet(def, seed, lighting, lonShift).map.baseColor` has on
+ * the disc (the living idle's rotation frames, idle handover specs/planet.md §2). Identical there (unit-tested); it skips the
+ * matter (depth bands below the surface layer: solid whatever band, which is all the island flood asks) and the
+ * atmosphere's hand-painted edge. Returns the colour per map cell (W·H; meaningful on the disc) and the face's surface class
+ * per cell (the rig's material ids: ocean, forest, desert, mountain, ice; atmosphere / cloud outside the disc).
+ */
+export function paintPlanetFace(
+  def: TitanDef,
+  seed: number,
+  lighting: StageLighting,
+  lonShift: number,
+): { colors: Uint32Array; cls: Uint8Array } {
+  const r = paintPlanetImpl(def, seed, lighting, lonShift, true);
+  return { colors: r.colors, cls: r.faceMat };
+}
+
+function paintPlanetImpl(
+  def: TitanDef,
+  seed: number,
+  lighting: StageLighting,
+  lonShift: number,
+  faceOnly: boolean,
+): { colors: Uint32Array; real: ArtCanvas; rig: PlanetRig; faceMat: Uint8Array } {
   const L = layout(def, seed);
   const rig = buildPlanetRig(def, seed);
   const I = rig.ids;
@@ -322,7 +359,9 @@ export function paintPlanet(
         // the real materials, by depth
         const d = rd - r;
         let m: number;
-        if (d < p.surface + 0.6 * fbm(x * 0.2, y * 0.2, sA + 9, 2)) {
+        // face only: below the surface layer (|0.6 · fbm| < 0.9) every band is solid, all the island flood asks
+        if (faceOnly && d >= p.surface + 0.9) m = I.crust;
+        else if (d < p.surface + 0.6 * fbm(x * 0.2, y * 0.2, sA + 9, 2)) {
           m = cls[i]!;
           // mountain ranges crossing the limb: land there is bare rock (the face colours already blend into it)
           if (
@@ -440,7 +479,7 @@ export function paintPlanet(
         const glint = DMath.pow(g, 260);
         if (glint > 0.4 && hash01(x, y, sA + 40) > 0.25) colors[i] = oceanRamp[oceanRamp.length - 1]!;
         else if (glint > 0.16) colors[i] = oceanRamp[Math.min(oceanRamp.length - 1, 5)]!;
-      } else if (m === I.atmosphere) {
+      } else if (m === I.atmosphere && !faceOnly) {
         // Rayleigh edge: cyan-white where the limb faces the light, deep blue-violet on the dark side
         const ang = DMath.atan2(y + 0.5 - cy, x + 0.5 - cx);
         const facing = clamp01(
@@ -455,16 +494,8 @@ export function paintPlanet(
       }
     }
 
-  // ---- 4. the map -----------------------------------------------------------------------------------------------------------
-  const map = createMatterMap(W, H);
   real.relief.set(face.relief);
-  const dens = (m: number): number =>
-    m === I.core ? 170 : m === I.magma ? 140 : m === I.atmosphere ? 120 : m === I.cloud ? 120 : 128;
-  real.writeTo(map, colors, dens);
-  map.coreX = def.art.coreX;
-  map.coreY = def.art.coreY;
-  map.coreRadius = def.art.coreRadius;
-  return { map, rig };
+  return { colors, real, rig, faceMat: face.mat };
 }
 
 /* ------------------------------------------------------------------------------------------------ *

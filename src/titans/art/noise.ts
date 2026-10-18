@@ -22,20 +22,55 @@ export const hash01 = (x: number, y: number, seed: number): number => ihash2(x, 
 
 const fade = (t: number): number => t * t * t * (t * (t * 6 - 15) + 10);
 
+/**
+ * The unit gradient of lattice point (ix, iy) under `seed`: (cos a, sin a) of its hashed angle, left in `gc` / `gs`.
+ * Neighbouring samples share lattice corners, so the gradients are memoised in a direct-mapped table keyed by the full
+ * (ix, iy, seed): a hit returns the very DMath values a miss computes, so the noise is bit-identical (the painters' looks and
+ * hashes are unchanged), just without re-evaluating DMath.cos/sin for every corner of every sample (the Planet's 240-frame
+ * rotation bake, idle handover).
+ */
+const GCAP = 1 << 14;
+const gKx = new Int32Array(GCAP);
+const gKy = new Int32Array(GCAP);
+const gKs = new Int32Array(GCAP);
+const gOk = new Uint8Array(GCAP);
+const gCos = new Float64Array(GCAP);
+const gSin = new Float64Array(GCAP);
+let gc = 0;
+let gs = 0;
+function grad(ix: number, iy: number, seed: number): void {
+  const h = ihash2(ix, iy, seed);
+  const k = h & (GCAP - 1);
+  if (gOk[k] === 1 && gKx[k] === (ix | 0) && gKy[k] === (iy | 0) && gKs[k] === (seed | 0)) {
+    gc = gCos[k]!;
+    gs = gSin[k]!;
+    return;
+  }
+  const a = h * F * 6.283185307179586;
+  gc = DMath.cos(a);
+  gs = DMath.sin(a);
+  gKx[k] = ix | 0;
+  gKy[k] = iy | 0;
+  gKs[k] = seed | 0;
+  gOk[k] = 1;
+  gCos[k] = gc;
+  gSin[k] = gs;
+}
+
 /** Gradient noise (Perlin-style, unit gradients from the hash) in about [-1, 1]. */
 export function gradNoise(x: number, y: number, seed: number): number {
   const xi = Math.floor(x);
   const yi = Math.floor(y);
   const xf = x - xi;
   const yf = y - yi;
-  const g = (ix: number, iy: number, dx: number, dy: number): number => {
-    const a = ihash2(ix, iy, seed) * F * 6.283185307179586;
-    return DMath.cos(a) * dx + DMath.sin(a) * dy;
-  };
-  const n00 = g(xi, yi, xf, yf);
-  const n10 = g(xi + 1, yi, xf - 1, yf);
-  const n01 = g(xi, yi + 1, xf, yf - 1);
-  const n11 = g(xi + 1, yi + 1, xf - 1, yf - 1);
+  grad(xi, yi, seed);
+  const n00 = gc * xf + gs * yf;
+  grad(xi + 1, yi, seed);
+  const n10 = gc * (xf - 1) + gs * yf;
+  grad(xi, yi + 1, seed);
+  const n01 = gc * xf + gs * (yf - 1);
+  grad(xi + 1, yi + 1, seed);
+  const n11 = gc * (xf - 1) + gs * (yf - 1);
   const u = fade(xf);
   const v = fade(yf);
   const a = n00 + (n10 - n00) * u;

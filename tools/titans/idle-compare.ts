@@ -7,13 +7,14 @@
  *
  *   npx tsx tools/titans/idle-compare.ts <titan> --proto=<path to the prototype's built .html> [--frames=8] [--every=30]
  *       [--warm=120] [--seed=21] [--stage=nursery] [--w=256] [--h=240] [--out=docs/gallery/idle/<titan>-compare.png]
- *       [--extra=unify=0] (extra URL params for the game) [--video=<out.mp4> --seconds=6] (a 30 fps side-by-side clip)
+ *       [--foe=<titan>] [--extra=unify=0] (extra URL params for the game) [--video=<out.mp4> --seconds=6] (a 30 fps side-by-side clip)
  *
  * Sheet: row 1 prototype, row 2 game. Video: prototype left, game right, ×3, encoded with ffmpeg (frames kept in
- * .scratch/idle/frames when ffmpeg is not on PATH). The prototype's canvas is read with getImageData (`--canvas=#cv`).
+ * the system temp folder, `adeuk-idle-frames`, when ffmpeg is not on PATH). The prototype's canvas is read with getImageData (`--canvas=#cv`).
  */
 import { mkdirSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
@@ -41,7 +42,13 @@ const out = opt('out', `docs/gallery/idle/${titan}-compare.png`);
 const server = await createServer({
   root: resolve('.'),
   logLevel: 'error',
-  server: { port: 5291, strictPort: false },
+  // scratch and evidence folders are written by other tools and sessions while this runs: a file half written under a
+  // watched folder crashes the watcher (Windows lstat UNKNOWN)
+  server: {
+    port: 5291,
+    strictPort: false,
+    watch: { ignored: ['**/.scratch/**', '**/evidence/**', '**/docs/gallery/**'] },
+  },
 });
 await server.listen();
 const base = server.resolvedUrls?.local[0] ?? 'http://localhost:5291/';
@@ -78,7 +85,8 @@ const readProto = async (): Promise<SheetItem> => {
 };
 
 // ---- the game: a mirror match of idle dummies, one rendered frame per tick ----
-const url = `${base}?mode=fight&a=${titan}&b=${titan}&stage=${opt('stage', 'nursery')}&seed=${opt('seed', '21')}&p1=dummy&p2=dummy&freeze=1&hud=0&aftermath=0&tele=0&q=1${opt('extra', '') ? `&${opt('extra', '')}` : ''}`;
+// `--foe=<titan>`: a different (smaller) foe when the mirror twin would crowd the frame (the Planet)
+const url = `${base}?mode=fight&a=${titan}&b=${opt('foe', titan)}&stage=${opt('stage', 'nursery')}&seed=${opt('seed', '21')}&p1=dummy&p2=dummy&freeze=1&hud=0&aftermath=0&tele=0&q=1${opt('extra', '') ? `&${opt('extra', '')}` : ''}`;
 const { page, errors } = await openGame(browser, url, { width: 1280, height: 720 });
 await page.evaluate((n) => {
   for (let i = 0; i < n; i++) window.__ADEUK__!.step(1);
@@ -110,7 +118,8 @@ const readGame = async (n: number): Promise<SheetItem> => {
 };
 
 if (video) {
-  const dir = resolve('.scratch/idle/frames');
+  // outside the repo: the game's dev server watches the working tree, and a frame half written under it crashed the watcher
+  const dir = resolve(tmpdir(), 'adeuk-idle-frames');
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   for (let i = 0; i < FRAMES; i++) {

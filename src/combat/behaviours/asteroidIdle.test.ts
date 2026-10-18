@@ -55,7 +55,10 @@ describe('the Asteroid living idle (idle handover, specs/asteroid.md; real rotat
         let near = 1e9;
         for (let dy = -3; dy <= 3; dy++)
           for (let dx = -3; dx <= 3; dx++) {
-            const c = f.body.cellAtWorld(wx + dx, wy + dy);
+            const c = (f.body as unknown as { cellAtWorld(x: number, y: number): number }).cellAtWorld(
+              wx + dx,
+              wy + dy,
+            );
             if (c < 0) continue;
             const lx = c % f.body.map.w;
             const ly = (c - lx) / f.body.map.w;

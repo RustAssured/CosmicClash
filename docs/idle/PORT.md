@@ -175,3 +175,75 @@ recorded as D39 (`docs/DECISIONS.md`): real rotation, real darts at full range, 
    right, a third sampler mode can reproduce RotSprite (in both the CPU contract and its GLSL twin).
 2. **The ±45° idle range.** The spec suggested it and asked you to verify. A wider range lets the horn follow a foe above
    or below.
+
+## 4. The Planet 행성 (ported 2026-10-18, waiting for WJ's side-by-side and one decision)
+
+`src/combat/behaviours/planetIdle.ts` (render side), `planetFrames.ts` and `src/titans/art/planetBake.worker.ts` (the
+rotation frames), wired into `planet.ts`. WJ's choices (2026-10-17): a 45 s day as in game, the 1 px impact jolt drawn
+only (`PLANET_JOLT`), no lensed stars, the moons at game speed. Evidence:
+- `docs/gallery/idle/planet-compare.png` (row 1 prototype, row 2 game against a still Asteroid, every 75 ticks);
+- `evidence/idle/planet.mp4` (12 s; the first quake at about 2 s, the gravity pull at about 6 s).
+
+**What is in:**
+- **The world turns:** 240 painted frames of the face, stepped exactly as painted, phased from the world's own spin and
+  its Brace half-turn, slowing in the pull's anticipation. The clouds stall with it.
+- **The surface lives:** plate seams as faint scars; quakes tear a seam open in magma and shift the plate a whole pixel or
+  two, leaving a dark gap; tsunamis with a foam front, a dark trough and coastal spray; craters, hot, then rimmed, healing;
+  a tidal bulge under each moon; the moons' shadows.
+- **The gravity pull** (every 10–15 s at rest): stall, yank, a third of the ring falls in, 26 rocks are dragged in from
+  space and strike (jolt, dust, flash, sometimes a quake), the air whitens, aurora and halo flare, the moons lurch.
+- **The ring of rubble:** 150 rocks (more as the world breaks) on the prototype's tilt and flattening, lit from the upper
+  left, half behind the globe and half before it. It replaces the old dotted debris ring and keeps its meaning: commitment
+  and Tidal Draw pull it in.
+- **The fight:** new events start only at rest (no move, Guard, Draw, half-turn, comet or KO); a KO stops them at once.
+  The face is drawn on pristine cells only: holes, cracks and exposed strata keep the fight's drawing.
+
+**Changed from the spec, and why:**
+- **Bake.** The 240 frames come from the game's own painter (`paintPlanetFace`, the face only; a test checks it gives
+  `paintPlanet`'s colours exactly), baked in a Web Worker nearest-first in the direction of turn. A frame not baked yet
+  holds the last one. The painter was made 4× faster for this (`gradNoise` memoises its gradients; bit-identical).
+- **The face is redrawn 30 times a second** (on even ticks), not 60. A tsunami front moves about 0.4 px a tick, so it
+  still advances a pixel at a time, and the picture is still the same at any frame rate (tested).
+- **At most three quakes at once.** A pull lands about 80 rocks; at the spec's 18 % each, the pool filled with quakes.
+- **No outline on the rubble.** At the spec's depths the unified look outlined every pebble.
+- **Off-palette colours** are steps along the Planet's own lit ramps: foam is the top of the ocean and ice ramps, the gap
+  a moved plate leaves is the darkest crust.
+
+**Numbers** (`npm run perf:gate -- --only=planet`). The gate fails today on its 58 fps mean target **before the port
+too**: on the last commit the same scenarios average 56.5 fps on this laptop.
+
+| Colossus v Planet clash | before the port | with the idle | idle without the bake |
+|---|---|---|---|
+| 1 % low | 40–47 | 25–30 | 43–48 |
+| frames over 34 ms (per run) | 1–3 | 6–10 | 1–2 |
+| sim tick p99 | 15 ms | 17–19 ms | 14–15 ms |
+
+- **Idle line** (two Planets idling): 5.4–5.7 ms CPU, 5.8–6.0 ms GPU a frame, against 3.5 / 4.5 ms before the port.
+- **Storm** (Planet v Black Hole): 1 % low 48–53, unchanged.
+- **The cause is the bake running beside the fight**, not the drawing: with the bake switched off the clash matches the
+  baseline. A face costs about 100 ms to paint, and the world needs about 5 a second while its first day turns, so for the
+  first ~45 s of a match the worker keeps a core half busy, and on this laptop that slows the main thread and the GPU.
+  Resting the worker longer between frames did not help. After the first day every frame exists and the cost is gone.
+- Tests: three idle tests (the same at any frame rate; damaged cells keep the fight's drawing; the ring on both sides
+  and the whole day turning), the face painter test, render purity, determinism, and the full suite green (one HUD timing
+  test fails only under full-suite load and passes alone).
+
+**WJ's decisions (2026-10-18):**
+1. **The bake: kept as is** (240 frames, the spec's rotation), to be optimised later. Options on file: cache what does
+   not turn in the face painter (relief, bands, tone, layout: ~20–25 %), pause the bake while a move is active, or fewer
+   frames.
+2. **Halo: about 80 % of the prototype's.** The halo sprite is now the prototype's falloff out to 1.7 R in its colour
+   ([90,170,255] × 0.16), at 80 %; it still flares with the pull (× (1 + 1.9 · yank)). It was a 2.2 R sprite near full
+   strength.
+3. **Rocks brighter and clearly visible:** the upper half of the crust ramp, and more of them 2 px.
+4. **The atmosphere thinner and calm, like the prototype's** (render only: the matter keeps its 8 px of air, so heat
+   absorption and the stripped-air phase are unchanged). The Planet presents its own copy of the body's pixels
+   (`BodySkin`):
+   - the ring is drawn 4 px thick in solid bands lit toward the key light (the painter's Rayleigh edge without its
+     checker dither and noise); the outer 4 px are not drawn;
+   - its emissive is 6, the prototype's 0.025, instead of the material's 40, which the shared bloom spread into a wide
+     white haze;
+   - the pull whitens the whole ring a step or two at once instead of in dithered dots;
+   - the glow pass's random atmosphere twinkles are gone;
+   - the cloud deck over the face is drawn as solid shapes (one threshold at the middle of the old dithered band) while
+     the air is whole, so a drifting deck no longer crawls with checkerboard; a stripped, thinning deck still breaks up.
