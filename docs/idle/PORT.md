@@ -176,7 +176,7 @@ recorded as D39 (`docs/DECISIONS.md`): real rotation, real darts at full range, 
 2. **The ±45° idle range.** The spec suggested it and asked you to verify. A wider range lets the horn follow a foe above
    or below.
 
-## 4. The Planet 행성 (ported 2026-10-18, waiting for WJ's side-by-side and one decision)
+## 4. The Planet 행성 (ported 2026-10-18, approved by WJ, e4418da)
 
 `src/combat/behaviours/planetIdle.ts` (render side), `planetFrames.ts` and `src/titans/art/planetBake.worker.ts` (the
 rotation frames), wired into `planet.ts`. WJ's choices (2026-10-17): a 45 s day as in game, the 1 px impact jolt drawn
@@ -247,3 +247,69 @@ too**: on the last commit the same scenarios average 56.5 fps on this laptop.
    - the glow pass's random atmosphere twinkles are gone;
    - the cloud deck over the face is drawn as solid shapes (one threshold at the middle of the old dithered band) while
      the air is whole, so a drifting deck no longer crawls with checkerboard; a stripped, thinning deck still breaks up.
+
+## 5. The Witness 목격자 (repo id `lastone`; ported 2026-10-18, waiting for WJ's side-by-side)
+
+Naming: the Witness is `lastone` (`LastOneBehaviour`, `TendrilSystem`). The `witness*.ts` files belong to the Last One
+(`colossus`) and are untouched. Files: `lastonePose.ts` (sim), `lastoneIdle.ts` (render), the idle veil in `tendrils.ts`,
+wired into `lastone.ts`. WJ's choices (2026-10-18): the veil's motion is real but idle only; the swim is real and replaces
+the bob and sway; the tilt is the row-shear lean (D4); the hem pull-in is ported (drawn only). Evidence:
+- `docs/gallery/idle/witness-compare.png` (row 1 prototype, row 2 game against a still Asteroid, every 60 ticks);
+- `evidence/idle/witness.mp4` (14 s; a pulse, a taste and a Five Witnesses moment).
+
+**What is in:**
+- **Sim (deterministic, in `hash()`):**
+  - the idle weight, easing in only while calm and out in ~0.25 s;
+  - the pulse (every 4.2–5.0 s): the body lifts on the stroke and the veil draws together, then flares, root first;
+  - the taste (every 5–10 s): the two front or hem tendrils nearest the foe reach for it;
+  - the Five Witnesses (every 12–18 s): the body rises 4 px, the veil lifts into a crown;
+  - taste and the Witness start only when fully idle with the foe out of reach (190 px); a move or a blow ends them;
+  - the swim spring (a 3 × 2 px drift, the stroke's lift) through `bodyPose`, the tilt through `leanBias` (row shear);
+  - the veil: the chains spring toward the prototype's rest curve (the raw root normal, curl and S-wave, a travelling
+    wave, the crown's fern curl, the water drag), each joint's heading following the one before it at the prototype's
+    rate; the sag fades out while idle. Hits still read the chains: what is drawn is what is hit.
+- **Render (a body skin, plus one overlay):**
+  - the hem pulls in by whole-pixel rims on the stroke;
+  - the lantern beats, and its light runs out through the lattice and seams; the seams flood for the testimony;
+  - a glint crosses the glaze along its crazing; the halo's glint runs the ring and its gems precess, gathering behind
+    the lead eye for the testimony;
+  - five eyes, five minds: the lead eye follows the foe with overshooting saccades, one darts, one looks behind, one
+    lags, one looks where the foe was 1.6 s ago; out-of-step blinks; a lock narrows every pupil; the socket bevels turn
+    like apertures and align for the testimony; in a fight every eye is on the foe; hitstun half-closes the lids and a
+    KO closes them, as before;
+  - spores off the tips, the tips igniting one by one, the testimony marks closing on the foe with threads of sight.
+
+**Changed from the spec, and why:**
+- **The tendril tips' light bias** (front +0.05, back −0.12) is not added to `SplinePen`; the tips' ignition is drawn
+  on the overlay instead of through the pen.
+- **Shatter's whips start from the flowing rest.** On the first active tick their tips average 22.5 px in front of the
+  body instead of 25 (the back tendrils now rest behind it). `tendrils.test.ts`'s bound is 20 px, with the reason.
+  Dropping the idle at once on a move start knotted the recovery, so the idle still eases out over ~0.25 s.
+- **The old eye overlay is gone:** the skin draws the eyes (the shared gaze, blinks, hitstun and KO lids carry over).
+- **The idle's clock counts the round intro**, so in the comparison the game's moments run a little ahead of the
+  prototype's.
+- **Gems** are found from the painted colours at attach (a frame-rate test caught them depending on the first frame).
+- **One AI test samples twice as many seeds.** `ai.test.ts` "higher levels dodge a telegraphed Crush" has the Witness
+  defend. At 24 seeds the idle's swim and veil moved one strike, and levels 3 and 5 tied at 7/24; at 48 seeds the
+  ladder holds clearly (levels 1 / 3 / 5: 34 / 15 / 13 of 48), so the test now uses 48 (it takes ~170 s).
+
+**Numbers** (`npm run perf:gate -- --only=lastone`, 2026-10-19, with Blender ×2 and Steam open, so measured against the
+last commit under the same conditions):
+
+| two Witnesses idling | last commit (e4418da) | with the port |
+|---|---|---|
+| CPU a frame | 8.1 ms | 11.4 ms |
+| GPU a frame | 16.8 ms | 18.4 ms |
+| mirror storm mean | 29–31 fps | 29 fps |
+
+- The skin's lantern and glaze visit only the band of cells their fronts are crossing (sorted once, a range search per
+  tick): 1.7 → 0.7 ms a tick in Node. The idle's spores and marks draw on the existing `fx` overlay (no layer of their own).
+- The gate fails on this machine before and after the port (the storm runs at ~30 fps with Blender open); a run on a quiet
+  machine is still owed.
+- Tests: four idle tests (render purity through 1,300 calm ticks with a Five Witnesses moment; the moment lifts the
+  veil; the same picture at any frame rate; a hole stays a hole), the D28 spectrum test, determinism, render purity.
+
+**Decisions for WJ:**
+1. **Shatter reach.** The whips arrive 2.5 px less far forward on the first active tick (see above). Fine, or tune?
+2. **Taste and the crown in a fight.** Both are idle only and need the foe beyond 190 px. Say if the distance should
+   differ.

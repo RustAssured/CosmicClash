@@ -171,7 +171,9 @@ describe('AI competence', () => {
     const hitRate = (level: Difficulty): number => {
       let thrown = 0;
       let hit = 0;
-      for (let seed = 1; seed <= 24; seed++) {
+      // 48 seeds: at 24, one strike in 24 decided L5 < L3 (the Witness's living idle moved one, 2026-10-19: 7/24 each; at
+      // 48 the ladder is 34 / 15 / 13 of 48)
+      for (let seed = 1; seed <= 48; seed++) {
         const m = makeMatch({
           seed,
           a: 'lastone',
@@ -212,7 +214,7 @@ describe('AI competence', () => {
     expect(r6).toBeLessThan(0.3);
     expect(r6).toBeLessThan(r3);
     expect(r3).toBeLessThan(r1);
-  }, 240_000);
+  }, 480_000);
 
   it('a higher level defeats a do-nothing dummy no slower than a lower one, and never stalls a round out', () => {
     const ttk = (level: Difficulty): number => {

@@ -26,10 +26,17 @@ import {
   TendrilSystem,
   makeTendrilPalette,
   makeTendrilStyle,
+  type IdleVeil,
   type Posture,
   type TendrilPalette,
 } from './tendrils';
 import { DMath } from '@/contracts/dmath';
+import { idleSeed } from '../fx/idle';
+import { LastOnePose } from './lastonePose';
+import { WitnessIdle, type WitnessIdleInput } from './lastoneIdle';
+
+/** The foe is out of the veil's reach beyond this distance (px, body to body): only then may it taste or witness. */
+const IDLE_FAR = 190;
 
 const ALPHA_EYE = 0.75;
 const ease = (cur: number, target: number, rate: number): number => cur + (target - cur) * rate;
@@ -58,9 +65,29 @@ export class LastOneBehaviour extends Behaviour {
   private pen!: SplinePen;
   private back!: Overlay;
   private front!: Overlay;
-  private eye!: Overlay;
   private fx!: Overlay;
   private readonly veil = new WoundVeil();
+  /** The living idle's sim pose (lastonePose.ts) and the tendrils' idle veil it fills each tick. */
+  private pose!: LastOnePose;
+  private idleVeil!: IdleVeil;
+  private readonly poseCtx = { calm: false, ko: false, foeFar: false };
+  /** The living idle's render side (lastoneIdle.ts): the body skin (eyes, lantern, glaze, halo, hem) and its overlay. */
+  private idle!: WitnessIdle;
+  private readonly idleIn: WitnessIdleInput = {
+    pt: 0,
+    w: 0,
+    wit: -1,
+    pu: 99,
+    ko: false,
+    koTicks: 0,
+    hitstun: false,
+    gaze: false,
+    facing: 1,
+    x: 0,
+    y: 0,
+    foeX: 0,
+    foeY: 0,
+  };
   private readonly post: Posture = { guard: 0, rise: 0, focus: 0, limp: 0, agitation: 0, eyeX: 0, eyeY: 0 };
   private readonly xy = { x: 0, y: 0 };
   private readonly wp = { x: 0, y: 0 };
@@ -69,8 +96,6 @@ export class LastOneBehaviour extends Behaviour {
   private readonly cut = { lost: 0, x: 0, y: 0 };
   private readonly tmpShape = makeFatShape();
   private readonly hitNode = new Int8Array(64);
-  private gazeX = 0;
-  private gazeY = 0;
   private regrowClock = 0;
   private flare = 0;
   private haloGlow = 0;
@@ -83,12 +108,7 @@ export class LastOneBehaviour extends Behaviour {
   private prevAlive = 0;
   private shardRamp: number[] = [];
   private moteRamp: number[] = [];
-  /** Live eye and light colours, read from the definition's materials (D36: the Witness's own palette). */
-  private cPupilD = 0;
-  private cPupilM = 0;
-  private cIrisHot = 0;
-  private cIrisMid = 0;
-  /** [r,g,b] 0..255: the flare, the beam's body and edge, and the halo's light. */
+  /** [r,g,b] 0..255 (the Witness's own palette, D36): the flare, the beam's body and edge, and the halo's light. */
   private lFlare: [number, number, number] = [255, 230, 150];
   private lBeam: [number, number, number] = [255, 226, 165];
   private lBeamEdge: [number, number, number] = [150, 84, 34];
@@ -124,13 +144,8 @@ export class LastOneBehaviour extends Behaviour {
     this.shardRamp = this.pal.body.slice(3, 7);
     this.moteRamp = this.pal.tip.slice(2);
     const ramp = (key: string): number[] => f.def.materials.find((m) => m.key === key)!.visual.ramp.map(hex);
-    const pupil = ramp('pupil');
     const iris = ramp('iris');
     const top = iris.length - 1;
-    this.cPupilD = pupil[0]!;
-    this.cPupilM = pupil[Math.min(2, pupil.length - 1)]!;
-    this.cIrisHot = iris[Math.max(0, top - 1)]!;
-    this.cIrisMid = iris[Math.max(0, top - 3)]!;
     this.lFlare = rgbOf(iris[Math.max(0, top - 1)]!);
     this.lBeam = rgbOf(iris[Math.max(0, top - 2)]!);
     this.lBeamEdge = rgbOf(iris[Math.max(0, top - 4)]!);
@@ -140,15 +155,35 @@ export class LastOneBehaviour extends Behaviour {
     this.front = new Overlay('lastone-tendrils-front', 1, 320, 300, 'normal', true);
     this.pen = new SplinePen(320, 300);
     this.pen.setLight(f.lighting.dir);
-    // the five eyes (D36) all fit around the lead eye in 96 px
-    this.eye = new Overlay('lastone-eye', 0.5, 96, 96, 'normal');
     this.fx = new Overlay('lastone-fx', 20, 768, 560, 'add', true);
     f.resourceMax = this.sys.n;
     f.resource = this.sys.n;
     this.prevAlive = this.sys.n;
     this.regrowClock = 0;
+    this.sys.coreX = this.rig.core.x + 0.5;
     this.sys.settle(f.body.transform);
     this.trailCount = 0;
+    this.pose = new LastOnePose(idleSeed(f.seed, f.slot), f.body.transform.anchorY);
+    const tr = f.body.transform;
+    this.idle = new WitnessIdle(
+      f.body.map,
+      this.rig,
+      f.def.materials,
+      { x: tr.anchorX, y: tr.anchorY },
+      (idleSeed(f.seed, f.slot) ^ 0x51ed) >>> 0,
+    );
+    this.idleVeil = {
+      w: 0,
+      t: 0,
+      pu: 99,
+      hold: 0,
+      rise: 0,
+      taste: new Float32Array(this.sys.n),
+      foeX: 0,
+      foeY: 0,
+      vx: 0,
+      vy: 0,
+    };
   }
 
   /** A heavy blow landed: its wound is kept clear of the fx overlay after the hit-stop (proposal 168). */
@@ -168,6 +203,58 @@ export class LastOneBehaviour extends Behaviour {
     f.resource = this.sys.aliveCount();
     this.prevAlive = f.resource;
     this.regrowClock = 0;
+    this.pose.reset();
+    this.idle.reset();
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  the living idle's pose (sim): asked once per tick, before this tick's hits
+   * ---------------------------------------------------------------------------------------------- */
+
+  override bodyPose(out: { ox: number; oy: number; rot: number }): void {
+    const f = this.f;
+    const c = this.poseCtx;
+    const fv = f.foe?.view;
+    c.calm = (f.state === 'idle' || f.state === 'move' || f.state === 'intro') && !f.mv.def && !f.guardUp;
+    c.ko = f.ko;
+    c.foeFar = !!fv && DMath.hypot(fv.x - f.px, fv.y - f.py) > IDLE_FAR;
+    const p = this.pose;
+    p.step(c);
+    if (p.tasteDue && fv) this.pickTaste(fv.x, fv.y);
+    out.ox = p.ox;
+    out.oy = p.oy;
+  }
+
+  override leanBias(): number {
+    return this.pose.lean;
+  }
+
+  override hash(h: number): number {
+    return this.pose.hash(h);
+  }
+
+  /** The two live front / hem tendrils whose roots are nearest the foe taste it (spec §4). */
+  private pickTaste(fx: number, fy: number): void {
+    const s = this.sys;
+    let a = -1;
+    let b = -1;
+    let da = Infinity;
+    let db = Infinity;
+    for (let i = 0; i < s.n; i++) {
+      const kind = s.roots[i]!.kind;
+      if ((kind !== 'front' && kind !== 'hem') || s.count[i]! < 4) continue;
+      const d = DMath.hypot(fx - s.rx[i]!, fy - s.ry[i]!);
+      if (d < da) {
+        b = a;
+        db = da;
+        a = i;
+        da = d;
+      } else if (d < db) {
+        b = i;
+        db = d;
+      }
+    }
+    this.pose.startTaste(a, b);
   }
 
   get tendrilsAlive(): number {
@@ -351,6 +438,7 @@ export class LastOneBehaviour extends Behaviour {
     // a long, slow swing of the veil (half the old kick: with the softer chains it travels further, never jiggles)
     this.sys.recoil(dx * Math.min(3, energy / 180), dy * Math.min(3, energy / 180));
     this.regrowClock = 0;
+    this.pose.interrupt();
   }
 
   override onKo(): void {
@@ -363,6 +451,7 @@ export class LastOneBehaviour extends Behaviour {
 
   override onMoveStart(m: ActiveMove): void {
     if (m.def?.slot === 'surge') this.trailCount = 0;
+    this.pose.interrupt();
   }
 
   override update(_ctx: FighterTickCtx): void {
@@ -405,7 +494,9 @@ export class LastOneBehaviour extends Behaviour {
     this.steerWhips(m);
 
     f.motionSample(this.motion);
-    this.sys.step(t, P, f.vx, f.vy, tick, this.motion);
+    const fv = f.foe?.view;
+    this.pose.veil(this.idleVeil, fv ? fv.x : t.x, fv ? fv.y : t.y, f.vx, f.vy);
+    this.sys.step(t, P, f.vx, f.vy, tick, this.motion, this.idleVeil);
 
     // ---- passive: patient regrowth ----
     this.regrowClock++;
@@ -432,6 +523,31 @@ export class LastOneBehaviour extends Behaviour {
 
     // S19: the tendrils, the eye and the beams are rasterised at render time (`renderLayers`), once per drawn frame
     this.drawStale = true;
+    this.recordIdle(tick);
+  }
+
+  /** The living idle's inputs this tick (render-side data: nothing here is read back by the sim). */
+  private recordIdle(tick: number): void {
+    const f = this.f;
+    const t = f.body.transform;
+    const p = this.pose;
+    const inp = this.idleIn;
+    const fv = f.foe?.view;
+    inp.pt = p.pt;
+    inp.w = p.w;
+    inp.wit = p.wit;
+    inp.pu = p.pu;
+    inp.ko = f.ko;
+    inp.koTicks = f.ko ? f.stateTicks : 0;
+    inp.hitstun = f.state === 'hitstun';
+    inp.gaze = f.mv.def?.id === 'lastone.gaze';
+    inp.facing = t.facing;
+    inp.x = t.x;
+    inp.y = t.y;
+    inp.foeX = fv ? fv.x : t.x + 100 * t.facing;
+    inp.foeY = fv ? fv.y : t.y;
+    this.idle.record(tick, inp);
+    this.idle.recordTips(tick, this.sys);
   }
   private drawStale = false;
 
@@ -555,7 +671,6 @@ export class LastOneBehaviour extends Behaviour {
       this.front.end();
     }
 
-    this.drawEye(tick, id);
     this.drawFx(tick, id, slot, m);
   }
 
@@ -578,87 +693,6 @@ export class LastOneBehaviour extends Behaviour {
         }
       }
     }
-  }
-
-  private drawEye(tick: number, id: string): void {
-    const f = this.f;
-    const t = f.body.transform;
-    const map = f.body.map;
-    const ids = this.rig.ids;
-    const ov = this.eye;
-    if (f.ko && f.stateTicks > 30) {
-      ov.hide();
-      return;
-    }
-    // gaze: toward the foe, a few px, smoothed (the eyes lead the body); in units of the eye's radius
-    const fv = f.foe.view;
-    let gx = fv.x - f.px;
-    let gy = fv.y - f.py - 20;
-    const gl = DMath.hypot(gx, gy) || 1;
-    const reach = 0.16;
-    gx = (gx / gl) * reach * clamp01(gl / 60);
-    gy = (gy / gl) * reach * clamp01(gl / 60) * 0.8;
-    const lx = gx * t.facing;
-    this.gazeX += (lx - this.gazeX) * 0.2;
-    this.gazeY += (gy - this.gazeY) * 0.2;
-
-    localToWorld(t, this.rig.eye.x + 0.5, this.rig.eye.y + 0.5, this.xy);
-    ov.begin(this.xy.x, this.xy.y);
-    const lidHi = this.pal.body[5]!;
-    const lidMid = this.pal.body[3]!;
-    const lidLo = this.pal.body[1]!;
-    const wpos = this.wp;
-    const eyes = this.rig.eyes;
-    for (let e = 0; e < eyes.length; e++) {
-      const E = eyes[e]!;
-      const R = E.r;
-      const ex = E.x;
-      const ey = E.y;
-      // blink: a quick lid sweep every ~5.5 s (never in the middle of a Gaze); the five eyes blink out of step, one at a time
-      const bt = (tick + f.slot * 97 + e * 61 + (e & 1) * 23) % (330 + e * 17);
-      let lid = 0;
-      if (bt < 8 && id !== 'lastone.gaze' && !f.ko) lid = 1 - Math.abs((bt - 4) / 4);
-      if (f.ko) lid = clamp01((f.stateTicks - e * 3) / 20) * 0.7;
-      if (f.state === 'hitstun') lid = Math.max(lid, 0.5);
-      // the moving pupil and the hot ring around it, scaled to this eye (at least a pixel and a half on the smallest)
-      const pOut = Math.max(1.5, R * 0.27);
-      const pIn = Math.max(0.9, R * 0.17);
-      const ringR = Math.max(1.6, R * 0.4);
-      const px = this.gazeX * R;
-      const py = this.gazeY * R;
-      const Ri = Math.ceil(R);
-      for (let dy = -Ri; dy <= Ri; dy++) {
-        for (let dx = -Ri; dx <= Ri; dx++) {
-          const q = DMath.hypot(dx, dy);
-          if (q > R + 0.5) continue;
-          const lx0 = Math.round(ex) + dx;
-          const ly0 = Math.round(ey) + dy;
-          if (lx0 < 0 || ly0 < 0 || lx0 >= map.w || ly0 >= map.h) continue;
-          const idx = ly0 * map.w + lx0;
-          const mat = map.material[idx]!;
-          if (mat !== ids.pupil && mat !== ids.iris && mat !== ids.eye) continue;
-          if (map.integrity[idx]! === 0) continue;
-          let c = 0;
-          // the map's pupil disc is re-painted as iris centre; the moving pupil is drawn on top
-          const pr = DMath.hypot(dx - px, dy - py);
-          if (mat === ids.pupil || (mat === ids.iris && q < ringR)) {
-            if (pr < pOut) c = pr < pIn ? this.cPupilD : this.cPupilM;
-            else if (mat === ids.pupil)
-              c = q < R * 0.22 ? blend(this.cIrisHot, this.cIrisMid, 0.3) : this.cIrisHot;
-          }
-          if (lid > 0.02) {
-            const lidEdge = -R + lid * 2 * R * 0.95;
-            if (dy < lidEdge)
-              c = dy > lidEdge - 1.6 ? lidLo : dy > lidEdge - Math.max(2, R * 0.17) ? lidMid : lidHi;
-          }
-          if (c !== 0) {
-            localToWorld(t, lx0 + 0.5, ly0 + 0.5, wpos);
-            ov.set(Math.floor(wpos.x), Math.floor(wpos.y), c, mat === ids.pupil ? 0 : 60);
-          }
-        }
-      }
-    }
-    ov.end();
   }
 
   private drawFx(tick: number, id: string, slot: string | undefined, m: ActiveMove): void {
@@ -746,6 +780,8 @@ export class LastOneBehaviour extends Behaviour {
     else if (m.def?.extra?.['eyeFlare']) halo = Math.max(halo, this.flare * 0.6);
     this.haloGlow += (halo - this.haloGlow) * 0.2;
     if (this.haloGlow > 0.03) this.drawHalo(fx, tick);
+    // the living idle's spores, igniting tips and testimony (on this overlay: no layer of its own, D-perf)
+    this.idle.drawFx(fx, this.sys);
     this.veil.apply(fx, f.foe.view.x, f.foe.view.y, f.tickNo, f.view.freezeTicks > 0);
     fx.end();
   }
@@ -858,12 +894,17 @@ export class LastOneBehaviour extends Behaviour {
 
   override renderLayers(view: ViewRect, _alpha: number, out: RenderLayer[]): void {
     // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
-    if ((this.fx.limitToView(view) || this.drawStale) && this.f.foe) {
+    const f = this.f;
+    this.idle.advance(f.tickNo);
+    if ((this.fx.limitToView(view) || this.drawStale) && f.foe) {
       this.drawStale = false;
-      const m = this.f.mv;
-      this.drawAll(this.f.tickNo, m.def?.id ?? '', m.def?.slot, m);
+      const m = f.mv;
+      this.drawAll(f.tickNo, m.def?.id ?? '', m.def?.slot, m);
     }
-    out.push(this.back.layer, this.front.layer, this.eye.layer, this.fx.layer);
+    // the body as drawn: the skin with the idle's eyes, lantern, glaze, halo and hem (render only)
+    const body = out[out.length - 1];
+    if (body) this.idle.presentBody(f.body.map, body);
+    out.push(this.back.layer, this.front.layer, this.fx.layer);
   }
 
   /** The planet-scale parts for the scale-of-motion tool: every tendril tip, in tendril order. */

@@ -289,8 +289,10 @@ describe('Last One tendrils (D3): grown, varied, curved whips', () => {
       bowSum += bow(sys, i);
       n++;
     }
-    // released before contact: on average the tips are already well in front of the body on the contact tick
-    expect(reach / n).toBeGreaterThan(25);
+    // released before contact: on average the tips are already well in front of the body on the contact tick. (25 px from
+    // the old hanging rest; the living idle's veil rests flowing out round the body, WJ 2026-10-18, so the back tendrils
+    // start further behind: 22.5 px measured)
+    expect(reach / n).toBeGreaterThan(20);
     step(6);
     const later: number[] = [];
     let bowLater = 0;

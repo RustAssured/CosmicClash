@@ -55,6 +55,37 @@ export interface Posture {
   eyeY: number;
 }
 
+/**
+ * The living idle's veil (idle handover specs/witness.md §3, "as if in water"; WJ 2026-10-18: real, idle only). SIM state from
+ * `LastOnePose`: while `w` > 0 the rest curve each chain springs toward blends into the prototype's: the raw root normal (no
+ * hang, `SAG` fades out), the curl and S-wave, a travelling wave, the pulse drawing the veil together and flaring it out
+ * root-first, the taste reaching for the foe, the Five Witnesses crown. Each joint's heading follows the one before it late.
+ */
+export interface IdleVeil {
+  /** Idle weight 0..1 (0 = today's hanging rest, untouched). */
+  w: number;
+  /** Idle seconds; seconds since the pulse began (large = none); the Witness's hold and rise (0..1). */
+  t: number;
+  pu: number;
+  hold: number;
+  rise: number;
+  /** Per tendril: how far it is tasting (0..1). */
+  taste: Float32Array;
+  /** The foe (world) the tasting tips reach for. */
+  foeX: number;
+  foeY: number;
+  /** Body velocity (px/s, world) for the water drag. */
+  vx: number;
+  vy: number;
+}
+
+/** The prototype's joint lag: segment s eases toward its heading at 5.5 / (1 + 0.42 s) per second, once per tick. */
+const IDLE_RATE = Array.from({ length: NODES - 1 }, (_, s) => 1 - DMath.exp(-(1 / 60) * (5.5 / (1 + 0.42 * s))));
+const ss01 = (a: number, b: number, x: number): number => {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+};
+
 export interface TendrilPalette {
   /** Shell ramp dark→light (packed). */
   body: number[];
@@ -105,6 +136,10 @@ export class TendrilSystem {
   private readonly svy: Float32Array;
   private readonly lag: Float32Array;
   private readonly wasWhip: Uint8Array;
+  /** The idle veil's lagged headings (map-local, rad) per segment [tendril*NODES + s], and the core x the sides split at. */
+  private readonly hv: Float32Array;
+  private hvInit = false;
+  coreX = 0;
 
   /* falling pieces (severed tips) */
   private readonly pieceOn: Uint8Array;
@@ -161,6 +196,7 @@ export class TendrilSystem {
     this.svy = new Float32Array(this.n);
     this.lag = new Float32Array(this.n);
     this.wasWhip = new Uint8Array(this.n);
+    this.hv = new Float32Array(m);
     for (let i = 0; i < this.n; i++) {
       const r = roots[i]!;
       this.seg[i] = r.len / (NODES - 1);
@@ -228,8 +264,51 @@ export class TendrilSystem {
     return base + (r.curl * u + r.wave * s + travel) * f;
   }
 
+  /**
+   * The idle veil's target headings for tendril i (map-local, facing +1; spec §3 "Veil"), each segment easing toward its own
+   * at the prototype's lagging rate: the joints follow the one before them, late.
+   */
+  private idleHeadings(i: number, iv: IdleVeil, f: number): void {
+    const r = this.roots[i]!;
+    const base = i * NODES;
+    const t = iv.t;
+    // which side of the body the root is on (map-local, so the crown and the flare split the same way at either facing)
+    const side = r.x >= this.coreX ? 1 : -1;
+    const curlMul = r.kind === 'crown' ? 0.55 + 0.5 * DMath.sin(t * 0.45 + r.phase * 9) : 1;
+    const b0 = DMath.atan2(r.ny, r.nx);
+    const spd = DMath.hypot(iv.vx, iv.vy);
+    const drag = spd > 1 ? DMath.atan2(-iv.vy, -iv.vx * f) : 0;
+    const taste = iv.taste[i]!;
+    const toward = taste > 0 ? DMath.atan2(iv.foeY - this.ry[i]!, (iv.foeX - this.rx[i]!) * f) : 0;
+    const crownWob = 0.85 + 0.15 * DMath.sin(t * 2 + r.phase * 9);
+    for (let s = 0; s < NODES - 1; s++) {
+      const u = s / (NODES - 2);
+      const travel = DMath.sin(t * 1.45 + r.phase * 6.283 - u * 2.8) * 0.16 * (0.35 + u);
+      let a = b0 + r.curl * u * curlMul + r.wave * DMath.sin(u * 4.4 + r.wavePh) + travel;
+      // the pulse travels down the veil, root first: drawn together, then flared out
+      const pd = Math.max(0, iv.pu - u * 0.45);
+      const c = pd < 0.35 ? ss01(0, 0.35, pd) : pd < 1.3 ? 1 - ss01(0.35, 1.3, pd) : 0;
+      const fl = pd > 0.35 && pd < 2.2 ? DMath.sin(((pd - 0.35) / 1.85) * Math.PI) : 0;
+      a = lerpAngle(a, Math.PI / 2, c * 0.4 * (1 - iv.hold));
+      a += side * fl * 0.32 * (0.4 + u) * (1 - iv.hold);
+      // the water drags it
+      if (spd > 1) a = lerpAngle(a, drag, clamp(spd / 30, 0, 0.55) * u);
+      // tasting: the tip reaches for the foe
+      if (taste > 0)
+        a = lerpAngle(a, toward + DMath.sin(t * 11 + s) * 0.12 * u * u, taste * (0.35 + 0.6 * u));
+      // the Five Witnesses: the veil rises into a crown, split by side
+      if (iv.rise > 0) {
+        const crown = (side > 0 ? -0.15 : Math.PI + 0.15) - side * (0.25 + 1.55 * u) * crownWob;
+        a = lerpAngle(a, crown, iv.rise * (0.85 + 0.15 * u));
+      }
+      const j = base + s;
+      this.hv[j] = this.hvInit ? lerpAngle(this.hv[j]!, a, IDLE_RATE[s]!) : a;
+    }
+  }
+
   /** Place every chain at rest (world). Call after the body is positioned (creation, new round). */
   settle(t: BodyTransform): void {
+    this.hvInit = false;
     this.updateRoots(t);
     for (let i = 0; i < this.n; i++) {
       const base = i * NODES;
@@ -293,8 +372,10 @@ export class TendrilSystem {
     vby: number,
     tick: number,
     smooth: { x: number; y: number; lean: number } | null = null,
+    idle: IdleVeil | null = null,
   ): void {
     this.updateRoots(t, smooth);
+    const iw = idle ? clamp01(idle.w) : 0;
     this.stepRecoil();
     // the body velocity the chains trail, low-passed (τ ≈ 0.2 s): a stepping velocity would shake every tip each tick
     this.vfx += (vbx - this.vfx) * 0.08;
@@ -310,6 +391,8 @@ export class TendrilSystem {
       const base = i * NODES;
       const rxi = this.rx[i]!;
       const ryi = this.ry[i]!;
+      // the idle veil's headings run every tick (so it blends in already flowing), and only matter while idle
+      if (idle) this.idleHeadings(i, idle, f);
       // rest posture: base direction (rising fans them upward), then the grown curve integrated node by node
       let ang = this.restAng[i]!;
       if (posture.rise > 0.01) ang = lerpAngle(ang, -1.5708 + (i / (this.n - 1) - 0.5) * 1.5, posture.rise);
@@ -435,7 +518,12 @@ export class TendrilSystem {
       for (let k = 1; k < cnt; k++) {
         const j = base + k;
         const u = k / (NODES - 1);
-        const a = this.restHeading(i, k, wd, f, swayAmp, tick);
+        let a = this.restHeading(i, k, wd, f, swayAmp, tick);
+        if (iw > 0) {
+          // the idle veil's heading for this segment, mirrored to the world by the facing
+          const h = this.hv[base + k - 1]!;
+          a = lerpAngle(a, DMath.atan2(DMath.sin(h), DMath.cos(h) * f), iw);
+        }
         restX += DMath.cos(a) * seg;
         restY += DMath.sin(a) * seg;
         // Verlet integration with damping
@@ -444,7 +532,8 @@ export class TendrilSystem {
         this.px[j] = this.x[j]!;
         this.py[j] = this.y[j]!;
         let ax = 0;
-        let ay = SAG * (1 + 3 * posture.limp);
+        // in water nothing hangs: the sag fades out with the idle
+        let ay = SAG * (1 + 3 * posture.limp) * (1 - iw);
 
         // rest-shape spring toward the grown curve
         // hanging-part spring (scale spec: ω ≤ 4 rad/s; was ≈ 13 rad/s): k = 0.0057 per tick² ⇒ ω ≈ 4.5 at the root, ≈ 3 at the tip
@@ -562,6 +651,7 @@ export class TendrilSystem {
         this.py[j] = this.py[j]! - (ay - vy) * INNER_DAMP;
       }
     }
+    if (idle) this.hvInit = true;
     this.stepPieces();
   }
 
