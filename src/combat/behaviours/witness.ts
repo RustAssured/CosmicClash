@@ -28,6 +28,10 @@ import { WitnessKit, type WitnessKitHost } from './witnessKit';
 import { shapeBounds, type Bounds } from '../shapes';
 import { WoundVeil } from '../fx/woundVeil';
 import { DMath, sq } from '@/contracts/dmath';
+import { idleSeed } from '../fx/idle';
+import { ColossusPose } from './colossusPose';
+import { ColossusIdle, type ColossusIdleInput } from './colossusIdle';
+import { Overlay } from '../fx/overlay';
 
 /**
  * THE WITNESS in game (Phase 2, behind `witness=1`): one matter body per rigid region (D27), driven by the XPBD rig, drawn as
@@ -70,6 +74,8 @@ interface Region {
   reach: number;
   /** Consecutive ticks its joint patch has been (nearly) gone. */
   failing: number;
+  /** The living idle recoloured this region's atlas cells (re-copy them clean once it stops). */
+  idleDrawn: boolean;
 }
 
 /** An eye that opens with damage: an inner eye behind the carapace or an orb-eye on an arm joint. */
@@ -105,6 +111,13 @@ const STACK_EXPOSED = 0.3;
 /** A joint fails once its patch health stays below this for this many ticks. */
 const JOINT_FAIL_HEALTH = 0.15;
 const JOINT_FAIL_TICKS = 30;
+
+/**
+ * How much stiffer the idle makes the drives it steers while calm (× (1 + IDLE_STIFF)), so the rig carries the prototype's
+ * springs. Back to the rig's own the tick the idle is not calm: a blow's load then reaches the carapace first and the arms
+ * later, as before (witness.test.ts "the load reaches the arms later").
+ */
+const IDLE_STIFF = 0.25;
 
 /** A root move larger than this in one tick (px) is a jump, not motion: the rig is carried along rigidly. */
 const ROOT_JUMP = 24;
@@ -149,6 +162,31 @@ export class WitnessBehaviour extends Behaviour {
   private awake = false;
   private startChecked = false;
   private readonly veil = new WoundVeil();
+  /**
+   * The living idle (colossusPose.ts, sim; colossusIdle.ts, render). Per arm segment its heading drive and rest drive; the
+   * drives the idle stiffens while it holds the parts; each region's halo arc index (−1 none) and that arc's mid direction.
+   */
+  private pose!: ColossusPose;
+  private idle!: ColossusIdle;
+  private idleBack!: Overlay;
+  private readonly idleIn: ColossusIdleInput = {
+    t: 0,
+    w: 0,
+    wit: -1,
+    b: 0,
+    ax: 0,
+    sAcc: 0,
+    ko: false,
+    foeX: 100,
+    foeY: 0,
+  };
+  private readonly poseCtx = { calm: false, inMove: false, ko: false, toward: 1 };
+  private segHead: number[][] = [];
+  private segRest: number[][] = [];
+  private idleDrives: number[] = [];
+  private haloOfRegion: Int8Array = new Int8Array(0);
+  private haloMidX: number[] = [];
+  private haloMidY: number[] = [];
   /** Root jumps the rig was carried across (instrumentation; see ROOT_JUMP). */
   jumps = 0;
   private pupilX = 0;
@@ -211,9 +249,81 @@ export class WitnessBehaviour extends Behaviour {
     this.kit = new WitnessKit(this.wr.halo.length);
     this.host = this.makeHost();
     this.findEyes(rigDef.ids);
+    // the living idle: its sim pose (the arms' lift side, direction and length; the halo arcs) and its render side
+    const W = this.W;
+    this.pose = new ColossusPose(
+      idleSeed(f.seed, f.slot),
+      W.arms.map((a) => (a.points[0]!.x > 0 ? -1 : 1)),
+      W.arms.map((a) => DMath.atan2(a.points[2]!.y - a.points[0]!.y, a.points[2]!.x - a.points[0]!.x)),
+      W.arms.map((a) => DMath.hypot(a.points[2]!.y - a.points[0]!.y, a.points[2]!.x - a.points[0]!.x) || 1),
+      this.wr.halo.length,
+    );
+    this.idle = new ColossusIdle(W, rigDef.ids, W.materials, (idleSeed(f.seed, f.slot) ^ 0x7c31) >>> 0);
+    this.idle.liveOf = (ri) => {
+      const r = this.byIndex[ri];
+      return r && !r.lost ? r.body.map : null;
+    };
+    // the light ring (radius 72), its ticks and the dust under the chandelier: a small layer behind the atlas
+    this.idleBack = new Overlay(`colossus-idle-${f.slot}`, -0.6, 176, 232, 'normal', true);
+    this.idleBack.layer.outline = false;
+    this.idleMaps();
     this.place();
     f.resourceMax = this.haloCount();
     f.resource = f.resourceMax;
+  }
+
+  /** Which rig drives the idle steers: each arm segment's heading and rest drives, the halo arcs, the chandelier. */
+  private idleMaps(): void {
+    const W = this.W;
+    const wr = this.wr;
+    // heading drives are made in region order, one per arm region (buildWitnessRig)
+    const headOf = new Map<number, number>();
+    let k = 0;
+    for (let i = 0; i < W.regions.length; i++) if (W.regions[i]!.kind === 'arm') headOf.set(i, wr.headingDrives[k++]!);
+    this.segHead = W.arms.map((a) => a.regions.map((ri) => headOf.get(ri) ?? -1));
+    this.segRest = W.arms.map((a) => a.regions.map((ri) => wr.driveOf[wr.bodyOf[ri]!]!));
+    this.idleDrives = [...wr.headingDrives, ...this.segRest.flat(), ...wr.haloDrives];
+    const sd = wr.driveOf[wr.shrine];
+    if (sd !== undefined && sd >= 0) this.idleDrives.push(sd);
+    this.haloOfRegion = new Int8Array(W.regions.length).fill(-1);
+    this.haloMidX = [];
+    this.haloMidY = [];
+    let h = 0;
+    for (let i = 0; i < W.regions.length; i++) {
+      const r = W.regions[i]!;
+      if (r.kind !== 'halo') continue;
+      this.haloOfRegion[i] = h++;
+      const a = DMath.atan2(r.oy + r.map.h / 2, r.ox + r.map.w / 2);
+      this.haloMidX.push(DMath.cos(a));
+      this.haloMidY.push(DMath.sin(a));
+    }
+  }
+
+  /** The idle's pose on the rig: drive targets toward its angles, the drives stiffened while it holds them. */
+  private applyIdle(): void {
+    const p = this.pose;
+    const wr = this.wr;
+    const d = wr.rig.drives;
+    const w = p.w;
+    const stiff = this.poseCtx.calm ? w : 0;
+    for (const k of this.idleDrives) d[k]!.hz = this.baseHz[k]! * (1 + IDLE_STIFF * stiff);
+    if (w <= 0) return;
+    for (let a = 0; a < this.segHead.length; a++) {
+      const hd = this.segHead[a]!;
+      const rd = this.segRest[a]!;
+      const a0 = p.a0[a] ?? 0;
+      const a1 = p.a1[a] ?? 0;
+      for (let s = 0; s < hd.length; s++) {
+        if (hd[s]! >= 0) d[hd[s]!]!.target += s === 0 ? a0 : a0 + a1;
+        if (rd[s]! >= 0) d[rd[s]!]!.target = s === 0 ? a0 : a1;
+      }
+    }
+    for (let k = 0; k < wr.haloDrives.length; k++) {
+      const dr = d[wr.haloDrives[k]!]!;
+      dr.target = dr.target * (1 - w) + (p.halo[k] ?? 0);
+    }
+    const sd = wr.driveOf[wr.shrine];
+    if (sd !== undefined && sd >= 0) d[sd]!.target = p.shrine;
   }
 
   private buildRig(): void {
@@ -281,6 +391,7 @@ export class WitnessBehaviour extends Behaviour {
       layer: r.layer,
       reach: liveReach(map, ax, ay),
       failing: 0,
+      idleDrawn: false,
     };
     const old = this.byIndex[i];
     if (old) {
@@ -302,7 +413,55 @@ export class WitnessBehaviour extends Behaviour {
     this.kit.reset();
     this.veil.reset();
     this.rigTick = -1;
+    this.pose.reset();
+    this.idle.reset();
+    this.idleMaps();
     this.place();
+  }
+
+  /* ---------------------------------------------------------------------------------------------- *
+   *  the living idle's pose (sim): asked once per tick, before this tick's hits
+   * ---------------------------------------------------------------------------------------------- */
+
+  override bodyPose(out: { ox: number; oy: number; rot: number }): void {
+    const f = this.f;
+    const c = this.poseCtx;
+    const fv = f.foe?.view;
+    c.calm = (f.state === 'idle' || f.state === 'move' || f.state === 'intro') && !f.mv.def && !f.guardUp;
+    c.inMove = !!f.mv.def;
+    c.ko = f.ko || this.dying >= 0;
+    c.toward = fv ? ((fv.x - f.px) * f.facing >= 0 ? 1 : -1) : 1;
+    this.pose.step(c);
+    // the breath, the shifts and the drop move the real body (they replace the bob and sway)
+    out.ox = this.pose.ox * f.facing;
+    out.oy = this.pose.oy;
+  }
+
+  override onMoveStart(): void {
+    this.pose.interrupt();
+  }
+
+  /** The living idle's render inputs this tick (render-side data: nothing here is read back by the sim). */
+  private recordIdle(): void {
+    const f = this.f;
+    const p = this.pose;
+    const inp = this.idleIn;
+    const fv = f.foe?.view;
+    const e = this.eyeCentre();
+    inp.t = p.t;
+    inp.w = p.w;
+    inp.wit = p.wit;
+    inp.b = p.b;
+    inp.ax = p.ax;
+    inp.sAcc = p.shrineAcc;
+    inp.ko = f.ko || this.dying >= 0;
+    inp.foeX = fv ? (fv.x - e.x) * this.facing : 100;
+    inp.foeY = fv ? fv.y - e.y : 0;
+    this.idle.record(f.tickNo, inp, p.a0);
+  }
+
+  override onDamaged(): void {
+    this.pose.interrupt();
   }
 
   /** World position of the eye's centre (body coordinate origin), from the primary body's transform. */
@@ -530,18 +689,22 @@ export class WitnessBehaviour extends Behaviour {
       // the intent: the eye is placed where the fighter is and turned by its angular state (facing-relative). The rig follows
       // the CONTINUOUS root, not the integer transform: a one-pixel step of the transform would kick the whole structure.
       const eye = this.eyeCentre(true);
+      // the idle's breath / shift / drop moves the eye too (the root excludes visual offsets): the structure then lags it
+      const ex = eye.x * this.facing + this.pose.ox;
+      const ey = eye.y + this.pose.oy;
       // a root that jumps (a respawn, a tether snap) carries the structure with it rigidly: dragged through the joints, a
       // jump of hundreds of px would fling every part (and a severed part would leave with that speed)
       wr.rig.frame(wr.eye, this.fr);
-      const jx = eye.x * this.facing - this.fr.x;
-      const jy = eye.y - this.fr.y;
+      const jx = ex - this.fr.x;
+      const jy = ey - this.fr.y;
       if (jx * jx + jy * jy > ROOT_JUMP * ROOT_JUMP) {
         wr.rig.translate(jx, jy);
         this.jumps++;
       }
       const heading = f.ang.angle;
-      wr.rig.setKinematic(wr.eye, eye.x * this.facing, eye.y, heading);
+      wr.rig.setKinematic(wr.eye, ex, ey, heading);
       setWitnessHeading(wr, heading, f.tickNo);
+      if (this.dying < 0) this.applyIdle();
       this.updateHost();
       this.checkJoints();
       if (f.view.state === 'ko' && this.dying < 0) this.dying = f.tickNo;
@@ -552,6 +715,7 @@ export class WitnessBehaviour extends Behaviour {
       this.place();
       this.updateHost();
       this.drawFx();
+      this.recordIdle();
       return;
     }
     this.place();
@@ -732,12 +896,23 @@ export class WitnessBehaviour extends Behaviour {
     const o = this.rigOffset(false);
     const ox = o.x;
     const oy = o.y;
+    const p = this.pose;
+    const hl = Math.round(p.hl);
     for (const r of this.regions) {
       if (r.lost) continue;
       this.wr.rig.frame(this.wr.bodyOf[r.index]!, fr);
       const t = r.body.transform;
       t.x = Math.round(fr.x * s + ox);
       t.y = Math.round(fr.y + oy);
+      // the halo lags the body vertically by whole pixels; arc 2 stands a pixel out of true (the idle's; hit where drawn)
+      const hk = this.haloOfRegion[r.index] ?? -1;
+      if (hk >= 0) {
+        t.y += hl;
+        if (hk === 2 && p.out2 && p.w > 0.5) {
+          t.x += Math.round(this.haloMidX[hk]!) * s;
+          t.y += Math.round(this.haloMidY[hk]!);
+        }
+      }
       t.facing = s;
       t.lean = 0;
       t.rot = angleToStep(fr.a * s);
@@ -876,7 +1051,7 @@ export class WitnessBehaviour extends Behaviour {
     }
     x = Math.imul(x ^ this.dying, 0x01000193);
     for (const r of this.regions) x = Math.imul(x ^ (r.lost ? 1 : 0) ^ (r.failing << 1), 0x01000193);
-    return this.kit.hash(x >>> 0);
+    return this.pose.hash(this.kit.hash(x >>> 0));
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -920,6 +1095,8 @@ export class WitnessBehaviour extends Behaviour {
       fx.glow(this.pt.x * s, this.pt.y, 2.2, 160, 230, 255, 0.8 * light);
     }
     this.drawFragments(f.tickNo, light);
+    // the living idle's reticle on the foe and its line of sight (a pure function of the witnessing clock)
+    if (this.dying < 0 && this.pose.w > 0.5) this.idle.drawReticle(fx, this.pose.wit, h.eyeX, h.eyeY, fv.x, fv.y);
     if (this.dying < 0) kit.strike(h);
     this.veil.apply(fx, fv.x, fv.y, f.tickNo, f.view.freezeTicks > 0);
     fx.end();
@@ -980,11 +1157,19 @@ export class WitnessBehaviour extends Behaviour {
 
   override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
     const L = this.atlas;
+    const f = this.f;
+    const idle = this.idle;
+    // the living idle steps once per sim tick; it recolours the atlas in source space and draws the great eye's skin
+    const advanced = idle.advance(f.tickNo);
+    const ready = idle.prepare();
+    const shading = ready && idle.active;
     let changed = false;
     for (const r of this.regions) {
       if (r.lost) continue;
       const m = r.body.map;
-      if (m.version === r.version) continue;
+      const shade = shading && (r.kind === 'carapace' || r.kind === 'arm' || r.kind === 'shrine' || r.kind === 'halo');
+      // re-copied when the map changed, on every idle step while shaded, and once more when the idle lets go
+      if (m.version === r.version && !(shade && advanced) && !(r.idleDrawn && !shade)) continue;
       r.version = m.version;
       changed = true;
       for (let y = 0; y < m.h; y++) {
@@ -993,7 +1178,31 @@ export class WitnessBehaviour extends Behaviour {
         L.pixels.set(m.pixels.subarray(src, src + m.w), dst);
         this.atlasEmis.set(m.emissive.subarray(src, src + m.w), dst);
       }
+      if (shade) idle.shadeRegion(r.index, m, L.pixels, this.atlasEmis, L.w, r.sx, r.sy);
+      r.idleDrawn = shade;
     }
+    // the great eye (the primary body, the layer the fighter pushed last)
+    const body = out[out.length - 1];
+    if (body && body !== L) idle.presentEye(f.body.map, body);
+    // the light ring, the crosshair ticks and the dust, behind the atlas
+    if (advanced) {
+      const e = this.eyeCentre();
+      const back = this.idleBack;
+      back.begin(e.x, e.y + 20);
+      if (shading) {
+        const sh = this.W.regions[idle.shrine];
+        idle.drawBack(
+          back,
+          e.x,
+          e.y + Math.round(this.pose.hl),
+          e.x + (sh ? sh.ox : 0) * this.facing,
+          e.y + (sh ? sh.oy : 0),
+          this.facing,
+        );
+      }
+      back.end();
+    }
+    out.push(this.idleBack.layer);
     if (changed) {
       L.version++;
       L.dirty = null;

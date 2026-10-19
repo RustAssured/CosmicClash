@@ -248,7 +248,7 @@ too**: on the last commit the same scenarios average 56.5 fps on this laptop.
    - the cloud deck over the face is drawn as solid shapes (one threshold at the middle of the old dithered band) while
      the air is whole, so a drifting deck no longer crawls with checkerboard; a stripped, thinning deck still breaks up.
 
-## 5. The Witness 목격자 (repo id `lastone`; ported 2026-10-18, waiting for WJ's side-by-side)
+## 5. The Witness 목격자 (repo id `lastone`; ported 2026-10-18, approved by WJ, abdf036)
 
 Naming: the Witness is `lastone` (`LastOneBehaviour`, `TendrilSystem`). The `witness*.ts` files belong to the Last One
 (`colossus`) and are untouched. Files: `lastonePose.ts` (sim), `lastoneIdle.ts` (render), the idle veil in `tendrils.ts`,
@@ -313,3 +313,50 @@ last commit under the same conditions):
 1. **Shatter reach.** The whips arrive 2.5 px less far forward on the first active tick (see above). Fine, or tune?
 2. **Taste and the crown in a fight.** Both are idle only and need the foe beyond 190 px. Say if the distance should
    differ.
+
+## 6. The Last One 마지막 하나 (repo id `colossus`; ported 2026-10-19, approved by WJ)
+
+Naming: the Last One is `colossus`, drawn by `WitnessBehaviour` in `witness.ts` (the old names). Files:
+`colossusPose.ts` (sim), `colossusIdle.ts` (render), wired into `witness.ts`; `colossus.json` bob and sway set to 0. WJ's
+choices (2026-10-19): the scythes, halo and chandelier move on the real rig, idle only; the breath, shifts and drop move
+the real body and replace the bob and sway; the spires' swing is drawn only; the prototype's springs are kept. No blink
+(WJ: "it just sees"). Evidence: `docs/gallery/idle/colossus-compare.png`.
+
+**What is in:**
+- **Sim (deterministic, in `hash()`, 4 substeps a tick as the page's 240 Hz):** the 9 s breath (a 0 / −2 px bob, held
+  while witnessing); the heavy body spring with its shifts toward the foe and the drop (ramped over 9 ticks); the scythes'
+  root and blade springs with the stretch (counter-move, lift, curl, snap); the halo arcs rocking in their sectors (arc 2
+  against and 1 px out of true, the ring's vertical lag in whole pixels); the chandelier's pendulum; the witnessing
+  (every 12–18 s, first at 9 s), which locks the halo, sets the arms and holds the breath. The angles are handed to the
+  rig's own drives (targets, and a little stiffness while calm), and the breath moves the kinematic eye so the structure
+  lags it. What is drawn is what is hit.
+- **Render:** the atlas is recoloured in source space before the parts rotate: the carapace's breath rim and parting
+  seams (channels, then gold, then the abyss, whose inner eyes open for the witnessing), crack waves along the fracture
+  network and shimmering hairlines; the scythes' vein signals, edge glints, gold sparkle and orb-eyes (peeks, then all
+  open and staring for the witnessing, closing in a wrong order); the chandelier's spires swinging (drawn only) and gold
+  drips; the halo brightening. The great eye (a skin): saccades with overshoot, a glance at nothing, the pupil breathing
+  a ring and going to a pinpoint. Behind the atlas: the light ring completing from the sigil, the crosshair ticks, dust off
+  the snapped spires. On the fx overlay: the reticle landing on the foe and the line of sight.
+
+**Changed from the spec, and why:**
+- **Stiffness.** To carry the prototype's springs the idle stiffens the drives it steers, but only by ×1.25 and only while
+  calm: at ×2.5 a blow's load reached the arms too soon (`witness.test.ts` "the load reaches the arms later" protects
+  the carapace-first wave). The rig's own dynamics soften the scythes' quick snap a little.
+- **The idle lets go** over ~0.15 s when a move starts and over ~0.6 s after a blow.
+- **Ladders** come from the painted template and the ramps (a lit colour off its ladder is placed by luminance), so the
+  drawing never depends on when the first frame was drawn (a frame-rate test caught it).
+- **The rim swell** is drawn only inside each region's own atlas rectangle.
+- **Kept, not in the prototype:** the existing arm fragments, the shrine light and the steady eye glow. Say if they go.
+
+**Numbers:**
+- Node, render: the idle's atlas shading 1.2 ms a tick (from 2.5 before cell lists and the shear skip), the eye 0.2 ms.
+- Node, sim (a colossus mirror, both AIs fighting, 1,500 ticks): mean tick 1.61–1.68 ms against 1.46–1.56 on the last
+  commit (+0.1 ms; the pose's sines use the deterministic table sine), p99 within the run-to-run noise (7.3–9.4 vs 7.2–9.1).
+- The browser gate ran with Blender ×2 and Steam open and swung wildly both ways (the last commit's Uri v Colossus
+  storm ran at 25 fps, the port's at 36–54; the port's colossus mirror at 30 against 50): no conclusion. A run on a quiet
+  machine is owed.
+- Tests: three idle tests (render purity through a whole witnessing; the same atlas at any frame rate; the body breathes
+  and the idle comes in), `witness.test.ts`, determinism, render purity, choreo, hits.
+
+**WJ's decisions (2026-10-19):** keep the softer snap (the carapace-first load wave wins), and keep the extra fx (arm
+fragments, shrine light, eye glow).

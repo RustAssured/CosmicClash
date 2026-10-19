@@ -1336,8 +1336,8 @@
     }
   ],
   "feel": {
-    "bob": { "amp": 1.6, "period": 3.4 },
-    "sway": { "amp": 1.2, "period": 5 },
+    "bob": { "amp": 0, "period": 3.4 },
+    "sway": { "amp": 0, "period": 5 },
     "fx": {
       "kind": "glint",
       "ramp": ["#ffffff", "#bfe8e0", "#6fb0a8"],
