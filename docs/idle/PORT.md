@@ -360,3 +360,39 @@ the real body and replace the bob and sway; the spires' swing is drawn only; the
 
 **WJ's decisions (2026-10-19):** keep the softer snap (the carapace-first load wave wins), and keep the extra fx (arm
 fragments, shrine light, eye glow).
+
+## 7. The Cradle 태반체 (ported 2026-10-19, waiting for WJ's side-by-side)
+
+Files: `src/combat/behaviours/kit/cradle/pose.ts` (sim), `cradle/idle.ts` (render), wired into `kit/cradle.ts`; the
+approved frames in `src/titans/kit/cradle/cradle_frames.bin` (zlib, 1.7 MB) and `cradle_frames.json` (palette, frame
+boxes, the rest disc), extracted from the built prototype by `tools/titans/cradle-frames.ts`; `frames.ts` loads them
+(the browser fetches them at boot, never awaited; Node reads them synchronously). WJ's choices (2026-10-19): ship the
+approved frames, with the paint seed pinned to 7 (`CRADLE_PAINT_SEED`) so the frames match the painted body; accept the
+claw drawing 10–21 px inside the hit mask; the quickening only with the foe within 240 px; the cord real, idle only.
+Evidence: `docs/gallery/idle/cradle-compare.png` (across a quickening, `gap=240`).
+
+**What is in:**
+- **Sim (deterministic, in `hash()`):** the idle weight (in over 0.5 s, out over 0.15 s); the cord's rest sway (3.5° over
+  9.5 s running down the links, plus 1.5° at 0.41 rad/s) as targets on the links' own drives; the coil (every 8–14 s,
+  first at 5 s) aiming the jaw-organ at the foe; the quickening (7 s; first at 9 s, then every 14–19 s, only with the foe
+  within 240 px) aiming the cord, then pulling it taut (2.2–3.5 s) and hushing the sway. What is drawn is what is hit.
+- **Render:** the sail is the approved frame for the current tilt and claw (phi precessing over 26 s, the spread spring,
+  the claw pulses), recoloured through the stage palette, with the contraction running hub → rim, vessel pulses, the
+  sacs' level fluid line sloshing, their masses kicking, the cold lumen flicker, the quickening's spiral of lit sacs and
+  the release ring. Every frame cell maps back to its rest-disc cell: destroyed → nothing, changed by the fight → the live
+  pixel. The cord: the bolus swallowed down it, muscle bands, the jaw-organ tasting. The knot: the embryo cleaving
+  1 → 16 and collapsing. On the fx overlay during the quickening: the filaments reaching the foe, beads, twigs, the web.
+
+**Changed from the spec, and why:**
+- **The frames are shipped, not baked in game:** a frame costs ~0.6 s to bake and the claw's code was lost; the seed is
+  pinned so the painted body and the frames agree.
+- **Sac identity** is the nearest painted sac by angle (the spec's §6 note), cached per frame in a small LRU.
+- **The quickening needs the foe within 240 px** (anchor to anchor). At the default round-start gap (380 px) it waits
+  until the fighters close in; with a big foe (the Asteroid) 240 px is nearly touching.
+- **The sail redraws every other tick** (every 4th at the lowest detail); the cord and knot every tick while the idle runs.
+
+**Numbers:**
+- Node (a Cradle v Asteroid idle at 200 px, 1,500 ticks, 3 reps, against the last commit): render avg 1.41–1.55 ms, p95
+  3.0–3.4 (before: 1.61–1.87, p95 4.9–5.1: the old sail warp is gone); sim avg 0.38–0.45 ms against 0.33–0.37.
+- Tests: four idle tests (render purity through a quickening; no quickening with the foe beyond 240 px; the same atlas
+  at any frame rate; a sail with no matter left draws nothing), `cradle.test.ts`, determinism, cross-engine, render purity.

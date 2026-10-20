@@ -77,11 +77,14 @@ const readProto = async (): Promise<SheetItem> => {
     (sel) => {
       const c = (sel ? document.querySelector(sel) : document.querySelector('canvas')) as HTMLCanvasElement;
       const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
-      return { w: c.width, h: c.height, data: Array.from(new Uint8Array(d.data.buffer)) };
+      const u8 = new Uint8Array(d.data.buffer);
+      let s = '';
+      for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+      return { w: c.width, h: c.height, data: btoa(s) };
     },
     opt('canvas', ''),
   );
-  return { pixels: new Uint32Array(new Uint8Array(px.data).buffer), w: px.w, h: px.h };
+  return { pixels: new Uint32Array(new Uint8Array(Buffer.from(px.data, 'base64')).buffer), w: px.w, h: px.h };
 };
 
 // ---- the game: a mirror match of idle dummies, one rendered frame per tick ----
@@ -92,28 +95,33 @@ await page.evaluate((n) => {
   for (let i = 0; i < n; i++) window.__ADEUK__!.step(1);
 }, WARM);
 const readGame = async (n: number): Promise<SheetItem> => {
-  const px = await page.evaluate(
-    ({ n }) => {
+  // cropped in the page and sent as base64: the whole logical frame as a JSON number array costs tens of MB a frame,
+  // which stalled a 14 s clip on a 6 GB machine
+  const b64 = await page.evaluate(
+    ({ n, CW, CH, LW, LH }) => {
       const api = window.__ADEUK__!;
       const f = api.summary().fighters[0];
       api.setCamera({ x: f.x, y: f.y, zoom: 1, still: true });
       if (n === 0) api.step(0);
       for (let k = 0; k < n; k++) api.step(1);
-      return Array.from(new Uint8Array(api.captureLogical().buffer));
+      const full = new Uint32Array(api.captureLogical().buffer);
+      const crop = new Uint32Array(CW * CH);
+      const x0 = (LW >> 1) - (CW >> 1);
+      const y0 = (LH >> 1) - (CH >> 1);
+      for (let y = 0; y < CH; y++)
+        for (let x = 0; x < CW; x++) {
+          const sx = x0 + x;
+          const sy = y0 + y;
+          if (sx >= 0 && sy >= 0 && sx < LW && sy < LH) crop[y * CW + x] = full[sy * LW + sx]!;
+        }
+      const u8 = new Uint8Array(crop.buffer);
+      let s = '';
+      for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+      return btoa(s);
     },
-    { n },
+    { n, CW, CH, LW: LOGICAL_W, LH: LOGICAL_H },
   );
-  const full = new Uint32Array(new Uint8Array(px).buffer);
-  const crop = new Uint32Array(CW * CH);
-  const x0 = (LOGICAL_W >> 1) - (CW >> 1);
-  const y0 = (LOGICAL_H >> 1) - (CH >> 1);
-  for (let y = 0; y < CH; y++)
-    for (let x = 0; x < CW; x++) {
-      const sx = x0 + x;
-      const sy = y0 + y;
-      if (sx >= 0 && sy >= 0 && sx < LOGICAL_W && sy < LOGICAL_H)
-        crop[y * CW + x] = full[sy * LOGICAL_W + sx]!;
-    }
+  const crop = new Uint32Array(new Uint8Array(Buffer.from(b64, 'base64')).buffer);
   return { pixels: crop, w: CW, h: CH };
 };
 

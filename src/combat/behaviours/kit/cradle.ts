@@ -23,7 +23,9 @@ import { CRADLE_RIG, buildCradleRig, densityTable, type CradleRigBuild } from '.
 import { Gestation, bodyLocal, bodyWorld } from './cradle/gestate';
 import { Chambers } from './cradle/chambers';
 import { Differentiation } from './cradle/wrong';
-import { SailSkin } from './cradle/sail';
+import { CradlePose } from './cradle/pose';
+import { CradleIdle, type CradleIdleInput } from './cradle/idle';
+import { idleSeed } from '../../fx/idle';
 import { Overlay } from '../../fx/overlay';
 import { FX_DETAIL } from '../../fx/detail';
 import {
@@ -67,6 +69,8 @@ interface Region {
   wrong: number;
   /** The last tick a heavy blow (SEVER_BLOW) landed on it. */
   heavyAt: number;
+  /** The living idle recoloured this region's atlas cells (re-copy them clean once it stops). */
+  idleDrawn: boolean;
   /** Counts toward the fighter's mass and integrity (only the disc: the cord is a limb and a resource). */
   counts: boolean;
 }
@@ -158,9 +162,30 @@ export class CradleBehaviour extends KitBehaviour {
   private readonly chambers = new Chambers();
   /** Gate 5: differentiation failure (it develops wrong as it is hurt). */
   private readonly diff = new Differentiation();
-  /** Presentation: the living sail (slow flapping, ripples and contraction waves drawn into the disc's atlas copy). */
-  private readonly skin = new SailSkin();
+  /**
+   * The living idle (cradle/pose.ts, sim: the cord's sway, aim and pull, the quickening's clock; cradle/idle.ts, render:
+   * the approved sail frames, the sacs, the embryo, the bolus, the filaments). Per cord region its along / across tables.
+   */
+  private pose!: CradlePose;
+  private idle!: CradleIdle;
   private skinTick = -1;
+  private readonly cordGeom = new Map<number, { along: Float32Array; perp: Float32Array }>();
+  private foeDark = 0;
+  private foeLit = 0;
+  private readonly idleIn: CradleIdleInput = {
+    t: 0,
+    w: 0,
+    wit: -1,
+    hush: 0,
+    coilAt: -1,
+    hit: false,
+    ko: false,
+    x: 0,
+    y: 0,
+    facing: 1,
+    foeX: 0,
+    foeY: 0,
+  };
   /** IMPLANT: ticks the filaments stay latched on the foe (0 = none), and where on it (offset from its centre). */
   private latch = 0;
   private lastSite = -1000;
@@ -223,23 +248,34 @@ export class CradleBehaviour extends KitBehaviour {
     this.jawRestDir = DMath.atan2(this.R.jawTip.y - root.pivotY, this.R.jawTip.x - root.pivotX);
     const k = this.R.regions[0]!;
     this.knotCorner = { x: k.ox + f.body.transform.anchorX, y: k.oy + f.body.transform.anchorY };
+    // the living idle (its sail slot is the union of every approved frame's box: the claw and the tilt reach past the rest
+    // disc, which stays the matter that is hit)
+    this.pose = new CradlePose(idleSeed(f.seed, f.slot));
+    this.idle = new CradleIdle(
+      this.R,
+      f.def.materials,
+      f.body.map,
+      (idleSeed(f.seed, f.slot) ^ 0x3a7d) >>> 0,
+    );
+    const slotW = (r: CradleRegion): number => (r.kind === 'disc' ? this.idle.slotW : r.map.w);
+    const slotH = (r: CradleRegion): number => (r.kind === 'disc' ? this.idle.slotH : r.map.h);
     // the atlas: every region map packed in rows (a regrown link reuses its original's slot: same map size)
     let x = 0;
     let y = 0;
     let rowH = 0;
     this.places = [];
     for (let i = 1; i < this.R.regions.length; i++) {
-      const m = this.R.regions[i]!.map;
-      if (x + m.w > Math.max(ATLAS_ROW, m.w)) {
+      const r = this.R.regions[i]!;
+      if (x + slotW(r) > Math.max(ATLAS_ROW, slotW(r))) {
         x = 0;
         y += rowH;
         rowH = 0;
       }
       this.places[i] = { sx: x, sy: y };
-      x += m.w;
-      rowH = Math.max(rowH, m.h);
+      x += slotW(r);
+      rowH = Math.max(rowH, slotH(r));
     }
-    const aw = Math.max(ATLAS_ROW, ...this.R.regions.slice(1).map((r) => r.map.w));
+    const aw = Math.max(ATLAS_ROW, ...this.R.regions.slice(1).map((r) => slotW(r)));
     const ah = y + rowH;
     this.atlas = makeLayer(`cradle-${f.slot}`, 'world', -0.5, aw, ah);
     this.atlasEmis = new Uint8Array(aw * ah);
@@ -250,10 +286,65 @@ export class CradleBehaviour extends KitBehaviour {
     this.buildRig();
     this.place();
     this.diff.prepare(this.R);
-    const discR = this.R.regions.find((r) => r.kind === 'disc');
-    if (discR) this.skin.prepare(this.R, discR);
+    this.cordTables();
     this.organFx = new Overlay(`cradle-organs-${f.slot}`, 0.7, 900, 600, 'add', true);
     this.fx = new Overlay(`cradle-fx-${f.slot}`, 0.6, 900, 600, 'normal', true);
+  }
+
+  /** Per cord link (and the jaw-organ): each map cell's place along it (0 at its root joint, 1 at the next) and across it. */
+  private cordTables(): void {
+    const R = this.R;
+    for (let i = 0; i < R.regions.length; i++) {
+      const r = R.regions[i]!;
+      if (r.kind !== 'cord' && r.kind !== 'jaw') continue;
+      const next = R.regions.find((q) => (q.kind === 'cord' || q.kind === 'jaw') && q.link === r.link + 1);
+      const ex = next ? next.pivotX : R.jawTip.x;
+      const ey = next ? next.pivotY : R.jawTip.y;
+      const dx = ex - r.pivotX;
+      const dy = ey - r.pivotY;
+      const L = DMath.hypot(dx, dy) || 1;
+      const m = r.map;
+      const along = new Float32Array(m.w * m.h);
+      const perp = new Float32Array(m.w * m.h);
+      for (let y = 0; y < m.h; y++)
+        for (let x = 0; x < m.w; x++) {
+          const bx = r.ox + x + 0.5 - r.pivotX;
+          const by = r.oy + y + 0.5 - r.pivotY;
+          along[y * m.w + x] = (bx * dx + by * dy) / (L * L);
+          perp[y * m.w + x] = (-bx * dy + by * dx) / L;
+        }
+      this.cordGeom.set(i, { along, perp });
+    }
+  }
+
+  override onMoveStart(): void {
+    this.pose.interrupt();
+  }
+
+  override onDamaged(): void {
+    this.pose.interrupt();
+  }
+
+  /** The living idle's render inputs this tick (render-side data: nothing here is read back by the sim). */
+  private recordIdle(): void {
+    const f = this.f;
+    const p = this.pose;
+    const inp = this.idleIn;
+    const fv = f.foe?.view;
+    const t = f.body.transform;
+    inp.t = p.pt / 60;
+    inp.w = p.w;
+    inp.wit = p.wit;
+    inp.hush = p.hush;
+    inp.coilAt = p.coilAt;
+    inp.hit = f.state === 'hitstun';
+    inp.ko = f.ko;
+    inp.x = t.x;
+    inp.y = t.y;
+    inp.facing = this.facing;
+    inp.foeX = fv ? fv.x : t.x + 170 * this.facing;
+    inp.foeY = fv ? fv.y : t.y;
+    this.idle.record(f.tickNo, inp);
   }
 
   /** Create region i's matter body (attach, regrowth, a new round) and its atlas part; `wrong` grows it wrong. */
@@ -280,13 +371,15 @@ export class CradleBehaviour extends KitBehaviour {
     // its integrity, so cutting it costs its reach and its jaw, not a third of its health
     const counts = src.kind === 'disc';
     f.addRegion(body, counts, regrown && counts);
+    // the sail's slot is larger than its map (the frames' union): the part's anchor sits at the hub inside it
+    const disc = src.kind === 'disc';
     const part: RenderPart = {
       sx: this.places[i]!.sx,
       sy: this.places[i]!.sy,
-      sw: map.w,
-      sh: map.h,
-      px: ax,
-      py: ay,
+      sw: disc ? this.idle.slotW : map.w,
+      sh: disc ? this.idle.slotH : map.h,
+      px: disc ? Math.round(src.pivotX - this.idle.slotOx) : ax,
+      py: disc ? Math.round(src.pivotY - this.idle.slotOy) : ay,
       wx: 0,
       wy: 0,
       step: 0,
@@ -305,6 +398,7 @@ export class CradleBehaviour extends KitBehaviour {
       wrong,
       counts,
       heavyAt: -1000,
+      idleDrawn: false,
     };
     this.regions.push(reg);
     return reg;
@@ -399,6 +493,8 @@ export class CradleBehaviour extends KitBehaviour {
     this.gest.reset();
     this.chambers.reset();
     this.diff.reset();
+    this.pose.reset();
+    this.idle.reset();
     this.buildRig();
     this.place();
   }
@@ -430,6 +526,7 @@ export class CradleBehaviour extends KitBehaviour {
       this.checkCord();
       rig.step();
       this.sanitize();
+      this.recordIdle();
     }
     this.place();
   }
@@ -507,10 +604,21 @@ export class CradleBehaviour extends KitBehaviour {
     const acc = (vf - this.lastVf) * 60;
     this.lastVf = vf;
     let sail = clamp(-0.42 * (vf / 230), -0.38, 0.38) + clamp(f.vy / 230, -1, 1) * 0.08;
-    // the disc breathes: a slow, deep convulsion of the whole sail (seconds, not frames)
+    // the living idle (sim): its weight, the quickening's and the coil's clocks
+    const fv = f.foe?.view;
+    const P = this.pose;
+    P.step({
+      calm: (f.state === 'idle' || f.state === 'move' || f.state === 'intro') && !f.mv.def && !f.guardUp,
+      ko: f.ko,
+      near: !!fv && DMath.hypot(fv.x - f.px, fv.y - f.py) <= 240,
+    });
+    const iw = P.w;
+    // the disc breathes: a slow, deep convulsion of the whole sail (seconds, not frames); at rest the approved sail frames
+    // carry its tilt instead (the idle)
     sail +=
-      0.06 * DMath.sin((t * Math.PI * 2) / (60 * 9.5)) +
-      0.025 * DMath.sin((t * Math.PI * 2) / (60 * 3.7) + 1.1);
+      (0.06 * DMath.sin((t * Math.PI * 2) / (60 * 9.5)) +
+        0.025 * DMath.sin((t * Math.PI * 2) / (60 * 3.7) + 1.1)) *
+      (1 - iw);
     // runaway: the sail loses its rhythm
     if (this.diff.stage === 2) sail += 0.14 * DMath.sin(t * 0.13) * DMath.sin(t * 0.051 + 1.3);
     if (this.rb.disc >= 0) rig.w[this.rb.disc] = rig.w[this.rb.disc]! - clamp(acc, -900, 900) * 0.00002;
@@ -519,10 +627,23 @@ export class CradleBehaviour extends KitBehaviour {
     const bend = this.bend;
     const head = this.head;
     const headHz = this.headHz;
+    // the idle's cord: the prototype's sway, and its aim at the foe while it coils or quickens (the jaw's heading error)
+    let err = 0;
+    if (iw > 0 && fv && P.aiming && n > 0 && this.jawPoint(this.pt)) {
+      const last = this.cordLive[n - 1]!;
+      rig.frame(last.rigBody, this.fr);
+      const t0 = f.body.transform;
+      const pxw = this.fr.x * s + (t0.x - f.px);
+      const pyw = this.fr.y + (t0.y - f.py);
+      const dir = DMath.atan2(this.pt.y - pyw, (this.pt.x - pxw) * s);
+      const want = DMath.atan2(fv.y - this.pt.y, (fv.x - this.pt.x) * s);
+      err = wrapAngle(want - dir);
+    }
     for (let k = 0; k < n; k++) {
-      bend[k] =
+      const rest =
         (0.07 + 0.05 * this.diff.stage) *
         DMath.sin((t * Math.PI * 2) / (60 * (4.2 - 0.8 * this.diff.stage)) - k * 0.75);
+      bend[k] = iw > 0 ? rest * (1 - iw) + P.bend(k, err) * iw : rest;
       headHz[k] = 0;
       head[k] = 0;
     }
@@ -1463,29 +1584,37 @@ export class CradleBehaviour extends KitBehaviour {
       if (x0 + w > dx1) dx1 = x0 + w;
       if (y0 + h > dy1) dy1 = y0 + h;
     };
-    const redrawSkin =
-      this.skin.ready && f.tickNo !== this.skinTick && f.tickNo % (FX_DETAIL.level === 0 ? 4 : 2) === 0;
+    // the living idle steps once per sim tick; the sail redraws every other tick (every 4th at the lowest detail)
+    const idle = this.idle;
+    const advanced = idle.advance(f.tickNo);
+    const redrawSkin = f.tickNo !== this.skinTick && f.tickNo % (FX_DETAIL.level === 0 ? 4 : 2) === 0;
     for (const r of this.regions) {
       if (r.lost) continue;
       const m = r.body.map;
       const pl = this.places[r.index]!;
-      if (r.kind === 'disc' && this.skin.ready && (redrawSkin || m.version !== r.version)) {
-        // the living sail: calm and floating it moves fully; under attack at half; knocked out, barely
-        const st = f.state;
-        const amp =
-          st === 'ko' ? 0.25 : st === 'idle' || st === 'move' || st === 'guard' || st === 'intro' ? 1 : 0.5;
-        this.skin.draw(m, L.pixels, L.w, pl.sx, pl.sy, f.tickNo, amp);
-        for (let y = 0; y < m.h; y++) {
-          const src = y * m.w;
-          this.atlasEmis.set(m.emissive.subarray(src, src + m.w), (pl.sy + y) * L.w + pl.sx);
+      if (r.kind === 'disc') {
+        if (!(redrawSkin || m.version !== r.version)) continue;
+        // the living sail: the approved painted frames (never a warp); until they are in, the painted rest disc
+        const src = this.R.regions[r.index]!;
+        if (!idle.drawSail(m, L.pixels, this.atlasEmis, L.w, pl.sx, pl.sy)) {
+          const ox = src.ox - idle.slotOx;
+          const oy = src.oy - idle.slotOy;
+          for (let y = 0; y < m.h; y++) {
+            const s0 = y * m.w;
+            const dst = (pl.sy + oy + y) * L.w + pl.sx + ox;
+            L.pixels.set(m.pixels.subarray(s0, s0 + m.w), dst);
+            this.atlasEmis.set(m.emissive.subarray(s0, s0 + m.w), dst);
+          }
         }
         this.skinTick = f.tickNo;
         r.version = m.version;
         changed = true;
-        grow(pl.sx, pl.sy, m.w, m.h);
+        grow(pl.sx, pl.sy, idle.slotW, idle.slotH);
         continue;
       }
-      if (m.version === r.version) continue;
+      const cord = r.kind === 'cord' || r.kind === 'jaw';
+      const shade = cord && idle.active && advanced;
+      if (m.version === r.version && !shade && !(cord && r.idleDrawn && !idle.active)) continue;
       r.version = m.version;
       changed = true;
       grow(pl.sx, pl.sy, m.w, m.h);
@@ -1495,7 +1624,17 @@ export class CradleBehaviour extends KitBehaviour {
         L.pixels.set(m.pixels.subarray(src, src + m.w), dst);
         this.atlasEmis.set(m.emissive.subarray(src, src + m.w), dst);
       }
+      // the bolus swallowed down the cord, its muscle bands, the jaw-organ tasting
+      const g = this.cordGeom.get(r.index);
+      if (shade && g) {
+        const link = this.R.regions[r.index]!.link;
+        idle.shadeCord(link, r.kind === 'jaw', m, g.along, g.perp, L.pixels, L.w, pl.sx, pl.sy);
+      }
+      r.idleDrawn = shade;
     }
+    // the knot (the primary body, the layer the fighter pushed last): the embryo cleaving
+    const knotLayer = out[out.length - 1];
+    if (knotLayer) idle.presentKnot(f.body.map, knotLayer);
     if (changed) {
       L.version++;
       // the renderer nulls `dirty` once uploaded; until then keep growing the rect (the Overlay protocol)
@@ -1521,8 +1660,49 @@ export class CradleBehaviour extends KitBehaviour {
       this.fxStale = false;
       this.drawFx();
     }
+    // the quickening's filaments and the web: on the fx overlay while no move or latch is using it
+    if (idle.reaching && this.f.foe && this.latch <= 0 && !f.mv.def) {
+      if (!this.foeDark) this.foeTones();
+      const fx = this.fx;
+      const fv = f.foe.view;
+      fx.begin((f.view.x + fv.x) / 2, (f.view.y + fv.y) / 2);
+      if (this.rb.disc >= 0) {
+        this.rb.rig.frame(this.rb.disc, this.fr);
+        const t0 = f.body.transform;
+        idle.drawFilaments(
+          fx,
+          this.fr.x * this.facing + (t0.x - f.px),
+          this.fr.y + (t0.y - f.py),
+          this.facing,
+          this.foeDark,
+          this.foeLit,
+        );
+      }
+      fx.end();
+    }
     if (this.fx.layer.visible) out.push(this.fx.layer);
     if (this.organFx.layer.visible) out.push(this.organFx.layer);
+  }
+
+  /** The foe's own darkest and lightest drawn colours (the web the quickening spins over it). */
+  private foeTones(): void {
+    const m = (this.f.foe as unknown as { body?: { map: MatterMap } }).body?.map;
+    if (!m) return;
+    let lo = 1e9;
+    let hi = -1;
+    for (let i = 0; i < m.pixels.length; i++) {
+      const c = m.pixels[i]!;
+      if (!c || !m.material[i]) continue;
+      const l = 0.3 * (c & 255) + 0.59 * ((c >>> 8) & 255) + 0.11 * ((c >>> 16) & 255);
+      if (l < lo) {
+        lo = l;
+        this.foeDark = c;
+      }
+      if (l > hi) {
+        hi = l;
+        this.foeLit = c;
+      }
+    }
   }
 
   /** The jaw-organ and the disc's rim, for the scale-of-motion instrumentation. */
@@ -1544,7 +1724,7 @@ export class CradleBehaviour extends KitBehaviour {
       0x01000193,
     );
     x = this.diff.hash(this.chambers.hash(this.gest.hash(x >>> 0)));
-    return x >>> 0;
+    return this.pose.hash(x >>> 0);
   }
 
   /* ---- for tests and tools ---- */

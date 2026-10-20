@@ -3,6 +3,8 @@ import { App } from '@/app/app';
 import { installHarness } from '@/app/harness';
 import { loadUriAsset } from '@/titans/uri/asset';
 import uriBinUrl from '@/titans/uri/uri_rig.bin?url';
+import { requestCradleFrames } from '@/titans/kit/cradle/frames';
+import cradleFramesUrl from '@/titans/kit/cradle/cradle_frames.bin?url';
 
 /** Entry point: builds the app, boots into the title (or a harness scenario when URL params ask for one). */
 async function main(): Promise<void> {
@@ -20,6 +22,9 @@ async function main(): Promise<void> {
   }
   // 우리's packed part grids (src/titans/uri/asset.ts): fetched once at boot, decoded in place before any match
   const uriAsset = loadUriAsset(uriBinUrl);
+  // the Cradle's living sail frames (src/titans/kit/cradle/frames.ts): presentation only, never awaited (until they are in,
+  // the sail draws its painted rest disc)
+  requestCradleFrames(cradleFramesUrl);
   const app = new App();
   // preserveDrawingBuffer only for screenshot tooling: real-time evidence runs (tele) read frames right after drawing
   // and must pay exactly what a player's build pays

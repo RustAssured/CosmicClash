@@ -184,7 +184,11 @@ describe.each(PAINTED)('generator: %s', (id) => {
     expect(Buffer.compare(Buffer.from(b.baseColor.buffer), Buffer.from(map.baseColor.buffer))).toBe(0);
     expect(Buffer.compare(Buffer.from(b.material), Buffer.from(map.material))).toBe(0);
     const c = portraitMap(paintTitanMap(def, 4321, DEFAULT_LIGHTING));
-    expect(Buffer.compare(Buffer.from(c.material), Buffer.from(map.material))).not.toBe(0);
+    // the Cradle paints one body whatever the seed (CRADLE_PAINT_SEED: its approved idle frames are of that body, WJ
+    // 2026-10-19)
+    const cmp = Buffer.compare(Buffer.from(c.material), Buffer.from(map.material));
+    if (id === 'cradle') expect(cmp).toBe(0);
+    else expect(cmp).not.toBe(0);
   });
 
   it('is lit for the stage: another light changes colours but not the silhouette', () => {
