@@ -14,7 +14,6 @@
  *   --hue=<0..359>     the palette's hue (default: the hue farthest from every other titan's colours)
  *   --stage=<stage>    its home stage (default rim)
  *   --essence=<word>   the one idea it is, for its card (default "mystery")
- *   --no-art           skip the site portrait / Korean name / matter count
  *
  * It writes:
  *   src/titans/kit/<id>/<id>.json        definition: attributes, moves (frame data in ticks), materials and palette, art
@@ -22,7 +21,7 @@
  *   src/titans/kit/<id>/index.ts         its painter and rig (the template's)
  *   src/combat/behaviours/kit/<id>.ts    its behaviour: one signature-mechanic hook to fill in
  * and registers it in src/contracts/roster.ts, src/titans/kit/index.ts and src/combat/behaviours/kit/index.ts (at the
- * `new:titan` markers), then draws its site art (tools/site/art.ts), counts its matter and regenerates the site's cards.
+ * `new:titan` markers). It starts as work in progress (kit.wip), off the site: `npm run titan:ship` draws its site art.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -536,12 +535,8 @@ register(id, cls);
 run('npx', ['prettier', '--write', ...files, ...Object.values(REGISTRY)]);
 console.log(`\n'${id}' (${name}, ${ko}) scaffolded from '${tpl}' at hue ${hue}°, size ${size}.`);
 
-if (!flag('no-art')) {
-  // a fresh process: it imports the roster with the new titan registered
-  run('npx', ['tsx', 'tools/site/art.ts', `--only=${id}`]);
-  run('npx', ['tsx', 'tools/site/matter.ts', `--only=${id}`]);
-  run('npx', ['prettier', '--write', ...SITE_JSON]);
-}
+// a new titan is work in progress (kit.wip), so it is off the site roster: its site art comes at `titan:ship`
+console.log(`Site art (portrait, Korean name, matter) skipped: it is drawn when the titan ships.`);
 console.log(`
 Next:
   npx tsc --noEmit && npx vitest run src/titans      the roster checks (size, palette, AI coverage, replay)

@@ -31,7 +31,9 @@ import { sourceRamp } from './master';
 import { UriLivePass } from './uriLivePass';
 import { MouthPass, type RenderLayerMouth } from './mouthPass';
 import type { MouthDrawList } from './mouthList';
-import { URI_FIST_SPREAD_REST } from './uriLive';
+import { URI_FIST_SPREAD_REST, uriIdleJigs, type UriIdleFx } from './uriLive';
+import { SIGNATURE, type RenderLayerSig } from './signature';
+import { SignaturePass } from './signaturePass';
 
 /** 우리's ramps for the part pass's shade mode, as linear-in-sRGB 0..1 triples (vec3 arrays). */
 const URI_SHADE_RAMPS = (() => {
@@ -89,16 +91,23 @@ export class LayerCompositor {
   drawn = 0;
   /** The unified look is drawing (set by the renderer each frame). */
   unified = false;
+  /** Quality tier (set by the renderer each frame): the signature pass's cheaper fallback at 0. */
+  tier = 1;
+  /** Body layers drawn through their signature animation (signature.ts) last frame. */
+  sigDrawn = 0;
+  private readonly sig: SignaturePass;
   /** 우리's fist chunk tables (centroids, bounds), per layer and part, rebuilt when the layer's version changes. */
   private readonly fistTabs = new Map<
     string,
-    { version: number; tex: DataTexture; n: number; maxOff: number }
+    { version: number; tex: DataTexture; n: number; maxOff: number; data: Float32Array }
   >();
+  /** 우리's living idle: this frame's jigging chunks ([part, u, phase, 0] × n, uriLive.ts uriIdleJigs) and the uniforms' scratch. */
+  private readonly jigs = new Float32Array(6 * 4);
 
   private fistTable(
     layer: RenderLayerLit,
     part: RenderPart,
-  ): { tex: DataTexture; n: number; maxOff: number } {
+  ): { tex: DataTexture; n: number; maxOff: number; data: Float32Array } {
     const key = `${layer.id}:${part.z}`;
     let e = this.fistTabs.get(key);
     if (e && e.version === layer.version) return e;
@@ -119,9 +128,9 @@ export class LayerCompositor {
         s[5] = Math.max(s[5]!, x + 1);
         s[6] = Math.max(s[6]!, y + 1);
       }
-    // the oracle draws chunks in id order (later ones on top)
-    const ids = [...sums.keys()].sort((a, b) => a - b).slice(0, 160);
-    const data = new Float32Array(320 * 4);
+    // the oracle draws chunks in id order (later ones on top); up to 256 (the chamber has 233: the living idle loosens it)
+    const ids = [...sums.keys()].sort((a, b) => a - b).slice(0, 256);
+    const data = new Float32Array(512 * 4);
     let maxOff = 0;
     ids.forEach((id, c) => {
       const s = sums.get(id)!;
@@ -131,11 +140,11 @@ export class LayerCompositor {
       maxOff = Math.max(maxOff, Math.hypot(cx - part.px, cy - part.py));
     });
     if (!e) {
-      const tex = new DataTexture(data, 320, 1, RGBAFormat, FloatType);
+      const tex = new DataTexture(data, 512, 1, RGBAFormat, FloatType);
       tex.minFilter = NearestFilter;
       tex.magFilter = NearestFilter;
       tex.generateMipmaps = false;
-      e = { version: layer.version, tex, n: ids.length, maxOff };
+      e = { version: layer.version, tex, n: ids.length, maxOff, data };
       this.fistTabs.set(key, e);
     } else {
       (e.tex.image.data as Float32Array).set(data);
@@ -145,6 +154,51 @@ export class LayerCompositor {
     }
     e.tex.needsUpdate = true;
     return e;
+  }
+
+  /**
+   * 우리's living idle on one part (shaders.ts PART_FRAG uIdle…, uChunkIdle, uJig): the clocks for the cities and the slit,
+   * and on the chunk path the Refusal's push, jitter and flash and this part's jigging chunks (mapped from their hash onto
+   * the part's live chunks, pushed 1 whole px along centroid − pivot).
+   */
+  private idleUniforms(
+    u: Record<string, { value: unknown }>,
+    idle: UriIdleFx | undefined,
+    chunks: boolean,
+    tab: { n: number; data: Float32Array } | null,
+    part: RenderPart,
+    nJig: number,
+    view: ViewRect,
+  ): void {
+    const on = !!idle?.on;
+    const S = idle?.scale ?? 1;
+    (u.uIdle!.value as Vector4).set(on ? 1 : 0, idle?.t ?? 0, idle?.refT ?? -1, idle?.loose ?? 0);
+    (u.uIdleB!.value as Vector4).set(
+      (idle?.bx ?? 0) - view.x0,
+      (idle?.by ?? 0) - view.y0,
+      (idle?.ox ?? 0) - view.x0,
+      (idle?.oy ?? 0) - view.y0,
+    );
+    u.uIdleSC!.value = S;
+    u.uPartIdx!.value = part.z;
+    const ci = u.uChunkIdle!.value as Vector4;
+    const J = u.uJig!.value as Vector4[];
+    for (const v of J) v.set(-1, 0, 0, 0);
+    if (!on || !chunks || !tab) {
+      ci.set(0, 0, 0, 0);
+      return;
+    }
+    const L = idle!.loose;
+    ci.set(L * S, L > 0.95 ? 1 : 0, Math.floor(idle!.t * 18), idle!.flash);
+    let k = 0;
+    for (let j = 0; j < nJig && k < 4; j++) {
+      if (this.jigs[j * 4] !== part.z || tab.n <= 0) continue;
+      const c = Math.min(tab.n - 1, Math.floor(this.jigs[j * 4 + 1]! * tab.n));
+      const dx = tab.data[c * 8]! - part.px;
+      const dy = tab.data[c * 8 + 1]! - part.py;
+      const dl = Math.hypot(dx, dy) || 1;
+      J[k++]!.set(c, Math.round(dx / dl), Math.round(dy / dl), this.jigs[j * 4 + 2]!);
+    }
   }
 
   /** 우리's live pass (created on first use) and whether it drew this frame. */
@@ -167,6 +221,7 @@ export class LayerCompositor {
   ) {
     for (let i = 0; i < MAX_LAYERS; i++) this.slots.push(this.makeSlot(i));
     for (let i = 0; i < MAX_PARTS; i++) this.partSlots.push(this.makePartSlot());
+    this.sig = new SignaturePass(this.scene, this.res, this.emisGain, (m) => setLayerBlend(m, 'normal'));
   }
 
   private makePartSlot(): PartSlot {
@@ -209,6 +264,12 @@ export class LayerCompositor {
         uChunkTab: { value: null },
         uNChunk: { value: 0 },
         uSpreadK: { value: 0 },
+        uIdle: { value: new Vector4() },
+        uIdleB: { value: new Vector4() },
+        uIdleSC: { value: 1 },
+        uChunkIdle: { value: new Vector4() },
+        uPartIdx: { value: 0 },
+        uJig: { value: Array.from({ length: 4 }, () => new Vector4(-1, 0, 0, 0)) },
       },
       depthTest: false,
       depthWrite: false,
@@ -298,7 +359,9 @@ export class LayerCompositor {
     const n = this.sortLayers(layers);
     let used = 0;
     let usedParts = 0;
+    let usedSig = 0;
     let order = 0;
+    this.sig.hide();
     for (let i = 0; i < MAX_LAYERS; i++) this.slots[i]!.mesh.visible = false;
     for (let i = 0; i < MAX_PARTS; i++) this.partSlots[i]!.mesh.visible = false;
     this.live?.hide();
@@ -336,6 +399,10 @@ export class LayerCompositor {
         }
         // 우리's live elements (cores, loop, orbit) go right after its chamber part: before the first part in front of it
         const live = (layer as RenderLayerLit).uriLive;
+        // 우리's living idle (both its atlas layers carry it): this frame's jigging chunks
+        const idle = (layer as RenderLayerLit).uriIdle;
+        const idleOn = !!idle?.on && !!gpu.chunk;
+        const nJig = idleOn ? uriIdleJigs(idle!, this.jigs, 6) : 0;
         let liveDone = !live;
         const stageLive = (): void => {
           liveDone = true;
@@ -366,8 +433,18 @@ export class LayerCompositor {
           // 우리's fists: drawn chunk by chunk, spread out from the pivot (uriLive.ts fistSpread)
           const fist = live && gpu.chunk && live.fistZ ? live.fistZ.indexOf(part.z) : -1;
           const spread = fist >= 0 ? (live!.fistSpread?.[fist] ?? URI_FIST_SPREAD_REST) : 1;
-          const tab = fist >= 0 ? this.fistTable(layer as RenderLayerLit, part) : null;
-          const m = tab ? Math.ceil(tab.maxOff * Math.abs(spread - 1) * 1.9) + 2 : 0;
+          // …and, with the living idle, any part whose chunks have somewhere to be: the Refusal loosening or flashing it,
+          // or one of its chunks jigging (the prototype's drawChunked: every other part stays on the plain sampler)
+          let jigHere = false;
+          for (let j = 0; j < nJig; j++) if (this.jigs[j * 4] === part.z) jigHere = true;
+          const idleChunks = idleOn && (idle!.loose > 0 || idle!.flash > 0 || jigHere);
+          const tab = fist >= 0 || idleChunks ? this.fistTable(layer as RenderLayerLit, part) : null;
+          const S = idle?.scale ?? 1;
+          const m = tab
+            ? Math.ceil(tab.maxOff * Math.abs(spread - 1) * 1.9) +
+              2 +
+              (idleChunks ? Math.ceil(idle!.loose * 5.3 * S) + 1 : 0)
+            : 0;
           const x0 = Math.max(0, qx + b.x0 - m);
           const y0 = Math.max(0, qy + b.y0 - m);
           const x1 = Math.min(LOGICAL_W, qx + b.x1 + m);
@@ -402,12 +479,18 @@ export class LayerCompositor {
           u.uChunkTab!.value = tab ? tab.tex : null;
           u.uNChunk!.value = tab ? tab.n : 0;
           u.uSpreadK!.value = spread - 1;
+          this.idleUniforms(u, idle, idleChunks, tab, part, nJig, view);
           setLayerBlend(s.material, layer.blend);
         }
         if (!liveDone) stageLive();
         if (live?.pylons) {
           this.live ??= new UriLivePass(this.scene, this.res);
           order = this.live.stagePlumes(live, view.x0, view.y0, order, order);
+          this.liveUsed = true;
+        }
+        if (live?.idle?.on) {
+          this.live ??= new UriLivePass(this.scene, this.res);
+          order = this.live.stageSpecks(live, view.x0, view.y0, order);
           this.liveUsed = true;
         }
         continue;
@@ -420,7 +503,11 @@ export class LayerCompositor {
         continue;
       }
       const gpu = this.textures.acquire(layer);
-      const slot = this.slots[used++]!;
+      // a body with a signature animation is drawn through the signature pass (same placement, warped sampling)
+      const sfx = SIGNATURE.on && !p.screen ? (layer as RenderLayerSig).signature : undefined;
+      const sigSlot = sfx && usedSig < SignaturePass.MAX ? this.sig.slots[usedSig++]! : null;
+      if (sigSlot) this.sig.apply(sigSlot, layer.id, sfx!, layer.w, layer.h, this.tier);
+      const slot = sigSlot ?? this.slots[used++]!;
       slot.mesh.visible = true;
       slot.mesh.renderOrder = ++order;
       const u = slot.material.uniforms;
@@ -437,11 +524,13 @@ export class LayerCompositor {
       u.uTex!.value = gpu.tex;
       u.uEmis!.value = gpu.emis;
       u.uHasEmis!.value = gpu.emis ? 1 : 0;
-      u.uScreen!.value = p.screen ? 1 : 0;
+      if (u.uScreen) u.uScreen.value = p.screen ? 1 : 0;
       u.uAlpha!.value = layer.alpha;
       setId(u, layer, order, gpu, this.unified);
       setLayerBlend(slot.material, layer.blend);
     }
+    this.sigDrawn = usedSig;
+    used += usedSig;
     this.drawn = used + usedParts + (this.liveUsed ? 1 : 0);
     this.drawnParts = usedParts;
     // The target is a dedicated layer target: it starts each frame transparent, so what it holds afterwards is exactly
@@ -459,13 +548,16 @@ export class LayerCompositor {
     for (const s of this.partSlots) s.mesh.visible = false;
     this.slots[0]!.mesh.visible = true;
     this.partSlots[0]!.mesh.visible = true;
+    this.sig.slots[0]!.mesh.visible = true;
     return compileScene(renderer, this.scene, this.camera).then(() => {
       this.slots[0]!.mesh.visible = false;
       this.partSlots[0]!.mesh.visible = false;
+      this.sig.slots[0]!.mesh.visible = false;
     });
   }
 
   dispose(): void {
+    this.sig.dispose();
     for (const s of this.slots) s.material.dispose();
     for (const s of this.partSlots) s.material.dispose();
     this.live?.dispose();

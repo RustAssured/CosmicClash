@@ -1,5 +1,5 @@
 import type { RenderLayer, StageLighting } from '@/contracts';
-import type { UriLiveFx } from './uriLive';
+import type { UriIdleFx, UriLiveFx } from './uriLive';
 
 /**
  * The unified titan look (shared/UNIFICATION.md, D31-4): the one sky every titan is lit by, and the per-layer extras the
@@ -46,6 +46,8 @@ export interface LitLayerFields {
   chunk?: Uint16Array;
   /** 우리's live elements (cores, loop, orbit), drawn after the chamber part (uriLive.ts). */
   uriLive?: UriLiveFx;
+  /** 우리's living idle (uriLive.ts UriIdleFx): on both its atlas layers (the cities, the slit, the chunks working loose). */
+  uriIdle?: UriIdleFx;
 }
 export type RenderLayerLit = RenderLayer & LitLayerFields;
 

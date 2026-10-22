@@ -1371,6 +1371,7 @@ class PixelRenderer implements DebuggableRenderer {
     const sb = uni && L.sharedBloom;
     this.emisGain.value = sb ? 1 : 1.5;
     this.compositor.unified = uni;
+    this.compositor.tier = this.tierNow;
     const drawn = this.compositor.draw(r, this.layerRT, frame.layers, view, frame.alpha);
     // ---- the shared VFX (unified path): drawn into the layer target, so the final snap puts them on the master palette ----
     let nVfx = 0;

@@ -18,8 +18,11 @@ import type { FighterImpl } from './fighter';
 import type { UriBehaviour } from './behaviours/uri';
 import { skipIntro } from './testing/harness';
 
-/** A real match with 우리 in slot 0 against `foe`, the foe placed `dx` px from it (negative = on its left). */
-function uriMatch(dx = 260, seed = 7): { m: Match; u: FighterImpl; beh: UriBehaviour } {
+/**
+ * A real match with 우리 in slot 0 against `foe`, the foe placed `dx` px from it (negative = on its left); `idle` false holds
+ * the bare rig at rest (no living idle).
+ */
+function uriMatch(dx = 260, seed = 7, idle = true): { m: Match; u: FighterImpl; beh: UriBehaviour } {
   const cfg: MatchConfig = {
     seed,
     stage: 'nursery',
@@ -36,6 +39,7 @@ function uriMatch(dx = 260, seed = 7): { m: Match; u: FighterImpl; beh: UriBehav
     arena: DEFAULT_ARENA,
     lighting: DEFAULT_LIGHTING,
   });
+  (m.fighters[0] as FighterImpl as unknown as { behaviour: UriBehaviour }).behaviour.idle = idle;
   skipIntro(m);
   const u = m.fighters[0] as FighterImpl;
   const foe = m.fighters[1] as unknown as { px: number; py: number };
@@ -60,7 +64,8 @@ function corners(u: FighterImpl, beh: UriBehaviour): Map<string, [number, number
 
 describe('우리 in the game (Phase 2A/2B)', () => {
   it('is one primary (the pelvis) and 12 region bodies, each the asset part placed at its reference layout', () => {
-    const { u, beh } = uriMatch();
+    // (the bare rig at rest: the living idle sways it off the layout on purpose)
+    const { u, beh } = uriMatch(260, 7, false);
     expect(u.def.name).toBe('우리');
     expect(beh.regionBodies).toHaveLength(12);
     expect(u.regions).toHaveLength(12);
@@ -86,8 +91,9 @@ describe('우리 in the game (Phase 2A/2B)', () => {
   });
 
   it('is never mirrored: with the opponent on its left everything is drawn and hit exactly as with it on the right', () => {
-    const right = uriMatch(260);
-    const left = uriMatch(-260);
+    // (the bare rig: the living idle's guard leads with the arm on the opponent's side on purpose, the idle test checks it)
+    const right = uriMatch(260, 7, false);
+    const left = uriMatch(-260, 7, false);
     expect(right.u.facing).toBe(1);
     expect(left.u.facing).toBe(-1);
     const a = corners(right.u, right.beh);

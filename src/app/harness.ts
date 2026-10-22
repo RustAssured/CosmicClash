@@ -12,6 +12,7 @@ import {
 } from '@/contracts';
 import { createScriptSource } from '@/sim';
 import { StripRecorder, type StripRequest } from '@/telemetry/strips';
+import { SIGNATURE } from '@/render/signature';
 import { setSetupMode, showLadder, showScreen } from '@/ui';
 import type { App } from './app';
 
@@ -252,6 +253,8 @@ export async function installHarness(app: App, params: HarnessParams): Promise<v
     }
   }
   openLadderFlag(app, location.search);
+  // `?sig=0`: the titans' signature animations off (before/after and A/B captures: tools/titans/signature.ts)
+  if (new URLSearchParams(location.search).get('sig') === '0') SIGNATURE.on = false;
   // let the scenery finish preparing and draw at least once before declaring ready
   await app.renderer.prepareStage(app.session?.config.stage ?? 'nursery');
   await nextFrame();

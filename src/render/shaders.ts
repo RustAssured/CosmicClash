@@ -327,7 +327,18 @@ uniform vec3 uS2[11];
 uniform vec3 uCiv[3];
 uniform vec3 uField[3];
 uniform float uBind;   // fist compression light (the oracle's drawFist: spread < 0.9 → bind 0..1), 0 = none
+// 우리's living idle (idle handover specs/uri.md; uriLive.ts UriIdleFx): on, kinetic time (s), the Refusal's age (s, −1 none),
+// its coming-apart (0..1); the cores' barycentre and the reference origin in logical screen px; the draw scale
+uniform vec4 uIdle;
+uniform vec4 uIdleB;
+uniform float uIdleSC;
 const float UBY[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+// the oracle's h3 (uriLive.ts), bit for bit in 32-bit unsigned arithmetic
+float uh3(int x, int y, int z) {
+  uint h = uint(x) * 374761393u + uint(y) * 668265263u + uint(z) * 1274126177u;
+  h = (h ^ (h >> 13u)) * 1274126177u;
+  return float(h ^ (h >> 16u)) / 4294967295.0;
+}
 vec3 uriRamp(int surf, float l, ivec2 P) {
   float b = (UBY[(P.y & 3) * 4 + (P.x & 3)] + 0.5) / 16.0 - 0.5;
   int k = clamp(int(floor(l * 11.0 * 1.02 + b * 0.6)), 0, 10);
@@ -341,9 +352,54 @@ vec3 uriShade(ivec2 texel, ivec2 P, vec2 cs, out float e) {
   int y = P.y;
   e = 1.0;
   vec3 c = vec3(0.0);
-  if (mat == 3) c = uCiv[(x * 7 + y * 3) % 3];
+  if (mat == 3) {
+    c = uCiv[(x * 7 + y * 3) % 3];
+    // the living idle's civilisations (the prototype's civAt): the Refusal's wave out from the cores, cities failing while
+    // it comes apart, and the day–night line sweeping the body (in the prototype's screen px, fixed to the body)
+    if (uIdle.x > 0.5) {
+      float R = uIdle.z;
+      float t = uIdle.y;
+      float S = uIdleSC;
+      bool done = false;
+      if (R > 1.5 && R < 3.3) {
+        float fr = (R - 1.5) * 240.0 * S;
+        float dd = length(vec2(P) - uIdleB.xy);
+        if (abs(dd - fr) < 12.0 * S) {
+          c = vec3(255.0, 248.0, 226.0) / 255.0;
+          done = true;
+        } else if (dd < fr) {
+          c = uCiv[2];
+          done = true;
+        }
+      }
+      if (!done && uIdle.w > 0.25 && uh3(x, y, int(floor(t * 10.0))) < uIdle.w * 0.55) {
+        c = uriRamp(1, 0.2, P);
+        e = 0.0;
+        done = true;
+      }
+      if (!done) {
+        vec2 q = (vec2(P) - uIdleB.zw) / S + vec2(120.0, 16.0);
+        float ph = sin(q.x * 0.021 + q.y * 0.006 - t * 0.32);
+        if (ph < -0.62) {
+          c = uriRamp(1, 0.17, P);
+          e = 0.0;
+        } else if (ph < -0.36 && ((x * 3 + y * 5) & 3) != 0) {
+          c = uriRamp(1, 0.23, P);
+          e = 0.0;
+        }
+      }
+    }
+  }
   else if (mat == 2) c = uField[(x + y) % 3 == 0 ? 2 : 1];
-  else if (mat == 9) c = (x % 2 == 1 ? vec3(255.0, 190.0, 120.0) : vec3(180.0, 220.0, 255.0)) / 255.0;
+  else if (mat == 9) {
+    c = (x % 2 == 1 ? vec3(255.0, 190.0, 120.0) : vec3(180.0, 220.0, 255.0)) / 255.0;
+    // the command moon's slit scanning (the living idle), all white for the Refusal's slam
+    if (uIdle.x > 0.5) {
+      float S = uIdleSC;
+      if (uIdle.z > 2.2 && uIdle.z < 3.6) c = vec3(1.0);
+      else if (mod(float(x) - uIdleB.z - uIdle.y * 16.0 * S, 13.0 * S) < 2.0 * S) c = vec3(255.0, 244.0, 214.0) / 255.0;
+    }
+  }
   else if (mat == 7) c = ((x + y) % 4 == 0 || abs(x - y) % 4 == 0 ? vec3(255.0, 214.0, 150.0) : vec3(44.0, 20.0, 10.0)) / 255.0;
   else if (mat == 8) c = vec3(255.0, 170.0, 90.0) / 255.0;
   else {
@@ -380,19 +436,42 @@ uniform sampler2D uChunkId;    // RG8 per atlas cell: id & 255, id >> 8
 uniform sampler2D uChunkTab;   // RGBA32F, 2 texels per chunk: (centroid x, y local, id, 0), (bbox x0, y0, x1, y1 local, exclusive)
 uniform int uNChunk;
 uniform float uSpreadK;        // spread − 1
+// 우리's living idle on the chunk path (any part, not only the fists): every chunk pushed out by
+// (1.5 + 3·h3(id, part, 7))·uLoose px (rounded to whole px; x jittered while fully loose), up to four jigging chunks
+// (table index, dx, dy, 1 = still pushed / 2 = its blue edge flicker) and the slam's flash over a share uFlash of the chunks
+uniform vec4 uChunkIdle;       // loose push (px at this scale), jitter on (1/0), jitter row floor(t·18), flash 0..1
+uniform int uPartIdx;
+uniform vec4 uJig[4];
 int chunkAt(ivec2 t) {
   vec2 v = texelFetch(uChunkId, t, 0).rg * 255.0 + 0.5;
   return int(v.x) + 256 * int(v.y);
 }
-bool fistSample(ivec2 P, vec2 cs, out ivec2 texel) {
+bool fistSample(ivec2 P, vec2 cs, out ivec2 texel, out bool blue) {
   bool found = false;
   texel = ivec2(0);
+  blue = false;
   vec2 piv = vec2(uPivot);
-  for (int c = 0; c < 160; c++) {
+  for (int c = 0; c < 256; c++) {
     if (c >= uNChunk) break;
     vec4 A = texelFetch(uChunkTab, ivec2(2 * c, 0), 0);
     vec4 B = texelFetch(uChunkTab, ivec2(2 * c + 1, 0), 0);
     vec2 off = (A.xy - piv) * uSpreadK * 1.9;
+    int cid = int(A.z + 0.5);
+    bool cb = false;
+    if (uChunkIdle.x > 0.0) {
+      vec2 dv = A.xy - piv;
+      float dl = max(length(dv), 1e-3);
+      float m = (1.5 + 3.0 * uh3(cid, uPartIdx, 7)) * uChunkIdle.x;
+      vec2 lo = dv / dl * m;
+      if (uChunkIdle.y > 0.5) lo.x += (uh3(cid, int(uChunkIdle.z), uPartIdx) - 0.5) * 1.6 * uIdleSC;
+      off += floor(lo + 0.5);
+    }
+    if (uChunkIdle.w > 0.0 && uh3(cid, uPartIdx, 3) < uChunkIdle.w) cb = true;
+    for (int j = 0; j < 4; j++) {
+      if (int(uJig[j].x + 0.5) != c || uJig[j].x < 0.0) continue;
+      if (uJig[j].w < 1.5) off += uJig[j].yz;
+      else cb = true;
+    }
     vec2 d0 = vec2(P - uDest) + 0.5;
     vec2 l0 = vec2(d0.x * cs.x + d0.y * cs.y, -d0.x * cs.y + d0.y * cs.x) + piv - off;
     if (l0.x < B.x - 1.5 || l0.y < B.y - 1.5 || l0.x > B.z + 1.5 || l0.y > B.w + 1.5) continue;
@@ -412,6 +491,7 @@ bool fistSample(ivec2 P, vec2 cs, out ivec2 texel) {
     if (cnt >= 2) {
       found = true;
       texel = bt;
+      blue = cb;
     }
   }
   return found;
@@ -420,8 +500,9 @@ void main() {
   ivec2 P = ivec2(floor(gl_FragCoord.x), int(floor(uRes.y - gl_FragCoord.y)));
   ivec2 texel;
   vec4 c;
+  bool blue = false;
   if (uFist == 1) {
-    if (!fistSample(P, vec2(uRotCS) / 16384.0, texel)) discard;
+    if (!fistSample(P, vec2(uRotCS) / 16384.0, texel, blue)) discard;
     c = texelFetch(uPart, texel, 0);
   } else {
     c = rotSampleModeGL(P - uDest, texel); // the part's sampler mode (proposal 174)
@@ -433,6 +514,12 @@ void main() {
     // the oracle draws 우리 unmirrored (spec §5): facing is always +1 for it
     c.rgb = uriShade(texel, P, vec2(uRotCS) / 16384.0, ue);
     e = ue;
+    // the living idle: a chunk snapping back (or every chunk the slam's flash reaches) flickers field blue at its edge
+    if (blue && ue <= 0.0 && texelFetch(uShade, texel, 0).b * 255.0 <= 1.01 &&
+        ((P.x + P.y + int(floor(uIdle.y * 30.0))) & 1) == 1) {
+      c.rgb = vec3(150.0, 210.0, 255.0) / 255.0;
+      e = 1.0;
+    }
   } else if (uHasLight == 1 && e <= 0.0) {
     vec4 L = texelFetch(uLight, texel, 0);
     float fc = float(uFacing);

@@ -18,6 +18,7 @@ export const ROSTER_IDS = [
   'planet',
   'uri',
   'cradle',
+  'cradlechild',
   // new:titan (the scaffold adds new ids above this line)
 ] as const;
 

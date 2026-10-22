@@ -279,6 +279,43 @@ export interface UriKineticView {
   moon: { x: number; y: number; a: number } | null;
   /** Fist spread per side (1.14 rest, ≤ 0.74 at impact). */
   spread: { L: number; R: number };
+  /** The living idle (idle handover, specs/uri.md): on, the Refusal's age (s, −1 none), its coming-apart and flash (0..1). */
+  idle?: { on: boolean; refT: number; loose: number; flash: number };
+}
+
+/**
+ * THE LIVING IDLE, "The Refusal: still here" (idle handover specs/uri.md; WJ 2026-10-20: the prototype's timing, a Refusal
+ * on its own every 13–17 s at rest, the first 8 s into a round, its slam as loud as the prototype's). 우리 barely holds
+ * itself together: a heavyweight's 2.6 s weight shift with the guard on the opponent's side, a fist clenching now and then,
+ * and the Refusal, everything coming loose for 2 s and slammed back together by the field. Off by default (the oracle-parity
+ * harness); the behaviour turns it on.
+ */
+export const URI_IDLE = {
+  /** The weight shift's period (s). */
+  period: 2.6,
+  /** The first Refusal (s of kinetic time) and the interval after each (base + random span). */
+  firstRefusal: 8,
+  refusalEvery: 13,
+  refusalSpan: 4,
+  /** The first clench (s) and the interval after each (base + random span). */
+  firstClench: 2.2,
+  clenchEvery: 2.6,
+  clenchSpan: 3,
+} as const;
+
+const sst = (a: number, b: number, x: number): number => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/** The Refusal's coming-apart (0..1) at age R (s): loosening over 1.6 s, held, snapped back by 2.32 s. */
+export function uriLoose(R: number): number {
+  if (R < 0) return 0;
+  return R < 1.6 ? sst(0, 1.6, R) : R < 2.1 ? 1 : R < 2.32 ? 1 - sst(2.1, 2.32, R) : 0;
+}
+/** The slam's blue flash (1 → 0 over R 2.1–2.5). */
+export function uriFlash(R: number): number {
+  return R >= 2.1 && R < 2.5 ? 1 - (R - 2.1) / 0.4 : 0;
 }
 
 export interface UriImpact {
@@ -335,9 +372,29 @@ export class UriKinetics {
   /** The impact of the last step, for the behaviour (hits, hitstop, fx); cleared when read. */
   private pendingImpact: UriImpact | null = null;
   private readonly tmp = { x: 0, y: 0 };
+  /** The living idle (URI_IDLE): on in the game, off in the oracle-parity harness; its own seeded stream. */
+  idleOn = false;
+  private irand: () => number;
+  private readonly idle = {
+    /** The current Refusal's start (s; −1 none), the next one's earliest time, its slam done. */
+    ref0: -1,
+    nextRef: URI_IDLE.firstRefusal as number,
+    slamDone: false,
+    /** Each fist's last clench start (s) and the next clench's earliest time. */
+    clenchL: -9,
+    clenchR: -9,
+    nextClench: URI_IDLE.firstClench as number,
+    /** The weight shift's phase sine (the prototype's IDLE.w) and the Refusal's coming-apart / flash. */
+    w: 0,
+    loose: 0,
+    flash: 0,
+    /** The slam fired this step (for the behaviour's ring, flash and shake), once. */
+    slam: false,
+  };
 
   constructor(seed: number) {
     this.rand = mulberry(seed ^ 0x55524931);
+    this.irand = mulberry(seed ^ 0x49444c45);
     this.pose = {
       hx: 0,
       hy: 0,
@@ -385,6 +442,128 @@ export class UriKinetics {
     this.fistVel.R = [0, 0];
     this.rand = mulberry(seed ^ 0x55524931);
     this.pendingImpact = null;
+    this.irand = mulberry(seed ^ 0x49444c45);
+    Object.assign(this.idle, {
+      ref0: -1,
+      nextRef: URI_IDLE.firstRefusal,
+      slamDone: false,
+      clenchL: -9,
+      clenchR: -9,
+      nextClench: URI_IDLE.firstClench,
+      w: 0,
+      loose: 0,
+      flash: 0,
+      slam: false,
+    });
+  }
+
+  /** Seconds since the current Refusal began (−1 if none). */
+  get refT(): number {
+    return this.idle.ref0 >= 0 ? this.t - this.idle.ref0 : -1;
+  }
+
+  /** The Refusal's slam fired since the last call (the behaviour's ring, flash and shake), once. */
+  takeRefusalSlam(): boolean {
+    const s = this.idle.slam;
+    this.idle.slam = false;
+    return s;
+  }
+
+  /**
+   * The idle's clocks, once per substep before the physics (the prototype's `idleTick`): a move ends the Refusal; at rest a
+   * Refusal and the clenches start on their own; the Refusal's coming-apart, flash and slam impulse.
+   */
+  private idleTick(t: number): void {
+    const I = this.idle;
+    if (!this.idleOn) {
+      I.ref0 = -1;
+      I.loose = 0;
+      I.flash = 0;
+      return;
+    }
+    if (this.cur) I.ref0 = -1;
+    else {
+      if (I.ref0 < 0 && t > I.nextRef) {
+        I.ref0 = t;
+        I.slamDone = false;
+        I.nextRef = t + URI_IDLE.refusalEvery + this.irand() * URI_IDLE.refusalSpan;
+      }
+      if (t > I.nextClench && I.ref0 < 0) {
+        if (this.irand() < 0.5) I.clenchL = t;
+        else I.clenchR = t;
+        I.nextClench = t + URI_IDLE.clenchEvery + this.irand() * URI_IDLE.clenchSpan;
+      }
+    }
+    const R = this.refT;
+    I.loose = uriLoose(R);
+    I.flash = uriFlash(R);
+    if (R >= 2.1 && !I.slamDone) {
+      // the field slams everything back together
+      I.slamDone = true;
+      I.slam = true;
+      this.loopS.br.v += 5;
+      this.loopS.l.v -= 2;
+      this.loopS.r.v -= 2;
+      this.coreS.vy -= 30;
+      this.L.hy.v -= 18;
+    }
+    if (R > 5.6) I.ref0 = -1;
+  }
+
+  /**
+   * The idle's goals at rest (the prototype's `idleGoals`): the weight shifting side to side with the root dipping on each
+   * side and the arks rolling with it, the guard (the arm on the opponent's side a little forward, never mirrored), the
+   * clench, and the Refusal's loosening, slam and guard.
+   */
+  private idleGoals(t: number, G: Goals): void {
+    const I = this.idle;
+    const d = this.targetVec().x >= 0 ? 1 : -1;
+    const ps = (t * 2 * Math.PI) / URI_IDLE.period;
+    const w = DMath.sin(ps);
+    I.w = w;
+    const R = this.refT;
+    const lo = R >= 0 && R < 2.1 ? sst(0, 1.6, R) : 0;
+    const guard = R >= 2.1 && R < 5.2 ? 1 - sst(4.3, 5.2, R) : 0;
+    const k = (1 - lo) * (1 - guard * 0.7);
+    G.hx = (4 * w + 3 * d) * k + guard * 6 * d;
+    G.hy = -1.6 * DMath.cos(2 * ps) * k + lo * 5 - guard * 2;
+    G.ha = 1.2 * D * w * k;
+    G.ta = (2.5 * w * k + 2 * d + guard * 3 * d) * D - lo * 3 * D * d;
+    G.daR = (3.5 * w + 1.5) * D * k + lo * 6 * D;
+    G.daL = (3.5 * w - 1.5) * D * k - lo * 6 * D;
+    G.dxR = 1.5 * w * k + lo * 4;
+    G.dxL = 1.5 * w * k - lo * 4;
+    const b1 = DMath.sin(ps * 2 + 0.6);
+    const b2 = DMath.sin(ps * 2 + 1.6);
+    const lead: Triple = [
+      (-10 - guard * 16 + 2.5 * b1 * k + lo * 16) * d * D,
+      (-12 - guard * 18 + 3 * b1 * k + lo * 14) * d * D,
+      (-4 + lo * 10) * d * D,
+    ];
+    const rear: Triple = [
+      (6 + guard * 5 + 2 * b2 * k - lo * 10) * d * D,
+      (4 + guard * 7 + 2.5 * b2 * k - lo * 8) * d * D,
+      0,
+    ];
+    if (d > 0) {
+      G.authR = lead;
+      G.authL = rear;
+    } else {
+      G.authL = lead;
+      G.authR = rear;
+    }
+    const clench = (c0: number): number => {
+      const u = t - c0;
+      return u < 0.3 ? 1.14 - 0.28 * sst(0, 0.3, u) : u < 1.1 ? 0.86 : u < 2.4 ? 0.86 + 0.28 * sst(1.1, 2.4, u) : 1.14;
+    };
+    G.cL = clench(I.clenchL);
+    G.cR = clench(I.clenchR);
+    if (lo > 0) G.cL = G.cR = 1.14 + 0.15 * lo;
+    if (R >= 2.1 && R < 3.5) {
+      G.cL = G.cR = 0.76;
+      G.km = { cL: 3, cR: 3, hx: 1.3, hy: 1.3, ta: 1.2 };
+    }
+    G.ikw = 0;
   }
 
   /* ---------------------------------------------------------------------------------------------- *
@@ -413,6 +592,10 @@ export class UriKinetics {
    * (spec §5). The links keep their state: a move begun during a taper grows out of the current motion (spec §6.3).
    */
   begin(name: UriMoveName): void {
+    // a move cancels the Refusal at once (the links are springs: nothing jumps)
+    this.idle.ref0 = -1;
+    this.idle.loose = 0;
+    this.idle.flash = 0;
     const tv = this.targetVec();
     const dir: 1 | -1 = tv.x >= 0 ? 1 : -1;
     this.cur = {
@@ -447,6 +630,7 @@ export class UriKinetics {
     const n = Math.max(1, Math.round(dt * URI_KINETICS.hz));
     const h = dt / n;
     for (let k = 0; k < n; k++) {
+      this.idleTick(this.t);
       this.physics(this.t, h);
       this.trackFists(h);
     }
@@ -507,6 +691,11 @@ export class UriKinetics {
       : null;
     out.spread.L = this.L.cL.x;
     out.spread.R = this.L.cR.x;
+    const iv = (out.idle ??= { on: false, refT: -1, loose: 0, flash: 0 });
+    iv.on = this.idleOn;
+    iv.refT = this.refT;
+    iv.loose = this.idle.loose;
+    iv.flash = this.idle.flash;
     return out;
   }
 
@@ -624,7 +813,10 @@ export class UriKinetics {
       phase: null,
     };
     const cur = this.cur;
-    if (!cur) return G;
+    if (!cur) {
+      if (this.idleOn) this.idleGoals(t, G);
+      return G;
+    }
     const M = URI_MOVES[cur.name];
     let ph = M[cur.ph]!;
     // (no tolerance on purpose: like the oracle, a phase ends on the first tick whose float time has passed its duration)
@@ -641,6 +833,7 @@ export class UriKinetics {
       cur.phT = t;
       if (cur.ph >= M.length) {
         this.cur = null;
+        if (this.idleOn) this.idleGoals(t, G);
         return G;
       }
       ph = M[cur.ph]!;
@@ -933,7 +1126,13 @@ export class UriKinetics {
         Math.max(0, corrX * side * 1.1) +
         Math.abs(L.ta.v) * 0.4 +
         (curName === 'slam' && (phn === 'rise' || phn === 'apex') ? 1.2 : 0) +
-        (curName === 'upper' && phn === 'launch' ? 1.1 : 0);
+        (curName === 'upper' && phn === 'launch' ? 1.1 : 0) +
+        // the idle: the loaded side's pylon burns harder; both flare for the Refusal's slam
+        (!this.cur && this.idleOn
+          ? Math.max(0, this.idle.w * side) * 0.55 +
+            (this.refT > 1.7 && this.refT < 3.6 ? 1.7 : 0) -
+            this.idle.loose * 0.35
+          : 0);
       p.th += (want * pyEff[s] * TU.thrust - p.th) * Math.min(1, dt * 5);
       p.ang += (-corrX * side * 0.25 - p.ang) * Math.min(1, dt * 6);
     }
@@ -962,16 +1161,27 @@ export class UriKinetics {
     const tapering = phn2 === 'taper' || !this.cur;
     const lk = tapering ? 20 : 40;
     const lc = tapering ? 3.2 : 6;
+    // the idle: the lobe on the loaded side stretches; both thin as the Refusal loosens
+    const idleLobe = !this.cur && this.idleOn ? this.idle.w * 0.07 : 0;
+    const idleThin = !this.cur && this.idleOn ? this.idle.loose * 0.12 : 0;
     this.springTo(
       LP.r,
-      slamRise ? 0.82 : loading ? 0.93 : 1 + Math.min(0.3, loadR) - Math.min(0.14, loadL * 0.5),
+      slamRise
+        ? 0.82
+        : loading
+          ? 0.93
+          : 1 + Math.min(0.3, loadR) - Math.min(0.14, loadL * 0.5) + idleLobe - idleThin,
       lk,
       lc * (1 / dmgLoop),
       dt,
     );
     this.springTo(
       LP.l,
-      slamRise ? 0.82 : loading ? 0.93 : 1 + Math.min(0.3, loadL) - Math.min(0.14, loadR * 0.5),
+      slamRise
+        ? 0.82
+        : loading
+          ? 0.93
+          : 1 + Math.min(0.3, loadL) - Math.min(0.14, loadR * 0.5) - idleLobe - idleThin,
       lk,
       lc * (1 / dmgLoop),
       dt,
@@ -990,7 +1200,14 @@ export class UriKinetics {
       tapering ? 2.6 : 4,
       dt,
     );
-    this.springTo(LP.br, 1 + Math.min(0.6, Math.abs(Larm) * 0.003), 20, 6, dt);
+    const rT = this.refT;
+    this.springTo(
+      LP.br,
+      1 + Math.min(0.6, Math.abs(Larm) * 0.003) + (rT > 1.6 && rT < 3.2 ? 0.75 : 0) - this.idle.loose * 0.15,
+      20,
+      6,
+      dt,
+    );
     this.stress = Math.min(
       1,
       Math.abs(LP.l.x - 1) + Math.abs(LP.r.x - 1) + Math.abs(LP.sh.x) / 20 + Math.abs(LP.vt.x - 1),
@@ -1024,9 +1241,11 @@ export class UriKinetics {
         M.x = ax + (ex / ed) * MN.trail;
         M.y = ay + (ey / ed) * MN.trail;
       }
-      // it keeps facing the way the body faces, a beat late: a head, not a ball
+      // it keeps facing the way the body faces, a beat late: a head, not a ball (with the idle on, also toward the
+      // opponent, during moves too: the approved build tests IDLE.on, not the move)
+      const look = this.idleOn ? Math.max(-0.22, Math.min(0.22, (this.target[0] - URI_CM0[0]) / 500)) : 0;
       M.va +=
-        (MN.facingK * (B.torso.a * MN.facing + M.vx * 0.004 - M.a) -
+        (MN.facingK * (B.torso.a * MN.facing + M.vx * 0.004 + look - M.a) -
           2 * MN.facingZeta * Math.sqrt(MN.facingK) * M.va) *
         dt;
       M.a += M.va * dt;
@@ -1137,6 +1356,14 @@ export class UriKinetics {
     mix(this.pyl.L.th);
     mix(this.pyl.R.th);
     mix(this.hp);
+    const I = this.idle;
+    mix(this.idleOn ? 1 : 0);
+    mix(I.ref0);
+    mix(I.nextRef);
+    mix(I.clenchL);
+    mix(I.clenchR);
+    mix(I.nextClench);
+    mix((I.slamDone ? 1 : 0) + (I.slam ? 2 : 0));
     return h >>> 0;
   }
 }

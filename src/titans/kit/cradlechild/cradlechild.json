@@ -1,0 +1,1194 @@
+{
+  "id": "cradlechild",
+  "name": "Cradle Child",
+  "nameKo": "요람의 아이",
+  "epithet": "The Newcomer",
+  "attributes": {
+    "mass": 5,
+    "cohesion": 5,
+    "heat": 5,
+    "gravity": 4,
+    "reach": 5,
+    "tempo": 6
+  },
+  "resource": {
+    "id": "fragments",
+    "name": "Lobes",
+    "nameKo": "혹",
+    "max": 5,
+    "start": 5,
+    "display": "pips"
+  },
+  "destruction": "KINETIC",
+  "passive": {
+    "name": "Swell",
+    "text": "Its signature move swells it: for two seconds every blow it lands hits harder."
+  },
+  "failureMode": {
+    "name": "Deflate",
+    "text": "Below about a third of its mass it sags: slower, and easier to tear."
+  },
+  "materials": [
+    {
+      "key": "tissue",
+      "base": "tendril",
+      "visual": {
+        "ramp": ["#2b2630", "#4b454a", "#716b66", "#969085", "#b7b1a2", "#d2cdbc", "#e6e2d1", "#f5f2e5"],
+        "emissive": 0,
+        "char": "#4b454a",
+        "crack": "#2b2630",
+        "debris": "#b7b1a2"
+      },
+      "physics": {
+        "density": 0.55,
+        "toughness": 0.55
+      }
+    },
+    {
+      "key": "flesh",
+      "base": "tendril",
+      "visual": {
+        "ramp": ["#3a1f2a", "#5e3341", "#874d59", "#ab6d75", "#c98f93", "#e0b1b0", "#f0d1cc"],
+        "emissive": 0,
+        "char": "#5e3341",
+        "crack": "#3a1f2a",
+        "debris": "#ab6d75"
+      }
+    },
+    {
+      "key": "vein",
+      "base": "tendril",
+      "visual": {
+        "ramp": ["#24080f", "#3e0e1b", "#5a1626", "#762032", "#923040", "#ac4652"],
+        "emissive": 0,
+        "char": "#3e0e1b",
+        "crack": "#24080f",
+        "debris": "#762032"
+      }
+    },
+    {
+      "key": "bone",
+      "base": "rock",
+      "visual": {
+        "ramp": ["#3a3129", "#5e5345", "#857965", "#aba089", "#cdc4ab", "#e6dfc9", "#f9f5e7"],
+        "emissive": 0,
+        "char": "#5e5345",
+        "crack": "#3a3129",
+        "debris": "#aba089"
+      },
+      "physics": {
+        "toughness": 0.8
+      }
+    },
+    {
+      "key": "membrane",
+      "base": "tendril",
+      "visual": {
+        "ramp": ["#3a2b37", "#5c4755", "#836b77", "#a8919b", "#c8b3b9", "#e2d3d3", "#f5ece9"],
+        "emissive": 0,
+        "char": "#5c4755",
+        "crack": "#3a2b37",
+        "debris": "#a8919b"
+      },
+      "physics": {
+        "density": 0.4,
+        "toughness": 0.4
+      }
+    },
+    {
+      "key": "galaxy",
+      "base": "crystal",
+      "visual": {
+        "ramp": ["#160e2c", "#2c1e58", "#46348a", "#6a56b8", "#8a7ad6", "#a8a6ea", "#cad6f6", "#f0f4ff"],
+        "emissive": 30,
+        "char": "#2c1e58",
+        "crack": "#160e2c",
+        "debris": "#8a7ad6"
+      }
+    },
+    {
+      "key": "star",
+      "base": "eye",
+      "visual": {
+        "ramp": ["#5a3410", "#94601c", "#c8902e", "#ecbe56", "#f8dc8e", "#fff4d0"],
+        "emissive": 50,
+        "char": "#94601c",
+        "crack": "#5a3410",
+        "debris": "#ecbe56"
+      }
+    },
+    {
+      "key": "core",
+      "base": "core",
+      "visual": {
+        "ramp": ["#4a2408", "#86480e", "#c07a1c", "#e8aa38", "#f8d470", "#fff0b8"],
+        "emissive": 60,
+        "char": "#86480e",
+        "crack": "#4a2408",
+        "debris": "#e8aa38"
+      },
+      "physics": {
+        "density": 3,
+        "toughness": 0.9
+      }
+    }
+  ],
+  "art": {
+    "w": 200,
+    "h": 252,
+    "coreX": 100,
+    "coreY": 90,
+    "coreRadius": 4,
+    "params": {
+      "cx": 100,
+      "profile": [
+        [37, 0],
+        [44, 5],
+        [58, 9],
+        [68, 14],
+        [76, 20],
+        [92, 23],
+        [108, 21],
+        [130, 18],
+        [150, 16],
+        [164, 12],
+        [176, 7],
+        [188, 3]
+      ],
+      "hood": {
+        "top": 38,
+        "base": 74,
+        "ribs": 5
+      },
+      "crown": {
+        "cy": 50,
+        "rings": [
+          {
+            "r": 21,
+            "dy": 0,
+            "w": 1.5,
+            "knobs": [-2.25, -0.9, 0.5, 2.65]
+          },
+          {
+            "r": 33,
+            "dy": -2,
+            "w": 2.3,
+            "gap": [-1.05, -0.6],
+            "knobs": [-2.75, -2.0, 0.3, 2.9]
+          }
+        ],
+        "spire": 6,
+        "bar": {
+          "y": 18,
+          "half": 7
+        }
+      },
+      "lobes": [
+        {
+          "root": [21, 80],
+          "tip": [78, 36],
+          "outer": [74, 100],
+          "bottom": [36, 114],
+          "sag": [4, 6, 3],
+          "galaxy": [54, 77, 12]
+        }
+      ],
+      "cavity": {
+        "y": 90,
+        "rx": 17,
+        "ry": 19,
+        "organ": 15,
+        "core": 4
+      },
+      "chambers": [
+        [0, 121, 4.5, 7.5],
+        [-1, 143, 4.5, 7.5]
+      ],
+      "scar": {
+        "y": 162,
+        "r": 4
+      },
+      "limbs": [
+        {
+          "pts": [
+            [-14, 160],
+            [-24, 174],
+            [-25, 192],
+            [-17, 211]
+          ],
+          "r0": 4.6,
+          "r1": 1.7
+        },
+        {
+          "pts": [
+            [14, 158],
+            [27, 174],
+            [30, 190],
+            [24, 204],
+            [16, 212]
+          ],
+          "r0": 4.6,
+          "r1": 1.6
+        }
+      ],
+      "chains": [
+        {
+          "pts": [
+            [2, 168],
+            [6, 188],
+            [7, 199],
+            [1, 213],
+            [-4, 224],
+            [-2, 235],
+            [1, 243]
+          ],
+          "pods": [
+            [7, 199, 4.5, 7],
+            [-4, 224, 4.5, 7]
+          ],
+          "bead": 5
+        },
+        {
+          "pts": [
+            [-21, 184],
+            [-14, 196],
+            [-12, 208],
+            [-11, 218]
+          ],
+          "pods": [[-12, 210, 3, 4.5]],
+          "bead": 5
+        },
+        {
+          "pts": [
+            [21, 204],
+            [21, 216],
+            [18, 230]
+          ],
+          "pods": [[18, 229, 2.6, 4]],
+          "bead": 4.5
+        }
+      ],
+      "webs": [
+        {
+          "pts": [
+            [-6, 164],
+            [-18, 168],
+            [-24, 186],
+            [-18, 200],
+            [-10, 192],
+            [-4, 178]
+          ],
+          "mirror": false
+        },
+        {
+          "pts": [
+            [6, 164],
+            [20, 166],
+            [29, 184],
+            [22, 200],
+            [12, 194],
+            [6, 180]
+          ],
+          "mirror": false
+        }
+      ]
+    }
+  },
+  "moves": [
+    {
+      "id": "cradlechild.slam",
+      "slot": "strike",
+      "name": "Slam",
+      "nameKo": "강타",
+      "frame": {
+        "startup": 8,
+        "active": 8,
+        "recovery": 16,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 6
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "check",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "point",
+                "ox": 97.5,
+                "oy": -65,
+                "r": 43.9
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 260,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 6,
+                  "penetration": 6,
+                  "scatter": 1
+                }
+              },
+              "knockback": {
+                "x": 260,
+                "y": -40
+              },
+              "guardPressure": 0.25
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 380,
+              "iy": -60,
+              "damp": 0.12
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "check",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "point",
+                "ox": 97.5,
+                "oy": -9.7,
+                "r": 43.9
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 260,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 6,
+                  "penetration": 6,
+                  "scatter": 1
+                }
+              },
+              "knockback": {
+                "x": 260,
+                "y": -40
+              },
+              "guardPressure": 0.25
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 380,
+              "iy": 0,
+              "damp": 0.12
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "check",
+              "from": 0,
+              "to": 8,
+              "shape": {
+                "kind": "point",
+                "ox": 97.5,
+                "oy": 45.5,
+                "r": 43.9
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 260,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 6,
+                  "penetration": 6,
+                  "scatter": 1
+                }
+              },
+              "knockback": {
+                "x": 260,
+                "y": -40
+              },
+              "guardPressure": 0.25
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 380,
+              "iy": 60,
+              "damp": 0.12
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": [],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -5
+          },
+          "active": {
+            "lean": 8
+          }
+        }
+      }
+    },
+    {
+      "id": "cradlechild.engulf",
+      "slot": "crush",
+      "name": "Engulf",
+      "nameKo": "삼키기",
+      "frame": {
+        "startup": 26,
+        "active": 10,
+        "recovery": 44,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 13
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "ram",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 94.3,
+                "oy": -55.2,
+                "r": 58.5
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 1147.5,
+                "duration": 1,
+                "flags": 8,
+                "params": {
+                  "embed": 6,
+                  "embedDelay": 40,
+                  "crater": 20,
+                  "penetration": 22,
+                  "scatter": 1.3
+                }
+              },
+              "knockback": {
+                "x": 820,
+                "y": -120
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -140,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 26,
+              "ix": 700,
+              "iy": -110,
+              "damp": 0.05
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "ram",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 94.3,
+                "oy": -6.5,
+                "r": 58.5
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 1147.5,
+                "duration": 1,
+                "flags": 8,
+                "params": {
+                  "embed": 6,
+                  "embedDelay": 40,
+                  "crater": 20,
+                  "penetration": 22,
+                  "scatter": 1.3
+                }
+              },
+              "knockback": {
+                "x": 820,
+                "y": -120
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -140,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 26,
+              "ix": 700,
+              "iy": 0,
+              "damp": 0.05
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "ram",
+              "from": 0,
+              "to": 10,
+              "shape": {
+                "kind": "point",
+                "ox": 94.3,
+                "oy": 42.3,
+                "r": 58.5
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 1147.5,
+                "duration": 1,
+                "flags": 8,
+                "params": {
+                  "embed": 6,
+                  "embedDelay": 40,
+                  "crater": 20,
+                  "penetration": 22,
+                  "scatter": 1.3
+                }
+              },
+              "knockback": {
+                "x": 820,
+                "y": -120
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": -140,
+              "iy": 0,
+              "damp": 0.3
+            },
+            {
+              "at": 26,
+              "ix": 700,
+              "iy": 110,
+              "damp": 0.05
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["heavy"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -9
+          },
+          "active": {
+            "lean": 13
+          },
+          "recovery": {
+            "lean": 4
+          }
+        }
+      }
+    },
+    {
+      "id": "cradlechild.slither",
+      "slot": "surge",
+      "name": "Slither",
+      "nameKo": "미끄러짐",
+      "frame": {
+        "startup": 2,
+        "active": 10,
+        "recovery": 8,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 860,
+              "iy": 0,
+              "damp": 0.02
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 860,
+              "iy": 0,
+              "damp": 0.02
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 860,
+              "iy": 0,
+              "damp": 0.02
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "intangible": [1, 9],
+      "tags": ["dash"],
+      "extra": {}
+    },
+    {
+      "id": "cradlechild.swell",
+      "slot": "signature",
+      "name": "Swell",
+      "nameKo": "부풀기",
+      "frame": {
+        "startup": 16,
+        "active": 12,
+        "recovery": 24,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 5
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "swell",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 29.3,
+                "r1": 94.3
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 380,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "scatter": 1.5,
+                  "crater": 4
+                }
+              },
+              "knockback": {
+                "x": 260,
+                "y": -40
+              },
+              "guardPressure": 0.45
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.1
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "swell",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 29.3,
+                "r1": 94.3
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 380,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "scatter": 1.5,
+                  "crater": 4
+                }
+              },
+              "knockback": {
+                "x": 260,
+                "y": -40
+              },
+              "guardPressure": 0.45
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.1
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "swell",
+              "from": 0,
+              "to": 6,
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 29.3,
+                "r1": 94.3
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 380,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "scatter": 1.5,
+                  "crater": 4
+                }
+              },
+              "knockback": {
+                "x": 260,
+                "y": -40
+              },
+              "guardPressure": 0.45
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.1
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["burst"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -4
+          },
+          "active": {
+            "lean": 2
+          }
+        },
+        "weight": "medium"
+      }
+    },
+    {
+      "id": "cradlechild.bloom",
+      "slot": "ultimate",
+      "name": "Bloom",
+      "nameKo": "만개",
+      "frame": {
+        "startup": 96,
+        "active": 84,
+        "recovery": 60,
+        "cancelWindow": 0.4,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [
+            {
+              "id": "storm",
+              "from": 8,
+              "to": 60,
+              "shape": {
+                "kind": "line",
+                "ox0": 48.8,
+                "oy0": 0,
+                "ox1": 536.3,
+                "oy1": 0,
+                "width": 195
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 70,
+                "duration": 1,
+                "flags": 1,
+                "params": {
+                  "scatter": 1.2,
+                  "crater": 5,
+                  "penetration": 8
+                }
+              },
+              "knockback": {
+                "x": -35,
+                "y": -6
+              },
+              "guardPressure": 0.3,
+              "rehit": 6
+            },
+            {
+              "id": "slam",
+              "from": 64,
+              "to": 74,
+              "shape": {
+                "kind": "point",
+                "ox": 100.8,
+                "oy": -6.5,
+                "r": 74.8
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 1650,
+                "duration": 1,
+                "flags": 40,
+                "params": {
+                  "embed": 10,
+                  "embedDelay": 36,
+                  "crater": 28,
+                  "penetration": 30,
+                  "scatter": 1.6
+                }
+              },
+              "knockback": {
+                "x": 900,
+                "y": -160
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            },
+            {
+              "at": 64,
+              "ix": 620,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        },
+        "forward": {
+          "hitboxes": [
+            {
+              "id": "storm",
+              "from": 8,
+              "to": 60,
+              "shape": {
+                "kind": "line",
+                "ox0": 48.8,
+                "oy0": 0,
+                "ox1": 536.3,
+                "oy1": 0,
+                "width": 195
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 70,
+                "duration": 1,
+                "flags": 1,
+                "params": {
+                  "scatter": 1.2,
+                  "crater": 5,
+                  "penetration": 8
+                }
+              },
+              "knockback": {
+                "x": -35,
+                "y": -6
+              },
+              "guardPressure": 0.3,
+              "rehit": 6
+            },
+            {
+              "id": "slam",
+              "from": 64,
+              "to": 74,
+              "shape": {
+                "kind": "point",
+                "ox": 100.8,
+                "oy": -6.5,
+                "r": 74.8
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 1650,
+                "duration": 1,
+                "flags": 40,
+                "params": {
+                  "embed": 10,
+                  "embedDelay": 36,
+                  "crater": 28,
+                  "penetration": 30,
+                  "scatter": 1.6
+                }
+              },
+              "knockback": {
+                "x": 900,
+                "y": -160
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            },
+            {
+              "at": 64,
+              "ix": 620,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        },
+        "down": {
+          "hitboxes": [
+            {
+              "id": "storm",
+              "from": 8,
+              "to": 60,
+              "shape": {
+                "kind": "line",
+                "ox0": 48.8,
+                "oy0": 0,
+                "ox1": 536.3,
+                "oy1": 0,
+                "width": 195
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 70,
+                "duration": 1,
+                "flags": 1,
+                "params": {
+                  "scatter": 1.2,
+                  "crater": 5,
+                  "penetration": 8
+                }
+              },
+              "knockback": {
+                "x": -35,
+                "y": -6
+              },
+              "guardPressure": 0.3,
+              "rehit": 6
+            },
+            {
+              "id": "slam",
+              "from": 64,
+              "to": 74,
+              "shape": {
+                "kind": "point",
+                "ox": 100.8,
+                "oy": -6.5,
+                "r": 74.8
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 1650,
+                "duration": 1,
+                "flags": 40,
+                "params": {
+                  "embed": 10,
+                  "embedDelay": 36,
+                  "crater": 28,
+                  "penetration": 30,
+                  "scatter": 1.6
+                }
+              },
+              "knockback": {
+                "x": 900,
+                "y": -160
+              },
+              "guardPressure": 1
+            }
+          ],
+          "movement": [
+            {
+              "at": 0,
+              "ix": 0,
+              "iy": 0,
+              "damp": 0.05
+            },
+            {
+              "at": 64,
+              "ix": 620,
+              "iy": 0,
+              "damp": 0.04
+            }
+          ]
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 1,
+      "tags": ["ultimate", "armor"],
+      "extra": {
+        "pose": {
+          "startup": {
+            "lean": -6
+          },
+          "active": {
+            "lean": 6
+          }
+        }
+      }
+    },
+    {
+      "id": "cradlechild.guard",
+      "slot": "guard",
+      "name": "Hide",
+      "nameKo": "움츠리기",
+      "frame": {
+        "startup": 3,
+        "active": 0,
+        "recovery": 5,
+        "cancelWindow": 0,
+        "chargeMax": 0,
+        "hitstop": 0
+      },
+      "variants": {
+        "up": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "forward": {
+          "hitboxes": [],
+          "movement": []
+        },
+        "down": {
+          "hitboxes": [],
+          "movement": []
+        }
+      },
+      "resourceCost": 0,
+      "meterCost": 0,
+      "tags": ["guard"],
+      "extra": {
+        "shell": {
+          "absorb": {
+            "KINETIC": 0.75,
+            "CRUSH": 0.5,
+            "FRACTURE": 0.4,
+            "THERMAL": 0.1,
+            "TIDAL": 0.2,
+            "ASSIMILATION": 0.25
+          }
+        }
+      }
+    }
+  ],
+  "ai": {
+    "style": "A plain brawler: walks in, slams, swells before it engulfs.",
+    "weights": {
+      "aggression": 0.6,
+      "patience": 0.3,
+      "zoning": 0.25,
+      "retreat": 0.4,
+      "trap": 0.1,
+      "punish": 0.65,
+      "gaze": 0
+    }
+  },
+  "ui": {
+    "accent": "#fbe0f6",
+    "accent2": "#f2c26a",
+    "tagline": "It is never finished being born."
+  },
+  "feel": {
+    "bob": {
+      "amp": 0.7,
+      "period": 2.6
+    },
+    "sway": {
+      "amp": 0.4,
+      "period": 3.4
+    },
+    "fx": {
+      "kind": "dust",
+      "ramp": ["#f1ece0", "#c9a8ae", "#6f5a66"],
+      "perHundredPx": 7,
+      "size": 1,
+      "life": [14, 30],
+      "spread": 30,
+      "behind": 24,
+      "rise": 10
+    }
+  },
+  "kit": {
+    "template": "blob",
+    "size": "large",
+    "stage": "nursery",
+    "light": {
+      "c": [0.95, 0.78, 0.5],
+      "radius": 120,
+      "base": 0.22
+    },
+    "voice": {
+      "pitch": 30,
+      "grit": 0.25,
+      "ring": 0.6,
+      "wet": 0.35
+    },
+    "site": {
+      "file": "cradlechild",
+      "essence": "incarnation",
+      "name": "Cradle Child",
+      "ko": "요람의 아이",
+      "lore": "The Cradle did not carry the Child. It taught the universe how to survive its birth.",
+      "mech": {
+        "title": "Reassignment.",
+        "text": "Catches the arena's loose matter, makes it part of its body, and fires it back changed."
+      },
+      "accent": "#fbe0f6",
+      "accent2": "#f2c26a",
+      "portrait": "x1",
+      "clip": false,
+      "tag": "It is never finished being born."
+    },
+    "homage": "Nods: sacred iconography (the halo, the seraph's radiating form), cosmic horror of incomprehensible scale, embryology; ancestor the Cradle. Its own: a vertical incarnation with a crown of bone arcs, paired galaxy-bearing membrane lobes and pearl tissue over rose flesh; no feathered wings or angel shorthand beyond the radiating form, no face, eyes or mouth, no arms or human torso, no fetus imagery, a few heavy strands instead of tentacles.",
+    "tier": 3,
+    "wip": true
+  }
+}

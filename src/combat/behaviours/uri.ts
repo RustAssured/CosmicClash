@@ -35,7 +35,7 @@ import {
   type UriPose,
 } from '@/titans/uri/rig';
 import type { RenderLayerLit } from '@/render/unified';
-import type { UriLiveFx, UriPylon } from '@/render/uriLive';
+import { URI_IDLE_PARTS, type UriIdleFx, type UriLiveFx, type UriPylon } from '@/render/uriLive';
 import { URI_MAT } from '@/titans/uri/maps';
 import { uriGridOf, type UriGrid } from '@/titans/uri/scale';
 import { Behaviour } from '../behaviour';
@@ -181,6 +181,8 @@ const BREAK = {
 } as const;
 /** A neck failing (the oracle's `hitAt`): shake = 8; the hanging chain drifts at (U − 0.5)·1.2, 0.3 + 0.3·U px per frame. */
 const NECK_SHAKE = 8;
+/** The Refusal's slam (the living idle prototype: shake ≥ 4). */
+const REFUSAL_SHAKE = 4;
 /** A limb that lost half of itself goes in pieces with tear power 1.2 (the oracle's `shatterPart(P, x, y, 1.2)`). */
 const SHATTER_POWER = 1.2;
 /**
@@ -230,6 +232,8 @@ export class UriBehaviour extends Behaviour {
     moon: null,
     spread: { L: 1.14, R: 1.14 },
   };
+  /** The living idle (idle handover specs/uri.md) is on; tests of the bare rig layout turn it off. */
+  idle = true;
   /** The tick the kinetic system last advanced (placeRegions may run twice in a tick). */
   private kinTick = -1;
   /** Where every part is (reference coordinates), and the reference → world offset of this tick. */
@@ -260,6 +264,21 @@ export class UriBehaviour extends Behaviour {
     loop: { l: 1, r: 1, sh: 0, vt: 1, br: 1, stress: 0, gain: 1 },
     afterZ: URI_ORDER.indexOf('chamber'),
     fistSpread: [1.14, 1.14],
+  };
+  /** The living idle's drawing data (render only, refreshed every frame). */
+  private readonly idleFx: UriIdleFx = {
+    on: false,
+    t: 0,
+    refT: -1,
+    loose: 0,
+    flash: 0,
+    bx: 0,
+    by: 0,
+    ox: 0,
+    oy: 0,
+    scale: SC,
+    parts: new Float32Array(URI_IDLE_PARTS * 4),
+    slot: 0,
   };
   private untune: (() => void) | null = null;
   /** Atlas placement of every region part (fixed: a regrown part goes back where it was). */
@@ -387,6 +406,8 @@ export class UriBehaviour extends Behaviour {
     for (const p of rig.parts) this.mass.set(p.key, massOf(p.map));
     this.packPlanes(rig);
     this.kin = new UriKinetics(f.seed);
+    // the living idle (idle handover specs/uri.md): on in the game (the oracle-parity harness keeps it off)
+    this.kin.idleOn = true;
     this.kin.integrity = (k) => this.integ.get(k) ?? 1;
     this.kin.gone = (k) => this.byKey.get(k)!.lost;
     this.resetDamage();
@@ -585,9 +606,18 @@ export class UriBehaviour extends Behaviour {
    * dropped so the body is not held twice; missed: the body keeps its own hold and the oracle's shake.
    */
   override resolveVolumes(_ctx: FighterTickCtx): void {
+    const f = this.f;
+    // the Refusal's slam (the living idle): the field snaps everything back together at the cores' barycentre
+    if (this.kin.takeRefusalSlam() && !this.broken) {
+      const x = this.ox + SC * (this.hot.x + this.cold.x) * 0.5;
+      const y = this.oy + SC * (this.hot.y + this.cold.y) * 0.5;
+      f.events.push({ t: 'shockwave', x, y, strength: 0.6, radius: 160, hue: -1 });
+      // (the prototype's flash is small and short: r 4 px growing 4 a frame, gone in ~4 frames)
+      f.events.push({ t: 'flash', amount: 0.25, x, y });
+      f.events.push({ t: 'shake', dirX: 0, dirY: 1, amp: REFUSAL_SHAKE });
+    }
     const imp = this.kin.takeImpact();
     if (!imp || this.broken) return;
-    const f = this.f;
     const mv = MOVE_OF[imp.move];
     const def = f.moveById(mv.id);
     const blow = def?.extra?.['blow'] as UriBlow | undefined;
@@ -653,6 +683,8 @@ export class UriBehaviour extends Behaviour {
       const fv = f.foe?.view;
       if (fv) this.kin.target = [(fv.x - this.ox) / SC, (fv.y - this.oy) / SC];
       this.refreshIntegrity();
+      // broken apart (or going down): no idle
+      this.kin.idleOn = this.idle && !this.broken;
       this.kin.step(1 / 60);
       this.pose = this.kin.currentPose();
       this.kin.view(this.kview);
@@ -1100,6 +1132,32 @@ export class UriBehaviour extends Behaviour {
       p.th = this.byKey.get(k)!.lost ? 0 : kv.pylon[s].th;
     }
     live.pylons = this.pylons;
+    // the living idle's drawing data (both atlases: the cities, the slit and the chunks; the live pass: loop, cores, specks)
+    const I = this.idleFx;
+    const iv = kv.idle;
+    I.on = !!iv?.on && !this.broken;
+    I.t = this.kin.t;
+    I.refT = iv?.refT ?? -1;
+    I.loose = iv?.loose ?? 0;
+    I.flash = iv?.flash ?? 0;
+    I.bx = this.ox + SC * (this.hot.x + this.cold.x) * 0.5;
+    I.by = this.oy + SC * (this.hot.y + this.cold.y) * 0.5;
+    I.ox = this.ox;
+    I.oy = this.oy;
+    I.slot = this.f.slot;
+    URI_PARTS.forEach((p, i) => {
+      const r = this.byKey.get(p.key);
+      const gone = p.key === URI_PRIMARY ? this.pelvisLost : !r || r.lost;
+      const g = grid(p.key);
+      const pl = this.places[p.key];
+      I.parts[i * 4] = this.ox + SC * pl.x;
+      I.parts[i * 4 + 1] = this.oy + SC * pl.y;
+      I.parts[i * 4 + 2] = gone ? 0 : g.w;
+      I.parts[i * 4 + 3] = gone ? 0 : g.h;
+    });
+    live.idle = I;
+    (this.front as RenderLayerLit).uriIdle = I;
+    (this.back as RenderLayerLit).uriIdle = I;
     (this.front as RenderLayerLit).uriLive = live;
     // the pelvis's wound cells in the body layer's shade plane
     const bm = this.f.body.map;

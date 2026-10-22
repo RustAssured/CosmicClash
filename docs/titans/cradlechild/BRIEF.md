@@ -1,4 +1,4 @@
-# CREATURE BRIEF: THE CRADLE CHILD / 요람의 아이
+# CREATURE BRIEF: CRADLE CHILD / 요람의 아이
 
 From WJ, 2026-10-15, built from his exchange about what the Cradle was preparing the universe for, three pieces of key art
 and the assessment session's notes. Not built yet: this is the brief the build starts from.
@@ -6,11 +6,12 @@ and the assessment session's notes. Not built yet: this is the brief the build s
 **Key art** (mood and silhouette references, not sprites to trace):
 - [keyart-tall.webp](keyart-tall.webp) and [keyart-wide.webp](keyart-wide.webp): the silhouette, the galaxy organs, the debris
   streams. Their burgundy is **not** the palette (see Palette).
-- WJ's third, pale version (pearl-white body, rose flesh, gold core) **is the palette direction**. It still needs saving here
-  as `keyart-pale.webp`.
+- [cradle child white.png](<cradle child white.png>), WJ's pale version (pearl-white body, rose flesh, gold core): **the
+  palette direction**.
 
-**Name:** THE CRADLE CHILD / 요람의 아이 (*yoram-ui ai*, "the cradle's child"). WJ's call: the Cradle's Korean name is
-태반체 ("placental body"). If the Child should rhyme with that, the option is **화신체** (*hwasinche*, "incarnation body").
+**Name:** CRADLE CHILD (English, WJ 2026-10-15: no "The") / 요람의 아이 (*yoram-ui ai*, "the cradle's child"). Korean still
+WJ's call: the Cradle's Korean name is 태반체 ("placental body"). If the Child should rhyme with that, the option is
+**화신체** (*hwasinche*, "incarnation body").
 
 **Essence:** incarnation
 
@@ -179,13 +180,36 @@ lobes as sails on slow drives, rig regions for the lobes and strands, persistent
 4. **Damage:** incarnation reversal (chunks revert as they detach, lobes lose alignment).
 5. **Card, voice, hover clip, checks** (`titan:check`: 25–75 % win rate, AI uses every move), then WJ plays it and ships.
 
-This is a Cradle-sized build: several sessions, not one.
+This is a Cradle-sized build: several sessions, not one. The unlock (below) is its own last step, after the titan itself
+plays well.
+
+## Role: a secret encounter that unlocks a roster titan (WJ, 2026-10-15)
+WJ wants it to be a surprise, and selectable. Both, in this order:
+
+1. **The surprise.** Finish a tournament (either mode, any difficulty) **playing as the Cradle**. After the final boss falls,
+   no victory screen: a story line (*"The Cradle's work is finished. Something answers."*), then Cradle Child arrives as an
+   extra, unannounced fight. Its stage: a new one later, or the Cradle's own until then.
+2. **The unlock.** Facing that fight is enough (WJ, 2026-10-15): play it to its end, win or lose (quitting midway doesn't
+   count), and Cradle Child is **selectable for good**. A loss doesn't end the run badly either: the tournament is already
+   won, so the encounter is a reward, not a final exam. Selectable in VS AI,
+   Training, Versus, both tournament modes, online. Remembered on the device, like the Mouth (`isMouthUnlocked` /
+   `setMouthUnlocked`, the tower's `lockedTitans` and `onUnlock`, D37). That machinery generalises from the Mouth to any
+   locked titan.
+3. **A second way in,** for players who never pick the Cradle: beat the Cradle **as an opponent** in CLASSIC without losing a
+   round, which triggers the same encounter. (Simpler alternative: finish any three tournaments.)
+4. **A tease (optional):** an unlit, unnamed silhouette card on the site, *"Something is being prepared."* Hidden from the
+   titan count until it is unlocked.
+
+**Practical rules:**
+- Until unlocked: out of the menus, the select screen and the COSMIC CLASH lineup (it is the encounter, not a rung).
+- **Online:** the unlock gates only the menus. If one player has it, they may play it, and the other side sees it.
+- **Testing:** like every new titan it starts as WIP (`?wip=cradlechild`, direct `?a=cradlechild` links), so nobody has to
+  play a tournament to test it. A dev link to trigger the encounter directly comes with the unlock step.
+- `titan:ship` today makes a titan public in the menus at once. A *secret* titan needs a "ships locked" variant:
+  public on the roster and in the encounter, selectable only after the unlock.
 
 ## Open questions for WJ
 1. Korean name: 요람의 아이 or 화신체?
-2. A roster titan (tier 4, a heavy), or a boss later? (Recommended: a roster titan. The Mouth is already the planned final
-   boss, D35.)
-3. Save the pale key art here as `keyart-pale.webp`.
 
 ## Why it is strong
 - **It pays off the Cradle's own card,** "it is not the child", so the lore grows inward instead of sideways.

@@ -21,7 +21,14 @@ import {
 } from 'three';
 import { hex, pb, pg, pr } from '@/contracts';
 import { unitQuad } from './gl';
-import { URI_CORE_RAMPS, coreSurface, uriLoopPixels, uriPlumePixels, type UriLiveFx } from './uriLive';
+import {
+  URI_CORE_RAMPS,
+  coreSurface,
+  uriLoopPixels,
+  uriPlumePixels,
+  uriSpeckPixels,
+  type UriLiveFx,
+} from './uriLive';
 
 /**
  * GPU half of 우리's live elements (see uriLive.ts): the loop / orbit pixels (instanced 1 px quads, back and front) and the two
@@ -31,6 +38,7 @@ import { URI_CORE_RAMPS, coreSurface, uriLoopPixels, uriPlumePixels, type UriLiv
  */
 
 const MAX_PX = 2048;
+const MAX_SPECKS = 128;
 
 const POINT_VERT = /* glsl */ `
 precision highp float;
@@ -56,6 +64,34 @@ void main() {
   oColor = vec4(vC, 1.0);
   oEmis = vec4(vC, 1.0);
   oId = vec4(uId.r, uId.g, 0.0, 1.0);
+}
+`;
+
+/** The idle's specks (uriSpeckPixels): 1 px, alpha = life, not emissive (the prototype draws its dust over the glow). */
+const SPECK_VERT = /* glsl */ `
+precision highp float;
+in vec3 position;
+in vec4 aP;     // x, y, r, g (0..255)
+in vec2 aBA;    // b, alpha
+uniform vec2 uRes;
+flat out vec4 vC;
+void main() {
+  vec2 p = aP.xy + position.xy;
+  vC = vec4(vec3(aP.zw, aBA.x) / 255.0, aBA.y);
+  gl_Position = vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0);
+}
+`;
+const SPECK_FRAG = /* glsl */ `
+precision highp float;
+uniform vec4 uId;
+flat in vec4 vC;
+layout(location = 0) out vec4 oColor;
+layout(location = 1) out vec4 oEmis;
+layout(location = 2) out vec4 oId;
+void main() {
+  oColor = vC;
+  oEmis = vec4(0.0, 0.0, 0.0, vC.a);
+  oId = vec4(0.0, 0.0, 0.0, 0.0);
 }
 `;
 
@@ -170,6 +206,47 @@ class PointSet {
   }
 }
 
+class SpeckSet {
+  readonly geo = new InstancedBufferGeometry();
+  readonly mesh: Mesh;
+  readonly data = new Float32Array(MAX_SPECKS * 6);
+  private readonly aP = new InstancedBufferAttribute(new Float32Array(MAX_SPECKS * 4), 4).setUsage(
+    DynamicDrawUsage,
+  );
+  private readonly aBA = new InstancedBufferAttribute(new Float32Array(MAX_SPECKS * 2), 2).setUsage(
+    DynamicDrawUsage,
+  );
+  constructor(mat: RawShaderMaterial) {
+    const q = unitQuad();
+    this.geo.setAttribute('position', q.getAttribute('position'));
+    this.geo.setIndex(q.getIndex());
+    this.geo.setAttribute('aP', this.aP);
+    this.geo.setAttribute('aBA', this.aBA);
+    this.geo.instanceCount = 0;
+    this.mesh = new Mesh(this.geo, mat);
+    this.mesh.frustumCulled = false;
+    this.mesh.visible = false;
+  }
+  upload(n: number): void {
+    const P = this.aP.array as Float32Array;
+    const B = this.aBA.array as Float32Array;
+    for (let i = 0; i < n; i++) {
+      P[i * 4] = this.data[i * 6]!;
+      P[i * 4 + 1] = this.data[i * 6 + 1]!;
+      P[i * 4 + 2] = this.data[i * 6 + 2]!;
+      P[i * 4 + 3] = this.data[i * 6 + 3]!;
+      B[i * 2] = this.data[i * 6 + 4]!;
+      B[i * 2 + 1] = this.data[i * 6 + 5]!;
+    }
+    for (const a of [this.aP, this.aBA]) {
+      a.clearUpdateRanges();
+      a.addUpdateRange(0, n * a.itemSize);
+      a.needsUpdate = true;
+    }
+    this.geo.instanceCount = n;
+  }
+}
+
 interface Core {
   mesh: Mesh;
   mat: RawShaderMaterial;
@@ -182,10 +259,24 @@ export class UriLivePass {
   private readonly back: PointSet;
   private readonly front: PointSet;
   private readonly plume: PointSet;
+  private readonly speckMat: RawShaderMaterial;
+  private readonly specks: SpeckSet;
   private readonly cores: Core[];
   private readonly id = new Vector4();
 
   constructor(scene: Scene, res: Vector2) {
+    this.speckMat = new RawShaderMaterial({
+      glslVersion: GLSL3,
+      vertexShader: SPECK_VERT,
+      fragmentShader: SPECK_FRAG,
+      uniforms: { uRes: { value: res }, uId: { value: this.id } },
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      side: DoubleSide,
+    });
+    normalBlend(this.speckMat);
+    this.specks = new SpeckSet(this.speckMat);
     this.pointMat = new RawShaderMaterial({
       glslVersion: GLSL3,
       vertexShader: POINT_VERT,
@@ -232,11 +323,19 @@ export class UriLivePass {
       mesh.visible = false;
       return { mesh, mat, tex: null, R: -1 };
     });
-    scene.add(this.back.mesh, this.cores[1]!.mesh, this.cores[0]!.mesh, this.front.mesh, this.plume.mesh);
+    scene.add(
+      this.back.mesh,
+      this.cores[1]!.mesh,
+      this.cores[0]!.mesh,
+      this.front.mesh,
+      this.plume.mesh,
+      this.specks.mesh,
+    );
   }
 
   hide(): void {
     this.back.mesh.visible = this.front.mesh.visible = this.plume.mesh.visible = false;
+    this.specks.mesh.visible = false;
     for (const c of this.cores) c.mesh.visible = false;
   }
 
@@ -273,9 +372,11 @@ export class UriLivePass {
         c.mat.uniforms.uSurfSize!.value = [s.w, s.h];
       }
       (c.mat.uniforms.uCore!.value as Vector4).set(x, y, R, k === 0 ? 1 : 0);
+      // (the living idle: the cores dim as the Refusal loosens everything, flickering)
+      const loose = fx.idle?.on ? fx.idle.loose : 0;
       (c.mat.uniforms.uSpinDim!.value as Vector2).set(
         fx.spin,
-        fx.broken ? 0.35 + 0.25 * Math.sin(fx.t * 6) : 1,
+        fx.broken ? 0.35 + 0.25 * Math.sin(fx.t * 6) : 1 - loose * (0.4 + 0.15 * Math.sin(fx.t * 23)),
       );
       c.mesh.visible = true;
       c.mesh.renderOrder = ++order;
@@ -295,7 +396,18 @@ export class UriLivePass {
     return order;
   }
 
+  /** The living idle's specks (uriSpeckPixels), on top of the whole body. Returns the next free render order. */
+  stageSpecks(fx: UriLiveFx, vx: number, vy: number, order: number): number {
+    const n = fx.idle && !fx.broken ? uriSpeckPixels(fx.idle, vx, vy, this.specks.data) : 0;
+    this.specks.upload(n);
+    this.specks.mesh.visible = n > 0;
+    this.specks.mesh.renderOrder = ++order;
+    return order;
+  }
+
   dispose(): void {
+    this.speckMat.dispose();
+    this.specks.geo.dispose();
     this.pointMat.dispose();
     this.plume.geo.dispose();
     this.back.geo.dispose();

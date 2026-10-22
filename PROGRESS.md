@@ -231,11 +231,13 @@ the blob placeholder's; not in the ladder's opponents.
   banner.ts, mockup-kit.ts (the kit WJ gave ChatGPT).
 - **Kept on the old one-line logotype** (logo.ts): the trailer (src/cinema, tools/press/trailer), the key-art lineup and the
   social card (site/media/og.jpg, tools/site/media.ts). Switch them when those are next re-rendered.
-- **The Cradle Child / 요람의 아이:** creature brief docs/titans/cradlechild/BRIEF.md (not built). The titan guide's creature
+- **Cradle Child / 요람의 아이:** creature brief docs/titans/cradlechild/BRIEF.md (not built). Role (WJ): a secret
+  encounter after a tournament won as the Cradle, which unlocks it as a selectable roster titan (the Mouth's unlock,
+  generalised). The titan guide's creature
   brief gained two lines: *where its scale lives* and *unfair at / open to*.
 
 ## Next
-- **The Cradle Child:** WJ answers the brief's three open questions, then Gate 1 (body and palette).
+- **Cradle Child:** WJ answers the brief's open questions, then Gate 1 (body and palette).
 - **Netplay:** after WJ pushes and the site redeploys, run a two-machine test (ONLINE › host › send the link to a friend).
 - **Gate R1:** WJ plays all six (plus 우리) at the new sizes, look and sound.
 - Then a full balance pass.

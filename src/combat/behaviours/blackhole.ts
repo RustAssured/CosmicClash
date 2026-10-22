@@ -14,8 +14,15 @@ import { Behaviour } from '../behaviour';
 import { Overlay } from '../fx/overlay';
 import type { ActiveMove } from '../move';
 import { asShape, makeFatShape } from '../shapes';
-import { DMath } from '@/contracts/dmath';
-import { fcos } from '@/contracts/ftrig';
+import { DMath, sq } from '@/contracts/dmath';
+import { fcos, fsin } from '@/contracts/ftrig';
+import {
+  SIGNATURE,
+  SIG_ROLE,
+  makeSignature,
+  type RenderLayerSig,
+  type SignatureFx,
+} from '@/render/signature';
 
 interface WellCfg {
   radius: [number, number];
@@ -31,8 +38,10 @@ interface WellCfg {
  *  - Gravity Well / Spaghettification: a world gravity source at the hole (radius and strength grow with the charge) that pulls
  *    debris and, through the fighter, the foe; matter reaching its consume radius is credited to this body.
  *  - Failure mode: a disrupted disk sheds mass; at low mass the hole sparkles away (Hawking) as the lens shrinks.
- *  - Animation: the disk rotates (angle- and radius-dependent Doppler shimmer over the live disk cells), the photon ring flickers,
- *    jet knots travel outward and motes fall in. Sets `lensRadius/lensStrength` for the renderer.
+ *  - Animation (docs/SIGNATURE.md): the signature pass turns the disk itself (inner gas faster, the Doppler side fixed on screen)
+ *    and streams its lensed far side round the horizon; the overlay adds the photon ring's flicker, photons escaping the ring,
+ *    jet knots streaking outward and motes falling in. Without the pass (`?sig=0`) the overlay's brightness wave fakes the
+ *    rotation as before. Sets `lensRadius/lensStrength` for the renderer (the scenery bends round the hole).
  */
 export class BlackHoleBehaviour extends Behaviour {
   private rig!: BlackHoleRig;
@@ -46,6 +55,10 @@ export class BlackHoleBehaviour extends Behaviour {
   private drawTick = 0;
   private drawMass = 1;
   private drawHolding = false;
+  /** The signature animation's parameters (render-only), and the ticks spent holding a Well (it spins the disk faster). */
+  private sig!: SignatureFx;
+  private heldTicks = 0;
+  private drawHeld = 0;
   private well: WellCfg | null = null;
   private ult: WellCfg | null = null;
   private wellOn = false;
@@ -82,11 +95,75 @@ export class BlackHoleBehaviour extends Behaviour {
       this.rad[k] = DMath.hypot(u, v);
       this.orbitK[k] = DMath.pow(this.rig.diskIn / Math.max(20, this.rad[k]!), 1.4);
     });
+    this.sig = this.buildSignature(map.w, map.h);
     this.fx = new Overlay('blackhole-fx', 20, 280, 240, 'add', true);
     this.well = (f.slotMoves.signature?.extra?.['well'] as WellCfg | undefined) ?? null;
     this.ult = (f.slotMoves.ultimate?.extra?.['well'] as WellCfg | undefined) ?? null;
     f.resourceMax = f.def.resource.max;
     f.resource = f.def.resource.start;
+  }
+
+  /**
+   * The disk's signature: roles from the painter's own geometry (art/blackhole.ts), so the flow region is the whole disk
+   * annulus (its ragged edge and any hole in it turn with it), the horizon and photon ring are the occluder, the near band
+   * crossing the horizon flows over it, and the arcs over and under the horizon are the lensed far side.
+   */
+  private buildSignature(w: number, h: number): SignatureFx {
+    const rg = this.rig;
+    const s = makeSignature(w, h);
+    const ct = DMath.cos(rg.tilt);
+    const st = DMath.sin(rg.tilt);
+    const hz = rg.horizon;
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const dx = x + 0.5 - rg.core.x;
+        const dy = y + 0.5 - rg.core.y;
+        const r = DMath.hypot(dx, dy);
+        const u = dx * ct + dy * st;
+        const v = -dx * st + dy * ct;
+        const q = DMath.hypot(u, v / rg.squash);
+        const frontBand =
+          v > 0 && r < hz + rg.ring && q >= rg.diskIn - 1 && q <= rg.diskIn + (rg.diskOut - rg.diskIn) * 0.28;
+        const rr = r - (hz + rg.ring);
+        const taper = Math.sqrt(Math.max(0, 1 - sq(dx / (hz * 1.15))));
+        const arc = (dy < 0 && rr >= 0.2 && rr < 12 * taper) || (dy > 0 && rr >= 0.2 && rr < 6 * taper);
+        const inDisk = q >= rg.diskIn && q <= rg.diskOut + 1 && !(v < 0 && r < hz + rg.ring + 1);
+        s.roles[y * w + x] = frontBand
+          ? SIG_ROLE.flow
+          : r < hz + rg.ring
+            ? SIG_ROLE.occluder
+            : inDisk
+              ? SIG_ROLE.flow
+              : arc
+                ? SIG_ROLE.lensed
+                : SIG_ROLE.still;
+      }
+    s.cx = rg.core.x;
+    s.cy = rg.core.y;
+    s.tilt = rg.tilt;
+    s.squash = rg.squash;
+    s.rIn = rg.diskIn;
+    s.rOut = rg.diskOut;
+    s.shearRate = 0.8;
+    s.shearK = 1.5;
+    s.shearPeriod = 3;
+    // the painter's beaming (0.6 + 0.75 · dopp, dopp = 0.5 − u / 2·diskOut) is ∝ 1 − 0.385 · u / diskOut: approaching on the left
+    s.doppler = 0.385;
+    s.dopplerX = -1;
+    s.dopplerY = 0;
+    // two bright spiral arms riding the gas (the old overlay's wave, now moving with the matter)
+    s.streak = 0.45;
+    s.streakArms = 2;
+    s.streakWind = 0.07;
+    s.hole = hz;
+    s.lensRing = hz + rg.ring;
+    s.lensSpin = 2.5;
+    s.lensGain = 1.1;
+    return s;
+  }
+
+  override decorateBodyLayer(layer: RenderLayer): void {
+    (layer as RenderLayerSig).signature = this.sig;
   }
 
   override reset(_heal: number): void {
@@ -236,6 +313,8 @@ export class BlackHoleBehaviour extends Behaviour {
     this.drawTick = tick;
     this.drawMass = st.massFrac;
     this.drawHolding = holding;
+    if (holding) this.heldTicks++;
+    this.drawHeld = this.heldTicks;
   }
 
   private draw(tick: number, massFrac: number, holding: boolean): void {
@@ -250,14 +329,18 @@ export class BlackHoleBehaviour extends Behaviour {
     }
     const spin = tick * (holding ? 0.09 : 0.055);
     const gain = holding ? 1.5 : 1;
-    // the disk turns: brightness rides an angle- and radius-dependent wave (inner gas orbits faster), hot on the approaching side
+    // without the signature pass, the disk's turning is faked: brightness rides an angle- and radius-dependent wave (inner gas
+    // orbits faster), hot on the approaching side
+    // (with the pass the disk really turns: what stays is the beaming glow, fixed on screen, over the disk's region; the gas
+    // moving through it is the pass's)
+    const sig = SIGNATURE.on;
     for (let k = 0; k < this.disk.length; k++) {
       const i = this.disk[k]!;
-      if (map.material[i] === 0) continue;
+      if (!sig && map.material[i] === 0) continue;
       const w = spin * this.orbitK[k]!;
-      const b = 0.5 + 0.5 * fcos(this.ang[k]! * 2 - w);
+      const b = sig ? 0.62 : 0.5 + 0.5 * fcos(this.ang[k]! * 2 - w);
       const dop = 0.5 - 0.5 * fcos(this.ang[k]! - 0.0);
-      const e = b * b * (0.35 + 0.65 * (1 - dop)) * 46 * gain;
+      const e = b * b * (0.35 + 0.65 * (1 - dop)) * (sig ? 30 : 46) * gain;
       if (e < 4) continue;
       const lx = i % map.w;
       localToWorld(t, lx + 0.5, (i - lx) / map.w + 0.5, this.xy);
@@ -266,15 +349,40 @@ export class BlackHoleBehaviour extends Behaviour {
     // photon ring flicker and a soft halo
     const hz = this.rig.horizon;
     fx.glow(t.x, t.y, hz + 12, 255, 170, 70, 0.1 + 0.05 * DMath.sin(tick * 0.31) + (holding ? 0.12 : 0));
-    // jet knots travelling outward along the axis
+    // jet knots travelling outward along the axis, each with a streak behind it (it accelerates: the streak lengthens)
     const jl = this.rig.jetLen;
+    const jx = this.rig.jetX;
+    const jy = this.rig.jetY;
     for (let s = 0; s < 2; s++) {
+      const sg = s ? -1 : 1;
       for (let k = 0; k < 3; k++) {
         const u = (tick * 0.02 + k / 3) % 1;
         const d = hz + 4 + u * jl;
-        const px = t.x + this.rig.jetX * d * (s ? -1 : 1);
-        const py = t.y + this.rig.jetY * d * (s ? -1 : 1);
+        const px = t.x + jx * d * sg;
+        const py = t.y + jy * d * sg;
         fx.glow(px, py, 3.2 * (1 - u * 0.5), 140, 200, 255, 0.85 * (1 - u));
+        const tail = Math.floor(3 + u * 9);
+        for (let j = 1; j <= tail; j++) {
+          const e = 150 * (1 - u) * (1 - j / (tail + 1));
+          fx.add(Math.floor(px - jx * j * sg), Math.floor(py - jy * j * sg), e * 0.6, e * 0.85, e);
+        }
+      }
+    }
+    // photons escaping the photon ring: each leaves at its own angle, bent round the hole as it climbs out (its path curls in
+    // the direction the disk turns), a short bright streak fading with distance
+    const ring = hz + this.rig.ring;
+    for (let k = 0; k < 7; k++) {
+      const ph = tick * 0.022 + hash01(k, 3, 9);
+      const cyc = Math.floor(ph);
+      const u = ph - cyc;
+      const a0 = hash01(k, cyc, 11) * 6.2832;
+      for (let j = 0; j < 6; j++) {
+        const uu = u - j * 0.012;
+        if (uu < 0) break;
+        const r = ring + 1 + uu * 64;
+        const a = a0 + 0.9 * sq(1 - uu);
+        const e = (255 - j * 40) * (1 - uu) * (holding ? 1.3 : 1);
+        fx.add(Math.round(t.x + fcos(a) * r), Math.round(t.y + fsin(a) * r), e, e * 0.88, e * 0.62);
       }
     }
     // infalling motes; and Hawking sparkle when the hole is dying
@@ -301,7 +409,13 @@ export class BlackHoleBehaviour extends Behaviour {
     fx.end();
   }
 
-  override renderLayers(view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+  override renderLayers(view: ViewRect, alpha: number, out: RenderLayer[]): void {
+    // the signature's clock: the snapshotted tick (+ the frame's alpha, so it turns smoothly between ticks); a held Well spins it
+    // faster without a jump (the held ticks are counted, not a rate swapped)
+    const s = this.sig;
+    const tt = this.drawTick + alpha;
+    s.t = tt * TICK_DT;
+    s.spin = tt * 0.0062 + (this.drawHeld + (this.drawHolding ? alpha : 0)) * 0.012;
     // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
     if ((this.fx.limitToView(view) || this.drawStale) && this.f.foe) {
       this.drawStale = false;

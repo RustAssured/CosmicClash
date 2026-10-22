@@ -82,6 +82,142 @@ export interface UriLiveFx {
    */
   pylons?: readonly [UriPylon, UriPylon];
   fistZ?: readonly [number, number];
+  /** The living idle (absent / off = the locked rest look). */
+  idle?: UriIdleFx;
+}
+
+/**
+ * 우리's living idle, "The Refusal: still here" (idle handover specs/uri.md), as drawing data: set by the behaviour on BOTH its
+ * atlas layers (`RenderLayerLit.uriIdle`) and in `UriLiveFx.idle`. Everything drawn from it is a stateless function of the
+ * kinetic clock `t` (it freezes in hitstop) and hashes: rendering never feeds back.
+ */
+export interface UriIdleFx {
+  on: boolean;
+  /** Kinetic time (s), the Refusal's age (s, −1 none), its coming-apart and its slam flash (0..1). */
+  t: number;
+  refT: number;
+  loose: number;
+  flash: number;
+  /** The cores' barycentre and the reference origin (rig (0, 0)), WORLD px; the draw scale. */
+  bx: number;
+  by: number;
+  ox: number;
+  oy: number;
+  scale: number;
+  /** Per part (URI_PARTS index): world pivot x, y and the part's grid w, h (w = 0: gone, never picked). */
+  parts: Float32Array;
+  /** The fighter's slot (its schedules differ from a mirror twin's). */
+  slot: number;
+}
+
+/** The parts the jig and the specks may pick (URI_PARTS order; the command moon never jigs). */
+export const URI_IDLE_PARTS = 13;
+const MOON_IDX = 12;
+/** The pelvis is the fighter's own body layer, not an atlas part: it never takes the chunk path. */
+const PELVIS_IDX = 2;
+
+/**
+ * The chunks working loose (the prototype's jig, made stateless): slot n starts at 0.65·n + 0.3·h s and lasts 0.45–1.35 s,
+ * then 0.16 s of blue edge flicker; it picks a live part (never the moon or the pelvis) and a chunk by a hash in 0..1 (the
+ * compositor maps it onto the part's live chunks: a torn chunk is never picked). Writes up to `max` entries of
+ * [part, u, phase (1 pushed / 2 flicker), 0] into `out`; returns the count.
+ */
+export function uriIdleJigs(fx: UriIdleFx, out: Float32Array, max: number): number {
+  if (!fx.on) return 0;
+  const t = fx.t;
+  const live: number[] = [];
+  for (let i = 0; i < URI_IDLE_PARTS; i++)
+    if (i !== MOON_IDX && i !== PELVIS_IDX && fx.parts[i * 4 + 2]! > 0) live.push(i);
+  if (!live.length) return 0;
+  let n = 0;
+  const n0 = Math.floor(t / 0.65);
+  for (let s = n0 - 3; s <= n0 && n < max; s++) {
+    if (s < 0) continue;
+    const t0 = s * 0.65 + 0.3 * h3(s, fx.slot, 11);
+    const until = t0 + 0.45 + 0.9 * h3(s, fx.slot, 12);
+    if (t < t0 || t >= until + 0.16) continue;
+    out[n * 4] = live[Math.floor(h3(s, fx.slot, 13) * live.length) % live.length]!;
+    out[n * 4 + 1] = h3(s, fx.slot, 14);
+    out[n * 4 + 2] = t < until ? 1 : 2;
+    out[n * 4 + 3] = 0;
+    n++;
+  }
+  return n;
+}
+
+/** The specks' colours: the warm stone s1[4..7] (the oracle's RP.s1) and the field blue they turn when pulled back. */
+const SPECK_S1 = ['#382a29', '#4a3834', '#5f4a42', '#776053'].map((h) => {
+  const v = parseInt(h.slice(1), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+});
+const FIELD_BLUE = [150, 210, 255];
+
+/**
+ * Specks shed from the cracks (the prototype's idleTick specks, made stateless): about 6 a second from a random live part
+ * within ±0.3 of its size around the pivot, 0.5 px a frame with drag 0.96, life 1 (−0.016 a frame); 60 % of them are pulled
+ * back in by the field once life < 0.62 (×−1.6, field blue). Plus, at the Refusal's slam, 60 field-blue specks on an
+ * ellipse (r 60–150, ×0.8 vertically) flying inward (2.2 / 1.8 px a frame, life 0.7). Same 5-float pixel format as
+ * uriLoopPixels plus the alpha (life) in a 6th float. Returns the count.
+ */
+export function uriSpeckPixels(fx: UriIdleFx, vx: number, vy: number, out: Float32Array): number {
+  if (!fx.on) return 0;
+  const S = fx.scale;
+  const cap = Math.floor(out.length / 6);
+  let n = 0;
+  const put = (x: number, y: number, c: readonly number[], a: number): void => {
+    if (n >= cap || a <= 0) return;
+    out.set([Math.round(x - vx), Math.round(y - vy), c[0]!, c[1]!, c[2]!, Math.min(1, a)], n++ * 6);
+  };
+  // distance along a speck's path after f frames (x += v; v *= 0.96)
+  const run = (f: number): number => (1 - Math.pow(0.96, f)) / 0.04;
+  const live: number[] = [];
+  for (let i = 0; i < URI_IDLE_PARTS; i++) if (fx.parts[i * 4 + 2]! > 0) live.push(i);
+  if (live.length) {
+    const s0 = Math.floor(fx.t * 6);
+    for (let s = s0 - 7; s <= s0; s++) {
+      if (s < 0) continue;
+      const t0 = (s + h3(s, fx.slot, 21)) / 6;
+      const f = (fx.t - t0) * 60;
+      if (f < 0) continue;
+      const life = 1 - 0.016 * f;
+      if (life <= 0) continue;
+      const pi = live[Math.floor(h3(s, fx.slot, 22) * live.length) % live.length]!;
+      const px = fx.parts[pi * 4]! + (h3(s, fx.slot, 23) - 0.5) * fx.parts[pi * 4 + 2]! * 0.6;
+      const py = fx.parts[pi * 4 + 1]! + (h3(s, fx.slot, 24) - 0.5) * fx.parts[pi * 4 + 3]! * 0.6;
+      const a = h3(s, fx.slot, 25) * Math.PI * 2;
+      const back = h3(s, fx.slot, 26) < 0.6;
+      const c = SPECK_S1[Math.floor(h3(s, fx.slot, 27) * 4) % 4]!;
+      const v0 = 0.5 * S;
+      // the turn: the first frame its life is below 0.62
+      const fr = 24;
+      let d: number;
+      let col = c;
+      if (back && f > fr) {
+        d = v0 * run(fr) - v0 * Math.pow(0.96, fr) * 1.6 * run(f - fr);
+        col = FIELD_BLUE;
+      } else d = v0 * run(f);
+      put(px + Math.cos(a) * d, py + Math.sin(a) * d, col, life);
+    }
+  }
+  // the slam's specks, pulled in toward the cores' barycentre
+  const R = fx.refT;
+  if (R >= 2.1) {
+    const f = (R - 2.1) * 60;
+    const life = 0.7 - 0.016 * f;
+    if (life > 0)
+      for (let k = 0; k < 60; k++) {
+        const a = h3(k, fx.slot, 31) * Math.PI * 2;
+        const r = (60 + h3(k, fx.slot, 32) * 90) * S;
+        const d = run(f) * S;
+        put(
+          fx.bx + Math.cos(a) * r - Math.cos(a) * 2.2 * d,
+          fx.by + Math.sin(a) * r * 0.8 - Math.sin(a) * 1.8 * d,
+          FIELD_BLUE,
+          life,
+        );
+      }
+  }
+  return n;
 }
 
 export interface UriPylon {
@@ -182,6 +318,9 @@ const C_BRIGHT = [255, 250, 255];
 const C_UNDER_FRONT = [170, 140, 250];
 const C_UNDER_BACK = [90, 80, 170];
 const C_OVER = [200, 180, 255];
+/** The idle packet's upper halo (the prototype's, kept exact: WJ 2026-10-20). */
+const C_PACKET_UP = [230, 220, 255];
+const TAU_ = Math.PI * 2;
 
 /**
  * The loop's and the orbit's pixels for one frame, in the oracle's painter order: everything BEHIND the cores into `back`, the
@@ -198,7 +337,12 @@ export function uriLoopPixels(
   if (fx.broken) return { back: 0, front: 0 };
   const L = fx.loop;
   const S = fx.scale ?? URI_SCALE;
-  const dmg = 1 - fx.hp / 100;
+  // the living idle: the Refusal thins the loop and drops it out (drawn only: hp itself never changes); the packet laps it
+  const idle = fx.idle?.on ? fx.idle : null;
+  const hp = idle ? Math.max(0, fx.hp - idle.loose * 62) : fx.hp;
+  const dmg = 1 - hp / 100;
+  const spk = idle ? ((idle.t * 0.5) % 1) * TAU_ : -9;
+  const xing = !!idle && Math.abs(Math.sin(spk)) < 0.16;
   const TAU = Math.PI * 2;
   let nb = 0;
   let nf = 0;
@@ -258,10 +402,24 @@ export function uriLoopPixels(
       if (p[2] > 0 !== isFront) continue;
       if (dmg > 0.4 && n3(k * 0.2, fx.t * 6, 9) < (dmg - 0.4) * 1.2) continue;
       const cross = Math.abs(Math.sin(p[3])) < 0.1;
+      if (idle) {
+        // the bright packet lapping every 2 s, the crossing flaring as it passes
+        const dd = Math.abs(Math.atan2(Math.sin(p[3] - spk), Math.cos(p[3] - spk)));
+        if (dd < 0.11 || (xing && cross)) {
+          put(isFront, p[0], p[1], C_CROSS);
+          put(isFront, p[0], p[1] - 1, C_PACKET_UP);
+          put(isFront, p[0], p[1] + 1, C_OVER);
+          if (xing && cross) {
+            put(isFront, p[0] - 1, p[1], C_CROSS);
+            put(isFront, p[0] + 1, p[1], C_CROSS);
+          }
+          continue;
+        }
+      }
       let c = cross ? C_CROSS : isFront ? (k % 7 < 3 ? C_FRONT_A : C_FRONT_B) : C_BACK;
       if (br > 1.15 && isFront) c = C_BRIGHT;
       put(isFront, p[0], p[1], c);
-      if (fx.hp > 40 || br > 1.2) put(isFront, p[0], p[1] + 1, isFront ? C_UNDER_FRONT : C_UNDER_BACK);
+      if (hp > 40 || br > 1.2) put(isFront, p[0], p[1] + 1, isFront ? C_UNDER_FRONT : C_UNDER_BACK);
       if (br > 1.3 && isFront) put(isFront, p[0], p[1] - 1, C_OVER);
     }
   };

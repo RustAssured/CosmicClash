@@ -361,7 +361,7 @@ the real body and replace the bob and sway; the spires' swing is drawn only; the
 **WJ's decisions (2026-10-19):** keep the softer snap (the carapace-first load wave wins), and keep the extra fx (arm
 fragments, shrine light, eye glow).
 
-## 7. The Cradle 태반체 (ported 2026-10-19, waiting for WJ's side-by-side)
+## 7. The Cradle 태반체 (ported 2026-10-19, approved by WJ 2026-10-20, 9f16fa0)
 
 Files: `src/combat/behaviours/kit/cradle/pose.ts` (sim), `cradle/idle.ts` (render), wired into `kit/cradle.ts`; the
 approved frames in `src/titans/kit/cradle/cradle_frames.bin` (zlib, 1.7 MB) and `cradle_frames.json` (palette, frame
@@ -396,3 +396,47 @@ Evidence: `docs/gallery/idle/cradle-compare.png` (across a quickening, `gap=240`
   3.0–3.4 (before: 1.61–1.87, p95 4.9–5.1: the old sail warp is gone); sim avg 0.38–0.45 ms against 0.33–0.37.
 - Tests: four idle tests (render purity through a quickening; no quickening with the foe beyond 240 px; the same atlas
   at any frame rate; a sail with no matter left draws nothing), `cradle.test.ts`, determinism, cross-engine, render purity.
+
+## 8. 우리 Uri, "The Refusal: still here" (ported 2026-10-20, waiting for WJ's side-by-side)
+
+Files: the idle's sim in `src/combat/uri/kinetics.ts` (`URI_IDLE`, `idleTick`, `idleGoals`, off by default so the oracle
+parity harness is untouched; `UriBehaviour` turns it on), the slam's events in `behaviours/uri.ts`, the drawing in
+`render/uriLive.ts` (`UriIdleFx`, the loop packet, stateless jigs and specks), `render/uriLivePass.ts` (cores dimming, the
+speck set), `render/shaders.ts` `PART_FRAG` (cities, slit, the chunk path) and `render/compositor.ts`. WJ's choices
+(2026-10-20): the Refusal only as in the prototype (on its own every 13–17 s at rest; never during a move or once broken;
+a hit neither triggers nor cancels it); the first one 8 s into a round; the slam's ring, flash and shake as the prototype's;
+the three near-white idle colours kept exact. Evidence: `docs/gallery/idle/uri-compare.png`.
+
+**What is in:**
+- **Sim (deterministic, its own seeded stream, in `hash()`):** the 2.6 s weight shift (root sway and dip, arks rolling,
+  torso lean toward the foe), the guard with the arm on the opponent's side leading (never mirrored), a fist clenching
+  every 2.6–5.6 s, the loaded side's lobe stretching and pylon burning harder, the moon looking toward the foe (during
+  moves too, as the approved build), and the Refusal: loosening over 1.6 s, the slam at +2.1 s (loop, cores and root
+  kicked; fists clenched hard and stiff), the guard until +5.2 s, done at +5.6 s. A move cancels it on the same tick.
+- **Render (stateless: functions of the kinetic clock, which freezes in hitstop, and hashes):** the cities' day–night
+  line sweeping the body every ~19.6 s, the Refusal's wave out from the cores and cities failing while it comes apart;
+  the moon's slit scanning (white for the slam); the loop's packet lapping every 2 s, the loop thinning and dropping out
+  while loose (drawn only); the cores dimming; every part's chunks pushed out by the Refusal (whole px, x jitter when fully
+  loose), the slam's blue edge flicker; a chunk jigging out a pixel every ~0.65 s and snapping back with a blue flicker;
+  specks shed from the cracks (some pulled back in, field blue) and 60 specks pulled in at the slam. On the slam: the
+  game's shockwave ring, a small flash and shake 4 at the cores' barycentre.
+
+**Changed from the spec, and why:**
+- **The pelvis never takes the chunk path:** it is the fighter's own body layer, not an atlas part (it has 81 of ~1,300
+  chunks and 10 city cells). It sways with the body and its cities stay lit.
+- **Jigs and specks run on fixed slots** (a jig slot every 0.65 s with jittered start, a speck slot every 1/6 s) rather
+  than the prototype's random chains: stateless, so rendering can never feed back. A jig picks a live chunk by hash on the
+  GPU's chunk table, so torn chunks are never picked.
+- **Offsets are whole px** (the LOOSE push and its jitter are rounded); the jig is 1 px at game scale.
+- **The flash** is the game's `flash` event at 0.25 (0.5 washed the whole chest white; the prototype's is 4 px and gone
+  in ~4 frames). The ring is the game's own shockwave, not the prototype's thin ellipse.
+- **The chunk table cap is 256** (it was 160; the chamber has 233).
+
+**Numbers:**
+- Node (a Uri v Planet idle, 1,200 ticks, 3 reps, against the last commit): sim avg 0.24–0.44 ms against 0.16–0.21 (the
+  swaying body moves its matter every tick); render CPU under 0.02 ms. The GPU cost of the chunk path during a Refusal
+  is not measured yet (the machine is loaded): owed with the quiet-machine gate.
+- Tests: seven idle tests (render purity through a Refusal; its timing and one slam; a move cancels it; the lead arm
+  follows the foe; a bare `UriKinetics` rests as before; broken apart, no idle; jigs and specks stateless and never on a
+  gone part), `kinetics.test.ts` oracle parity (idle off), `uri*.test.ts` (the layout tests run with the idle off),
+  render purity, determinism, the render suite.
