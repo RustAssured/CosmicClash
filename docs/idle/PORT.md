@@ -397,7 +397,7 @@ Evidence: `docs/gallery/idle/cradle-compare.png` (across a quickening, `gap=240`
 - Tests: four idle tests (render purity through a quickening; no quickening with the foe beyond 240 px; the same atlas
   at any frame rate; a sail with no matter left draws nothing), `cradle.test.ts`, determinism, cross-engine, render purity.
 
-## 8. 우리 Uri, "The Refusal: still here" (ported 2026-10-20, waiting for WJ's side-by-side)
+## 8. 우리 Uri, "The Refusal: still here" (ported 2026-10-20, approved by WJ 2026-10-22, in 9f380e1)
 
 Files: the idle's sim in `src/combat/uri/kinetics.ts` (`URI_IDLE`, `idleTick`, `idleGoals`, off by default so the oracle
 parity harness is untouched; `UriBehaviour` turns it on), the slam's events in `behaviours/uri.ts`, the drawing in
