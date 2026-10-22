@@ -5,6 +5,7 @@ import { loadUriAsset } from '@/titans/uri/asset';
 import uriBinUrl from '@/titans/uri/uri_rig.bin?url';
 import { requestCradleFrames } from '@/titans/kit/cradle/frames';
 import cradleFramesUrl from '@/titans/kit/cradle/cradle_frames.bin?url';
+import { GARGANTUA } from '@/combat/behaviours/blackholeGargantua';
 
 /** Entry point: builds the app, boots into the title (or a harness scenario when URL params ask for one). */
 async function main(): Promise<void> {
@@ -25,6 +26,8 @@ async function main(): Promise<void> {
   // the Cradle's living sail frames (src/titans/kit/cradle/frames.ts): presentation only, never awaited (until they are in,
   // the sail draws its painted rest disc)
   requestCradleFrames(cradleFramesUrl);
+  // `?bh=gargantua`: the Black Hole's v3 "Gargantua" idle instead of the desktop one (presentation only; for comparing them)
+  if (q.get('bh') === 'gargantua') GARGANTUA.on = true;
   const app = new App();
   // preserveDrawingBuffer only for screenshot tooling: real-time evidence runs (tele) read frames right after drawing
   // and must pay exactly what a player's build pays

@@ -21,7 +21,7 @@ stays outside the repo (about 10 MB); its specs are the source of truth for each
 - `npm run perf:gate -- --only=<titan>`: a mirror storm, plus the titan's clashes and its idle cost line;
 - the render-purity test (`src/combat/renderpure.test.ts`) and the titan's idle tests.
 
-## 1. Supernova 초신성 (ported 2026-10-17, waiting for WJ's side-by-side)
+## 1. Supernova 초신성 (ported 2026-10-17, approved by WJ, 548f9d4)
 
 `src/combat/behaviours/supernovaIdle.ts`, wired into `supernova.ts`. Evidence:
 - `docs/gallery/idle/supernova-compare.png` (row 1 prototype, row 2 game, every 40 ticks, Tussenruimte);
@@ -70,7 +70,7 @@ stays outside the repo (about 10 MB); its specs are the source of truth for each
    has none. Dropping them changes replay hashes.
 5. **Embers.** `feel.fx` embers (`idleRate 8`) overlap the idle's sparks. Lower them? That is a JSON change.
 
-## 2. The Nexus 넥서스 (ported 2026-10-17, waiting for WJ's side-by-side)
+## 2. The Nexus 넥서스 (ported 2026-10-17, approved by WJ, e698f12)
 
 `src/combat/behaviours/nexusIdle.ts`, wired into `nexus.ts`. It replaces `drawGraphFx`: the sliding glow dots, the node
 breathing, the hub glow and the crystal shimmer. Evidence:
@@ -124,7 +124,7 @@ breathing, the hub glow and the crystal shimmer. Evidence:
 4. **Glow.** It is now the prototype's (sparse). Today's strong whole-graph bloom is gone at rest; say if you want some
    of it back.
 
-## 3. The Asteroid 소행성 (ported 2026-10-17, waiting for WJ's side-by-side)
+## 3. The Asteroid 소행성 (ported 2026-10-17, approved by WJ, 986d3f9)
 
 `src/combat/behaviours/asteroidPose.ts` (sim) and `asteroidIdle.ts` (render), wired into `asteroid.ts`. WJ's choices,
 recorded as D39 (`docs/DECISIONS.md`): real rotation, real darts at full range, the spin on real momentum. Evidence:
@@ -440,3 +440,41 @@ the three near-white idle colours kept exact. Evidence: `docs/gallery/idle/uri-c
   follows the foe; a bare `UriKinetics` rests as before; broken apart, no idle; jigs and specks stateless and never on a
   gone part), `kinetics.test.ts` oracle parity (idle off), `uri*.test.ts` (the layout tests run with the idle off),
   render purity, determinism, the render suite.
+
+## 9. Black Hole 블랙홀, v3 "Gargantua" (a VARIANT behind `?bh=gargantua`; ported 2026-10-22, waiting for WJ)
+
+The desktop agent's Black Hole stays the default and untouched (its body, signature pass and overlay); the Gargantua is an
+alternative for comparing them in game: `src/combat/behaviours/blackholeGargantua.ts` (`GARGANTUA.on`, set by `?bh=gargantua`
+in `main.ts`), read by `blackhole.ts` through a few additive lines. WJ's choices (2026-10-22): presentation only (the sim,
+the body, its hit volumes and balance unchanged; the overlay covers the painted body, which is hidden); the prototype's own
+pixel numbers (1:1: the disk spans ~356 px, the Feast's blades ~840); its colours tinted 7% by the stage's light like the
+painted body; a URL flag, not a setting. Evidence: `docs/gallery/idle/blackhole-gargantua-compare.png`.
+
+**What is in:** the big shadow, the one-pixel photon ring and sub-ring (its wobble, ring echoes when a clump passes behind),
+the far side lensed into the thick upper arch and the thin lower arc, the wing-tipped disk (Keplerian flow noise in two
+crossfaded 11 s epochs, fibrils, shearing clumps and inner flares, the Doppler side, the heart boost), the 40 s precession,
+constant feeding (rocks streaking in several times a second, wisps spiralling from the tips, rocks torn off a foe within
+200 px), and THE FEAST every 9–12 s from 4.5 s: a star torn into a stream that wraps the shadow through its secondary
+image, the flood front through the disk, blades along its plane, plumes off the poles, the shadow swelling, and after it
+the hole a little heavier (brighter, a pixel wider). Big impacts jolt the overlay by whole pixels.
+
+**Changed from the spec, and why:**
+- **Not ported:** the lensed starfield (the stage's), the stand-in opponent, its stretch, pull and the ripple shove (the
+  foe is not ours to move), the ripples themselves (they only moved those), the dead jet code.
+- **Glow** is the overlay's emissive through the game's bloom (no blur pass); the outline pass is off for this overlay
+  (it outlined every dithered pixel black).
+- **Rocks** are coloured from its own disk-dim and horizon steps (the prototype's greys are not in the palette).
+- **Damage:** a disk pixel within r 100 maps onto the painted disk (same phase, radius remapped) and is a hole only where
+  that cell was gas and is gone; beyond r 100 the light scales with the disk's live fraction. The shadow never holes.
+- **Yielding:** the idle weight falls over ~10 ticks on a move or a hit (60 at KO); it scales the feeding, holds back new
+  Feasts and dims blades and plumes.
+- **Cost:** the flow noise comes from polar grids per epoch (filled a slice per tick ahead of need), every pixel's polar
+  geometry and mask cell are tabled (rebuilt in slices as the disk precesses), clumps are bucketed by radius, and the
+  picture is redrawn every other tick, only inside the camera's view.
+
+**Numbers:**
+- Node (a Black Hole v Asteroid idle, 1,500 ticks): render 3.0–3.3 ms a frame against 1.6–2.0 for the desktop version
+  (the prototype's own frame was ~20 ms). The browser gate is owed on a quiet machine.
+- Tests: six (render purity through a Feast; the same picture at any frame rate; it covers the body and the Feast comes
+  at 4.5 s then every 9–12 s; it yields to a move; destroyed gas is holes; off by default, the desktop version as before),
+  `blackhole.test.ts`, render purity, determinism.

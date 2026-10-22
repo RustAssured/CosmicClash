@@ -23,6 +23,7 @@ import {
   type RenderLayerSig,
   type SignatureFx,
 } from '@/render/signature';
+import { GARGANTUA, GargantuaIdle } from './blackholeGargantua';
 
 interface WellCfg {
   radius: [number, number];
@@ -69,6 +70,9 @@ export class BlackHoleBehaviour extends Behaviour {
   private readonly xy = { x: 0, y: 0 };
   private readonly shape = makeFatShape();
   private matGrow = 'diskmid';
+  /** The v3 "Gargantua" idle (blackholeGargantua.ts), only with `?bh=gargantua`; the painted body it covers. */
+  private gar: GargantuaIdle | null = null;
+  private bodyLayer: RenderLayer | null = null;
 
   override attach(): void {
     const f = this.f;
@@ -164,9 +168,11 @@ export class BlackHoleBehaviour extends Behaviour {
 
   override decorateBodyLayer(layer: RenderLayer): void {
     (layer as RenderLayerSig).signature = this.sig;
+    this.bodyLayer = layer;
   }
 
   override reset(_heal: number): void {
+    this.gar?.reset();
     this.f.world.setGravitySource(this.f.slot, null);
     this.wellOn = false;
     this.lastFoeMass = (this.f.foe.view.bodyStats as { mass: number }).mass;
@@ -315,15 +321,26 @@ export class BlackHoleBehaviour extends Behaviour {
     this.drawHolding = holding;
     if (holding) this.heldTicks++;
     this.drawHeld = this.heldTicks;
+    // the Gargantua variant's inputs (presentation only: the foe's place and whether the hole is at rest), per tick
+    if (GARGANTUA.on) {
+      this.gar ??= new GargantuaIdle(f.def, this.rig, f.body.map, f.lighting.color, f.seed, f.slot);
+      const calm = (f.state === 'idle' || f.state === 'move' || f.state === 'intro') && !m.def && !f.guardUp;
+      this.gar.record(tick, t, f.foe.view.x, f.foe.view.y, calm, f.ko);
+    }
   }
 
-  private draw(tick: number, massFrac: number, holding: boolean): void {
+  private draw(tick: number, massFrac: number, holding: boolean, hawkingOnly = false): void {
     const f = this.f;
     const t = f.body.transform;
     const fx = this.fx;
     const map = f.body.map;
     fx.begin(t.x, t.y);
     if (f.ko && f.stateTicks > 60) {
+      fx.end();
+      return;
+    }
+    if (hawkingOnly) {
+      this.drawHawking(tick, massFrac);
       fx.end();
       return;
     }
@@ -398,15 +415,21 @@ export class BlackHoleBehaviour extends Behaviour {
         50 * u,
       );
     }
-    if (massFrac < 0.5) {
-      const n = Math.round((0.5 - massFrac) * 30);
-      for (let k = 0; k < n; k++) {
-        const a = hash01(tick, k, 5) * 6.2832;
-        const r = hz * (0.9 + 0.5 * hash01(tick, k, 6));
-        fx.add(Math.round(t.x + DMath.cos(a) * r), Math.round(t.y + DMath.sin(a) * r), 255, 240, 200);
-      }
-    }
+    this.drawHawking(tick, massFrac);
     fx.end();
+  }
+
+  /** Hawking sparkle when the hole is dying. */
+  private drawHawking(tick: number, massFrac: number): void {
+    if (massFrac >= 0.5) return;
+    const t = this.f.body.transform;
+    const hz = this.rig.horizon;
+    const n = Math.round((0.5 - massFrac) * 30);
+    for (let k = 0; k < n; k++) {
+      const a = hash01(tick, k, 5) * 6.2832;
+      const r = hz * (0.9 + 0.5 * hash01(tick, k, 6));
+      this.fx.add(Math.round(t.x + DMath.cos(a) * r), Math.round(t.y + DMath.sin(a) * r), 255, 240, 200);
+    }
   }
 
   override renderLayers(view: ViewRect, alpha: number, out: RenderLayer[]): void {
@@ -416,10 +439,17 @@ export class BlackHoleBehaviour extends Behaviour {
     const tt = this.drawTick + alpha;
     s.t = tt * TICK_DT;
     s.spin = tt * 0.0062 + (this.drawHeld + (this.drawHolding ? alpha : 0)) * 0.012;
+    // the Gargantua variant: its overlay covers the painted body (hidden), the desktop overlay keeps only the Hawking sparkle
+    const gar = GARGANTUA.on ? this.gar : null;
+    if (gar) {
+      gar.advance(this.f.tickNo, this.f.body.transform, this.f.body.map, view);
+      if (this.bodyLayer) this.bodyLayer.visible = false;
+      out.push(gar.fx.layer);
+    }
     // (a fighter that has not met its foe yet has nothing to draw: drawing starts with the first tick)
     if ((this.fx.limitToView(view) || this.drawStale) && this.f.foe) {
       this.drawStale = false;
-      this.draw(this.drawTick, this.drawMass, this.drawHolding);
+      this.draw(this.drawTick, this.drawMass, this.drawHolding, !!gar);
     }
     out.push(this.fx.layer);
   }
