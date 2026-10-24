@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Titan Builder</title>
+    <style>
+      :root {
+        --bg: #07070d;
+        --panel: #10111c;
+        --panel2: #151726;
+        --line: #23263a;
+        --ink: #cfe0d6;
+        --dim: #7f8fa0;
+        --accent: #a8bdb2;
+        --gold: #e8dc96;
+        --ok: #8fd6a0;
+        --bad: #ff8a7a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          12px/1.4 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+        position: sticky;
+        top: 0;
+        z-index: 5;
+      }
+      h1 {
+        margin: 0 8px 0 0;
+        font-size: 13px;
+        color: var(--gold);
+        letter-spacing: 0.1em;
+      }
+      h1 small {
+        color: var(--dim);
+        font-weight: normal;
+        letter-spacing: 0;
+      }
+      #status {
+        color: var(--dim);
+        margin-left: auto;
+      }
+      #status.dirty {
+        color: var(--gold);
+      }
+      #status.err {
+        color: var(--bad);
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 400px;
+        gap: 12px;
+        padding: 12px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        main {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      select,
+      button,
+      input[type='text'],
+      input[type='number'],
+      textarea {
+        background: #171827;
+        color: var(--ink);
+        border: 1px solid #2a2d44;
+        padding: 3px 6px;
+        font: inherit;
+        border-radius: 2px;
+      }
+      textarea {
+        width: 100%;
+        resize: vertical;
+        min-height: 3.2em;
+      }
+      input[type='text'] {
+        width: 100%;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        border-color: var(--accent);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      button.primary {
+        border-color: var(--gold);
+        color: var(--gold);
+      }
+      a {
+        color: var(--accent);
+      }
+      .stage {
+        background: radial-gradient(ellipse at 50% 40%, #141a2e 0%, #07070d 70%);
+        border: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 420px;
+        padding: 16px;
+        position: relative;
+        overflow: hidden;
+      }
+      canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        display: block;
+        max-width: 100%;
+      }
+      .strip {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .tile {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .tile span {
+        color: var(--dim);
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        max-width: 260px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        margin-right: 4px;
+        vertical-align: -1px;
+      }
+      .viewbar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+        color: var(--dim);
+      }
+      .checks {
+        margin-top: 10px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        padding: 8px 10px;
+      }
+      .check {
+        margin: 3px 0;
+      }
+      .check b.ok {
+        color: var(--ok);
+      }
+      .check b.bad {
+        color: var(--bad);
+      }
+      .check ul {
+        margin: 2px 0 0 18px;
+        padding: 0;
+        color: var(--bad);
+      }
+      pre#report {
+        white-space: pre-wrap;
+        color: var(--dim);
+        margin: 8px 0 0;
+        max-height: 260px;
+        overflow: auto;
+      }
+      aside {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      details {
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+      summary {
+        cursor: pointer;
+        padding: 7px 10px;
+        color: var(--gold);
+        letter-spacing: 0.06em;
+        user-select: none;
+      }
+      summary small {
+        color: var(--dim);
+        letter-spacing: 0;
+      }
+      .body {
+        padding: 4px 10px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field {
+        display: grid;
+        grid-template-columns: 110px minmax(0, 1fr) 52px;
+        align-items: center;
+        gap: 8px;
+      }
+      .field.wide {
+        grid-template-columns: 110px minmax(0, 1fr);
+      }
+      .field > label {
+        color: var(--dim);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .field output {
+        text-align: right;
+        color: var(--ink);
+      }
+      input[type='range'] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+      .note {
+        color: var(--dim);
+        margin: 0;
+      }
+      .kinds {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      .kind {
+        text-align: left;
+        padding: 6px 8px;
+        line-height: 1.3;
+      }
+      .kind b {
+        color: var(--ink);
+      }
+      .kind span {
+        color: var(--dim);
+        display: block;
+        font-size: 11px;
+      }
+      .kind.on {
+        border-color: var(--gold);
+        background: #1d1c18;
+      }
+      .mat {
+        border-top: 1px solid var(--line);
+        padding-top: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .mat h3 {
+        margin: 0;
+        font-size: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .ramp {
+        display: flex;
+        gap: 2px;
+      }
+      .ramp input[type='color'] {
+        width: 100%;
+        min-width: 0;
+        height: 22px;
+        padding: 0;
+        border: 1px solid #2a2d44;
+        background: none;
+        cursor: pointer;
+      }
+      .row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      dialog {
+        background: var(--panel);
+        color: var(--ink);
+        border: 1px solid var(--gold);
+        max-width: 520px;
+        width: calc(100% - 32px);
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.6);
+      }
+      dialog form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>TITAN BUILDER <small>타이탄 빌더 · v2</small></h1>
+      <label
+        >Titan
+        <select id="titan"></select
+      ></label>
+      <button id="new">+ New titan</button>
+      <button id="save" class="primary" disabled>Save</button>
+      <button id="revert" disabled>Revert</button>
+      <span id="status">loading…</span>
+    </header>
+    <main>
+      <section>
+        <div class="viewbar">
+          <label
+            >Light
+            <select id="light"></select
+          ></label>
+          <label
+            >Seed <input id="seed" type="number" value="1" min="1" max="9999" style="width: 70px"
+          /></label>
+          <label
+            >Zoom
+            <select id="zoom">
+              <option>2</option>
+              <option selected>3</option>
+              <option>4</option>
+            </select></label
+          >
+          <label><input id="layers" type="checkbox" /> material layers</label>
+          <span id="paintTime"></span>
+        </div>
+        <div class="stage"><canvas id="big"></canvas></div>
+        <div class="strip">
+          <div class="tile"><canvas id="one"></canvas><span>1× (game size)</span></div>
+          <div class="tile"><canvas id="thumb"></canvas><span>64 px read</span></div>
+          <div class="tile">
+            <div class="legend" id="legend"></div>
+            <span>materials</span>
+          </div>
+        </div>
+        <div class="checks">
+          <div id="checks"></div>
+          <div class="row" style="margin-top: 8px">
+            <button id="runCheck">Run titan:check (quick)</button>
+            <a id="lnkTraining" target="_blank">Training ↗</a>
+            <a id="lnkVsAi" target="_blank">VS AI ↗</a>
+            <a id="lnkSandbox" target="_blank">Damage states ↗</a>
+          </div>
+          <pre id="report"></pre>
+        </div>
+      </section>
+      <aside id="panels"></aside>
+    </main>
+
+    <dialog id="newDlg">
+      <form method="dialog" id="newForm">
+        <h1>NEW TITAN</h1>
+        <p class="note">
+          Runs <code>npm run new:titan</code>: a working placeholder, registered everywhere, hidden as work in
+          progress until it ships. The page reloads on it when it is made.
+        </p>
+        <div class="field wide">
+          <label>id</label><input type="text" name="id" placeholder="gloop" required />
+        </div>
+        <div class="field wide">
+          <label>English name</label><input type="text" name="name" placeholder="The Gloop" required />
+        </div>
+        <div class="field wide">
+          <label>Korean name</label><input type="text" name="ko" placeholder="글룹" required />
+        </div>
+        <div class="kinds" id="newKinds"></div>
+        <div class="field wide">
+          <label>Size class</label>
+          <select name="size">
+            <option>small</option>
+            <option selected>medium</option>
+            <option>large</option>
+          </select>
+        </div>
+        <div class="field wide">
+          <label>Template</label>
+          <select name="from">
+            <option value="blob">blob (a fresh creature)</option>
+            <option>planet</option>
+            <option>asteroid</option>
+            <option>nexus</option>
+            <option>blackhole</option>
+            <option>supernova</option>
+            <option>lastone</option>
+          </select>
+        </div>
+        <div class="field wide">
+          <label>Hue (optional)</label
+          ><input type="number" name="hue" min="0" max="359" placeholder="auto: the freest hue" />
+        </div>
+        <pre id="newOut" class="note"></pre>
+        <div class="row">
+          <button value="cancel" formnovalidate>Cancel</button>
+          <button id="newGo" class="primary" value="default">Create</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

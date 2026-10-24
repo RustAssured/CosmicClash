@@ -14,6 +14,9 @@
  *   --hue=<0..359>     the palette's hue (default: the hue farthest from every other titan's colours)
  *   --stage=<stage>    its home stage (default rim)
  *   --essence=<word>   the one idea it is, for its card (default "mystery")
+ *   --kind=<kind>      what it is: celestial, mineral, organic, construct or cosmic (src/titans/kit/kinds.ts). Blob only:
+ *                      its materials, outline, voice and wake start from the kind's preset (default organic: the plain
+ *                      blob). From a template it is a label (default: the template's own kind)
  *
  * It writes:
  *   src/titans/kit/<id>/<id>.json        definition: attributes, moves (frame data in ticks), materials and palette, art
@@ -29,15 +32,17 @@ import {
   ROSTER_IDS,
   SIZE_CLASSES,
   TIER_OF_SIZE,
-  type MaterialSpec,
+  TITAN_KINDS,
   type MoveDef,
   type SizeClass,
   type TitanDef,
+  type TitanKind,
   type TitanId,
 } from '@/contracts';
 import { getTitanDef } from '@/titans/defs';
 import { ROSTER } from '@/titans/roster';
-import { buildRamp, hexToHsl, hslToHex, hueDistance, rotateHue } from '@/titans/kit/palette';
+import { hexToHsl, hslToHex, hueDistance, rotateHue } from '@/titans/kit/palette';
+import { BLOB_SIZE_SCALE, KIND_PRESETS, kindMaterials } from '@/titans/kit/kinds';
 
 const args = process.argv.slice(2);
 const opt = (k: string, d = ''): string =>
@@ -155,7 +160,7 @@ function unregister(id: string, name: string): void {
 
 /* ------------------------------------------------------------------------------------------------ the definition */
 
-const SIZE_SCALE: Record<SizeClass, number> = { small: 0.72, medium: 1, large: 1.3, huge: 1.3 };
+const SIZE_SCALE = BLOB_SIZE_SCALE;
 
 /** The hue farthest from every roster titan's signature colours (accent and accent2, weighted by how colourful they are). */
 function freeHue(): number {
@@ -172,20 +177,6 @@ function freeHue(): number {
   }
   return best;
 }
-
-const mat = (
-  key: string,
-  base: string,
-  ramp: string[],
-  emissive: number,
-  extra: Partial<MaterialSpec> = {},
-): MaterialSpec =>
-  ({
-    key,
-    base,
-    visual: { ramp, emissive, char: ramp[1], crack: ramp[0], debris: ramp[Math.floor(ramp.length / 2)] },
-    ...extra,
-  }) as unknown as MaterialSpec;
 
 /** Scale every hitbox's geometry (offsets, radii, ranges, widths) of a move by k. */
 function scaleMove(m: MoveDef, k: number): MoveDef {
@@ -206,7 +197,14 @@ function scaleMove(m: MoveDef, k: number): MoveDef {
  * The blob creature: a medium, balanced brawler with KINETIC blows, built on the Asteroid's proven frame data (the feel
  * targets and the AI model hold) without any of its parts (no swarm, no cascade, no tumble spin).
  */
-function blobDef(id: string, name: string, ko: string, hue: number, size: SizeClass): TitanDef {
+function blobDef(
+  id: string,
+  name: string,
+  ko: string,
+  hue: number,
+  size: SizeClass,
+  kind: TitanKind,
+): TitanDef {
   const k = SIZE_SCALE[size];
   const ast = getTitanDef('asteroid');
   const reach = 1.25 * k;
@@ -276,19 +274,10 @@ function blobDef(id: string, name: string, ko: string, hue: number, size: SizeCl
     { ...guard, id: `${id}.guard`, name: 'Hide', nameKo: '움츠리기' },
   ];
 
-  const ramp = (dh: number, n: number, sat: number, lo: number, hi: number): string[] =>
-    buildRamp(hue + dh, n, sat, lo, hi);
-  const materials = [
-    mat('skin', 'regolith', ramp(0, 8, 0.45, 0.07, 0.82), 0, {
-      physics: { toughness: 0.95 },
-    } as Partial<MaterialSpec>),
-    mat('flesh', 'regolith', ramp(-12, 7, 0.55, 0.1, 0.78), 0),
-    mat('marking', 'crystal', ramp(150, 6, 0.65, 0.12, 0.85), 20),
-    mat('eye', 'crystal', ramp(180, 6, 0.75, 0.1, 0.92), 48),
-    mat('core', 'ironNickel', ramp(170, 6, 0.85, 0.2, 0.95), 60, {
-      physics: { density: 3, toughness: 0.9 },
-    } as Partial<MaterialSpec>),
-  ];
+  // the kind's five materials (skin, flesh, marking, eye, core) and outline; organic is the plain blob
+  const preset = KIND_PRESETS[kind];
+  const materials = kindMaterials(kind, hue);
+  const shape = preset.shape;
   const r = (v: number): number => Math.round(v * k);
   const W = r(176);
   const H = r(164);
@@ -320,13 +309,13 @@ function blobDef(id: string, name: string, ko: string, hue: number, size: SizeCl
       params: {
         centre: [r(88), r(82)],
         body: { rx: r(58), ry: r(52) },
-        lobes: 5,
-        lobeSize: 0.38,
-        wobble: 6 * k,
-        skin: 4,
-        markingSize: 13 * k,
-        markings: 0.35,
-        eyes: 3,
+        lobes: shape.lobes,
+        lobeSize: shape.lobeSize,
+        wobble: shape.wobble * k,
+        skin: shape.skin,
+        markingSize: shape.markingSize * k,
+        markings: shape.markings,
+        eyes: shape.eyes,
         eyeR: 7 * k,
         core: { x: r(-6), y: r(4), r: r(10) },
       },
@@ -349,7 +338,7 @@ function blobDef(id: string, name: string, ko: string, hue: number, size: SizeCl
       bob: { amp: 0.7, period: 2.6 },
       sway: { amp: 0.4, period: 3.4 },
       fx: {
-        kind: 'dust',
+        kind: preset.wake,
         ramp: [hslToHex(hue, 0.3, 0.65), hslToHex(hue, 0.3, 0.42), hslToHex(hue, 0.25, 0.22)],
         perHundredPx: 7,
         size: 1,
@@ -487,15 +476,20 @@ if (tpl !== 'blob' && !TEMPLATES[tpl])
 const size = opt('size', tpl === 'planet' || tpl === 'asteroid' ? 'small' : 'medium') as SizeClass;
 if (!SIZE_CLASSES[size]) throw new Error(`--size=${size}: use ${Object.keys(SIZE_CLASSES).join(', ')}`);
 const hue = opt('hue') ? +opt('hue') : freeHue();
+const kind = (opt('kind') ||
+  (tpl === 'blob' ? 'organic' : (ROSTER.find((r) => r.id === tpl)?.kind ?? ''))) as TitanKind;
+if (kind && !(TITAN_KINDS as readonly string[]).includes(kind))
+  throw new Error(`--kind=${kind}: use ${TITAN_KINDS.join(', ')}`);
 const cls = pascal(id);
 
-const def = tpl === 'blob' ? blobDef(id, name, ko, hue, size) : fromTemplate(tpl, id, name, ko, hue);
+const def = tpl === 'blob' ? blobDef(id, name, ko, hue, size, kind) : fromTemplate(tpl, id, name, ko, hue);
 def.kit = {
   template: tpl,
+  ...(kind ? { kind } : {}),
   size,
   stage: opt('stage', 'rim'),
   light: { c: hexRgb(def.ui.accent), radius: 110, base: 0.22 },
-  voice: { pitch: 55, grit: 0.5, ring: 0.3, wet: 0.5 },
+  voice: tpl === 'blob' ? { ...KIND_PRESETS[kind].voice } : { pitch: 55, grit: 0.5, ring: 0.3, wet: 0.5 },
   site: {
     file: id,
     essence: opt('essence', 'mystery'),
@@ -533,7 +527,9 @@ writeFileSync(files[1]!, indexTs(id, tpl));
 writeFileSync(files[2]!, behaviourTs(id, cls, tpl));
 register(id, cls);
 run('npx', ['prettier', '--write', ...files, ...Object.values(REGISTRY)]);
-console.log(`\n'${id}' (${name}, ${ko}) scaffolded from '${tpl}' at hue ${hue}°, size ${size}.`);
+console.log(
+  `\n'${id}' (${name}, ${ko}) scaffolded from '${tpl}'${kind ? ` as ${kind}` : ''} at hue ${hue}°, size ${size}.`,
+);
 
 // a new titan is work in progress (kit.wip), so it is off the site roster: its site art comes at `titan:ship`
 console.log(`Site art (portrait, Korean name, matter) skipped: it is drawn when the titan ships.`);

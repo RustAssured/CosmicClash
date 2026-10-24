@@ -236,6 +236,21 @@ the blob placeholder's; not in the ladder's opponents.
   generalised). The titan guide's creature
   brief gained two lines: *where its scale lives* and *unfair at / open to*.
 
+## S23: the titan builder (v2) and titan kinds
+- **Kinds** (`TITAN_KINDS` in src/contracts/roster.ts; presets in src/titans/kit/kinds.ts): celestial, mineral (rock & metal),
+  organic, construct, cosmic (a cosmic being). Authoring only: no gameplay reads it. A kind sets a new blob titan's five
+  materials (archetype + ramp around its hue), outline, voice and wake; `npm run new:titan -- … --kind=<kind>` (default
+  organic = the old blob, unchanged). Every roster titan is tagged (first guess, for WJ to confirm): Planet, Supernova,
+  Black Hole celestial; Asteroid mineral; Cradle, Cradle Child organic; Last One, 우리 construct; Witness, Nexus cosmic.
+  Proof: one titan scaffolded per kind passed every roster check (validator, size, AI coverage, replay, painting), then
+  removed.
+- **Titan builder** (dev/builder/, `npm run dev` → /dev/builder/): live repaint on every slider (×2–4, 1×, 64 px, material
+  layers), live size / palette / materials / validator checks, Save (Ctrl+S) through a dev-server bridge
+  (tools/builder/plugin.ts: loopback only, header-gated writes, no shell), + New titan, Run titan:check, drafts survive
+  reloads. tools/titans/checks.ts gained `checkSizeOf` / `checkPaletteOf` (the same checks on values).
+- **Next for the builder:** moves (a frame-data timeline, hitboxes on the sprite), the destruction type (rewrite every
+  hitbox's damage type), voice audition, damage states in the page itself.
+
 ## Next
 - **Cradle Child:** WJ answers the brief's open questions, then Gate 1 (body and palette).
 - **Netplay:** after WJ pushes and the site redeploys, run a two-machine test (ONLINE › host › send the link to a friend).

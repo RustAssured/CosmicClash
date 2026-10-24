@@ -38,6 +38,28 @@ Every titan has the same seven parts. A new titan keeps all of its parts in two 
 **Not every titan fits the kit.** 우리 (a baked rig), the Mouth (an analytic fighter) and the Last One (many body regions)
 are hand-built and stay that way. The kit is for the common case: one body, six moves, one signature idea.
 
+### Kinds: what a titan *is*
+
+Every titan has a **kind** (`kit.kind` in its JSON; the titans before the kit carry theirs in `src/titans/roster.ts`):
+
+| Kind | 종류 | What belongs here | Roster |
+|---|---|---|---|
+| **Celestial body** | 천체 | Stars, planets, holes in space: round, layered, glowing from within | Planet, Supernova, Black Hole |
+| **Rock & metal** (`mineral`) | 암석 | Asteroids, ores, crystal masses: hard, faceted, breaking into shards | Asteroid |
+| **Organic** | 생물 | Flesh, membrane, tendrils: soft, lobed, wet, tearing rather than shattering | The Cradle, Cradle Child |
+| **Construct** | 구조체 | Idols, engines, made things: glazed, banded, clean seams | The Last One, 우리 |
+| **Cosmic being** (`cosmic`) | 우주적 존재 | Watchers, possessors, things with too many eyes: luminous, unsettling | The Witness, the Nexus |
+
+A kind is an **authoring preset, not a gameplay type**. Nothing in a fight reads it: matchups still come only from damage
+types against each material's `resist`, which keeps balancing in one place. What a kind does is give a new blob titan a
+fitting start (src/titans/kit/kinds.ts):
+
+- the physics archetype and colour ramp of its five materials (skin, flesh, marking, eye, core);
+- the outline (lobes, wobble, markings, eyes);
+- its voice and its movement wake.
+
+Every one of those numbers stays editable afterwards. From a template (`--from=planet`, …) the kind is only a label.
+
 ---
 
 ## 2. How to describe a new creature to Claude
@@ -63,6 +85,7 @@ Weakness:                     what happens when it's losing (its failure mode)
 Sound:                        e.g. "wet, heavy, a whale's groan", "glass bells under a landslide"
 Lore line:                    one or two sentences for its card
 Homage notes:                 what it nods to, and how it stays its own (see "Homage" below)
+Kind:                         celestial / mineral (rock & metal) / organic / construct / cosmic (a cosmic being)
 Template:                     blob (a fresh creature), or start from: planet / asteroid / nexus / blackhole / supernova / lastone
 ```
 
@@ -92,6 +115,31 @@ A good test: if someone who has seen the film looks at the card and says "oh, th
 ---
 
 ## 3. The numbers worth tweaking
+
+### The titan builder (v2)
+
+The easiest way to tweak them is the **titan builder**, a page in the dev server:
+
+```text
+npm run dev, then open http://localhost:5173/dev/builder/
+```
+
+- **Pick a titan** (any kit titan) or **+ New titan**: the same scaffold as `npm run new:titan`, with the kind picked from
+  cards.
+- **Every number has a slider**, and the body repaints as you drag: at ×2–4, at game size and as the 64 px read. Its
+  panels are KIND, BODY (the blob's shape; other painters get their raw `art.params`), PALETTE & MATERIALS (a hue shift for
+  everything, accents, each material's ramp, archetype, glow, toughness and density), ATTRIBUTES & AI, VOICE, CARD and RAW
+  JSON.
+- **The checks run live** on every change: size class, palette clash with the roster, every material showing, and the
+  definition validator (frame data, slots). **Run titan:check** runs the quick checks (AI coverage, replay) on the saved file.
+- **Save** (or Ctrl+S) writes the JSON, prettier-formatted, and the open game tabs reload with it. The **Training**, **VS AI**
+  and **Damage states** links open the saved titan.
+- Unsaved edits are kept as a draft in the tab, so a reload never loses them. **Revert** goes back to the saved file.
+
+It only works with `npm run dev` on your own machine: the dev server saves the files (tools/builder/plugin.ts), and only
+for requests from the machine itself. The JSON stays the one source of truth, so everything below still works by hand.
+
+### By hand
 
 All of these are in `src/titans/kit/<id>/<id>.json`. Change one, save, and reload the game.
 
@@ -145,6 +193,7 @@ flags any slip (docs/netplay/STEP0.md).
 npm run new:titan -- <id> "<English Name>" "<Korean name>"                 a blob creature (default)
 npm run new:titan -- <id> "<English Name>" "<Korean name>" --from=planet   start from an existing titan
     options: --size=small|medium|large  --hue=0..359  --stage=rim  --essence=<word>
+             --kind=celestial|mineral|organic|construct|cosmic   (§1 "Kinds"; default organic, the plain blob)
 npm run new:titan -- --remove <id>                                          take it out again, cleanly
 ```
 
@@ -259,5 +308,7 @@ A titan ships when all of these are true.
 | The kit voice | `src/audio/voices/kitVoice.ts` |
 | The checks | `src/titans/roster.test.ts`, `tools/titans/checks.ts`, `tools/titans/check.ts` |
 | The scaffold | `tools/titans/new.ts` |
+| Kinds (presets) | `src/titans/kit/kinds.ts` (the list: `TITAN_KINDS` in `src/contracts/roster.ts`) |
+| The titan builder | `dev/builder/` (page), `tools/builder/plugin.ts` (the dev server's file bridge) |
 | The ship step | `tools/titans/ship.ts` (`npm run titan:ship -- <id>`) |
 | The site cards | `tools/site/roster.ts` (run on every `npm run build:site`) |

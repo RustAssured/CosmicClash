@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { titanBuilder } from './tools/builder/plugin';
 
 const src = fileURLToPath(new URL('./src', import.meta.url));
 
@@ -33,6 +34,8 @@ function buildCommit(): string {
 
 export default defineConfig({
   base: './',
+  // the titan builder's file bridge (dev/builder/): `npm run dev` only
+  plugins: [titanBuilder()],
   resolve: { alias: { '@': src } },
   define: { __ADEUK_BUILD__: JSON.stringify(buildCommit()) },
   build: {

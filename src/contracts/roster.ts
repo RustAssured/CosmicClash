@@ -36,6 +36,14 @@ export const SIZE_CLASSES: Readonly<Record<SizeClass, readonly [number, number]>
   huge: [180, 320],
 };
 
+/**
+ * Titan kinds: what a titan fundamentally IS, for authoring. A kind is a family of looks, materials, motion and sound, not a
+ * gameplay type: matchups still come only from damage types against material `resist`. The titan builder and
+ * `npm run new:titan -- --kind=<kind>` start a new titan from its kind's preset (src/titans/kit/kinds.ts).
+ */
+export const TITAN_KINDS = ['celestial', 'mineral', 'organic', 'construct', 'cosmic'] as const;
+export type TitanKind = (typeof TITAN_KINDS)[number];
+
 /** A titan's default strength tier when its roster data does not give one (COSMIC CLASH's order). */
 export const TIER_OF_SIZE: Readonly<Record<SizeClass, number>> = { small: 1, medium: 2, large: 3, huge: 4 };
 
@@ -92,6 +100,8 @@ export interface KitVoiceTuning {
 export interface TitanKit {
   /** Which template it was scaffolded from: 'blob' or an existing titan's id (its painter and behaviour). */
   template: string;
+  /** What it is (celestial, mineral, organic, construct, cosmic): its authoring family, `TITAN_KINDS`. */
+  kind?: TitanKind;
   size: SizeClass;
   /** Its home stage (StageId): the ladder rung and showcase fights use it. */
   stage: string;

@@ -243,6 +243,9 @@ Each module has its own `README.md` (public API, invariants, tuning knobs, how t
 
 **Sandboxes worth knowing** (with `npm run dev`, then open `/dev/ui/…`):
 
+- `/dev/builder/` : the **titan builder**. Make a kit titan, shape it with sliders while it repaints live, watch the roster
+  checks pass or fail as you drag, and save its JSON (docs/TITAN_GUIDE.md §3).
+
 - `/dev/ui/index.html?screen=controller` : the real input manager, UI and audio engine over a stage backdrop, no simulation. Any
   screen by name (`title`, `mode`, `assign`, `select`, `stage`, `controller`, `options`, `pause`, `results`, `attract`), or `?hud=1`.
 - `/dev/ui/audio.html` : every sound on a button, with the score's stage / phase / intensity controls, volume, and a live level
