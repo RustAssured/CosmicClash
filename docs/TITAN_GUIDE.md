@@ -205,6 +205,7 @@ And from a terminal:
 ```text
 npm run titan:check -- <id>                the full report: size, palette, AI coverage, replay, balance sweep
 npx tsx tools/titans/still.ts <id>         stills of it in a real fight + the select screen (docs/gallery/kit/)
+npx tsx tools/titans/clip.ts out.gif --a=<id> --b=planet --script0="20:crush"   a clip of a fight (.gif / .mp4 / .webm; no GPU)
 npx vitest run src/titans                  the fast checks for every titan
 ```
 

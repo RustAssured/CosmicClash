@@ -269,6 +269,13 @@ the blob placeholder's; not in the ladder's opponents.
   checks pass. **Open for WJ:** the Korean name (잔여체 proposed), the brief's mechanics. Moves, signature, voice: the blob's.
 - Not verified here: the GPU renderer (this sandbox's Chromium never reaches `ready`, for any titan, the Planet included);
   the strip uses the software compositor (tools/titans/strip.ts).
+- **The Remainder's living idle** (src/combat/behaviours/kit/remainderIdle.ts, presentation only, ≈ 0.3 ms a frame): the
+  vortex turns (clockwise: the arms wind counter-clockwise outward in the key art, measured, so they trail and the vortex
+  reads as draining; the inner turns lead a little), light runs down the ichor veins toward the core, the eye breathes and
+  flinches tight for a second when hit, nine wreckage chunks orbit on tilted ellipses (behind / in front). Fight-changed
+  cells are left as the matter world shows them. Clips (tools/titans/clip.ts: the software compositor + ffmpeg, no GPU)
+  in docs/titans/remainder/clips/: idle (gif), an exchange with the Witness, its (placeholder) ultimate on the Planet, and
+  20 s of AI vs the Nexus (mp4).
 - **Next (Phase 2):** a pixel touch-up editor (paint cells and materials), part regions and pivots for motion.
 
 ## Next
