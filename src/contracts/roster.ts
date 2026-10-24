@@ -19,6 +19,7 @@ export const ROSTER_IDS = [
   'uri',
   'cradle',
   'cradlechild',
+  'remainder',
   // new:titan (the scaffold adds new ids above this line)
 ] as const;
 
@@ -102,6 +103,11 @@ export interface TitanKit {
   template: string;
   /** What it is (celestial, mineral, organic, construct, cosmic): its authoring family, `TITAN_KINDS`. */
   kind?: TitanKind;
+  /**
+   * 'image': its body was imported from key art in the titan builder (body.json in its folder, painted by
+   * src/titans/kit/image.ts) instead of being painted by its template's painter. Its behaviour is still the template's.
+   */
+  painter?: 'image';
   size: SizeClass;
   /** Its home stage (StageId): the ladder rung and showcase fights use it. */
   stage: string;

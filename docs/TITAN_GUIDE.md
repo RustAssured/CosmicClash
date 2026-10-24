@@ -136,6 +136,33 @@ npm run dev, then open http://localhost:5173/dev/builder/
   and **Damage states** links open the saved titan.
 - Unsaved edits are kept as a draft in the tab, so a reload never loses them. **Revert** goes back to the saved file.
 
+### Import key art (Phase 1)
+
+A blob titan's body can come from **key art** instead of the blob: BODY › **Import key art…** opens the import workspace.
+
+1. **Load the art** (png, jpg or webp; or drop it in). The auto mask is a first guess: anything unlike the frame's border.
+   On art whose background shares the creature's colours (nebulae!) it will be wrong, and that is expected.
+2. **Mark the creature.** Lasso − across everything, then Lasso + around the creature's outline; Brush + / − for details.
+   **Background** samples colours that are not the creature, and **Cut background** removes them from inside the mask.
+   **Core** puts the KO anchor (the eye, the heart); Undo goes back.
+3. **Convert.** The preview on the right is the game's own painter. The knobs:
+   - **size**: its longest side in game px (its size class's default);
+   - **materials**: how many body regions; **structure** 1 = regions that follow the anatomy (shell, membrane, vortex),
+     0 = plain colour groups. Keep it high: the matter world weakens every bond between two different materials, so
+     colour-band materials would make the body crumble along random lines;
+   - **veins** (0–3): strongly coloured streaks a region's ramp cannot show become their own glowing materials (and weak
+     seams: the body cracks along them);
+   - **simplify** flattens painterly texture into clean regions; **vibrance** keeps the colours alive at sprite size;
+   - **form light** adds the stage's light on a gentle dome; **dither** blends the ramp steps.
+4. **Apply to titan**, then rename the materials in PALETTE (they come named by colour) and pick their physics, then
+   **Save**: body.json, its JSON, its index.ts (the image painter, src/titans/kit/image.ts) and the key art
+   (docs/titans/<id>/keyart.webp) are written together.
+
+An imported body keeps the art's shading in its material ramps, so PALETTE still recolours it and the stage still lights
+it. Its moves, signature and voice are the blob's until they are built. The **BRIEF** panel keeps the creature's description
+in docs/titans/<id>/BRIEF.md, and **Copy packet for Claude** puts the brief and the titan's state on the clipboard for a
+Claude Code session to take further. The Remainder (docs/titans/remainder/) was the first titan made this way.
+
 It only works with `npm run dev` on your own machine: the dev server saves the files (tools/builder/plugin.ts), and only
 for requests from the machine itself. The JSON stays the one source of truth, so everything below still works by hand.
 
@@ -310,5 +337,6 @@ A titan ships when all of these are true.
 | The scaffold | `tools/titans/new.ts` |
 | Kinds (presets) | `src/titans/kit/kinds.ts` (the list: `TITAN_KINDS` in `src/contracts/roster.ts`) |
 | The titan builder | `dev/builder/` (page), `tools/builder/plugin.ts` (the dev server's file bridge) |
+| Key art import | `dev/builder/artImport.ts` (art → cells and materials), `src/titans/kit/image.ts` (the image painter) |
 | The ship step | `tools/titans/ship.ts` (`npm run titan:ship -- <id>`) |
 | The site cards | `tools/site/roster.ts` (run on every `npm run build:site`) |

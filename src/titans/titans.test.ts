@@ -185,9 +185,9 @@ describe.each(PAINTED)('generator: %s', (id) => {
     expect(Buffer.compare(Buffer.from(b.material), Buffer.from(map.material))).toBe(0);
     const c = portraitMap(paintTitanMap(def, 4321, DEFAULT_LIGHTING));
     // the Cradle paints one body whatever the seed (CRADLE_PAINT_SEED: its approved idle frames are of that body, WJ
-    // 2026-10-19)
+    // 2026-10-19), and so does a titan imported from key art (its body is the art: src/titans/kit/image.ts)
     const cmp = Buffer.compare(Buffer.from(c.material), Buffer.from(map.material));
-    if (id === 'cradle') expect(cmp).toBe(0);
+    if (id === 'cradle' || def.kit?.painter === 'image') expect(cmp).toBe(0);
     else expect(cmp).not.toBe(0);
   });
 

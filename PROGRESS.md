@@ -251,6 +251,26 @@ the blob placeholder's; not in the ladder's opponents.
 - **Next for the builder:** moves (a frame-data timeline, hitboxes on the sprite), the destruction type (rewrite every
   hitbox's damage type), voice audition, damage states in the page itself.
 
+## S24: key art import (builder Phase 1) and The Remainder / 잔여체
+- **Import key art** (BODY › Import key art…; dev/builder/importArt.ts + artImport.ts): mask the creature (auto guess,
+  lasso, brush, background samples + cut, core point), then convert: crop and scale to the size class, Kuwahara simplify,
+  **region materials** (k-means on colour blended with the surroundings' colour: materials follow the anatomy, because the
+  matter world weakens every bond between different materials), up to 3 **vein** materials for colours a region's ramp
+  cannot show (glowing, weak seams), hue-shifted ramps from each region's lightness quantiles (dominant hue per step), each
+  cell's level within its ramp. Stored as body.json (one byte a cell); painted by src/titans/kit/image.ts through the
+  ArtCanvas (stage light on a gentle dome, rim, outline, dither): palette-clean and recolourable. `kit.painter: 'image'`.
+- **Brief panel**: docs/titans/<id>/BRIEF.md in the builder, and "Copy packet for Claude".
+- **Bridge**: GET/PUT body (body.json + JSON + index.ts + key art), GET/PUT brief. The bridge no longer imports the
+  roster contract: vite.config.ts dependencies restart the dev server, and the scaffold edits that file mid-request.
+- **The Remainder / 잔여체** (WIP, `remainder`): the first titan from key art, made entirely in the builder UI (driven by
+  Playwright): celestial, large, 163×230 px, materials crust, rubble, membrane, bone, vortex, ichor (vein), spark (vein),
+  core. Brief from the user's text with a creature-brief proposal (Compaction signature, Loosening ultimate, Cannibal failure
+  mode) in docs/titans/remainder/BRIEF.md; key art beside it; a software-composited fight strip in stills/. All quick
+  checks pass. **Open for WJ:** the Korean name (잔여체 proposed), the brief's mechanics. Moves, signature, voice: the blob's.
+- Not verified here: the GPU renderer (this sandbox's Chromium never reaches `ready`, for any titan, the Planet included);
+  the strip uses the software compositor (tools/titans/strip.ts).
+- **Next (Phase 2):** a pixel touch-up editor (paint cells and materials), part regions and pivots for motion.
+
 ## Next
 - **Cradle Child:** WJ answers the brief's open questions, then Gate 1 (body and palette).
 - **Netplay:** after WJ pushes and the site redeploys, run a two-machine test (ONLINE › host › send the link to a friend).

@@ -13,9 +13,11 @@ import { MATERIAL_ARCHETYPES } from '@/matter/archetypes';
 import { STAGE_INFO } from '@/stages/info';
 import { kitTitan } from '@/titans/kit';
 import { paintBlob, type BlobParams } from '@/titans/kit/blob';
+import { paintImage, type ImageBody, type ImageParams } from '@/titans/kit/image';
 import { BLOB_KEYS, BLOB_SIZE_SCALE, KIND_PRESETS, kindMaterials } from '@/titans/kit/kinds';
 import { buildRamp, hexToHsl, rotateHue } from '@/titans/kit/palette';
 import { checkPaletteOf, checkSizeOf, type CheckResult } from '../../tools/titans/checks';
+import { openImport, type ImportResult } from './importArt';
 
 /**
  * THE TITAN BUILDER (v2 of the titan kit): edit a kit titan's JSON with sliders and see it repaint live, with the roster's
@@ -78,6 +80,12 @@ function saveUi(): void {
 let titans: ListedTitan[] = [];
 let def: TitanDef | null = null;
 let saved = '';
+/** An imported titan's body as saved (body.json), and an unsaved import (with its key art) waiting for Save. */
+let savedBody: ImageBody | null = null;
+let pendingBody: ImageBody | null = null;
+let pendingKeyart: string | null = null;
+const body = (): ImageBody | null => pendingBody ?? savedBody;
+const isImage = (): boolean => kit().painter === 'image';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -121,14 +129,15 @@ function status(text: string, cls = ''): void {
   s.className = cls;
 }
 
-const dirty = (): boolean => !!def && JSON.stringify(def) !== saved;
+const dirty = (): boolean => !!def && (JSON.stringify(def) !== saved || !!pendingBody);
 
 /** Everything that follows an edit: the draft, the header, a repaint on the next frame. */
 function changed(): void {
   if (!def) return;
   const d = dirty();
   try {
-    if (d) sessionStorage.setItem(draftKey(def.id), JSON.stringify(def));
+    // the draft carries an unsaved import's body too (not its key art: Save then keeps the art already on disk)
+    if (d) sessionStorage.setItem(draftKey(def.id), JSON.stringify({ def, body: pendingBody }));
     else sessionStorage.removeItem(draftKey(def.id));
   } catch {
     /* no storage: no draft */
@@ -266,7 +275,12 @@ function thumbnail(s: Sprite, target: number): Sprite {
 
 function render(): void {
   if (!def) return;
-  const painter = kitTitan(def.id)?.paint ?? (isBlob() ? paintBlob : null);
+  const art = body();
+  const painter = isImage()
+    ? art
+      ? (d: TitanDef, _s: number, l: ReturnType<typeof lighting>) => paintImage(d, art, l)
+      : null
+    : (kitTitan(def.id)?.paint ?? (isBlob() ? paintBlob : null));
   const checks: [string, CheckResult][] = [];
   const problems: string[] = [];
   let sprite: Sprite | null = null;
@@ -506,7 +520,73 @@ function applyKind(k: TitanKind): void {
   fitCanvas();
 }
 
+function importButton(b: HTMLElement): void {
+  const ok = kit().template === 'blob' && (isBlob() || isImage());
+  const btn = el('button', { textContent: isImage() ? 'Re-import key art…' : 'Import key art…' });
+  btn.disabled = !ok;
+  btn.title = ok ? '' : 'art import is for blob-template titans (this one has its own painter)';
+  btn.addEventListener('click', () =>
+    openImport({ def: D(), kind: kit().kind ?? 'organic', size: kit().size, onApply: applyImport }),
+  );
+  b.append(el('div', { className: 'row' }, btn));
+}
+
+/** An import from the workspace: its materials, its art block and its body become the titan's (Save writes them). */
+function applyImport(r: ImportResult): void {
+  const c = r.converted;
+  D().materials = c.materials;
+  D().art = {
+    w: c.body.w,
+    h: c.body.h,
+    coreX: Math.round(c.body.core.x),
+    coreY: Math.round(c.body.core.y),
+    coreRadius: c.body.core.r,
+    params: { form: r.form, dither: r.dither },
+  };
+  kit().painter = 'image';
+  if (r.accents) {
+    D().ui.accent = kit().site.accent = c.accent[0];
+    D().ui.accent2 = kit().site.accent2 = c.accent[1];
+  }
+  pendingBody = c.body;
+  pendingKeyart = r.keyart;
+  buildPanels();
+  changed();
+}
+
 function bodyPanel(b: HTMLElement): void {
+  importButton(b);
+  if (isImage()) {
+    const p = (): Partial<ImageParams> => D().art.params as Partial<ImageParams>;
+    b.append(
+      el('p', {
+        className: 'note',
+        textContent: `Imported from key art: ${D().art.w}×${D().art.h} cells (src/titans/kit/${D().id}/body.json). Its colours are its material ramps (PALETTE).`,
+      }),
+    );
+    slider(
+      b,
+      'form light',
+      () => p().form ?? 0.25,
+      (v) => (p().form = v),
+      { min: 0, max: 1, step: 0.05 },
+    );
+    slider(
+      b,
+      'dither',
+      () => p().dither ?? 0.35,
+      (v) => (p().dither = v),
+      { min: 0, max: 1, step: 0.05 },
+    );
+    selectField(
+      b,
+      'size class',
+      Object.keys(SIZE_CLASSES),
+      () => kit().size,
+      (v) => (kit().size = v as SizeClass),
+    );
+    return;
+  }
   if (!isBlob()) {
     b.append(
       el('p', {
@@ -720,7 +800,24 @@ function palettePanel(b: HTMLElement): void {
       m().base = arch.value;
       changed();
     });
-    box.append(el('h3', {}, el('span', { textContent: m().key }), arch));
+    // an imported titan's materials are named by colour: rename them for what they are (bone, membrane, ichor…)
+    const key = isImage() && m().key !== 'core' ? el('input', { type: 'text', value: m().key }) : null;
+    if (key) {
+      key.style.width = '120px';
+      key.addEventListener('change', () => {
+        const v = key.value
+          .trim()
+          .replace(/[^a-z0-9]/gi, '')
+          .toLowerCase();
+        if (!v || v.startsWith('dead') || D().materials.some((o, j) => j !== mi && o.key === v)) {
+          key.value = m().key;
+          return status(`'${v}': material keys are unique, lowercase, and never start with 'dead'`, 'err');
+        }
+        m().key = key.value = v;
+        changed();
+      });
+    }
+    box.append(el('h3', {}, key ?? el('span', { textContent: m().key }), arch));
     const ramp = el('div', { className: 'ramp' });
     const fillRamp = (): void => {
       ramp.replaceChildren(
@@ -961,13 +1058,103 @@ function jsonPanel(b: HTMLElement): void {
   b.append(ta, el('div', { className: 'row' }, apply));
 }
 
+const BRIEF_TEMPLATE = (d: TitanDef): string => `# CREATURE BRIEF: ${d.name.toUpperCase()} / ${d.nameKo}
+
+**Key art:** [keyart](keyart.webp)
+
+**Essence:** ${d.kit?.site.essence ?? ''}
+
+## Description
+(paste the creature's description here: lore, attack style, signature idea)
+
+## Creature brief (docs/TITAN_GUIDE.md §2)
+- Silhouette:
+- Size class: ${d.kit?.size ?? ''}
+- Where its scale lives:
+- Unfair at / open to:
+- Materials (outside to inside):
+- Palette mood:
+- How it destroys matter:
+- Signature move:
+- Weakness (failure mode):
+- Sound:
+- Lore line:
+- Homage notes:
+- Kind: ${d.kit?.kind ?? ''}
+`;
+
+/** The creature's brief (docs/TITAN_GUIDE.md §2), kept as docs/titans/<id>/BRIEF.md beside its key art. */
+function briefPanel(b: HTMLElement): void {
+  const ta = el('textarea', { rows: 14, spellcheck: true, placeholder: 'loading…' });
+  const id = D().id;
+  void api<{ text: string }>(`brief?id=${id}`).then((r) => {
+    if (def?.id === id) ta.value = r.text || BRIEF_TEMPLATE(D());
+  });
+  const save = el('button', { textContent: 'Save brief' });
+  save.addEventListener('click', async () => {
+    try {
+      const r = await api<{ saved: string }>(`brief?id=${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ text: ta.value }),
+      });
+      status(`saved ${r.saved}`);
+    } catch (e) {
+      status(`brief: ${(e as Error).message}`, 'err');
+    }
+  });
+  const copy = el('button', { textContent: 'Copy packet for Claude' });
+  copy.title = 'the brief, the titan and what to do next, ready to paste into a Claude Code session';
+  copy.addEventListener('click', async () => {
+    const packet = claudePacket(ta.value);
+    try {
+      await navigator.clipboard.writeText(packet);
+      status('packet copied: paste it into a Claude Code session');
+    } catch {
+      ta.value = packet;
+      status('could not reach the clipboard: the packet is in the box, copy it from there', 'err');
+    }
+  });
+  b.append(
+    el('p', {
+      className: 'note',
+      textContent: `docs/titans/${id}/BRIEF.md: the description and the brief the build starts from.`,
+    }),
+    ta,
+    el('div', { className: 'row' }, save, copy),
+  );
+}
+
+/** Everything a Claude Code session needs to take this titan further, as one paste. */
+function claudePacket(brief: string): string {
+  const d = D();
+  const k = kit();
+  return `I'm building a titan for ADEUK: TITANS with the titan builder (dev/builder/). Please take it further.
+
+Titan: ${d.name} / ${d.nameKo}, id \`${d.id}\`, kind ${k.kind ?? '(none)'}, size ${k.size}, template ${k.template}${
+    k.painter === 'image' ? ', body imported from key art (src/titans/kit/image.ts)' : ''
+  }.
+Files: src/titans/kit/${d.id}/${d.id}.json (definition), src/titans/kit/${d.id}/index.ts (painter), src/combat/behaviours/kit/${d.id}.ts (behaviour), docs/titans/${d.id}/ (brief and key art).
+Materials now: ${d.materials.map((m) => `${m.key} (${m.base})`).join(', ')}.
+Moves now: ${d.moves.map((m) => `${m.slot} ${m.name}`).join(', ')}.
+
+Work from the brief below and docs/TITAN_GUIDE.md: the materials' physics and names, its moves and frame data, its signature mechanic in the behaviour file, its voice, its card copy. Keep it WIP; run \`npm run titan:check -- ${d.id}\` and show me stills.
+
+${brief}`;
+}
+
 function buildPanels(): void {
   const p = $('panels');
   if (!def) return p.replaceChildren();
   const kindLabel = kit().kind ? KIND_PRESETS[kit().kind!].label : 'none';
   p.replaceChildren(
     section('kind', 'KIND · 종류', kindLabel, kindPanel),
-    section('body', 'BODY · 몸', isBlob() ? 'blob painter' : kit().template, bodyPanel),
+    section('brief', 'BRIEF · 설정', 'description, key art, Claude', briefPanel),
+    section(
+      'body',
+      'BODY · 몸',
+      isImage() ? 'imported art' : isBlob() ? 'blob painter' : kit().template,
+      bodyPanel,
+    ),
     section('palette', 'PALETTE & MATERIALS · 색', `${D().materials.length} materials`, palettePanel),
     section('stats', 'ATTRIBUTES & AI · 능력치', 'mass, tempo, personality', statsPanel),
     section('voice', 'VOICE · 목소리', 'kit voice', voicePanel),
@@ -995,11 +1182,16 @@ async function open(id: string): Promise<void> {
   const fresh = await api<TitanDef>(`titan?id=${encodeURIComponent(id)}`);
   saved = JSON.stringify(fresh);
   def = fresh;
+  savedBody = await api<ImageBody | null>(`body?id=${encodeURIComponent(id)}`);
+  pendingBody = null;
+  pendingKeyart = null;
   let restored = false;
   try {
-    const draft = sessionStorage.getItem(draftKey(id));
-    if (draft && draft !== saved) {
-      def = JSON.parse(draft) as TitanDef;
+    const raw = sessionStorage.getItem(draftKey(id));
+    const draft = raw ? (JSON.parse(raw) as { def?: TitanDef; body?: ImageBody | null }) : null;
+    if (draft?.def && (JSON.stringify(draft.def) !== saved || draft.body)) {
+      def = draft.def;
+      pendingBody = draft.body ?? null;
       restored = true;
     }
   } catch {
@@ -1022,13 +1214,23 @@ async function save(): Promise<void> {
   if (!def) return;
   status('saving…');
   try {
-    const r = await api<{ saved: string }>(`titan?id=${def.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(def),
-    });
+    // an import writes its body, definition, painter and key art together; Vite reloads every page on the new index.ts
+    const r = pendingBody
+      ? await api<{ saved: string[] }>(`body?id=${def.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            def,
+            body: pendingBody,
+            ...(pendingKeyart ? { keyart: pendingKeyart } : {}),
+          }),
+        })
+      : await api<{ saved: string }>(`titan?id=${def.id}`, { method: 'PUT', body: JSON.stringify(def) });
+    if (pendingBody) savedBody = pendingBody;
+    pendingBody = null;
+    pendingKeyart = null;
     saved = JSON.stringify(def);
     changed();
-    status(`saved ${r.saved}`);
+    status(`saved ${String(r.saved)}`);
   } catch (e) {
     status(`save failed: ${(e as Error).message}`, 'err');
   }
@@ -1135,6 +1337,8 @@ function bootView(): void {
   $('revert').addEventListener('click', () => {
     if (!def || !confirm('Throw away the unsaved changes?')) return;
     def = JSON.parse(saved) as TitanDef;
+    pendingBody = null;
+    pendingKeyart = null;
     buildPanels();
     changed();
   });

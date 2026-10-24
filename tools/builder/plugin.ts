@@ -1,10 +1,8 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
-// relative, not '@/': vite.config.ts loads this before any alias exists (the roster contract has no imports of its own)
-import { SIZE_CLASSES, TITAN_KINDS } from '../../src/contracts/roster';
 
 /**
  * THE TITAN BUILDER'S FILE BRIDGE (dev server only): the builder page (dev/builder/) runs in the browser and cannot write
@@ -16,6 +14,12 @@ import { SIZE_CLASSES, TITAN_KINDS } from '../../src/contracts/roster';
  *   PUT  /__builder/titan?id=<id>   save its JSON (validated as JSON, same id, has a kit block; prettier-formatted)
  *   POST /__builder/new             { id, name, ko, kind, size, from?, hue? } → `npm run new:titan` (output returned)
  *   POST /__builder/check?id=<id>   `npm run titan:check -- <id> --quick` (output returned)
+ *   GET  /__builder/body?id=<id>    an imported titan's body.json (null if it has none)
+ *   PUT  /__builder/body?id=<id>    { def, body, keyart? }: make it an imported-art titan (src/titans/kit/image.ts): writes
+ *                                   body.json, its JSON and its index.ts (the image painter); the key art (a data URL) goes
+ *                                   to docs/titans/<id>/keyart.<ext>. Only for blob-template or already-imported titans.
+ *   GET  /__builder/brief?id=<id>   docs/titans/<id>/BRIEF.md ('' if none)
+ *   PUT  /__builder/brief?id=<id>   { text }: write it
  *
  * The dev server listens on the LAN (vite.config.ts `host`), so the bridge only answers the machine itself (loopback), and
  * anything that writes needs the `x-titan-builder` header (a page on another origin cannot send it without a preflight,
@@ -25,12 +29,33 @@ import { SIZE_CLASSES, TITAN_KINDS } from '../../src/contracts/roster';
 const ROOT = process.cwd();
 const KIT_DIR = join(ROOT, 'src/titans/kit');
 const ID_RE = /^[a-z][a-z0-9]{2,15}$/;
-const KINDS: readonly string[] = TITAN_KINDS;
-const SIZES = Object.keys(SIZE_CLASSES);
+// kept here, not imported: anything vite.config.ts imports is a config dependency, and the scaffold edits the roster
+// contract, which would restart the dev server in the middle of the request (plugin.test.ts keeps these in step)
+export const KINDS: readonly string[] = ['celestial', 'mineral', 'organic', 'construct', 'cosmic'];
+export const SIZES: readonly string[] = ['small', 'medium', 'large', 'huge'];
 const TEMPLATES = ['blob', 'planet', 'asteroid', 'nexus', 'blackhole', 'supernova', 'lastone'];
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 const jsonPath = (id: string): string => join(KIT_DIR, id, `${id}.json`);
+const docsDir = (id: string): string => join(ROOT, 'docs/titans', id);
+
+/** The index.ts of a titan whose body is imported art (the image painter reading its body.json). */
+const imageIndexTs = (id: string): string => `import type { TitanDef } from '@/contracts';
+import { buildImageRig, paintImage, type ImageBody } from '../image';
+import type { KitTitan } from '../types';
+import body from './body.json';
+import json from './${id}.json';
+
+/**
+ * ${id}: a kit titan whose body was imported from key art in the titan builder (dev/builder/, "Import art"): body.json holds
+ * its cells, the image painter (src/titans/kit/image.ts) lights them with its JSON's material ramps. Re-import or recolour it
+ * in the builder; write its own painter here if it outgrows the import.
+ */
+const def = json as unknown as TitanDef;
+const art = body as ImageBody;
+const kit: KitTitan = { def, paint: (d, _seed, light) => paintImage(d, art, light), rig: (d) => buildImageRig(d, art) };
+export default kit;
+`;
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -160,6 +185,78 @@ async function handle(
     }
     const r = await runTool('tools/titans/new.ts', args);
     return send(res, r.code === 0 ? 200 : 500, { ok: r.code === 0, output: r.output });
+  }
+
+  if (path === 'body' || path === 'brief') {
+    const id = q.get('id') ?? '';
+    if (!ID_RE.test(id) || !existsSync(jsonPath(id)))
+      return send(res, 404, { error: `no kit titan '${id}'` });
+    const dir = join(KIT_DIR, id);
+    if (path === 'brief') {
+      const file = join(docsDir(id), 'BRIEF.md');
+      if (req.method === 'GET')
+        return send(res, 200, { text: existsSync(file) ? readFileSync(file, 'utf8') : '' });
+      if (req.method === 'PUT') {
+        const b = JSON.parse(await readBody(req, 512 << 10)) as { text?: unknown };
+        if (typeof b.text !== 'string') return send(res, 400, { error: 'no text' });
+        mkdirSync(docsDir(id), { recursive: true });
+        writeFileSync(file, b.text.endsWith('\n') ? b.text : b.text + '\n');
+        return send(res, 200, { saved: `docs/titans/${id}/BRIEF.md` });
+      }
+    }
+    if (req.method === 'GET') {
+      const file = join(dir, 'body.json');
+      return send(res, 200, existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null);
+    }
+    if (req.method === 'PUT') {
+      const index = readFileSync(join(dir, 'index.ts'), 'utf8');
+      if (!index.includes("from '../blob'") && !index.includes("from '../image'"))
+        return send(res, 400, {
+          error: `'${id}' has its own painter: art import is for blob-template titans`,
+        });
+      let b: { def?: { id?: unknown; kit?: unknown }; body?: Record<string, unknown>; keyart?: unknown };
+      try {
+        b = JSON.parse(await readBody(req, 32 << 20)) as typeof b;
+      } catch {
+        return send(res, 400, { error: 'not JSON' });
+      }
+      const body = b.body;
+      const ok =
+        body &&
+        body['version'] === 1 &&
+        Number.isInteger(body['w']) &&
+        Number.isInteger(body['h']) &&
+        (body['w'] as number) <= 300 &&
+        (body['h'] as number) <= 300 &&
+        typeof body['cells'] === 'string' &&
+        /^[A-Za-z0-9+/=]*$/.test(body['cells']) &&
+        typeof body['core'] === 'object';
+      if (!ok) return send(res, 400, { error: 'not an image body' });
+      if (b.def?.id !== id || !b.def.kit)
+        return send(res, 400, { error: `the definition's id is not '${id}'` });
+      const saved = [
+        `src/titans/kit/${id}/body.json`,
+        `src/titans/kit/${id}/${id}.json`,
+        `src/titans/kit/${id}/index.ts`,
+      ];
+      if (typeof b.keyart === 'string') {
+        const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(b.keyart);
+        if (!m) return send(res, 400, { error: 'the key art is not a png, jpeg or webp data URL' });
+        mkdirSync(docsDir(id), { recursive: true });
+        const ext = m[1] === 'jpeg' ? 'jpg' : m[1]!;
+        writeFileSync(join(docsDir(id), `keyart.${ext}`), Buffer.from(m[2]!, 'base64'));
+        saved.push(`docs/titans/${id}/keyart.${ext}`);
+      }
+      // body first: the index imports it (Vite reloads the moment the index changes)
+      const bodyFile = join(dir, 'body.json');
+      writeFileSync(bodyFile, await formatJson(JSON.stringify(body) + '\n', bodyFile));
+      writeFileSync(jsonPath(id), await formatJson(JSON.stringify(b.def, null, 2) + '\n', jsonPath(id)));
+      const prettier = await import('prettier');
+      const tsFile = join(dir, 'index.ts');
+      const tsOptions = (await prettier.resolveConfig(tsFile)) ?? {};
+      writeFileSync(tsFile, await prettier.format(imageIndexTs(id), { ...tsOptions, filepath: tsFile }));
+      return send(res, 200, { saved });
+    }
   }
 
   if (path === 'check' && req.method === 'POST') {

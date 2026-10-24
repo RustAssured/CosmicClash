@@ -20,6 +20,7 @@ import { paintPlanet, type PlanetRig } from './art/planet';
 import { paintSupernova, type SupernovaRig } from './art/supernova';
 import { resolveMaterials } from './materialTable';
 import type { BlobRig } from './kit/blob';
+import type { ImageRig } from './kit/image';
 import type { CradleRig } from './kit/cradle/paint';
 import type { ChildRig } from './kit/cradlechild/paint';
 import { kitTitan } from './kit';
@@ -36,6 +37,7 @@ export type TitanRig =
   | SupernovaRig
   | PlanetRig
   | BlobRig
+  | ImageRig
   | CradleRig
   | ChildRig;
 

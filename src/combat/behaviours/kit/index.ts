@@ -3,6 +3,7 @@ import type { Behaviour } from '../../behaviour';
 import type { FighterImpl } from '../../fighter';
 import { CradleBehaviour } from './cradle';
 import { CradlechildBehaviour } from './cradlechild';
+import { RemainderBehaviour } from './remainder';
 // new:titan imports (the scaffold adds `import { <Name>Behaviour } from './<id>';` above this line)
 
 /**
@@ -12,5 +13,6 @@ import { CradlechildBehaviour } from './cradlechild';
 export const KIT_BEHAVIOURS: Readonly<Partial<Record<TitanId, (f: FighterImpl) => Behaviour>>> = {
   cradle: (f) => new CradleBehaviour(f),
   cradlechild: (f) => new CradlechildBehaviour(f),
+  remainder: (f) => new RemainderBehaviour(f),
   // new:titan (the scaffold adds entries above this line)
 };
