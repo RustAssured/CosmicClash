@@ -269,13 +269,17 @@ the blob placeholder's; not in the ladder's opponents.
   checks pass. **Open for WJ:** the Korean name (잔여체 proposed), the brief's mechanics. Moves, signature, voice: the blob's.
 - Not verified here: the GPU renderer (this sandbox's Chromium never reaches `ready`, for any titan, the Planet included);
   the strip uses the software compositor (tools/titans/strip.ts).
-- **The Remainder's living idle** (src/combat/behaviours/kit/remainderIdle.ts, presentation only, ≈ 0.3 ms a frame): the
-  vortex turns (clockwise: the arms wind counter-clockwise outward in the key art, measured, so they trail and the vortex
-  reads as draining; the inner turns lead a little), light runs down the ichor veins toward the core, the eye breathes and
-  flinches tight for a second when hit, nine wreckage chunks orbit on tilted ellipses (behind / in front). Fight-changed
-  cells are left as the matter world shows them. Clips (tools/titans/clip.ts: the software compositor + ffmpeg, no GPU)
-  in docs/titans/remainder/clips/: idle (gif), an exchange with the Witness, its (placeholder) ultimate on the Planet, and
-  20 s of AI vs the Nexus (mp4).
+- **The Remainder's living idle** (src/combat/behaviours/kit/remainderIdle.ts, presentation only), reworked on the user's
+  note ("a wound in reality that wants to close; it keeps itself open: violent, under stress, sucking in its surroundings"):
+  the vortex swirls violently and drains (a flow map: two copies of the motion half a 0.6 s cycle apart, cross-faded per
+  cell, so it spins up to 5× faster at the eye and streams inward forever without winding the arms; surges and
+  turbulence), closing spasms every ~5.5 s (the eye squeezes, the swirl chokes, then it tears itself open: the eye blown
+  wide, a flash through the veins, a burst of speed, the body shaking), the shell round it creeps inward, stress fractures
+  crackle along the rim, wreckage orbits decay into the vortex and are consumed, dust streams over the shell into the eye,
+  the body twitches (and shakes when hit). Clockwise: the arms wind counter-clockwise outward in the key art (measured), so
+  they trail. The body animates on twos (30 Hz; at once on a hit): ≈ 1.2 ms on its frames, 0.05 ms between. Clips
+  (tools/titans/clip.ts: the software compositor + ffmpeg, no GPU) in docs/titans/remainder/clips/: idle (gif + mp4), an
+  exchange with the Witness, its (placeholder) ultimate on the Planet, and 20 s of AI vs the Nexus.
 - **Next (Phase 2):** a pixel touch-up editor (paint cells and materials), part regions and pivots for motion.
 
 ## Next
