@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ROSTER_IDS, SLICE, TITAN_IDS, validateTitanDef, type TitanId } from '@/contracts';
 import { KIT_BEHAVIOURS } from '@/combat/behaviours/kit';
+import { motionProblems } from '@/combat/behaviours/kit/motion';
 import { createTitanVoice } from '@/audio/voices';
 import {
   IMPLEMENTED_TITANS,
@@ -49,6 +50,7 @@ describe('the roster is one list', () => {
       expect(KIT_BEHAVIOURS[id], `${id} has a behaviour in src/combat/behaviours/kit`).toBeDefined();
       expect(k.def.kit, `${id}'s JSON carries its kit block`).toBeDefined();
       expect(createTitanVoice(id).onHitDealt, `${id} is voiced (kit.voice)`).toBeDefined();
+      expect(motionProblems(k.def), `${id}'s animation presets (kit.motion)`).toEqual([]);
     }
   });
 });

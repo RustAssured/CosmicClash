@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
+import { appendNote, cleanText, parseNotes, setDone } from './notes';
 
 /**
  * THE TITAN BUILDER'S FILE BRIDGE (dev server only): the builder page (dev/builder/) runs in the browser and cannot write
@@ -20,6 +21,9 @@ import type { Plugin } from 'vite';
  *                                   to docs/titans/<id>/keyart.<ext>. Only for blob-template or already-imported titans.
  *   GET  /__builder/brief?id=<id>   docs/titans/<id>/BRIEF.md ('' if none)
  *   PUT  /__builder/brief?id=<id>   { text }: write it
+ *   GET  /__builder/notes?id=<id>   the motion studio's notes (docs/titans/<id>/NOTES.md, parsed): [{ done, title, tick, … }]
+ *   POST /__builder/notes?id=<id>   { title, tick, phase, text, png? }: add one (the frame, a PNG data URL, goes to notes/)
+ *   PUT  /__builder/notes?id=<id>   { index, done }: tick one off (or open it again)
  *
  * The dev server listens on the LAN (vite.config.ts `host`), so the bridge only answers the machine itself (loopback), and
  * anything that writes needs the `x-titan-builder` header (a page on another origin cannot send it without a preflight,
@@ -256,6 +260,50 @@ async function handle(
       const tsOptions = (await prettier.resolveConfig(tsFile)) ?? {};
       writeFileSync(tsFile, await prettier.format(imageIndexTs(id), { ...tsOptions, filepath: tsFile }));
       return send(res, 200, { saved });
+    }
+  }
+
+  if (path === 'notes') {
+    const id = q.get('id') ?? '';
+    if (!ID_RE.test(id) || !existsSync(jsonPath(id)))
+      return send(res, 404, { error: `no kit titan '${id}'` });
+    const file = join(docsDir(id), 'NOTES.md');
+    const md = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    if (req.method === 'GET') return send(res, 200, parseNotes(md));
+    let b: Record<string, unknown>;
+    try {
+      b = JSON.parse(await readBody(req, 8 << 20)) as Record<string, unknown>;
+    } catch {
+      return send(res, 400, { error: 'not JSON' });
+    }
+    if (req.method === 'PUT') {
+      const index = Number(b['index']);
+      if (!Number.isInteger(index) || index < 0 || index >= parseNotes(md).length)
+        return send(res, 400, { error: 'no such note' });
+      writeFileSync(file, setDone(md, index, b['done'] === true));
+      return send(res, 200, parseNotes(readFileSync(file, 'utf8')));
+    }
+    if (req.method === 'POST') {
+      const title = cleanText(String(b['title'] ?? ''), 80);
+      const body = cleanText(String(b['text'] ?? ''));
+      const tick = Math.max(0, Math.round(Number(b['tick']) || 0));
+      if (!title || !body) return send(res, 400, { error: 'a note needs a title and some text' });
+      const now = new Date();
+      const pad = (n: number): string => String(n).padStart(2, '0');
+      const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      let image: string | null = null;
+      if (typeof b['png'] === 'string') {
+        const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(b['png']);
+        if (!m) return send(res, 400, { error: 'the frame is not a PNG data URL' });
+        const stamp = `${date.replaceAll('-', '')}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        image = `${stamp}-t${tick}.png`;
+        mkdirSync(join(docsDir(id), 'notes'), { recursive: true });
+        writeFileSync(join(docsDir(id), 'notes', image), Buffer.from(m[1]!, 'base64'));
+      }
+      mkdirSync(docsDir(id), { recursive: true });
+      const phase = cleanText(String(b['phase'] ?? ''), 40).replace(/·/g, '');
+      writeFileSync(file, appendNote(md, id, { done: false, title, tick, phase, date, text: body, image }));
+      return send(res, 200, parseNotes(readFileSync(file, 'utf8')));
     }
   }
 

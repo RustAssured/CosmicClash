@@ -166,6 +166,38 @@ Claude Code session to take further. The Remainder (docs/titans/remainder/) was 
 It only works with `npm run dev` on your own machine: the dev server saves the files (tools/builder/plugin.ts), and only
 for requests from the machine itself. The JSON stays the one source of truth, so everything below still works by hand.
 
+### Motion studio and animation presets (Phase 2)
+
+**▶ Studio** (top bar) plays the titan you are editing in the **real sim**: the game's own fighters, matter world and
+behaviours, drawn frame by frame by the software compositor. Unsaved edits play too.
+
+- Pick a **move** and an **aim**, a **foe**, the **gap**, how long a charge or guard is **held**, and when the foe
+  **strikes** (to test a guard). The clip re-runs on every change.
+- The **timeline** under the frame is coloured by the move's phase (gold startup, purple charge, red active, blue
+  recovery, green guard); white marks are hits it lands, red ones hits it takes. Drag on it to scrub, **←/→** steps a
+  tick, **space** plays. **Hitboxes** draws the live hit shapes, as Training does.
+- **MOVE** shows the move's frame data (with its feel target) and the selected aim's hitboxes as numbers: from/to, damage
+  type and energy, the shape, the knockback. Change one and the clip re-runs.
+- **MOTION** edits the **animation presets** (below), while the clip plays.
+- **NOTES**: pause on a frame, write what should change, **Pin note to this frame**. The note and the frame (with the
+  hitboxes) are saved in docs/titans/<id>/NOTES.md and notes/. It is a task list: ask Claude to "work through
+  docs/titans/<id>/NOTES.md" (**Copy for Claude** copies that), and tick notes off when they are done.
+
+**Animation presets** (`kit.motion`, the MOTION panel; src/combat/behaviours/kit/motion.ts) give a titan a living idle and
+move animation without code. Each preset moves the cells of one material; each separate patch of it moves round its own
+centre (two eyes on two wings swirl apart). They stack in order.
+
+| Preset | What it does | Knobs |
+|---|---|---|
+| **swirl** | turns like a vortex and drains toward its centre | speed, inflow, turbulence, direction |
+| **pulse** | brightens and glows on a beat, optionally as a ring running outward | rate, depth (ramp steps), glow, wave |
+| **shimmer** | scattered cells flare to the top of the ramp and fade | density, rate, glow |
+| **stretch** | during a move (Strike by default) the front patch is pulled toward the aim like rubber and snaps back | reach, ripple |
+| **iris** | petals of another material close over it while guarding | petal colour, petals, speed |
+
+**Runs** sets when a preset plays: always, or during one move slot. A titan whose behaviour draws its own hand-written idle
+(the Remainder, the Cradle) ignores its presets, and the panel says so.
+
 ### By hand
 
 All of these are in `src/titans/kit/<id>/<id>.json`. Change one, save, and reload the game.
@@ -182,6 +214,7 @@ All of these are in `src/titans/kit/<id>/<id>.json`. Change one, save, and reloa
 | **Knockback** | `…hitboxes[].knockback` | How far it throws the foe. |
 | **Overall power** | `balance.power`, `balance.durability` (0.3–3) | The quickest balance knobs: deal more / take less. |
 | **AI personality** | `ai.weights` (0–1) | `aggression`, `patience`, `zoning` (keeps distance), `retreat`, `punish`. |
+| **Animation presets** | `kit.motion` | A list of `{ "type", "material", "on"?, knobs… }`: see "Motion studio and animation presets" above. |
 | **What the AI sees** | `moves[].extra.aiReach` | The AI judges a move by its hitboxes. When the real threat is something else (a launched slug, a body that moves), describe it: a box, a tick window and an energy, per aim. Add `"replace": true` to use it even though the move has hitboxes. |
 | **Meter earned** | `moves[].extra.meterGain` | A hit earns ultimate meter by its energy. Scale it down for moves with very large energies (TIDAL grabs), or to `0` so an ultimate cannot refill itself. |
 | **Voice** | `kit.voice` | `pitch` (Hz: 30 = a mountain, 120 = a boulder), `grit` (smooth to gritty), `ring` (how it rings when hit), `wet` (reverb). |
@@ -336,6 +369,8 @@ A titan ships when all of these are true.
 | The blob painter | `src/titans/kit/blob.ts` |
 | Behaviours | `src/combat/behaviours/kit/<id>.ts` (base: `kit/base.ts`) |
 | The kit voice | `src/audio/voices/kitVoice.ts` |
+| Animation presets | `src/combat/behaviours/kit/motion.ts` |
+| The motion studio | `dev/builder/studio.ts` (notes: `tools/builder/notes.ts`) |
 | The checks | `src/titans/roster.test.ts`, `tools/titans/checks.ts`, `tools/titans/check.ts` |
 | The scaffold | `tools/titans/new.ts` |
 | Kinds (presets) | `src/titans/kit/kinds.ts` (the list: `TITAN_KINDS` in `src/contracts/roster.ts`) |

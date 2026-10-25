@@ -18,6 +18,8 @@ import { BLOB_KEYS, BLOB_SIZE_SCALE, KIND_PRESETS, kindMaterials } from '@/titan
 import { buildRamp, hexToHsl, rotateHue } from '@/titans/kit/palette';
 import { checkPaletteOf, checkSizeOf, type CheckResult } from '../../tools/titans/checks';
 import { openImport, type ImportResult } from './importArt';
+import { motionEditor } from './motionPanel';
+import { openStudio } from './studio';
 
 /**
  * THE TITAN BUILDER (v2 of the titan kit): edit a kit titan's JSON with sliders and see it repaint live, with the roster's
@@ -1157,6 +1159,12 @@ function buildPanels(): void {
     ),
     section('palette', 'PALETTE & MATERIALS · 색', `${D().materials.length} materials`, palettePanel),
     section('stats', 'ATTRIBUTES & AI · 능력치', 'mass, tempo, personality', statsPanel),
+    section(
+      'motion',
+      'MOTION · 움직임',
+      `${D().kit?.motion?.length ?? 0} animation presets · ▶ Studio plays them`,
+      (b) => motionEditor(b, D(), changed),
+    ),
     section('voice', 'VOICE · 목소리', 'kit voice', voicePanel),
     section('card', 'CARD · 카드', 'name, lore, stage', cardPanel),
     section('json', 'RAW JSON', 'everything else', jsonPanel),
@@ -1343,6 +1351,17 @@ function bootView(): void {
     changed();
   });
   $('new').addEventListener('click', newDialog);
+  $('studio').addEventListener('click', () => {
+    if (!def) return;
+    openStudio({
+      def: D,
+      edited: () => {
+        changed();
+        buildPanels();
+      },
+      api,
+    });
+  });
   $('runCheck').addEventListener('click', async () => {
     if (!def) return;
     $('report').textContent = dirty()

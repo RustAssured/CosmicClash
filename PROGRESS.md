@@ -289,7 +289,14 @@ the blob placeholder's; not in the ladder's opponents.
   `extra.aiReach.replace`; `extra.meterGain` stops its TIDAL grabs filling the meter), its own voice
   (src/audio/voices/remainder.ts), `titan:check` counts guard raises. Left: the real-game pass and the hand steps in
   docs/titans/remainder/CHECKLIST.md (hover clip, key art, CLASSIC slot: WJ decides).
-- **Next (Phase 2):** a pixel touch-up editor (paint cells and materials), part regions and pivots for motion.
+- **Builder Phase 2** (2026-10-25): the **motion studio** (▶ Studio, dev/builder/studio.ts) plays any move of the titan
+  being edited in the real sim, with a phase-coloured scrub timeline, live hitboxes, a MOVE tab (frame data and hitboxes
+  as numbers, re-run on every change), a MOTION tab and NOTES (pinned to a frame, saved with it to
+  docs/titans/<id>/NOTES.md as a task list for Claude; tools/builder/notes.ts, bridge `/__builder/notes`). **Animation
+  presets** (`kit.motion`, src/combat/behaviours/kit/motion.ts): swirl, pulse, shimmer, stretch, iris, each on one
+  material's patches, run by `KitBehaviour.renderLayers` for any kit titan without a hand-written idle; the MOTION panel
+  edits them with sliders. Tests: motion.test.ts (6), notes.test.ts (3), the roster checks every kit titan's presets.
+- **Next (Phase 3):** a pixel touch-up editor (paint cells and materials), part regions and pivots for motion.
 
 ## Next
 - **Cradle Child:** WJ answers the brief's open questions, then Gate 1 (body and palette).

@@ -98,6 +98,18 @@ export interface KitVoiceTuning {
 }
 
 /** The roster data of a titan built with the kit (`npm run new:titan`): lives in its JSON, as `kit`. */
+/**
+ * One animation preset (`kit.motion`): its `type`, the `material` (key) whose cells it moves, when it runs (`on`: 'always' or a
+ * move slot; absent = its type's default) and its knobs (numbers; absent = defaults). Iris also takes `cover`: the material
+ * whose colours its petals use.
+ */
+export interface MotionPreset {
+  type: string;
+  material: string;
+  on?: string;
+  [knob: string]: number | string | undefined;
+}
+
 export interface TitanKit {
   /** Which template it was scaffolded from: 'blob' or an existing titan's id (its painter and behaviour). */
   template: string;
@@ -114,6 +126,12 @@ export interface TitanKit {
   light?: TitanLight;
   voice?: KitVoiceTuning;
   site: SiteCard;
+  /**
+   * Animation presets (src/combat/behaviours/kit/motion.ts): living-idle and move-animation pieces bound to one material each
+   * (swirl, pulse, shimmer, stretch, iris), tuned with sliders in the titan builder. A titan with a hand-written idle ignores
+   * them.
+   */
+  motion?: MotionPreset[];
   /** Homage notes (what it nods to, and how it stays its own), for the director. Not shown in the game. */
   homage?: string;
   /**
