@@ -57,7 +57,12 @@ export interface RemainderAct {
   flash: number;
   /** Extra shaking (px). */
   shake: number;
-  /** A move is running: the body redraws every tick and the spontaneous spasms hold off. */
+  /** Snap: the vortex leans `pull` px toward (pullX, pullY) (negative: dented away) and wobbles by `jiggle` 0..1. */
+  pullX: number;
+  pullY: number;
+  pull: number;
+  jiggle: number;
+  /** A move is running: the spontaneous spasms hold off (the body still animates on twos; its effects every tick). */
   busy: boolean;
 }
 
@@ -73,6 +78,10 @@ export const NEUTRAL_ACT: RemainderAct = {
   glow: 0,
   flash: 0,
   shake: 0,
+  pullX: 1,
+  pullY: 0,
+  pull: 0,
+  jiggle: 0,
   busy: false,
 };
 
@@ -131,6 +140,9 @@ export class RemainderIdle {
   private readonly swirl: Int32Array;
   private readonly sr: Float32Array;
   private readonly sa: Float32Array;
+  /** cos / sin of `sa` (Snap's lean reads them every frame it pulls) */
+  private readonly sca: Float32Array;
+  private readonly ssa: Float32Array;
   /** The shell around the vortex (rv … 1.6 rv), drawn inward: index, radius, angle. */
   private readonly ring: Int32Array;
   private readonly rr: Float32Array;
@@ -226,6 +238,8 @@ export class RemainderIdle {
     this.shiver = new Float32Array(Math.ceil(this.rv) + 2);
     this.sr = Float32Array.from(sw, (i) => polar(i)[0]);
     this.sa = Float32Array.from(sw, (i) => polar(i)[1]);
+    this.sca = this.sa.map((a) => fcos(a));
+    this.ssa = this.sa.map((a) => fsin(a));
     // the ring sorted by angle, so a stress arc visits only its own segment
     rg.sort((p, q) => polar(p)[1] - polar(q)[1]);
     this.ring = Int32Array.from(rg);
@@ -289,7 +303,7 @@ export class RemainderIdle {
     // the body animates on twos (30 Hz, like hand-drawn pixel art, and half the cost), at once when it is hit, so damage
     // is never late; the wreckage and the dust move every tick
     const bodyDue =
-      redraw && (act.busy || inp.tick - this.bodyTick >= 2 || inp.tick < this.bodyTick || inp.sinceHit === 0);
+      redraw && (inp.tick - this.bodyTick >= 2 || inp.tick < this.bodyTick || inp.sinceHit === 0);
     if (bodyDue) {
       this.drawBody(map, t, inp.sinceHit, sp, act);
       this.bodyTick = inp.tick;
@@ -358,6 +372,7 @@ export class RemainderIdle {
     const grow0 = DMath.exp(inflow * ph0 * FLOW_T);
     const grow1 = DMath.exp(inflow * ph1 * FLOW_T);
     for (let q = 0; q < this.shiver.length; q++) this.shiver[q] = vnoise(q * 0.22, t * 6) - 0.5;
+    const { pullX, pullY, pull: lean, jiggle } = act;
     for (let k = 0; k < this.swirl.length; k++) {
       const i = this.swirl[k]!;
       if (this.changed(map, i)) continue;
@@ -371,9 +386,19 @@ export class RemainderIdle {
       const shiver = this.shiver[r | 0]! * (0.35 + 0.6 * inner);
       const a = this.sa[k]! - omega * ph * FLOW_T + shiver;
       // the inflow: colours come from further out, never from beyond the rim (the rim streaks inward instead)
-      const rs = Math.min(rv * 0.97, r * (use0 ? grow0 : grow1));
-      const sx = Math.floor(this.cx + fcos(a) * rs);
-      const sy = Math.floor(this.cy + fsin(a) * rs);
+      let rs = Math.min(rv * 0.97, r * (use0 ? grow0 : grow1));
+      // Snap's rubber: the wobble runs round the vortex as a wave, and the side being pulled leans toward the pull
+      if (jiggle > 0) rs *= 1 + jiggle * 0.12 * fsin(3 * this.sa[k]! - t * 26);
+      let fx = this.cx + fcos(a) * rs;
+      let fy = this.cy + fsin(a) * rs;
+      if (lean !== 0) {
+        const dot = this.sca[k]! * pullX + this.ssa[k]! * pullY;
+        const w = (dot > 0 ? dot * Math.sqrt(dot) : lean < 0 ? 0.3 * dot : 0) * (r / rv);
+        fx -= pullX * lean * w;
+        fy -= pullY * lean * w;
+      }
+      const sx = Math.floor(fx);
+      const sy = Math.floor(fy);
       let c = this.orig[i]!;
       if (sx >= 0 && sy >= 0 && sx < W && sy < H) {
         const j = sy * W + sx;

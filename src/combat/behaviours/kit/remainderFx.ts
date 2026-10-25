@@ -79,6 +79,7 @@ export class RemainderFx {
   private readonly cx: number;
   private readonly cy: number;
   private readonly R: number;
+  private readonly rv: number;
   private readonly pal: Record<'ichor' | 'vortex' | 'spark' | 'bone' | 'crust' | 'core', Uint32Array>;
   /** Loosening's cracks: polylines from the eye to the rim (map cells), fixed per fighter. */
   private readonly cracks: Float32Array[] = [];
@@ -89,6 +90,14 @@ export class RemainderFx {
     this.cx = map.coreX + 0.5;
     this.cy = map.coreY + 0.5;
     this.R = Math.min(map.w, map.h) * 0.48;
+    // the vortex's radius, as the idle measures it (85 % of the vortex cells lie inside it): Snap's rubber band
+    const vid = materials.findIndex((m) => m.key === 'vortex') + 1;
+    const vr: number[] = [];
+    for (let i = 0; i < map.material.length; i++)
+      if (vid && map.material[i] === vid)
+        vr.push(DMath.hypot((i % map.w) + 0.5 - this.cx, Math.floor(i / map.w) + 0.5 - this.cy));
+    vr.sort((p, q) => p - q);
+    this.rv = vr.length ? vr[Math.floor(vr.length * 0.85)]! : 40;
     const big = Math.max(map.w, map.h);
     this.front = new BodySpaceLayer('remainder-fx', 2, big * 2 + 64, big * 2 + 64, map.coreX, map.coreY);
     const ramp = (key: string, fb: string): Uint32Array =>
@@ -130,6 +139,10 @@ export class RemainderFx {
       glow: 0,
       flash: 0,
       shake: 0,
+      pullX: 1,
+      pullY: 0,
+      pull: 0,
+      jiggle: 0,
       busy: v.id !== '' || v.guard || tick - v.absorbAt < 10 || tick - v.foldToAt < 16,
     };
     const S = Math.max(1, v.startup);
@@ -139,6 +152,14 @@ export class RemainderFx {
     const ac = v.phase === 'active' ? clampN(v.phaseTick / A, 0, 1) : 0;
     const rc = v.phase === 'recovery' ? clampN(v.phaseTick / Rc, 0, 1) : 0;
     if (v.id === SNAP) {
+      // the vortex itself is the rubber: it leans into the pull, then dents and wobbles when the band snaps back
+      const sp = this.snapPose(v);
+      const [tx, ty] = TIP[v.aim];
+      const L = DMath.hypot(tx, ty);
+      a.pullX = tx / L;
+      a.pullY = ty / L;
+      a.pull = sp.pull;
+      a.jiggle = sp.jiggle;
       if (v.phase === 'startup') a.pupil = 1 - 0.55 * su;
       else if (v.phase === 'active') {
         a.pupil = 0.35;
@@ -249,7 +270,7 @@ export class RemainderFx {
     const W = this.world;
     W.limitToView(view, 64);
     W.begin(v.foldFromX, v.foldFromY);
-    if (v.id === SNAP) this.drawSnap(v, tick);
+    if (v.id === SNAP) this.drawSnap(v, tick, map);
     if (v.id === INHALE) this.drawInhale(v, tick);
     if (v.id === COMPACTION) this.drawCompaction(v, tick);
     if (v.id === LOOSENING) this.drawLoosening(v, tick);
@@ -311,78 +332,181 @@ export class RemainderFx {
           );
   }
 
-  /** SNAP: the whip out and back, with the stolen colours riding it home. */
-  private drawSnap(v: RemainderMoveView, tick: number): void {
-    const [tx, ty] = TIP[v.aim];
+  /**
+   * SNAP's pose: `ext` how far the tongue reaches (0 = none, 1 = the tip, past 1 = the overshoot), `pull` how far the vortex
+   * leans toward the aim (px; negative = the dent after the snap back), `jiggle` its wobble, `tension` the band's glow.
+   * Startup: grabbed and stretched (the vortex bulges toward the aim). Active: the tongue snaps out. Recovery: it snaps
+   * back fast, overshoots into a dent and wobbles out (a damped spring).
+   */
+  snapPose(v: RemainderMoveView): { ext: number; pull: number; jiggle: number; tension: number } {
     const S = Math.max(1, v.startup);
     const A = Math.max(1, v.active);
     const Rc = Math.max(1, v.recovery);
-    const { ichor, vortex, spark } = this.pal;
     if (v.phase === 'startup') {
-      // the bud: a knot of light gathering at the rim, aimed
-      const u = v.phaseTick / S;
-      const ax = this.cx + (tx / 166) * RIM;
-      const ay = this.cy + (ty / 166) * RIM;
-      this.disc(ax, ay, 1.5 + 3 * u, spark, spark.length - 1, 120);
-      return;
-    }
-    // reach: out fast with an overshoot (active), then back in with a wave down its length (recovery)
-    let ext: number;
-    let wave = 0;
-    if (v.phase === 'active') ext = Math.min(1.12, (v.phaseTick + 1) / A) * 1.0;
-    else {
-      const p = v.phaseTick / Rc;
-      ext = 1.12 - 0.12 * ss(0, 0.15, p) - ss(0.15, 1, p);
-      ext = Math.max(0, ext);
-      wave = (1 - p) * 9;
-    }
-    if (ext <= 0.01) return;
-    const N = 36;
-    let px = this.cx;
-    let py = this.cy;
-    const nx = -ty / 220;
-    const ny = tx / 220;
-    for (let i = 1; i <= N; i++) {
-      const s = i / N;
-      const along = s * ext;
-      const wob = wave * fsin(s * 9 - tick * 1.1) * s * (1 - s * 0.4);
-      const x = this.cx + tx * along + nx * wob;
-      const y = this.cy + ty * along + ny * wob;
-      const w = 9 - 6.5 * s;
-      this.stroke(px, py, x, y, w + 2, vortex, 1, 20);
-      this.stroke(px, py, x, y, w, vortex, vortex.length - 2, 40);
-      this.stroke(px, py, x, y, Math.max(1, w - 2.5), ichor, ichor.length - 1 - Math.floor(s * 2), 140);
-      px = x;
-      py = y;
+      const p = v.phaseTick / S;
+      return { ext: 0.12 * p * p, pull: 9 * ss(0, 1, p), jiggle: 0, tension: p };
     }
     if (v.phase === 'active') {
-      // the crack at the tip
-      const k = v.phaseTick;
-      for (let r = 0; r < 4; r++) {
-        const a = (r / 4) * Math.PI * 2 + k;
-        this.stroke(
-          px,
-          py,
-          px + fcos(a) * (5 + k * 3),
-          py + fsin(a) * (5 + k * 3),
-          1,
-          spark,
-          spark.length - 1,
-          200,
-        );
+      const p = (v.phaseTick + 1) / A;
+      return { ext: Math.min(1.1, 1.1 * (1 - (1 - p) * (1 - p))), pull: 12, jiggle: 0, tension: 1 };
+    }
+    if (v.phase === 'recovery') {
+      const p = v.phaseTick / Rc;
+      if (p < 0.22) {
+        const q = p / 0.22;
+        return { ext: 1.1 * (1 - q * q), pull: 12 * (1 - q), jiggle: q * 0.5, tension: 1 - 0.5 * q };
       }
-      this.disc(px, py, 3, spark, spark.length - 1, 220);
-    } else if (tick - v.snapHitAt < Rc + 4 && v.foeColorsN) {
-      // what it tore off rides the whip home: bits in the foe's own colours, clustered at the tip
-      for (let i = 0; i < 10; i++) {
-        const c = v.foeColors[i % v.foeColorsN]!;
-        const j = (h2(i, this.seed) - 0.5) * 8;
-        const k = (h2(this.seed, i) - 0.5) * 8;
-        const bx = Math.floor(px + j);
-        const by = Math.floor(py + k);
-        this.front.put(bx, by, c, 30);
-        this.front.put(bx + 1, by, c, 30);
-        this.front.put(bx, by + 1, c, 30);
+      const q = (p - 0.22) / 0.78;
+      const spring = DMath.exp(-3.4 * q) * fcos(q * Math.PI * 3.4);
+      return { ext: 0, pull: -16 * spring, jiggle: DMath.exp(-2.4 * q), tension: 0.5 * DMath.exp(-4 * q) };
+    }
+    return { ext: 0, pull: 0, jiggle: 0, tension: 0 };
+  }
+
+  /**
+   * SNAP: a rubber band round the vortex, pulled at one point. The band stays wrapped round the back of the vortex and
+   * leaves it on the two tangent lines that meet at the tip: the vortex stretched into a tongue toward the aim, filled with
+   * its own colours streaming along it. It snaps back with the foe's colours caught at the tip.
+   */
+  private drawSnap(v: RemainderMoveView, tick: number, map: MatterMap): void {
+    const pose = this.snapPose(v);
+    const [tx, ty] = TIP[v.aim];
+    const L = DMath.hypot(tx, ty);
+    const dX = tx / L;
+    const dY = ty / L;
+    const nX = -dY;
+    const nY = dX;
+    const R = this.rv;
+    const { ichor, vortex, spark } = this.pal;
+    const cx = this.cx;
+    const cy = this.cy;
+
+    // the band round the rim: tight and bright on the side being pulled, a thin glint round the back
+    if (pose.tension > 0.04) {
+      const n = Math.round(R * 7);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const ca = fcos(a);
+        const sa = fsin(a);
+        const facing = ca * dX + sa * dY;
+        const lean = Math.max(0, facing) * pose.pull * 0.6;
+        const rr = R + 0.5 + lean;
+        const hot = pose.tension * (0.35 + 0.65 * Math.max(0, facing));
+        if (hot < 0.18 && i & 1) continue;
+        const P = hot > 0.6 ? spark : ichor;
+        this.front.putPal(
+          Math.floor(cx + ca * rr),
+          Math.floor(cy + sa * rr),
+          P,
+          P.length - 1 - (hot > 0.4 ? 0 : 1),
+          Math.round(60 + 150 * hot),
+        );
+        if (hot > 0.5)
+          this.front.putPal(
+            Math.floor(cx + ca * (rr - 1)),
+            Math.floor(cy + sa * (rr - 1)),
+            ichor,
+            ichor.length - 2,
+            Math.round(100 * hot),
+          );
+      }
+    }
+
+    // the tongue: from the tangent points on the rim to the tip
+    const d = R + (L - R) * pose.ext;
+    if (d > R * 1.06) {
+      const ca = R / d;
+      const sa = Math.sqrt(1 - ca * ca);
+      const bx = R * ca;
+      const hw0 = R * sa;
+      // bounding box of the triangle (base chord + tip), in body space
+      const pts = [
+        [cx + dX * bx + nX * hw0, cy + dY * bx + nY * hw0],
+        [cx + dX * bx - nX * hw0, cy + dY * bx - nY * hw0],
+        [cx + dX * d, cy + dY * d],
+      ];
+      const x0 = Math.floor(Math.min(pts[0]![0]!, pts[1]![0]!, pts[2]![0]!)) - 1;
+      const x1 = Math.ceil(Math.max(pts[0]![0]!, pts[1]![0]!, pts[2]![0]!)) + 1;
+      const y0 = Math.floor(Math.min(pts[0]![1]!, pts[1]![1]!, pts[2]![1]!)) - 1;
+      const y1 = Math.ceil(Math.max(pts[0]![1]!, pts[1]![1]!, pts[2]![1]!)) + 1;
+      // colours stream out along the tongue while it reaches, back in while it snaps back
+      const flow = (tick * (v.phase === 'recovery' ? -0.5 : 0.35)) % 1;
+      // the tongue's texture: the vortex's rim on the pulled side, across the tangent span, turning with the vortex
+      const aimA = DMath.atan2(dY, dX);
+      const span = Math.PI / 2 - DMath.atan2(ca, sa);
+      const spinA = tick * 0.06;
+      for (let y = y0; y <= y1; y++)
+        for (let x = x0; x <= x1; x++) {
+          const px = x + 0.5 - cx;
+          const py = y + 0.5 - cy;
+          const along = px * dX + py * dY;
+          const lat = px * nX + py * nY;
+          if (along < bx || along > d) continue;
+          const s2 = (along - bx) / (d - bx);
+          // stretched elastic: the sides curve in (concave), thinning to the tip
+          const hw = hw0 * DMath.pow(1 - s2, 1.35) + 1.1 * s2;
+          const u = lat / hw;
+          if (u < -1 || u > 1) continue;
+          // over the vortex itself the idle draws it (stretched); the tongue starts at the rim
+          if (px * px + py * py < (R - 0.5) * (R - 0.5)) continue;
+          // the band itself: one or two cells of glowing elastic along each side, hotter toward the tip
+          const edgeCells = Math.abs(Math.abs(lat) - hw);
+          if (edgeCells < 1.2 + 0.6 * pose.tension * (1 - s2)) {
+            const P = s2 > 0.65 ? spark : ichor;
+            this.front.putPal(
+              x,
+              y,
+              P,
+              P.length - 1 - (edgeCells > 0.8 ? 1 : 0),
+              Math.round(80 + 150 * pose.tension),
+            );
+            continue;
+          }
+          // inside: the vortex itself, pulled out. Each cell shows the live vortex from the rim on the pulled side, further
+          // in toward the eye the further along the tongue (the tip carries the heart of it), turning as the vortex turns;
+          // light runs along it while it reaches and back while it snaps home
+          const th = aimA + u * span * 0.92 + spinA;
+          const rr = R * (0.96 - 0.7 * s2);
+          const sx = Math.floor(cx + fcos(th) * rr);
+          const sy = Math.floor(cy + fsin(th) * rr);
+          const j = sy * map.w + sx;
+          const c = sx >= 0 && sy >= 0 && sx < map.w && sy < map.h && map.material[j] ? map.pixels[j]! : 0;
+          const lane = Math.floor((u + 1) * 5);
+          const run = (s2 * 2.4 - flow * 2 + h2(lane, 13) * 0.9) % 1;
+          const lit = h2(lane, 41) > 0.6 && run < 0.07 && s2 > 0.08;
+          if (lit) this.front.putPal(x, y, ichor, ichor.length - 1, 120);
+          else if (c) this.front.put(x, y, c | 0xff000000, run < 0.2 ? 40 : 0);
+          else this.front.putPal(x, y, vortex, 2, 0);
+        }
+      const tipX = cx + dX * d;
+      const tipY = cy + dY * d;
+      if (v.phase === 'active') {
+        // the crack at the tip
+        const k = v.phaseTick;
+        for (let r = 0; r < 6; r++) {
+          const a = (r / 6) * Math.PI * 2 + k;
+          this.stroke(
+            tipX,
+            tipY,
+            tipX + fcos(a) * (5 + k * 3),
+            tipY + fsin(a) * (5 + k * 3),
+            1,
+            spark,
+            spark.length - 1,
+            200,
+          );
+        }
+        this.disc(tipX, tipY, 3, spark, spark.length - 1, 220);
+      } else if (v.phase === 'recovery' && tick - v.snapHitAt < Math.max(1, v.recovery) && v.foeColorsN) {
+        // what it tore off rides the tip home: bits in the foe's own colours
+        for (let i = 0; i < 12; i++) {
+          const c = v.foeColors[i % v.foeColorsN]!;
+          const bx2 = Math.floor(tipX + (h2(i, this.seed) - 0.5) * 9);
+          const by2 = Math.floor(tipY + (h2(this.seed, i) - 0.5) * 9);
+          this.front.put(bx2, by2, c, 30);
+          this.front.put(bx2 + 1, by2, c, 30);
+          this.front.put(bx2, by2 + 1, c, 30);
+        }
       }
     }
   }

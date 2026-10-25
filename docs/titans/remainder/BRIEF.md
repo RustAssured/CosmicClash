@@ -57,7 +57,7 @@ remainderFx.ts and remainderIdle.ts. Clips: [clips/moves/](clips/moves/) and [th
 
 | Button | Move | What you see | What it does |
 |---|---|---|---|
-| Strike | **Snap** / 낚아채기 | the eye cocks, a whip of ichor and violet cracks out to the aim, overshoots, recoils with a wave down it, dragging the foe's own colours home | 9 / 4 / 26 ticks, 166 px reach; TIDAL along the whip and a grab at the tip, a KINETIC crack; yanks the foe a little |
+| Strike | **Snap** / 낚아채기 | a rubber band round the whole vortex: the eye cocks, the band stretches out of the rim into a taut tongue of live vortex (its edges run tangent off the circle), cracks at the aim, then snaps back so the vortex dents and wobbles, dragging the foe's own colours home | 9 / 4 / 26 ticks, 166 px reach; TIDAL along the whip and a grab at the tip, a KINETIC crack; yanks the foe a little |
 | Crush | **Inhale** / 들이킴 | the tell (vortex spins up and darkens, the eye widens, a cone of dust rushes in), then the yank and two toothed bone mandibles slamming shut at the rim | 28 / 12 / 50; the foe is pulled toward the eye for 8 ticks (and loose debris with it), then a CRUSH bite |
 | Surge | **Fold** / 접힘 | the body twists down into its own eye, a tear of light closes where it was, it unfolds out of a second tear | 4 / 14 / 16; intangible ticks 2–16 |
 | Signature | **Compaction** / 압축 | hold: compression rings close on the eye, matter spirals into a slug growing there; forward / up it fires (a muzzle ring, a comet trail), down it grinds bone plates onto the shell | hold up to 1 s; 1–3 Mass pips by charge; the slug is real matter (a launched chunk: one KINETIC blow); plates are grown bone cells |
