@@ -2,7 +2,7 @@
 
 From the user, 2026-10-24: key art and a short summary. Imported into the titan builder as the first titan made from key art
 (Phase 1: art and brief intake). Its living idle, its six moves and its own voice are built, and it shipped on 2026-10-25 (ADK-010). The real-game pass
-is [CHECKLIST.md](CHECKLIST.md).
+is [CHECKLIST.md](CHECKLIST.md); the handover for other threads (e.g. a voxel version) is [HANDOVER.md](HANDOVER.md).
 
 **Clips:** [clips/](clips/) (idle, an exchange, the ultimate, an AI fight). **Key art:** [keyart.webp](keyart.webp) (the original is 1122×1402). Imported with the lasso around the creature, the core in
 the vortex's eye, 5 regions + 2 veins.
