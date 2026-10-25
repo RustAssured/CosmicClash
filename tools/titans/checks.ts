@@ -233,11 +233,17 @@ export function balanceSweep(
         );
         let ticks = 0;
         const cap = 60 * 60 * 5;
+        // raising the Guard is a state, not a move event: count each raise as a use of the guard move
+        const guardId = getTitanDef(id).moves.find((mv) => mv.slot === 'guard')?.id;
+        let guarding = false;
         while (m.phase !== 'matchend' && ticks < cap) {
           m.step();
           ticks++;
           for (const e of m.events)
             if (e.t === 'move' && e.slot === side) moves[e.moveId] = (moves[e.moveId] ?? 0) + 1;
+          const g = m.fighters[side]!.view.state === 'guard';
+          if (guardId && g && !guarding) moves[guardId] = (moves[guardId] ?? 0) + 1;
+          guarding = g;
         }
         const row: SweepRow = {
           foe,

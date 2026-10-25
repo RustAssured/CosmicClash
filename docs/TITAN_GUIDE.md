@@ -182,6 +182,8 @@ All of these are in `src/titans/kit/<id>/<id>.json`. Change one, save, and reloa
 | **Knockback** | `…hitboxes[].knockback` | How far it throws the foe. |
 | **Overall power** | `balance.power`, `balance.durability` (0.3–3) | The quickest balance knobs: deal more / take less. |
 | **AI personality** | `ai.weights` (0–1) | `aggression`, `patience`, `zoning` (keeps distance), `retreat`, `punish`. |
+| **What the AI sees** | `moves[].extra.aiReach` | The AI judges a move by its hitboxes. When the real threat is something else (a launched slug, a body that moves), describe it: a box, a tick window and an energy, per aim. Add `"replace": true` to use it even though the move has hitboxes. |
+| **Meter earned** | `moves[].extra.meterGain` | A hit earns ultimate meter by its energy. Scale it down for moves with very large energies (TIDAL grabs), or to `0` so an ultimate cannot refill itself. |
 | **Voice** | `kit.voice` | `pitch` (Hz: 30 = a mountain, 120 = a boulder), `grit` (smooth to gritty), `ring` (how it rings when hit), `wet` (reverb). |
 | **Signature** | `src/combat/behaviours/kit/<id>.ts` | The placeholder swells for 120 ticks with blows ×1.2. Change the numbers, or describe a new idea to Claude. |
 

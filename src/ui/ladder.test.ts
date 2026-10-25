@@ -350,6 +350,7 @@ function rig(store = createMemoryStore()) {
     extra('colossus', 'The Last One', '마지막 하나'),
     extra('uri', '우리', '우리'),
     extra('cradle', 'The Cradle', '태반체'),
+    extra('remainder', 'The Remainder', '잔여체'),
   ];
   const ui = createUI({
     input,

@@ -262,7 +262,7 @@ the blob placeholder's; not in the ladder's opponents.
 - **Brief panel**: docs/titans/<id>/BRIEF.md in the builder, and "Copy packet for Claude".
 - **Bridge**: GET/PUT body (body.json + JSON + index.ts + key art), GET/PUT brief. The bridge no longer imports the
   roster contract: vite.config.ts dependencies restart the dev server, and the scaffold edits that file mid-request.
-- **The Remainder / 잔여체** (WIP, `remainder`): the first titan from key art, made entirely in the builder UI (driven by
+- **The Remainder / 잔여체** (`remainder`, shipped 2026-10-25): the first titan from key art, made entirely in the builder UI (driven by
   Playwright): celestial, large, 163×230 px, materials crust, rubble, membrane, bone, vortex, ichor (vein), spark (vein),
   core. Brief from the user's text with a creature-brief proposal (Compaction signature, Loosening ultimate, Cannibal failure
   mode) in docs/titans/remainder/BRIEF.md; key art beside it; a software-composited fight strip in stills/. All quick
@@ -283,7 +283,12 @@ the blob placeholder's; not in the ladder's opponents.
 - **The Remainder's six moves** (the user approved the proposal): Snap, Inhale, Fold, Compaction, Loosening, Hold Shut,
   plus Mass (Hoard) and Cannibal; details, balance and clips in docs/titans/remainder/BRIEF.md. A rigid shell with violence
   inside: no move moves the shell. 8 mechanics tests (src/combat/remainder.test.ts). Balance 65 % at AI level 4 (40 fights).
-  Open: the AI never guards with it and rarely uses Compaction.
+  Snap reworked twice on the user's notes: a rubber band round the vortex, then the vortex's own pixels warped out of the
+  rim (no overlay).
+- **The Remainder shipped** (2026-10-25, ADK-010): its AI uses every move (Compaction's slug modelled with
+  `extra.aiReach.replace`; `extra.meterGain` stops its TIDAL grabs filling the meter), its own voice
+  (src/audio/voices/remainder.ts), `titan:check` counts guard raises. Left: the real-game pass and the hand steps in
+  docs/titans/remainder/CHECKLIST.md (hover clip, key art, CLASSIC slot: WJ decides).
 - **Next (Phase 2):** a pixel touch-up editor (paint cells and materials), part regions and pivots for motion.
 
 ## Next

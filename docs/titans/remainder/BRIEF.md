@@ -1,7 +1,8 @@
 # CREATURE BRIEF: THE REMAINDER / 잔여체
 
 From the user, 2026-10-24: key art and a short summary. Imported into the titan builder as the first titan made from key art
-(Phase 1: art and brief intake). Its living idle and its six moves are built (2026-10-25); its voice is the kit voice.
+(Phase 1: art and brief intake). Its living idle, its six moves and its own voice are built, and it shipped on 2026-10-25 (ADK-010). The real-game pass
+is [CHECKLIST.md](CHECKLIST.md).
 
 **Clips:** [clips/](clips/) (idle, an exchange, the ultimate, an AI fight). **Key art:** [keyart.webp](keyart.webp) (the original is 1122×1402). Imported with the lasso around the creature, the core in
 the vortex's eye, 5 regions + 2 veins.
@@ -73,5 +74,14 @@ remainderFx.ts and remainderIdle.ts. Clips: [clips/moves/](clips/moves/) and [th
 - **Balance** (`npm run titan:check -- remainder --fights=2`, AI level 4, 40 fights): **65 %**, in the 25–75 % band. Pacing
   (share of an idle foe): Snap 0.4–3 %, Inhale 3–9 %, Compaction 6–10 %, Loosening 12–38 % (the Nexus resists it most, the
   Planet least).
-- **Open:** the AI never raises Hold Shut (the Cradle's Enfold has the same gap) and rarely spends Mass on Compaction (it
-  cannot see the slug: the AI values moves by their hitboxes). Its voice is the kit voice, tuned only by numbers.
+- **AI** (2026-10-25): it does raise Hold Shut (about 3 times a fight, ~5 blocks each); the check report said "never used"
+  only because raising a guard is a state, not a move event (`checks.ts` now counts it). Compaction was starved (0.3 a
+  minute): its JSON describes only the muzzle blast, so the AI never saw the slug. `extra.aiReach` with `replace` now
+  models the slug's flight (1.5 a minute). Loosening came round every 30 s: its TIDAL energies are large, and meter is
+  earned per unit of energy, so one grab filled half the meter; `extra.meterGain` scales it (Snap 0.15, Inhale 0.2,
+  Loosening 0), now about 0.8 a minute like the others. Balance after: 65 % (20 fights).
+- **Voice** (`src/audio/voices/remainder.ts`): a beating drone (two sines a hair apart) and a wavering breath that strain
+  as it is hurt and muffle while held shut; a sound for each move, cue and the KO (the wound finally closing). Nothing
+  above 2 kHz in a real fight render ([clips/remainder-voice-fight.m4a](clips/remainder-voice-fight.m4a)). Its fights
+  measure −17.5 LUFS against the −20 target, from the matter they tear loose more than from the voice (the Cradle's
+  measures −22).

@@ -75,7 +75,13 @@ const moves: MoveDef[] = [
     resourceCost: 0,
     meterCost: 0,
     tags: [],
-    extra: { noCredit: true, weight: 'light', pose: { startup: { lean: 0 }, active: { lean: 0 } } },
+    // meterGain: its TIDAL energies are large (TIDAL tears little per unit); unscaled, one grab filled half the meter
+    extra: {
+      noCredit: true,
+      weight: 'light',
+      meterGain: 0.15,
+      pose: { startup: { lean: 0 }, active: { lean: 0 } },
+    },
   },
   {
     // the vortex spins up and darkens (the tell), inhales the foe in a violent yank, and the rim bites shut on it
@@ -118,6 +124,7 @@ const moves: MoveDef[] = [
     extra: {
       noCredit: true,
       weight: 'heavy',
+      meterGain: 0.2,
       pose: { startup: { lean: 0 }, active: { lean: 0 } },
       // the yank: the foe's velocity is pulled toward the eye while the intake runs (behaviour), debris with it
       inhale: { radius: 280, pullFoe: 1100, strength: 2600, ticks: 8 },
@@ -187,6 +194,31 @@ const moves: MoveDef[] = [
       chargePower: 0.6,
       pose: { startup: { lean: 0 }, active: { lean: 0 } },
       compaction: { speed: 560, size: [9, 15], pips: [1, 3], plateCells: 34, slugMass: 9 },
+      // the AI's model of the slug (the muzzle blast is all the JSON describes): ~10 px a tick for about 40 ticks
+      aiReach: {
+        forward: {
+          x0: 60,
+          y0: -32,
+          x1: 470,
+          y1: 32,
+          from: 0,
+          to: 40,
+          energy: 900,
+          projectile: true,
+          replace: true,
+        },
+        up: {
+          x0: 40,
+          y0: -330,
+          x1: 340,
+          y1: -10,
+          from: 0,
+          to: 40,
+          energy: 900,
+          projectile: true,
+          replace: true,
+        },
+      },
     },
   },
   {
@@ -247,6 +279,8 @@ const moves: MoveDef[] = [
       weight: 'heavy',
       pose: { startup: { lean: 0 }, active: { lean: 0 } },
       ctl: { startup: 0.1, active: 0.15, recovery: 0.3 },
+      // the ultimate does not refill its own meter
+      meterGain: 0,
       well: { radius: [200, 300], strength: [1800, 3400], consume: 34, pullFoe: 360 },
       exposedCore: 1,
     },

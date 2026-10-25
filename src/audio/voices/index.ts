@@ -5,6 +5,7 @@ import { createCradleVoice } from './cradle';
 import { createColossusVoice, createLastOneVoice } from './lastone';
 import { createNexusVoice } from './nexus';
 import { createPlanetVoice } from './planet';
+import { createRemainderVoice } from './remainder';
 import { createSupernovaVoice } from './supernova';
 import type { TitanVoice } from './types';
 import { createUriVoice } from './uri';
@@ -24,6 +25,8 @@ export const VOICES: Readonly<Partial<Record<TitanId, () => TitanVoice>>> = {
   uri: createUriVoice,
   // the first kit titan with its own voice file (its JSON's kit.voice tuning is the fallback)
   cradle: createCradleVoice,
+  // the first titan built from key art (the builder's pilot)
+  remainder: createRemainderVoice,
 };
 
 /**
