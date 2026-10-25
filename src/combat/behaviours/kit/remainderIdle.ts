@@ -35,12 +35,55 @@ const SPASM_LEN = 1.4;
 const CHUNKS = 9;
 const MOTES = 28;
 
+/** What the moves ask of the idle this frame (src/combat/behaviours/kit/remainderFx.ts `act`); neutral = 1 / 0. */
+export interface RemainderAct {
+  /** Multipliers on the vortex's spin and inflow. */
+  spin: number;
+  inflow: number;
+  /** 0..1: the vortex darkens (the tell of an intake). */
+  dark: number;
+  /** 0..1: the wound spreads over the shell (Loosening). */
+  loosen: number;
+  /** 0..1: the wound is held shut (Hold Shut, the snap of Loosening): plates over the rim, the vortex stalled and dark. */
+  shut: number;
+  /** 0..1: the body drains into its own eye (Fold: 1 = gone), twisted by `twist` radians. */
+  fold: number;
+  twist: number;
+  /** Multiplier on the eye's opening (below 0.15 it is shut). */
+  pupil: number;
+  /** 0..1: the eye's rim blazes. */
+  glow: number;
+  /** 0..1: the whole vortex flares a step brighter. */
+  flash: number;
+  /** Extra shaking (px). */
+  shake: number;
+  /** A move is running: the body redraws every tick and the spontaneous spasms hold off. */
+  busy: boolean;
+}
+
+export const NEUTRAL_ACT: RemainderAct = {
+  spin: 1,
+  inflow: 1,
+  dark: 0,
+  loosen: 0,
+  shut: 0,
+  fold: 0,
+  twist: 0,
+  pupil: 1,
+  glow: 0,
+  flash: 0,
+  shake: 0,
+  busy: false,
+};
+
 export interface RemainderIdleInput {
   /** Sim tick of the frame. */
   tick: number;
   /** Ticks since it was last hit. */
   sinceHit: number;
   ko: boolean;
+  /** What the moves ask of it (default: nothing). */
+  act?: RemainderAct;
 }
 
 interface Chunk {
@@ -114,6 +157,8 @@ export class RemainderIdle {
   private readonly shiver: Float32Array;
   private lastTick = -1;
   private bodyTick = -99;
+  private tmpPx: Uint32Array | null = null;
+  private tmpEm: Uint8Array | null = null;
   private jx = 0;
   private jy = 0;
 
@@ -238,13 +283,15 @@ export class RemainderIdle {
     const redraw = inp.tick !== this.lastTick;
     this.lastTick = inp.tick;
     const t = inp.tick / 60;
-    const sp = spasm(t, this.seed);
+    const act = inp.act ?? NEUTRAL_ACT;
+    // a move owns the vortex while it runs: no spontaneous spasm on top of it
+    const sp = act.busy ? { close: 0, open: 0 } : spasm(t, this.seed);
     // the body animates on twos (30 Hz, like hand-drawn pixel art, and half the cost), at once when it is hit, so damage
     // is never late; the wreckage and the dust move every tick
     const bodyDue =
-      redraw && (inp.tick - this.bodyTick >= 2 || inp.tick < this.bodyTick || inp.sinceHit === 0);
+      redraw && (act.busy || inp.tick - this.bodyTick >= 2 || inp.tick < this.bodyTick || inp.sinceHit === 0);
     if (bodyDue) {
-      this.drawBody(map, t, inp.sinceHit, sp);
+      this.drawBody(map, t, inp.sinceHit, sp, act);
       this.bodyTick = inp.tick;
     }
     this.skin.present(body, bodyDue);
@@ -260,7 +307,13 @@ export class RemainderIdle {
       const hit = inp.sinceHit < 24 ? 1 - inp.sinceHit / 24 : 0;
       const tick = inp.tick;
       const twitch = h2(this.seed + 5, tick >> 2) > 0.82 ? 1 : 0;
-      const amp = Math.max(twitch, Math.round(2 * hit), Math.round(2 * sp.open), sp.close > 0.5 ? 1 : 0);
+      const amp = Math.max(
+        twitch,
+        Math.round(2 * hit),
+        Math.round(2 * sp.open),
+        sp.close > 0.5 ? 1 : 0,
+        act.shake,
+      );
       this.jx = amp ? Math.round((h2(tick, this.seed) * 2 - 1) * amp) : 0;
       this.jy = amp ? Math.round((h2(this.seed, tick) * 2 - 1) * amp * 0.6) : 0;
     }
@@ -270,21 +323,33 @@ export class RemainderIdle {
     body.prevY += this.jy;
   }
 
-  private drawBody(map: MatterMap, t: number, sinceHit: number, sp: { close: number; open: number }): void {
+  private drawBody(
+    map: MatterMap,
+    t: number,
+    sinceHit: number,
+    sp: { close: number; open: number },
+    act: RemainderAct,
+  ): void {
     const { W, H, skin, ids, rv } = this;
     skin.copyFrom(map.pixels, map.emissive);
     const px = skin.px;
     const em = skin.emis;
     // the fear: a hit snaps the eye tight; a closing spasm squeezes it shut, tearing open blows it wide
     const flinch = sinceHit < 60 ? 1 - sinceHit / 60 : 0;
-    const pupil = Math.max(
+    const pupil0 = Math.max(
       1,
       this.coreR *
         (0.6 + 0.12 * fsin(t * 9) + 0.1 * fsin(t * 2.3) - 0.45 * flinch - 0.5 * sp.close + 0.9 * sp.open),
     );
+    const pupil = act.pupil < 0.15 ? 0 : pupil0 * act.pupil;
+    const blaze = Math.max(flinch, sp.open, act.glow);
     // how hard it turns: surges (noise), choked while closing, a burst when it tears open
-    const surge = (1 + 0.5 * (vnoise(t * 1.7, 3.1) - 0.5)) * (1 - 0.7 * sp.close) * (1 + 2.2 * sp.open);
-    const inflow = INFLOW * (1 - 1.4 * sp.close + 1.5 * sp.open);
+    const surge =
+      (1 + 0.5 * (vnoise(t * 1.7, 3.1) - 0.5)) * (1 - 0.7 * sp.close) * (1 + 2.2 * sp.open) * act.spin;
+    const inflow = INFLOW * (1 - 1.4 * sp.close + 1.5 * sp.open) * act.inflow;
+    // darker for an intake's tell and a held-shut wound, a step brighter for a flare
+    const dim = Math.round(2 * act.dark + 2 * act.shut);
+    const lift = act.flash > 0.5 ? 2 : act.flash > 0.15 ? 1 : 0;
 
     // the flow map: two copies of the motion, half a cycle apart; each cell picks one by the dither, weighted by a triangle
     const ph0 = (t / FLOW_T) % 1;
@@ -313,25 +378,85 @@ export class RemainderIdle {
       if (sx >= 0 && sy >= 0 && sx < W && sy < H) {
         const j = sy * W + sx;
         // from beyond the spiral the colour is the vortex's own darkest (space being pulled in)
-        if (this.turns[j] && !this.changed(map, j)) c = this.orig[j]!;
+        if (this.turns[j] && !this.changed(map, j))
+          c = dim || lift ? this.step(map, j, lift - dim) : this.orig[j]!;
         else c = this.lad[ids.vortex]?.[0] ?? c;
       }
       px[i] = c;
+      if (lift) em[i] = Math.max(em[i]!, 60 * act.flash);
       // the eye: black inside the pupil, a rim of light at its edge (blinding when it tears open)
       if (r < pupil) px[i] = this.lad[ids.core]?.[0] ?? c;
       else if (r < pupil + 1.8) {
         const L = this.lad[ids.spark] ?? this.lad[ids.core]!;
-        px[i] = L[Math.max(0, L.length - 1 - (sp.open > 0.3 || flinch > 0.5 ? 0 : 2))]!;
-        em[i] = Math.max(em[i]!, 70 + 150 * Math.max(flinch, sp.open));
-      } else if (r < pupil + 4 && inner > 0.6) em[i] = Math.max(em[i]!, 30 + 60 * sp.open);
+        px[i] = L[Math.max(0, L.length - 1 - (blaze > 0.3 ? 0 : 2))]!;
+        em[i] = Math.max(em[i]!, 70 + 150 * blaze);
+      } else if (r < pupil + 4 && inner > 0.6) em[i] = Math.max(em[i]!, 30 + 60 * blaze);
+    }
+
+    // shut: an iris of bone closes over the wound from the rim inward (seven petals, seams between them, a slit of light
+    // left at the centre): Hold Shut, and the snap at the end of Loosening
+    if (act.shut > 0) {
+      const B = this.lad[ids.bone] ?? this.lad[ids.crust]!;
+      const C = this.lad[ids.crust] ?? B;
+      const S = this.lad[ids.spark] ?? B;
+      const open = rv * (1 - 0.97 * act.shut);
+      const turn = t * 0.2;
+      for (let k = 0; k < this.swirl.length; k++) {
+        const i = this.swirl[k]!;
+        if (this.changed(map, i)) continue;
+        const r = this.sr[k]!;
+        if (r < open) continue;
+        const a = this.sa[k]!;
+        // petal seams curve inward like an aperture
+        const pet = ((a + turn) / (Math.PI * 2)) * 7 + (r / rv) * 0.9;
+        const f = pet - Math.floor(pet);
+        const lit = 0.55 - 0.3 * fsin(a + 0.8) - 0.25 * (1 - r / rv);
+        if (f < 0.07) {
+          px[i] = C[0]!;
+        } else if (f < 0.12 && r < rv * 0.6) {
+          px[i] = S[S.length - 1]!;
+          em[i] = Math.max(em[i]!, 90);
+        } else px[i] = B[Math.max(0, Math.min(B.length - 1, Math.floor(lit * B.length)))]!;
+        if (r < open + 1.5 && act.shut > 0.85) {
+          px[i] = S[S.length - 1]!;
+          em[i] = Math.max(em[i]!, 200);
+        }
+      }
     }
 
     // the shell around it is drawn in: each cell shows the shell a little further out and back along the spin
-    const pull = 0.06 + 0.035 * fsin(t * 2.1) + 0.12 * sp.open - 0.03 * sp.close;
+    const pull = 0.06 + 0.035 * fsin(t * 2.1) + 0.12 * sp.open - 0.03 * sp.close + 0.1 * act.loosen;
+    // Loosening: the wound spreads over the shell, out to `reach`; the shell there shows the vortex turning, squeezed in
+    const reach = rv * (1 + 0.6 * act.loosen);
+    const rimTurn = SPIN * surge * ph0 * FLOW_T;
     for (let k = 0; k < this.ring.length; k++) {
       const i = this.ring[k]!;
       if (this.changed(map, i)) continue;
       const r = this.rr[k]!;
+      if (act.loosen > 0 && r < reach - 3 * h2(i, 31)) {
+        const a = this.ra[k]! - rimTurn * 1.4;
+        const rs = (r / reach) * rv * 0.95;
+        const sx = Math.floor(this.cx + fcos(a) * rs);
+        const sy = Math.floor(this.cy + fsin(a) * rs);
+        const j = sy * W + sx;
+        if (sx >= 0 && sy >= 0 && sx < W && sy < H && this.turns[j]) {
+          px[i] = this.orig[j]!;
+          em[i] = Math.max(em[i]!, 40);
+          continue;
+        }
+      }
+      if (act.shut > 0 && Math.abs(r - rv) < 7 * act.shut) {
+        // Hold Shut: bone plates locked over the rim, grinding round slowly, seams of light between them
+        const seg = (this.ra[k]! + t * 0.25) / 0.42;
+        const f = seg - Math.floor(seg);
+        const B = this.lad[ids.bone] ?? this.lad[ids.crust]!;
+        if (f < 0.08) {
+          const S = this.lad[ids.spark] ?? B;
+          px[i] = S[S.length - 1]!;
+          em[i] = Math.max(em[i]!, 110);
+        } else px[i] = B[Math.max(0, B.length - 2 - ((Math.floor(seg) & 1) + (r > rv ? 1 : 0)))]!;
+        continue;
+      }
       const near = 1 - (r - rv * 0.85) / (rv * 0.75);
       const rs = r * (1 + pull * near);
       const a = this.ra[k]! - 0.12 * near * surge * (0.6 + 0.4 * fsin(t * 3 + r * 0.1));
@@ -394,6 +519,37 @@ export class RemainderIdle {
         em[i] = Math.max(em[i]!, 120);
       }
     }
+    // Fold: the whole body drains into its own eye, twisting, and unfolds again
+    if (act.fold > 0) this.collapse(1 - act.fold, act.twist);
+  }
+
+  /** Shrink and twist the drawn skin about the eye (s = 1: as drawn, 0: gone). */
+  private collapse(s: number, twist: number): void {
+    const { W, H, skin } = this;
+    const N = W * H;
+    const tmp = (this.tmpPx ??= new Uint32Array(N));
+    const tme = (this.tmpEm ??= new Uint8Array(N));
+    tmp.set(skin.px);
+    tme.set(skin.emis);
+    skin.px.fill(0);
+    skin.emis.fill(0);
+    if (s < 0.04) return;
+    const c = fcos(-twist);
+    const sn = fsin(-twist);
+    const inv = 1 / s;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const dx = (x + 0.5 - this.cx) * inv;
+        const dy = (y + 0.5 - this.cy) * inv;
+        const sx = Math.floor(this.cx + dx * c - dy * sn);
+        const sy = Math.floor(this.cy + dx * sn + dy * c);
+        if (sx < 0 || sy < 0 || sx >= W || sy >= H) continue;
+        const j = sy * W + sx;
+        const i = y * W + x;
+        skin.px[i] = tmp[j]!;
+        // the draining body glows as it goes
+        skin.emis[i] = Math.max(tme[j]!, tmp[j] ? Math.round(160 * (1 - s)) : 0);
+      }
   }
 
   private drawWreck(body: RenderLayer, map: MatterMap, t: number, sp: { close: number; open: number }): void {

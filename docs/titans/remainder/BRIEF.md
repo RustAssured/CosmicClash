@@ -1,7 +1,7 @@
 # CREATURE BRIEF: THE REMAINDER / 잔여체
 
 From the user, 2026-10-24: key art and a short summary. Imported into the titan builder as the first titan made from key art
-(Phase 1: art and brief intake). The body is the imported art; moves, signature and voice are still the blob placeholder's.
+(Phase 1: art and brief intake). Its living idle and its six moves are built (2026-10-25); its voice is the kit voice.
 
 **Clips:** [clips/](clips/) (idle, an exchange, the ultimate, an AI fight). **Key art:** [keyart.webp](keyart.webp) (the original is 1122×1402). Imported with the lasso around the creature, the core in
 the vortex's eye, 5 regions + 2 veins.
@@ -48,3 +48,30 @@ shell to reinforce the core.
   self-cannibalism**; keep that at the centre.
 - **Kind:** celestial (a wormhole plus captured worlds; its awareness is lore).
 - **Template:** blob behaviour for now; its body is imported art (src/titans/kit/image.ts).
+
+## The moves (built 2026-10-25, the user's go-ahead on the proposal)
+
+**The idea: a rigid shell with violence inside.** The body never swings, leans or lunges: every attack erupts out of the
+vortex. Data: tools/titans/author/remainder.ts → remainder.json; mechanics: src/combat/behaviours/kit/remainder.ts; drawing:
+remainderFx.ts and remainderIdle.ts. Clips: [clips/moves/](clips/moves/) and [the reel](clips/remainder-moves-reel.mp4).
+
+| Button | Move | What you see | What it does |
+|---|---|---|---|
+| Strike | **Snap** / 낚아채기 | the eye cocks, a whip of ichor and violet cracks out to the aim, overshoots, recoils with a wave down it, dragging the foe's own colours home | 9 / 4 / 26 ticks, 166 px reach; TIDAL along the whip and a grab at the tip, a KINETIC crack; yanks the foe a little |
+| Crush | **Inhale** / 들이킴 | the tell (vortex spins up and darkens, the eye widens, a cone of dust rushes in), then the yank and two toothed bone mandibles slamming shut at the rim | 28 / 12 / 50; the foe is pulled toward the eye for 8 ticks (and loose debris with it), then a CRUSH bite |
+| Surge | **Fold** / 접힘 | the body twists down into its own eye, a tear of light closes where it was, it unfolds out of a second tear | 4 / 14 / 16; intangible ticks 2–16 |
+| Signature | **Compaction** / 압축 | hold: compression rings close on the eye, matter spirals into a slug growing there; forward / up it fires (a muzzle ring, a comet trail), down it grinds bone plates onto the shell | hold up to 1 s; 1–3 Mass pips by charge; the slug is real matter (a launched chunk: one KINETIC blow); plates are grown bone cells |
+| Ultimate | **Loosening** / 풀림 | the wound tears open over the whole shell, light cracks run outward, debris streams in from all round; then it slams shut (an iris of bone, a ring of light, a shockwave) | 40 / 150 / 50; a gravity well drags the foe and debris in, the eye shreds what reaches it; **while open its core is exposed: a blow that reaches the eye lands twice** |
+| Guard | **Hold Shut** / 닫힘 | an iris of bone petals closes over the vortex (seams of light, a slit at the centre), plates grind round the rim | strong vs KINETIC / CRUSH, weak vs TIDAL / ASSIMILATION; each swallowed blow is +0.3 Mass |
+
+- **Mass / 질량** (5 pips, starts at 2): Hoard: what Snap, Inhale and Loosening tear off the foe (4 % of a foe ≈ 1 pip), and
+  blows swallowed while holding shut. Compaction spends it.
+- **Cannibal** (failure mode, below 34 % mass): every 0.75 s it tears a mouthful of its own shell loose toward the eye and
+  grows a little core from it (a quarter at most: starving, not healing); tempo ×1.18, speed ×1.1, Hold Shut ×0.55, the
+  vortex frantic. (The first version grew more than it ate: caught by its test, fixed.)
+- **Stats:** mass 7, cohesion 6, heat 6, gravity 9, reach 7, tempo 4; `balance` power 0.72, durability 0.75.
+- **Balance** (`npm run titan:check -- remainder --fights=2`, AI level 4, 40 fights): **65 %**, in the 25–75 % band. Pacing
+  (share of an idle foe): Snap 0.4–3 %, Inhale 3–9 %, Compaction 6–10 %, Loosening 12–38 % (the Nexus resists it most, the
+  Planet least).
+- **Open:** the AI never raises Hold Shut (the Cradle's Enfold has the same gap) and rarely spends Mass on Compaction (it
+  cannot see the slug: the AI values moves by their hitboxes). Its voice is the kit voice, tuned only by numbers.

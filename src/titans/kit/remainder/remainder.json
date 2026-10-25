@@ -4,29 +4,29 @@
   "nameKo": "잔여체",
   "epithet": "The Wound That Fears",
   "attributes": {
-    "mass": 5,
-    "cohesion": 5,
-    "heat": 5,
-    "gravity": 4,
-    "reach": 5,
-    "tempo": 6
+    "mass": 7,
+    "cohesion": 6,
+    "heat": 6,
+    "gravity": 9,
+    "reach": 7,
+    "tempo": 4
   },
   "resource": {
-    "id": "fragments",
-    "name": "Lobes",
-    "nameKo": "혹",
+    "id": "accreted",
+    "name": "Mass",
+    "nameKo": "질량",
     "max": 5,
-    "start": 5,
+    "start": 2,
     "display": "pips"
   },
-  "destruction": "KINETIC",
+  "destruction": "TIDAL",
   "passive": {
-    "name": "Swell",
-    "text": "Its signature move swells it: for two seconds every blow it lands hits harder."
+    "name": "Hoard",
+    "text": "What it tears off the foe, and the blows it swallows while holding shut, are packed into Mass: the pips Compaction spends."
   },
   "failureMode": {
-    "name": "Deflate",
-    "text": "Below about a third of its mass it sags: slower, and easier to tear."
+    "name": "Cannibal",
+    "text": "Below about a third of its mass it eats its own shell to keep the core alive: the bone crumbles inward, the core hardens, it Snaps faster and spins frantic, but it has no plates left to Hold Shut with."
   },
   "materials": [
     {
@@ -135,14 +135,14 @@
   },
   "moves": [
     {
-      "id": "remainder.slam",
+      "id": "remainder.snap",
       "slot": "strike",
-      "name": "Slam",
-      "nameKo": "강타",
+      "name": "Snap",
+      "nameKo": "낚아채기",
       "frame": {
-        "startup": 8,
-        "active": 8,
-        "recovery": 16,
+        "startup": 9,
+        "active": 4,
+        "recovery": 26,
         "cancelWindow": 0.4,
         "chargeMax": 0,
         "hitstop": 6
@@ -151,317 +151,492 @@
         "up": {
           "hitboxes": [
             {
-              "id": "check",
+              "id": "lash",
               "from": 0,
-              "to": 8,
+              "to": 4,
               "shape": {
-                "kind": "point",
-                "ox": 97.5,
-                "oy": -65,
-                "r": 43.9
+                "kind": "line",
+                "ox0": 58,
+                "oy0": 0,
+                "ox1": 166,
+                "oy1": -96,
+                "width": 14
               },
               "damage": {
-                "type": "KINETIC",
-                "energy": 260,
+                "type": "TIDAL",
+                "energy": 1400,
                 "duration": 1,
                 "flags": 0,
                 "params": {
-                  "crater": 6,
-                  "penetration": 6,
-                  "scatter": 1
+                  "pull": 1.3
                 }
               },
               "knockback": {
-                "x": 260,
-                "y": -40
+                "x": -110,
+                "y": 40
               },
-              "guardPressure": 0.25
+              "guardPressure": 0.15
+            },
+            {
+              "id": "grab",
+              "from": 1,
+              "to": 4,
+              "shape": {
+                "kind": "field",
+                "ox": 156,
+                "oy": -88,
+                "r": 34,
+                "falloff": 0.5
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 3800,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "pull": 1.5
+                }
+              },
+              "knockback": {
+                "x": -80,
+                "y": 0
+              },
+              "guardPressure": 0.15
+            },
+            {
+              "id": "crack",
+              "from": 1,
+              "to": 4,
+              "shape": {
+                "kind": "point",
+                "ox": 162,
+                "oy": -92,
+                "r": 18
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 320,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 7,
+                  "penetration": 8
+                }
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.15
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 380,
-              "iy": -60,
-              "damp": 0.12
-            }
-          ]
+          "movement": []
         },
         "forward": {
           "hitboxes": [
             {
-              "id": "check",
+              "id": "lash",
               "from": 0,
-              "to": 8,
+              "to": 4,
               "shape": {
-                "kind": "point",
-                "ox": 97.5,
-                "oy": -9.7,
-                "r": 43.9
+                "kind": "line",
+                "ox0": 58,
+                "oy0": 0,
+                "ox1": 166,
+                "oy1": -4,
+                "width": 14
               },
               "damage": {
-                "type": "KINETIC",
-                "energy": 260,
+                "type": "TIDAL",
+                "energy": 1400,
                 "duration": 1,
                 "flags": 0,
                 "params": {
-                  "crater": 6,
-                  "penetration": 6,
-                  "scatter": 1
+                  "pull": 1.3
                 }
               },
               "knockback": {
-                "x": 260,
-                "y": -40
+                "x": -110,
+                "y": 0
               },
-              "guardPressure": 0.25
+              "guardPressure": 0.15
+            },
+            {
+              "id": "grab",
+              "from": 1,
+              "to": 4,
+              "shape": {
+                "kind": "field",
+                "ox": 156,
+                "oy": -4,
+                "r": 34,
+                "falloff": 0.5
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 3800,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "pull": 1.5
+                }
+              },
+              "knockback": {
+                "x": -80,
+                "y": 0
+              },
+              "guardPressure": 0.15
+            },
+            {
+              "id": "crack",
+              "from": 1,
+              "to": 4,
+              "shape": {
+                "kind": "point",
+                "ox": 162,
+                "oy": -4,
+                "r": 18
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 320,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 7,
+                  "penetration": 8
+                }
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.15
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 380,
-              "iy": 0,
-              "damp": 0.12
-            }
-          ]
+          "movement": []
         },
         "down": {
           "hitboxes": [
             {
-              "id": "check",
+              "id": "lash",
               "from": 0,
-              "to": 8,
+              "to": 4,
               "shape": {
-                "kind": "point",
-                "ox": 97.5,
-                "oy": 45.5,
-                "r": 43.9
+                "kind": "line",
+                "ox0": 58,
+                "oy0": 0,
+                "ox1": 166,
+                "oy1": 88,
+                "width": 14
               },
               "damage": {
-                "type": "KINETIC",
-                "energy": 260,
+                "type": "TIDAL",
+                "energy": 1400,
                 "duration": 1,
                 "flags": 0,
                 "params": {
-                  "crater": 6,
-                  "penetration": 6,
-                  "scatter": 1
+                  "pull": 1.3
                 }
               },
               "knockback": {
-                "x": 260,
+                "x": -110,
                 "y": -40
               },
-              "guardPressure": 0.25
+              "guardPressure": 0.15
+            },
+            {
+              "id": "grab",
+              "from": 1,
+              "to": 4,
+              "shape": {
+                "kind": "field",
+                "ox": 156,
+                "oy": 80,
+                "r": 34,
+                "falloff": 0.5
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 3800,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "pull": 1.5
+                }
+              },
+              "knockback": {
+                "x": -80,
+                "y": 0
+              },
+              "guardPressure": 0.15
+            },
+            {
+              "id": "crack",
+              "from": 1,
+              "to": 4,
+              "shape": {
+                "kind": "point",
+                "ox": 162,
+                "oy": 84,
+                "r": 18
+              },
+              "damage": {
+                "type": "KINETIC",
+                "energy": 320,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 7,
+                  "penetration": 8
+                }
+              },
+              "knockback": {
+                "x": -60,
+                "y": 0
+              },
+              "guardPressure": 0.15
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 380,
-              "iy": 60,
-              "damp": 0.12
-            }
-          ]
+          "movement": []
         }
       },
       "resourceCost": 0,
       "meterCost": 0,
       "tags": [],
       "extra": {
+        "noCredit": true,
+        "weight": "light",
         "pose": {
           "startup": {
-            "lean": -5
+            "lean": 0
           },
           "active": {
-            "lean": 8
+            "lean": 0
           }
         }
       }
     },
     {
-      "id": "remainder.engulf",
+      "id": "remainder.inhale",
       "slot": "crush",
-      "name": "Engulf",
-      "nameKo": "삼키기",
+      "name": "Inhale",
+      "nameKo": "들이킴",
       "frame": {
-        "startup": 26,
-        "active": 10,
-        "recovery": 44,
+        "startup": 28,
+        "active": 12,
+        "recovery": 50,
         "cancelWindow": 0.4,
         "chargeMax": 0,
-        "hitstop": 13
+        "hitstop": 12
       },
       "variants": {
         "up": {
           "hitboxes": [
             {
-              "id": "ram",
+              "id": "inhale",
               "from": 0,
-              "to": 10,
+              "to": 8,
               "shape": {
-                "kind": "point",
-                "ox": 94.3,
-                "oy": -55.2,
-                "r": 58.5
+                "kind": "field",
+                "ox": 130,
+                "oy": -36,
+                "r": 120,
+                "falloff": 0.4
               },
               "damage": {
-                "type": "KINETIC",
-                "energy": 1147.5,
+                "type": "TIDAL",
+                "energy": 5200,
                 "duration": 1,
-                "flags": 8,
+                "flags": 0,
                 "params": {
-                  "embed": 6,
-                  "embedDelay": 40,
-                  "crater": 20,
-                  "penetration": 22,
-                  "scatter": 1.3
+                  "pull": 1.8
                 }
               },
               "knockback": {
-                "x": 820,
-                "y": -120
+                "x": -460,
+                "y": 60
               },
-              "guardPressure": 1
-            }
-          ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": -140,
-              "iy": 0,
-              "damp": 0.3
+              "guardPressure": 0.45
             },
             {
-              "at": 26,
-              "ix": 700,
-              "iy": -110,
-              "damp": 0.05
+              "id": "bite",
+              "from": 7,
+              "to": 12,
+              "shape": {
+                "kind": "point",
+                "ox": 90,
+                "oy": -44,
+                "r": 46
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 900,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 14,
+                  "penetration": 10,
+                  "scatter": 0.6
+                }
+              },
+              "knockback": {
+                "x": 300,
+                "y": -120
+              },
+              "guardPressure": 0.9
             }
-          ]
+          ],
+          "movement": []
         },
         "forward": {
           "hitboxes": [
             {
-              "id": "ram",
+              "id": "inhale",
               "from": 0,
-              "to": 10,
+              "to": 8,
               "shape": {
-                "kind": "point",
-                "ox": 94.3,
-                "oy": -6.5,
-                "r": 58.5
+                "kind": "field",
+                "ox": 130,
+                "oy": 0,
+                "r": 120,
+                "falloff": 0.4
               },
               "damage": {
-                "type": "KINETIC",
-                "energy": 1147.5,
+                "type": "TIDAL",
+                "energy": 5200,
                 "duration": 1,
-                "flags": 8,
+                "flags": 0,
                 "params": {
-                  "embed": 6,
-                  "embedDelay": 40,
-                  "crater": 20,
-                  "penetration": 22,
-                  "scatter": 1.3
+                  "pull": 1.8
                 }
               },
               "knockback": {
-                "x": 820,
-                "y": -120
+                "x": -460,
+                "y": 0
               },
-              "guardPressure": 1
-            }
-          ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": -140,
-              "iy": 0,
-              "damp": 0.3
+              "guardPressure": 0.45
             },
             {
-              "at": 26,
-              "ix": 700,
-              "iy": 0,
-              "damp": 0.05
+              "id": "bite",
+              "from": 7,
+              "to": 12,
+              "shape": {
+                "kind": "point",
+                "ox": 90,
+                "oy": 0,
+                "r": 46
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 900,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 14,
+                  "penetration": 10,
+                  "scatter": 0.6
+                }
+              },
+              "knockback": {
+                "x": 300,
+                "y": -20
+              },
+              "guardPressure": 0.9
             }
-          ]
+          ],
+          "movement": []
         },
         "down": {
           "hitboxes": [
             {
-              "id": "ram",
+              "id": "inhale",
               "from": 0,
-              "to": 10,
+              "to": 8,
               "shape": {
-                "kind": "point",
-                "ox": 94.3,
-                "oy": 42.3,
-                "r": 58.5
+                "kind": "field",
+                "ox": 130,
+                "oy": 36,
+                "r": 120,
+                "falloff": 0.4
               },
               "damage": {
-                "type": "KINETIC",
-                "energy": 1147.5,
+                "type": "TIDAL",
+                "energy": 5200,
                 "duration": 1,
-                "flags": 8,
+                "flags": 0,
                 "params": {
-                  "embed": 6,
-                  "embedDelay": 40,
-                  "crater": 20,
-                  "penetration": 22,
-                  "scatter": 1.3
+                  "pull": 1.8
                 }
               },
               "knockback": {
-                "x": 820,
-                "y": -120
+                "x": -460,
+                "y": -60
               },
-              "guardPressure": 1
-            }
-          ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": -140,
-              "iy": 0,
-              "damp": 0.3
+              "guardPressure": 0.45
             },
             {
-              "at": 26,
-              "ix": 700,
-              "iy": 110,
-              "damp": 0.05
+              "id": "bite",
+              "from": 7,
+              "to": 12,
+              "shape": {
+                "kind": "point",
+                "ox": 90,
+                "oy": 44,
+                "r": 46
+              },
+              "damage": {
+                "type": "CRUSH",
+                "energy": 900,
+                "duration": 1,
+                "flags": 0,
+                "params": {
+                  "crater": 14,
+                  "penetration": 10,
+                  "scatter": 0.6
+                }
+              },
+              "knockback": {
+                "x": 300,
+                "y": 140
+              },
+              "guardPressure": 0.9
             }
-          ]
+          ],
+          "movement": []
         }
       },
       "resourceCost": 0,
       "meterCost": 0,
       "tags": ["heavy"],
       "extra": {
+        "noCredit": true,
+        "weight": "heavy",
         "pose": {
           "startup": {
-            "lean": -9
+            "lean": 0
           },
           "active": {
-            "lean": 13
-          },
-          "recovery": {
-            "lean": 4
+            "lean": 0
           }
+        },
+        "inhale": {
+          "radius": 280,
+          "pullFoe": 1100,
+          "strength": 2600,
+          "ticks": 8
         }
       }
     },
     {
-      "id": "remainder.slither",
+      "id": "remainder.fold",
       "slot": "surge",
-      "name": "Slither",
-      "nameKo": "미끄러짐",
+      "name": "Fold",
+      "nameKo": "접힘",
       "frame": {
-        "startup": 2,
-        "active": 10,
-        "recovery": 8,
+        "startup": 4,
+        "active": 14,
+        "recovery": 16,
         "cancelWindow": 0,
         "chargeMax": 0,
         "hitstop": 0
@@ -472,9 +647,9 @@
           "movement": [
             {
               "at": 0,
-              "ix": 860,
+              "ix": 1100,
               "iy": 0,
-              "damp": 0.02
+              "damp": 0.002
             }
           ]
         },
@@ -483,9 +658,9 @@
           "movement": [
             {
               "at": 0,
-              "ix": 860,
+              "ix": 1100,
               "iy": 0,
-              "damp": 0.02
+              "damp": 0.002
             }
           ]
         },
@@ -494,175 +669,160 @@
           "movement": [
             {
               "at": 0,
-              "ix": 860,
+              "ix": 1100,
               "iy": 0,
-              "damp": 0.02
+              "damp": 0.002
             }
           ]
         }
       },
       "resourceCost": 0,
       "meterCost": 0,
-      "intangible": [1, 9],
+      "intangible": [2, 16],
       "tags": ["dash"],
-      "extra": {}
+      "extra": {
+        "fold": true
+      }
     },
     {
-      "id": "remainder.swell",
+      "id": "remainder.compaction",
       "slot": "signature",
-      "name": "Swell",
-      "nameKo": "부풀기",
+      "name": "Compaction",
+      "nameKo": "압축",
       "frame": {
-        "startup": 16,
-        "active": 12,
-        "recovery": 24,
+        "startup": 14,
+        "active": 6,
+        "recovery": 26,
         "cancelWindow": 0.4,
-        "chargeMax": 0,
-        "hitstop": 5
+        "chargeMax": 60,
+        "hitstop": 4
       },
       "variants": {
         "up": {
           "hitboxes": [
             {
-              "id": "swell",
+              "id": "muzzle",
               "from": 0,
-              "to": 6,
+              "to": 4,
               "shape": {
-                "kind": "ring",
-                "ox": 0,
-                "oy": 0,
-                "r0": 29.3,
-                "r1": 94.3
+                "kind": "point",
+                "ox": 98,
+                "oy": -46,
+                "r": 22
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 380,
+                "energy": 160,
                 "duration": 1,
                 "flags": 0,
                 "params": {
-                  "scatter": 1.5,
                   "crater": 4
                 }
               },
               "knockback": {
-                "x": 260,
-                "y": -40
+                "x": 160,
+                "y": -60
               },
-              "guardPressure": 0.45
+              "guardPressure": 0.2
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.1
-            }
-          ]
+          "movement": []
         },
         "forward": {
           "hitboxes": [
             {
-              "id": "swell",
+              "id": "muzzle",
               "from": 0,
-              "to": 6,
+              "to": 4,
               "shape": {
-                "kind": "ring",
-                "ox": 0,
+                "kind": "point",
+                "ox": 98,
                 "oy": 0,
-                "r0": 29.3,
-                "r1": 94.3
+                "r": 22
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 380,
+                "energy": 160,
                 "duration": 1,
                 "flags": 0,
                 "params": {
-                  "scatter": 1.5,
                   "crater": 4
                 }
               },
               "knockback": {
-                "x": 260,
-                "y": -40
+                "x": 160,
+                "y": 0
               },
-              "guardPressure": 0.45
+              "guardPressure": 0.2
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.1
-            }
-          ]
+          "movement": []
         },
         "down": {
           "hitboxes": [
             {
-              "id": "swell",
+              "id": "grind",
               "from": 0,
               "to": 6,
               "shape": {
                 "kind": "ring",
                 "ox": 0,
                 "oy": 0,
-                "r0": 29.3,
-                "r1": 94.3
+                "r0": 64,
+                "r1": 112
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 380,
+                "energy": 180,
                 "duration": 1,
                 "flags": 0,
                 "params": {
-                  "scatter": 1.5,
                   "crater": 4
                 }
               },
               "knockback": {
-                "x": 260,
+                "x": 320,
                 "y": -40
               },
-              "guardPressure": 0.45
+              "guardPressure": 0.3
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.1
-            }
-          ]
+          "movement": []
         }
       },
-      "resourceCost": 0,
+      "resourceCost": 1,
       "meterCost": 0,
-      "tags": ["burst"],
+      "tags": ["charge", "projectile"],
       "extra": {
+        "noCredit": true,
+        "weight": "medium",
+        "chargePower": 0.6,
         "pose": {
           "startup": {
-            "lean": -4
+            "lean": 0
           },
           "active": {
-            "lean": 2
+            "lean": 0
           }
         },
-        "weight": "medium"
+        "compaction": {
+          "speed": 560,
+          "size": [9, 15],
+          "pips": [1, 3],
+          "plateCells": 34,
+          "slugMass": 9
+        }
       }
     },
     {
-      "id": "remainder.bloom",
+      "id": "remainder.loosening",
       "slot": "ultimate",
-      "name": "Bloom",
-      "nameKo": "만개",
+      "name": "Loosening",
+      "nameKo": "풀림",
       "frame": {
-        "startup": 96,
-        "active": 84,
-        "recovery": 60,
+        "startup": 40,
+        "active": 150,
+        "recovery": 50,
         "cancelWindow": 0.4,
         "chargeMax": 0,
         "hitstop": 0
@@ -671,254 +831,295 @@
         "up": {
           "hitboxes": [
             {
-              "id": "storm",
-              "from": 8,
-              "to": 60,
+              "id": "tear",
+              "from": 0,
+              "to": 140,
               "shape": {
-                "kind": "line",
-                "ox0": 48.8,
-                "oy0": 0,
-                "ox1": 536.3,
-                "oy1": 0,
-                "width": 195
+                "kind": "field",
+                "ox": 40,
+                "oy": 0,
+                "r": 240,
+                "falloff": 0.35
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 12,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 2
+                }
+              },
+              "knockback": {
+                "x": -50,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "rehit": 3
+            },
+            {
+              "id": "maw",
+              "from": 0,
+              "to": 140,
+              "shape": {
+                "kind": "field",
+                "ox": 0,
+                "oy": 0,
+                "r": 76,
+                "falloff": 0.6
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 22,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 2.4
+                }
+              },
+              "knockback": {
+                "x": -20,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "rehit": 5
+            },
+            {
+              "id": "snap",
+              "from": 140,
+              "to": 150,
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 30,
+                "r1": 250
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 70,
+                "energy": 1500,
                 "duration": 1,
-                "flags": 1,
+                "flags": 0,
                 "params": {
-                  "scatter": 1.2,
-                  "crater": 5,
+                  "crater": 10,
                   "penetration": 8
                 }
               },
               "knockback": {
-                "x": -35,
-                "y": -6
-              },
-              "guardPressure": 0.3,
-              "rehit": 6
-            },
-            {
-              "id": "slam",
-              "from": 64,
-              "to": 74,
-              "shape": {
-                "kind": "point",
-                "ox": 100.8,
-                "oy": -6.5,
-                "r": 74.8
-              },
-              "damage": {
-                "type": "KINETIC",
-                "energy": 1650,
-                "duration": 1,
-                "flags": 40,
-                "params": {
-                  "embed": 10,
-                  "embedDelay": 36,
-                  "crater": 28,
-                  "penetration": 30,
-                  "scatter": 1.6
-                }
-              },
-              "knockback": {
-                "x": 900,
-                "y": -160
+                "x": 950,
+                "y": -120
               },
               "guardPressure": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.05
-            },
-            {
-              "at": 64,
-              "ix": 620,
-              "iy": 0,
-              "damp": 0.04
-            }
-          ]
+          "movement": []
         },
         "forward": {
           "hitboxes": [
             {
-              "id": "storm",
-              "from": 8,
-              "to": 60,
+              "id": "tear",
+              "from": 0,
+              "to": 140,
               "shape": {
-                "kind": "line",
-                "ox0": 48.8,
-                "oy0": 0,
-                "ox1": 536.3,
-                "oy1": 0,
-                "width": 195
+                "kind": "field",
+                "ox": 40,
+                "oy": 0,
+                "r": 240,
+                "falloff": 0.35
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 12,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 2
+                }
+              },
+              "knockback": {
+                "x": -50,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "rehit": 3
+            },
+            {
+              "id": "maw",
+              "from": 0,
+              "to": 140,
+              "shape": {
+                "kind": "field",
+                "ox": 0,
+                "oy": 0,
+                "r": 76,
+                "falloff": 0.6
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 22,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 2.4
+                }
+              },
+              "knockback": {
+                "x": -20,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "rehit": 5
+            },
+            {
+              "id": "snap",
+              "from": 140,
+              "to": 150,
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 30,
+                "r1": 250
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 70,
+                "energy": 1500,
                 "duration": 1,
-                "flags": 1,
+                "flags": 0,
                 "params": {
-                  "scatter": 1.2,
-                  "crater": 5,
+                  "crater": 10,
                   "penetration": 8
                 }
               },
               "knockback": {
-                "x": -35,
-                "y": -6
-              },
-              "guardPressure": 0.3,
-              "rehit": 6
-            },
-            {
-              "id": "slam",
-              "from": 64,
-              "to": 74,
-              "shape": {
-                "kind": "point",
-                "ox": 100.8,
-                "oy": -6.5,
-                "r": 74.8
-              },
-              "damage": {
-                "type": "KINETIC",
-                "energy": 1650,
-                "duration": 1,
-                "flags": 40,
-                "params": {
-                  "embed": 10,
-                  "embedDelay": 36,
-                  "crater": 28,
-                  "penetration": 30,
-                  "scatter": 1.6
-                }
-              },
-              "knockback": {
-                "x": 900,
-                "y": -160
+                "x": 950,
+                "y": -120
               },
               "guardPressure": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.05
-            },
-            {
-              "at": 64,
-              "ix": 620,
-              "iy": 0,
-              "damp": 0.04
-            }
-          ]
+          "movement": []
         },
         "down": {
           "hitboxes": [
             {
-              "id": "storm",
-              "from": 8,
-              "to": 60,
+              "id": "tear",
+              "from": 0,
+              "to": 140,
               "shape": {
-                "kind": "line",
-                "ox0": 48.8,
-                "oy0": 0,
-                "ox1": 536.3,
-                "oy1": 0,
-                "width": 195
+                "kind": "field",
+                "ox": 40,
+                "oy": 0,
+                "r": 240,
+                "falloff": 0.35
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 12,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 2
+                }
+              },
+              "knockback": {
+                "x": -50,
+                "y": 0
+              },
+              "guardPressure": 0.1,
+              "rehit": 3
+            },
+            {
+              "id": "maw",
+              "from": 0,
+              "to": 140,
+              "shape": {
+                "kind": "field",
+                "ox": 0,
+                "oy": 0,
+                "r": 76,
+                "falloff": 0.6
+              },
+              "damage": {
+                "type": "TIDAL",
+                "energy": 22,
+                "duration": 1,
+                "flags": 16,
+                "params": {
+                  "pull": 2.4
+                }
+              },
+              "knockback": {
+                "x": -20,
+                "y": 0
+              },
+              "guardPressure": 0.2,
+              "rehit": 5
+            },
+            {
+              "id": "snap",
+              "from": 140,
+              "to": 150,
+              "shape": {
+                "kind": "ring",
+                "ox": 0,
+                "oy": 0,
+                "r0": 30,
+                "r1": 250
               },
               "damage": {
                 "type": "KINETIC",
-                "energy": 70,
+                "energy": 1500,
                 "duration": 1,
-                "flags": 1,
+                "flags": 0,
                 "params": {
-                  "scatter": 1.2,
-                  "crater": 5,
+                  "crater": 10,
                   "penetration": 8
                 }
               },
               "knockback": {
-                "x": -35,
-                "y": -6
-              },
-              "guardPressure": 0.3,
-              "rehit": 6
-            },
-            {
-              "id": "slam",
-              "from": 64,
-              "to": 74,
-              "shape": {
-                "kind": "point",
-                "ox": 100.8,
-                "oy": -6.5,
-                "r": 74.8
-              },
-              "damage": {
-                "type": "KINETIC",
-                "energy": 1650,
-                "duration": 1,
-                "flags": 40,
-                "params": {
-                  "embed": 10,
-                  "embedDelay": 36,
-                  "crater": 28,
-                  "penetration": 30,
-                  "scatter": 1.6
-                }
-              },
-              "knockback": {
-                "x": 900,
-                "y": -160
+                "x": 950,
+                "y": -120
               },
               "guardPressure": 1
             }
           ],
-          "movement": [
-            {
-              "at": 0,
-              "ix": 0,
-              "iy": 0,
-              "damp": 0.05
-            },
-            {
-              "at": 64,
-              "ix": 620,
-              "iy": 0,
-              "damp": 0.04
-            }
-          ]
+          "movement": []
         }
       },
       "resourceCost": 0,
       "meterCost": 1,
-      "tags": ["ultimate", "armor"],
+      "tags": ["ultimate"],
       "extra": {
+        "noCredit": true,
+        "weight": "heavy",
         "pose": {
           "startup": {
-            "lean": -6
+            "lean": 0
           },
           "active": {
-            "lean": 6
+            "lean": 0
           }
-        }
+        },
+        "ctl": {
+          "startup": 0.1,
+          "active": 0.15,
+          "recovery": 0.3
+        },
+        "well": {
+          "radius": [200, 300],
+          "strength": [1800, 3400],
+          "consume": 34,
+          "pullFoe": 360
+        },
+        "exposedCore": 1
       }
     },
     {
-      "id": "remainder.guard",
+      "id": "remainder.holdshut",
       "slot": "guard",
-      "name": "Hide",
-      "nameKo": "움츠리기",
+      "name": "Hold Shut",
+      "nameKo": "닫힘",
       "frame": {
         "startup": 3,
         "active": 0,
@@ -948,10 +1149,10 @@
         "shell": {
           "absorb": {
             "KINETIC": 0.75,
-            "CRUSH": 0.5,
-            "FRACTURE": 0.4,
-            "THERMAL": 0.1,
-            "TIDAL": 0.2,
+            "CRUSH": 0.7,
+            "FRACTURE": 0.55,
+            "THERMAL": 0.4,
+            "TIDAL": 0.3,
             "ASSIMILATION": 0.25
           }
         }
@@ -959,14 +1160,14 @@
     }
   ],
   "ai": {
-    "style": "A plain brawler: walks in, slams, swells before it engulfs.",
+    "style": "A patient mid-range controller: holds the foe off with Snaps, punishes an approach with Inhale, Folds away from pressure, and spends its Mass on slugs at range.",
     "weights": {
-      "aggression": 0.6,
-      "patience": 0.3,
-      "zoning": 0.25,
-      "retreat": 0.4,
-      "trap": 0.1,
-      "punish": 0.65,
+      "aggression": 0.45,
+      "patience": 0.6,
+      "zoning": 0.65,
+      "retreat": 0.3,
+      "trap": 0.3,
+      "punish": 0.75,
       "gaze": 0
     }
   },
@@ -977,12 +1178,12 @@
   },
   "feel": {
     "bob": {
-      "amp": 0.7,
-      "period": 2.6
+      "amp": 0.4,
+      "period": 6.5
     },
     "sway": {
-      "amp": 0.4,
-      "period": 3.4
+      "amp": 0.3,
+      "period": 7.5
     },
     "fx": {
       "kind": "ember",
@@ -993,7 +1194,11 @@
       "spread": 30,
       "behind": 24,
       "rise": 10
-    }
+    },
+    "accelMul": 1.45,
+    "recoil": 0.35,
+    "shudder": 1.5,
+    "thud": 1.3
   },
   "kit": {
     "template": "blob",
@@ -1030,5 +1235,9 @@
     "tier": 3,
     "wip": true,
     "painter": "image"
+  },
+  "balance": {
+    "power": 0.72,
+    "durability": 0.75
   }
 }

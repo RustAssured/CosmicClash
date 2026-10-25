@@ -280,6 +280,10 @@ the blob placeholder's; not in the ladder's opponents.
   they trail. The body animates on twos (30 Hz; at once on a hit): ≈ 1.2 ms on its frames, 0.05 ms between. Clips
   (tools/titans/clip.ts: the software compositor + ffmpeg, no GPU) in docs/titans/remainder/clips/: idle (gif + mp4), an
   exchange with the Witness, its (placeholder) ultimate on the Planet, and 20 s of AI vs the Nexus.
+- **The Remainder's six moves** (the user approved the proposal): Snap, Inhale, Fold, Compaction, Loosening, Hold Shut,
+  plus Mass (Hoard) and Cannibal; details, balance and clips in docs/titans/remainder/BRIEF.md. A rigid shell with violence
+  inside: no move moves the shell. 8 mechanics tests (src/combat/remainder.test.ts). Balance 65 % at AI level 4 (40 fights).
+  Open: the AI never guards with it and rarely uses Compaction.
 - **Next (Phase 2):** a pixel touch-up editor (paint cells and materials), part regions and pivots for motion.
 
 ## Next
