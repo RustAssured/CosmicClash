@@ -73,6 +73,12 @@ const packHex = (hex: string): number => {
   return (0xff000000 | ((v & 255) << 16) | (v & 0xff00) | ((v >> 16) & 255)) >>> 0;
 };
 
+/** The idle's redrawn body this frame (map-indexed): Snap stretches it out of the rim. */
+export interface SkinPixels {
+  readonly px: Uint32Array;
+  readonly emis: Uint8Array;
+}
+
 export class RemainderFx {
   private readonly front: BodySpaceLayer;
   private readonly world = new Overlay('remainder-fx-world', 2, 360, 360, 'normal', true);
@@ -264,13 +270,14 @@ export class RemainderFx {
     tick: number,
     view: ViewRect,
     out: RenderLayer[],
+    skin: SkinPixels,
   ): void {
     const L = this.front;
     L.begin(body);
     const W = this.world;
     W.limitToView(view, 64);
     W.begin(v.foldFromX, v.foldFromY);
-    if (v.id === SNAP) this.drawSnap(v, tick, map);
+    if (v.id === SNAP) this.drawSnap(v, tick, map, skin);
     if (v.id === INHALE) this.drawInhale(v, tick);
     if (v.id === COMPACTION) this.drawCompaction(v, tick);
     if (v.id === LOOSENING) this.drawLoosening(v, tick);
@@ -365,10 +372,10 @@ export class RemainderFx {
 
   /**
    * SNAP: a rubber band round the vortex, pulled at one point. The band stays wrapped round the back of the vortex and
-   * leaves it on the two tangent lines that meet at the tip: the vortex stretched into a tongue toward the aim, filled with
-   * its own colours streaming along it. It snaps back with the foe's colours caught at the tip.
+   * leaves it on the two tangent lines that meet at the tip: the vortex's own pixels warped into a tongue toward the aim.
+   * It snaps back with the foe's colours caught at the tip.
    */
-  private drawSnap(v: RemainderMoveView, tick: number, map: MatterMap): void {
+  private drawSnap(v: RemainderMoveView, tick: number, map: MatterMap, skin: SkinPixels): void {
     const pose = this.snapPose(v);
     const [tx, ty] = TIP[v.aim];
     const L = DMath.hypot(tx, ty);
@@ -377,106 +384,61 @@ export class RemainderFx {
     const nX = -dY;
     const nY = dX;
     const R = this.rv;
-    const { ichor, vortex, spark } = this.pal;
+    const { vortex, spark } = this.pal;
     const cx = this.cx;
     const cy = this.cy;
 
-    // the band round the rim: tight and bright on the side being pulled, a thin glint round the back
-    if (pose.tension > 0.04) {
-      const n = Math.round(R * 7);
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2;
-        const ca = fcos(a);
-        const sa = fsin(a);
-        const facing = ca * dX + sa * dY;
-        const lean = Math.max(0, facing) * pose.pull * 0.6;
-        const rr = R + 0.5 + lean;
-        const hot = pose.tension * (0.35 + 0.65 * Math.max(0, facing));
-        if (hot < 0.18 && i & 1) continue;
-        const P = hot > 0.6 ? spark : ichor;
-        this.front.putPal(
-          Math.floor(cx + ca * rr),
-          Math.floor(cy + sa * rr),
-          P,
-          P.length - 1 - (hot > 0.4 ? 0 : 1),
-          Math.round(60 + 150 * hot),
-        );
-        if (hot > 0.5)
-          this.front.putPal(
-            Math.floor(cx + ca * (rr - 1)),
-            Math.floor(cy + sa * (rr - 1)),
-            ichor,
-            ichor.length - 2,
-            Math.round(100 * hot),
-          );
-      }
-    }
-
-    // the tongue: from the tangent points on the rim to the tip
+    // the tongue: no shape drawn over the vortex but the vortex itself, warped. The front of the disc is stretched toward the
+    // tip like a rubber sheet: the rim becomes the band (it leaves the circle on the two tangents and pinches to the tip), the
+    // spiral arms drag out into streaks along it, and every pixel is the idle's own live pixel (spin, flashes and all)
     const d = R + (L - R) * pose.ext;
-    if (d > R * 1.06) {
+    if (d > R * 1.04) {
       const ca = R / d;
       const sa = Math.sqrt(1 - ca * ca);
       const bx = R * ca;
       const hw0 = R * sa;
-      // bounding box of the triangle (base chord + tip), in body space
-      const pts = [
-        [cx + dX * bx + nX * hw0, cy + dY * bx + nY * hw0],
-        [cx + dX * bx - nX * hw0, cy + dY * bx - nY * hw0],
-        [cx + dX * d, cy + dY * d],
-      ];
-      const x0 = Math.floor(Math.min(pts[0]![0]!, pts[1]![0]!, pts[2]![0]!)) - 1;
-      const x1 = Math.ceil(Math.max(pts[0]![0]!, pts[1]![0]!, pts[2]![0]!)) + 1;
-      const y0 = Math.floor(Math.min(pts[0]![1]!, pts[1]![1]!, pts[2]![1]!)) - 1;
-      const y1 = Math.ceil(Math.max(pts[0]![1]!, pts[1]![1]!, pts[2]![1]!)) + 1;
-      // colours stream out along the tongue while it reaches, back in while it snaps back
-      const flow = (tick * (v.phase === 'recovery' ? -0.5 : 0.35)) % 1;
-      // the tongue's texture: the vortex's rim on the pulled side, across the tangent span, turning with the vortex
-      const aimA = DMath.atan2(dY, dX);
-      const span = Math.PI / 2 - DMath.atan2(ca, sa);
-      const spinA = tick * 0.06;
+      // the warp leaves the back of the disc alone and stretches [a0, R] along the aim out to [a0, d]
+      const a0 = R * 0.3;
+      const x0 = Math.floor(Math.min(cx - R, cx + dX * d)) - 1;
+      const x1 = Math.ceil(Math.max(cx + R, cx + dX * d)) + 1;
+      const y0 = Math.floor(Math.min(cy - R, cy + dY * d)) - 1;
+      const y1 = Math.ceil(Math.max(cy + R, cy + dY * d)) + 1;
+      // the stretch ripples: waves run out along the rubber while it reaches, back in while it snaps home
+      const wave = tick * (v.phase === 'recovery' ? -0.9 : 0.6);
+      const { px: SP, emis: SE } = skin;
+      const R2 = R * R;
+      // read from a little inside the rim as it stretches (the disc's outer edge is partly shell): the band is all vortex
+      const Rs = R * (1 - 0.1 * Math.min(1, pose.ext * 4));
       for (let y = y0; y <= y1; y++)
         for (let x = x0; x <= x1; x++) {
           const px = x + 0.5 - cx;
           const py = y + 0.5 - cy;
           const along = px * dX + py * dY;
+          if (along < a0 || along > d) continue;
           const lat = px * nX + py * nY;
-          if (along < bx || along > d) continue;
-          const s2 = (along - bx) / (d - bx);
-          // stretched elastic: the sides curve in (concave), thinning to the tip
-          const hw = hw0 * DMath.pow(1 - s2, 1.35) + 1.1 * s2;
-          const u = lat / hw;
+          // the outline at this distance: the circle up to the tangent points, then the elastic (concave, thinning to the tip)
+          const disc = along < R ? Math.sqrt(R2 - along * along) : 0;
+          const s2 = along > bx ? (along - bx) / (d - bx) : 0;
+          const band = along > bx ? hw0 * DMath.pow(1 - s2, 1.35) + 1.1 * s2 : 0;
+          const H = Math.max(disc, band);
+          if (H <= 0) continue;
+          const u = lat / H;
           if (u < -1 || u > 1) continue;
-          // over the vortex itself the idle draws it (stretched); the tongue starts at the rim
-          if (px * px + py * py < (R - 0.5) * (R - 0.5)) continue;
-          // the band itself: one or two cells of glowing elastic along each side, hotter toward the tip
-          const edgeCells = Math.abs(Math.abs(lat) - hw);
-          if (edgeCells < 1.2 + 0.6 * pose.tension * (1 - s2)) {
-            const P = s2 > 0.65 ? spark : ichor;
-            this.front.putPal(
-              x,
-              y,
-              P,
-              P.length - 1 - (edgeCells > 0.8 ? 1 : 0),
-              Math.round(80 + 150 * pose.tension),
-            );
+          // where it comes from: along compressed back into the disc (the tip end stretched most), across scaled to the
+          // disc's width there, so the band's edge is the disc's edge
+          const g = (along - a0) / (d - a0);
+          const k = 1 - DMath.pow(1 - g, 1.6);
+          const ripple = 0.03 * (1 - Math.abs(u)) * fsin(g * 14 - wave) * pose.ext;
+          const sa0 = Math.min(Rs - 0.6, a0 + (Rs - a0) * (k + ripple));
+          const sl = u * Math.sqrt(Math.max(0, Rs * Rs - sa0 * sa0));
+          const sx = Math.floor(cx + dX * sa0 + nX * sl);
+          const sy = Math.floor(cy + dY * sa0 + nY * sl);
+          const j = sy * map.w + sx;
+          if (sx < 0 || sy < 0 || sx >= map.w || sy >= map.h || !map.material[j]) {
+            if (along > R) this.front.putPal(x, y, vortex, 0, 0);
             continue;
           }
-          // inside: the vortex itself, pulled out. Each cell shows the live vortex from the rim on the pulled side, further
-          // in toward the eye the further along the tongue (the tip carries the heart of it), turning as the vortex turns;
-          // light runs along it while it reaches and back while it snaps home
-          const th = aimA + u * span * 0.92 + spinA;
-          const rr = R * (0.96 - 0.7 * s2);
-          const sx = Math.floor(cx + fcos(th) * rr);
-          const sy = Math.floor(cy + fsin(th) * rr);
-          const j = sy * map.w + sx;
-          const c = sx >= 0 && sy >= 0 && sx < map.w && sy < map.h && map.material[j] ? map.pixels[j]! : 0;
-          const lane = Math.floor((u + 1) * 5);
-          const run = (s2 * 2.4 - flow * 2 + h2(lane, 13) * 0.9) % 1;
-          const lit = h2(lane, 41) > 0.6 && run < 0.07 && s2 > 0.08;
-          if (lit) this.front.putPal(x, y, ichor, ichor.length - 1, 120);
-          else if (c) this.front.put(x, y, c | 0xff000000, run < 0.2 ? 40 : 0);
-          else this.front.putPal(x, y, vortex, 2, 0);
+          this.front.put(x, y, SP[j]! | 0xff000000, SE[j]!);
         }
       const tipX = cx + dX * d;
       const tipY = cy + dY * d;

@@ -129,7 +129,8 @@ export class RemainderIdle {
   private readonly W: number;
   private readonly H: number;
   private readonly seed: number;
-  private readonly skin: BodySkin;
+  /** the body as the idle drew it (Snap's tongue samples it) */
+  readonly skin: BodySkin;
   private readonly back: BodySpaceLayer;
   private readonly front: BodySpaceLayer;
   private readonly orig: Uint32Array;

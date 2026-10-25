@@ -542,6 +542,6 @@ export class RemainderBehaviour extends KitBehaviour {
       { tick: this.drawTick, sinceHit: this.drawTick - f.lastHitTick, ko, act },
       out,
     );
-    if (!ko) this.fx.render(body, f.body.map, v, this.drawTick, view, out);
+    if (!ko) this.fx.render(body, f.body.map, v, this.drawTick, view, out, this.idle.skin);
   }
 }
