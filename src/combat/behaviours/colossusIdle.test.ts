@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ARENA, DEFAULT_LIGHTING, LOGICAL_H, LOGICAL_W, type MatchConfig, type RenderLayer } from '@/contracts';
+import {
+  DEFAULT_ARENA,
+  DEFAULT_LIGHTING,
+  LOGICAL_H,
+  LOGICAL_W,
+  type MatchConfig,
+  type RenderLayer,
+} from '@/contracts';
 import { createMatterWorld } from '@/matter';
 import { createMatch, type Match } from '@/sim';
 import { getTitanDef } from '@/titans';
@@ -14,7 +21,7 @@ interface Peek {
   pose: ColossusPose;
   atlas: RenderLayer;
 }
-const peek = (f: FighterImpl): Peek => (f.behaviour as unknown as Peek);
+const peek = (f: FighterImpl): Peek => f.behaviour as unknown as Peek;
 
 /** The Last One (id colossus, slot 0) against a still Asteroid. */
 function setup(): { m: Match; f: FighterImpl } {

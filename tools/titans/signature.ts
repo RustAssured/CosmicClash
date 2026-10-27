@@ -105,7 +105,9 @@ try {
     // signature on and off (the dev server's own module instance of signature.ts), alternating, so drift hits both alike.
     const res = (await page.evaluate(async () => {
       const h = window.__ADEUK__!;
-      const mod = (await import(/* @vite-ignore */ '/src/render/signature.ts')) as {
+      // a variable, not a literal: the dev server serves this path, tsc must not resolve it
+      const spec = '/src/render/signature.ts';
+      const mod = (await import(/* @vite-ignore */ spec)) as {
         SIGNATURE: { on: boolean };
       };
       const on: number[] = [];

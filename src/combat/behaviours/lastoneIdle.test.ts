@@ -17,7 +17,12 @@ const peek = (f: FighterImpl): Peek => (f as unknown as { behaviour: Peek }).beh
 
 /** The Witness (id lastone, slot 0) against a still foe well out of the veil's reach. */
 function setup() {
-  const m = makeMatch({ a: 'lastone', b: 'asteroid' as TitanId, seed: 21, createWorld: (s) => createMatterWorld(s) });
+  const m = makeMatch({
+    a: 'lastone',
+    b: 'asteroid' as TitanId,
+    seed: 21,
+    createWorld: (s) => createMatterWorld(s),
+  });
   skipIntro(m);
   const f = m.fighters[0] as FighterImpl;
   const g = m.fighters[1] as FighterImpl;

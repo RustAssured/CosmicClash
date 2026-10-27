@@ -18,7 +18,12 @@ const peek = (f: FighterImpl): Peek => (f as unknown as { behaviour: Peek }).beh
 
 /** A Planet (slot 0) against a still foe. Node has no workers: the rotation frames are filled here (all frame 0's face). */
 function setup(script0 = '') {
-  const m = makeMatch({ a: 'planet', b: 'asteroid' as TitanId, seed: 21, createWorld: (s) => createMatterWorld(s) });
+  const m = makeMatch({
+    a: 'planet',
+    b: 'asteroid' as TitanId,
+    seed: 21,
+    createWorld: (s) => createMatterWorld(s),
+  });
   skipIntro(m);
   const f = m.fighters[0] as FighterImpl;
   m.setSources(
@@ -58,9 +63,9 @@ describe('the Planet living idle (idle handover, specs/planet.md; 45 s day, WJ 2
       const pb = peek(b.f);
       expect(pb.idle.clock.t).toBeCloseTo(pa.idle.clock.t, 9);
       expect(Buffer.from(pb.idle.faceBuf.buffer).equals(Buffer.from(pa.idle.faceBuf.buffer))).toBe(true);
-      expect(Buffer.from(pb.rubFront.layer.pixels.buffer).equals(Buffer.from(pa.rubFront.layer.pixels.buffer))).toBe(
-        true,
-      );
+      expect(
+        Buffer.from(pb.rubFront.layer.pixels.buffer).equals(Buffer.from(pa.rubFront.layer.pixels.buffer)),
+      ).toBe(true);
       compared++;
     }
     expect(compared).toBe(15);

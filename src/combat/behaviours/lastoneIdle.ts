@@ -197,7 +197,13 @@ export class WitnessIdle {
   private readonly tipX: Float32Array;
   private readonly tipY: Float32Array;
 
-  constructor(map: MatterMap, rig: LastOneRig, materials: { key: string; visual: { ramp: string[] } }[], anchor: { x: number; y: number }, seed: number) {
+  constructor(
+    map: MatterMap,
+    rig: LastOneRig,
+    materials: { key: string; visual: { ramp: string[] } }[],
+    anchor: { x: number; y: number },
+    seed: number,
+  ) {
     const W = (this.W = map.w);
     const H = (this.H = map.h);
     const N = (this.N = W * H);
@@ -314,9 +320,15 @@ export class WitnessIdle {
         aR0,
         tab,
         cells: Int32Array.from(cells),
-        cellD: Float32Array.from(cells, (i) => DMath.hypot((i % W) + 0.5 - ecx, Math.floor(i / W) + 0.5 - ecy)),
-        cellC: Float32Array.from(cells, (i) => DMath.cos(DMath.atan2(Math.floor(i / W) + 0.5 - ecy, (i % W) + 0.5 - ecx))),
-        cellS: Float32Array.from(cells, (i) => DMath.sin(DMath.atan2(Math.floor(i / W) + 0.5 - ecy, (i % W) + 0.5 - ecx))),
+        cellD: Float32Array.from(cells, (i) =>
+          DMath.hypot((i % W) + 0.5 - ecx, Math.floor(i / W) + 0.5 - ecy),
+        ),
+        cellC: Float32Array.from(cells, (i) =>
+          DMath.cos(DMath.atan2(Math.floor(i / W) + 0.5 - ecy, (i % W) + 0.5 - ecx)),
+        ),
+        cellS: Float32Array.from(cells, (i) =>
+          DMath.sin(DMath.atan2(Math.floor(i / W) + 0.5 - ecy, (i % W) + 0.5 - ecx)),
+        ),
       });
     });
     for (const E of this.eyes) for (const i of E.ann) if (this.eyeOf[i]! < 0) this.annOf[i] = E.k;
@@ -525,7 +537,14 @@ export class WitnessIdle {
         }
       for (const j of src) this.gemCell[j] = 1;
       const [a, rho] = this.ellOf(gx, gy);
-      this.gems.push({ a, rho, off: 0, sdx: Int8Array.from(dxs), sdy: Int8Array.from(dys), src: Int32Array.from(src) });
+      this.gems.push({
+        a,
+        rho,
+        off: 0,
+        sdx: Int8Array.from(dxs),
+        sdy: Int8Array.from(dys),
+        src: Int32Array.from(src),
+      });
     }
     // what a gem leaves behind: the plain ring colour nearest along the ring (−2: it stood off the ring)
     for (let i = 0; i < N; i++) {
@@ -710,7 +729,9 @@ export class WitnessIdle {
         E.sFy = E.gy;
         E.sTx = wx;
         E.sTy = wy;
-        E.next = st + (E.k === 0 ? 72 + Math.floor(R.next() * 150) : E.k === 3 ? 24 : 48 + Math.floor(R.next() * 120));
+        E.next =
+          st +
+          (E.k === 0 ? 72 + Math.floor(R.next() * 150) : E.k === 3 ? 24 : 48 + Math.floor(R.next() * 120));
       }
       if (E.sOn) {
         const u = st - E.sT0;
@@ -1015,7 +1036,10 @@ export class WitnessIdle {
           const lo = hh * Math.min(1, E.lid * 1.5 + 0.15);
           if (ly < up || ly > lo) {
             const edge = ly < up ? up - ly : ly - lo;
-            px[i] = edge < 1 ? (this.lad[I.seam]![1] ?? px[i]!) : this.ladAt(I.shell, clampN(0.75 - (edge / (hh + 1)) * 0.5, 0.2, 0.9));
+            px[i] =
+              edge < 1
+                ? (this.lad[I.seam]![1] ?? px[i]!)
+                : this.ladAt(I.shell, clampN(0.75 - (edge / (hh + 1)) * 0.5, 0.2, 0.9));
             em[i] = 0;
             continue;
           }
