@@ -182,7 +182,16 @@ export class ColossusIdle {
   private nextSac = 72;
   private readonly waves = new Pool<{ k: number; t0: number }>(8, () => ({ k: 0, t0: 0 }));
   private readonly drips = new Pool<{ sp: number; t0: number }>(10, () => ({ sp: 0, t0: 0 }));
-  private readonly dust = new Pool<Dust>(80, () => ({ sp: 0, x: 0, y: 0, vx: 0, vy: 0, age: 0, life: 1, c: 0 }));
+  private readonly dust = new Pool<Dust>(80, () => ({
+    sp: 0,
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    age: 0,
+    life: 1,
+    c: 0,
+  }));
   private readonly armWave: Float32Array;
   private readonly armGlint: Float32Array;
   /* the eye's saccade */
@@ -398,7 +407,18 @@ export class ColossusIdle {
         let rad = 0;
         for (const j of list) rad = Math.max(rad, Math.abs(Math.floor(j / m.w) - cy));
         const id = this.orbs.length;
-        this.orbs.push({ reg: ri, arm: r.arm, cx, cy, r: Math.max(1, rad), open: 0, peekT0: -1, peekDur: 0, gx: 0, gy: 0 });
+        this.orbs.push({
+          reg: ri,
+          arm: r.arm,
+          cx,
+          cy,
+          r: Math.max(1, rad),
+          open: 0,
+          peekT0: -1,
+          peekDur: 0,
+          gx: 0,
+          gy: 0,
+        });
         for (const j of list) {
           orb[j] = id;
           odx[j] = (j % m.w) - cx;
@@ -408,7 +428,8 @@ export class ColossusIdle {
       const live: number[] = [];
       for (let i = 0; i < n; i++) {
         const mm = m.material[i]!;
-        if (mm && (orb[i]! >= 0 || edge[i] || mm === I['vein'] || mm === I['gold'] || mm === I['lattice'])) live.push(i);
+        if (mm && (orb[i]! >= 0 || edge[i] || mm === I['vein'] || mm === I['gold'] || mm === I['lattice']))
+          live.push(i);
       }
       this.armL.set(ri, Int32Array.from(live));
       this.armS.set(ri, s);
@@ -433,7 +454,8 @@ export class ColossusIdle {
       const sl: number[] = [];
       for (let i = 0; i < SH.material.length; i++) {
         const mm = SH.material[i]!;
-        if (mm && (Math.floor(i / SH.w) >= this.collar || mm === I['gold'] || mm === I['lattice'])) sl.push(i);
+        if (mm && (Math.floor(i / SH.w) >= this.collar || mm === I['gold'] || mm === I['lattice']))
+          sl.push(i);
       }
       this.shrL = Int32Array.from(sl);
       const seen = new Uint8Array(SH.material.length);
@@ -532,7 +554,17 @@ export class ColossusIdle {
     this.armWave = new Float32Array(W.arms.length).fill(-9);
     this.armGlint = new Float32Array(W.arms.length).fill(-9);
     this.build(R.map((r) => r.map));
-    const mk = (): ColossusIdleInput => ({ t: 0, w: 0, wit: -1, b: 0, ax: 0, sAcc: 0, ko: false, foeX: 100, foeY: 0 });
+    const mk = (): ColossusIdleInput => ({
+      t: 0,
+      w: 0,
+      wit: -1,
+      b: 0,
+      ax: 0,
+      sAcc: 0,
+      ko: false,
+      foeX: 100,
+      foeY: 0,
+    });
     this.ringIn = Array.from({ length: RING }, mk);
     this.lastIn = mk();
     this.ringA0 = new Float64Array(RING * W.arms.length);
@@ -843,7 +875,15 @@ export class ColossusIdle {
    * Recolour region `ri`'s cells in the atlas (already holding the live map's pixels at `sx, sy`, row stride `stride`).
    * `src` is the live region map. Returns whether anything was drawn.
    */
-  shadeRegion(ri: number, src: MatterMap, px: Uint32Array, em: Uint8Array, stride: number, sx: number, sy: number): void {
+  shadeRegion(
+    ri: number,
+    src: MatterMap,
+    px: Uint32Array,
+    em: Uint8Array,
+    stride: number,
+    sx: number,
+    sy: number,
+  ): void {
     const inp = this.lastIn;
     if (inp.w < 0.01) return;
     const I = this.id;
@@ -962,7 +1002,8 @@ export class ColossusIdle {
                 em[j] = Math.max(em[j]!, Math.round(0.5 * EM));
               }
             }
-          } else c = depth > 2 ? this.ladC(I['abyss']!, h2(x, y) > 0.97 ? 1 : 0.1) : this.ladC(I['channel']!, 0.1);
+          } else
+            c = depth > 2 ? this.ladC(I['abyss']!, h2(x, y) > 0.97 ? 1 : 0.1) : this.ladC(I['channel']!, 0.1);
           px[j] = c;
           continue;
         }
@@ -976,7 +1017,8 @@ export class ColossusIdle {
           if (d === 65535) continue;
           const f = (T - wv.t0) * 38 - d;
           if (f > -1 && f < 1.2) lit = 2;
-          else if (f >= 1.2 && f < 7 && BAY8[((y & 7) << 3) | (x & 7)]! > (f - 1.2) / 6) lit = Math.max(lit, 1);
+          else if (f >= 1.2 && f < 7 && BAY8[((y & 7) << 3) | (x & 7)]! > (f - 1.2) / 6)
+            lit = Math.max(lit, 1);
         }
         if (m === I['hairline'] && fsin(T * 0.8 + h2(i, 3) * 6) > 0.8) lit = Math.max(lit, 1);
         if (lit && w > 0.5) {
@@ -1037,7 +1079,10 @@ export class ColossusIdle {
         const slit = Math.floor(0.5 + O.open * (O.r + 0.5));
         if (Math.abs(dy) > slit) {
           const u = Math.abs(dy) / (O.r + 1);
-          px[j] = Math.abs(dy) === slit + 1 ? this.ladC(I['bronze']!, 0.15) : this.ladC(I['shell']!, 0.55 - u * 0.4);
+          px[j] =
+            Math.abs(dy) === slit + 1
+              ? this.ladC(I['bronze']!, 0.15)
+              : this.ladC(I['shell']!, 0.55 - u * 0.4);
           em[j] = 0;
           continue;
         }
@@ -1073,7 +1118,8 @@ export class ColossusIdle {
           em[j] = Math.max(em[j]!, Math.round(0.35 * EM));
         } else if (Math.abs(f) < 0.06) px[j] = this.stepC(px[j]!, m, 2);
       }
-      if ((m === I['gold'] || m === I['lattice']) && h2(i * 7 + ri, sparkle) > 0.95) px[j] = this.stepC(px[j]!, m, 1);
+      if ((m === I['gold'] || m === I['lattice']) && h2(i * 7 + ri, sparkle) > 0.95)
+        px[j] = this.stepC(px[j]!, m, 1);
     }
   }
 
@@ -1123,7 +1169,10 @@ export class ColossusIdle {
           if (d.sp !== sp) continue;
           const front = (T - d.t0) * 22;
           if (Math.abs(y - this.spires[sp]!.y0 - front) < 1.5) {
-            px[j] = m === I['gold'] || m === I['lattice'] ? this.ladC(I['lattice']!, 0.8) : this.stepC(tmp[i]!, m, 2);
+            px[j] =
+              m === I['gold'] || m === I['lattice']
+                ? this.ladC(I['lattice']!, 0.8)
+                : this.stepC(tmp[i]!, m, 2);
             em[j] = Math.max(em[j]!, Math.round(0.12 * EM));
           }
         }
@@ -1287,7 +1336,12 @@ export class ColossusIdle {
           const y = Math.round(hy + fsin(a) * rr);
           if (W > 3.8 && BAY8[((y & 7) << 3) | (x & 7)]! > ringP) continue;
           const lead = reach - da < 0.12 && W < 1.6;
-          ov.set(x, y, this.ladC(I['lattice']!, lead ? 1 : kk === 1 ? 0.7 : 0.45), Math.round((lead ? 0.5 : 0.12) * EM));
+          ov.set(
+            x,
+            y,
+            this.ladC(I['lattice']!, lead ? 1 : kk === 1 ? 0.7 : 0.45),
+            Math.round((lead ? 0.5 : 0.12) * EM),
+          );
         }
       }
       const len = Math.round(ss(1.0, 1.7, W) * (1 - ss(3.8, 4.6, W)) * 40);
@@ -1300,7 +1354,12 @@ export class ColossusIdle {
         for (let k = 0; k < len; k++) {
           if (!(k > len - 3 || (k & 1) === 0 || dy === -1)) continue;
           const rr = 42 + k;
-          ov.set(hx + dx * rr, hy + dy * rr, this.ladC(I['lattice']!, k > len - 3 ? 1 : 0.55), Math.round(0.15 * EM));
+          ov.set(
+            hx + dx * rr,
+            hy + dy * rr,
+            this.ladC(I['lattice']!, k > len - 3 ? 1 : 0.55),
+            Math.round(0.15 * EM),
+          );
         }
     }
     for (let n = 0; n < this.dust.n; n++) {

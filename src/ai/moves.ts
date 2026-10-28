@@ -117,6 +117,11 @@ export interface AiReach {
   line?: { x0: number; y0: number; x1: number; y1: number; width: number };
   beam?: boolean;
   projectile?: boolean;
+  /**
+   * Use this model even though the move has JSON hitboxes: they are only part of it (the Remainder's Compaction: a muzzle
+   * blast in JSON, the slug it fires is a launched chunk of matter the hitboxes cannot describe).
+   */
+  replace?: boolean;
 }
 
 /**
@@ -216,7 +221,8 @@ export function buildMoveInfos(def: TitanDef): MoveInfo[] {
       }
       let has = v.hitboxes.length > 0 && ext.x1 > -1e8;
       // a move whose volumes come from the live body (no JSON hitboxes) is judged by its stand-in reach
-      const stand = has ? null : standInReach(m, aim);
+      const own = standInReach(m, aim);
+      const stand = has && !own?.replace ? null : own;
       if (stand) {
         has = true;
         ext.x0 = stand.x0;

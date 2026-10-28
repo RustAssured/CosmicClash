@@ -5,6 +5,7 @@ import {
   type SiteCard,
   type SizeClass,
   type TitanId,
+  type TitanKind,
   type TitanLight,
 } from '@/contracts';
 import { getTitanDef } from './defs';
@@ -28,6 +29,8 @@ export interface RosterEntry {
   /** Optional body light (src/app/fx.ts); the titans before the kit have theirs in fx.ts. */
   light?: TitanLight;
   site: SiteCard;
+  /** What it is (src/titans/kit/kinds.ts); absent for a kit titan whose JSON does not say. */
+  kind?: TitanKind;
   /** Built with the kit (its JSON carries this entry). */
   kit: boolean;
   /** Work in progress (its JSON's `kit.wip`): kept out of the menus, site and press until it ships. */
@@ -51,6 +54,7 @@ const LAUNCH = '2026-09-01';
 /** The titans that predate the kit. The card copy is the site's (WJ approved); edit it here. */
 const BUILTIN: Readonly<Record<string, Builtin>> = {
   colossus: {
+    kind: 'construct',
     size: 'large',
     tier: 5,
     shippedAt: LAUNCH,
@@ -74,6 +78,7 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
     },
   },
   planet: {
+    kind: 'celestial',
     size: 'small',
     tier: 1,
     shippedAt: LAUNCH,
@@ -97,6 +102,7 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
     },
   },
   asteroid: {
+    kind: 'mineral',
     size: 'small',
     tier: 1,
     shippedAt: LAUNCH,
@@ -120,6 +126,7 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
     },
   },
   nexus: {
+    kind: 'cosmic',
     size: 'medium',
     tier: 2,
     shippedAt: LAUNCH,
@@ -143,6 +150,7 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
     },
   },
   blackhole: {
+    kind: 'celestial',
     size: 'medium',
     tier: 3,
     shippedAt: LAUNCH,
@@ -166,6 +174,7 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
     },
   },
   supernova: {
+    kind: 'celestial',
     size: 'medium',
     tier: 3,
     shippedAt: LAUNCH,
@@ -189,6 +198,7 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
     },
   },
   lastone: {
+    kind: 'cosmic',
     size: 'medium',
     tier: 2,
     shippedAt: LAUNCH,
@@ -212,6 +222,7 @@ const BUILTIN: Readonly<Record<string, Builtin>> = {
     },
   },
   uri: {
+    kind: 'construct',
     size: 'huge',
     tier: 4,
     shippedAt: LAUNCH,
@@ -266,6 +277,7 @@ function entryOf(id: TitanId): RosterEntry {
     portraitScale: 1,
     light: k.light,
     site: k.site,
+    ...(k.kind ? { kind: k.kind } : {}),
     ...(k.wip ? { wip: true } : {}),
     tier: k.tier ?? TIER_OF_SIZE[k.size],
     ...(k.shippedAt ? { shippedAt: k.shippedAt } : {}),

@@ -11,6 +11,7 @@ import {
   MOVE_SLOTS,
   SIZE_CLASSES,
   type Difficulty,
+  type SizeClass,
   type MatchConfig,
   type TitanId,
 } from '@/contracts';
@@ -44,19 +45,21 @@ const result = (detail: string, problems: string[]): CheckResult => ({
 export function checkSize(id: TitanId): CheckResult {
   const e = rosterEntry(id)!;
   const p = renderPortrait(id, 1, DEFAULT_LIGHTING);
-  const w = Math.round(p.w * e.portraitScale);
-  const h = Math.round(p.h * e.portraitScale);
-  const [lo, hi] = SIZE_CLASSES[e.size];
+  return checkSizeOf(Math.round(p.w * e.portraitScale), Math.round(p.h * e.portraitScale), e.size);
+}
+
+/** `checkSize` on a body's measured size (game px): the titan builder runs it live on an unsaved definition. */
+export function checkSizeOf(w: number, h: number, size: SizeClass): CheckResult {
+  const [lo, hi] = SIZE_CLASSES[size];
   const big = Math.max(w, h);
   const problems: string[] = [];
-  if (big < lo || big > hi)
-    problems.push(`${big} px across is outside the '${e.size}' class (${lo}–${hi} px)`);
+  if (big < lo || big > hi) problems.push(`${big} px across is outside the '${size}' class (${lo}–${hi} px)`);
   if (w > LOGICAL_W / 2) problems.push(`${w} px wide: more than half the screen (${LOGICAL_W / 2} px)`);
   if (h > LOGICAL_H - 60)
     problems.push(`${h} px tall: taller than the screen below the HUD (${LOGICAL_H - 60} px)`);
   if (h / 2 > DEFAULT_ARENA.restY - DEFAULT_ARENA.minY)
     problems.push(`its top would leave the arena at rest (${h} px tall, rest line ${DEFAULT_ARENA.restY})`);
-  return result(`${w}×${h} px at game size, class ${e.size} (${lo}–${hi})`, problems);
+  return result(`${w}×${h} px at game size, class ${size} (${lo}–${hi})`, problems);
 }
 
 /**
@@ -65,7 +68,11 @@ export function checkSize(id: TitanId): CheckResult {
  */
 export function checkPalette(id: TitanId): CheckResult {
   const e = rosterEntry(id)!;
-  const mine: [string, string] = [e.site.accent, e.site.accent2];
+  return checkPaletteOf(id, [e.site.accent, e.site.accent2], e.kit);
+}
+
+/** `checkPalette` on an accent pair (the titan builder runs it live on an unsaved definition). */
+export function checkPaletteOf(id: string, mine: readonly [string, string], kit: boolean): CheckResult {
   const problems: string[] = [];
   let nearest = { id: '', d: Infinity };
   for (const o of ROSTER) {
@@ -76,7 +83,7 @@ export function checkPalette(id: TitanId): CheckResult {
     for (const c of theirs) {
       const d = deltaE(mine[0], c);
       if (d < nearest.d) nearest = { id: o.id, d };
-      if (e.kit && d < CLASH_DE)
+      if (kit && d < CLASH_DE)
         problems.push(`its accent ${mine[0]} is too close to ${o.id}'s ${c} (ΔE ${d.toFixed(3)})`);
     }
   }
@@ -226,11 +233,17 @@ export function balanceSweep(
         );
         let ticks = 0;
         const cap = 60 * 60 * 5;
+        // raising the Guard is a state, not a move event: count each raise as a use of the guard move
+        const guardId = getTitanDef(id).moves.find((mv) => mv.slot === 'guard')?.id;
+        let guarding = false;
         while (m.phase !== 'matchend' && ticks < cap) {
           m.step();
           ticks++;
           for (const e of m.events)
             if (e.t === 'move' && e.slot === side) moves[e.moveId] = (moves[e.moveId] ?? 0) + 1;
+          const g = m.fighters[side]!.view.state === 'guard';
+          if (guardId && g && !guarding) moves[guardId] = (moves[guardId] ?? 0) + 1;
+          guarding = g;
         }
         const row: SweepRow = {
           foe,

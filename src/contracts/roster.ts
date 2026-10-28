@@ -19,6 +19,7 @@ export const ROSTER_IDS = [
   'uri',
   'cradle',
   'cradlechild',
+  'remainder',
   // new:titan (the scaffold adds new ids above this line)
 ] as const;
 
@@ -35,6 +36,14 @@ export const SIZE_CLASSES: Readonly<Record<SizeClass, readonly [number, number]>
   large: [150, 250],
   huge: [180, 320],
 };
+
+/**
+ * Titan kinds: what a titan fundamentally IS, for authoring. A kind is a family of looks, materials, motion and sound, not a
+ * gameplay type: matchups still come only from damage types against material `resist`. The titan builder and
+ * `npm run new:titan -- --kind=<kind>` start a new titan from its kind's preset (src/titans/kit/kinds.ts).
+ */
+export const TITAN_KINDS = ['celestial', 'mineral', 'organic', 'construct', 'cosmic'] as const;
+export type TitanKind = (typeof TITAN_KINDS)[number];
 
 /** A titan's default strength tier when its roster data does not give one (COSMIC CLASH's order). */
 export const TIER_OF_SIZE: Readonly<Record<SizeClass, number>> = { small: 1, medium: 2, large: 3, huge: 4 };
@@ -89,15 +98,40 @@ export interface KitVoiceTuning {
 }
 
 /** The roster data of a titan built with the kit (`npm run new:titan`): lives in its JSON, as `kit`. */
+/**
+ * One animation preset (`kit.motion`): its `type`, the `material` (key) whose cells it moves, when it runs (`on`: 'always' or a
+ * move slot; absent = its type's default) and its knobs (numbers; absent = defaults). Iris also takes `cover`: the material
+ * whose colours its petals use.
+ */
+export interface MotionPreset {
+  type: string;
+  material: string;
+  on?: string;
+  [knob: string]: number | string | undefined;
+}
+
 export interface TitanKit {
   /** Which template it was scaffolded from: 'blob' or an existing titan's id (its painter and behaviour). */
   template: string;
+  /** What it is (celestial, mineral, organic, construct, cosmic): its authoring family, `TITAN_KINDS`. */
+  kind?: TitanKind;
+  /**
+   * 'image': its body was imported from key art in the titan builder (body.json in its folder, painted by
+   * src/titans/kit/image.ts) instead of being painted by its template's painter. Its behaviour is still the template's.
+   */
+  painter?: 'image';
   size: SizeClass;
   /** Its home stage (StageId): the ladder rung and showcase fights use it. */
   stage: string;
   light?: TitanLight;
   voice?: KitVoiceTuning;
   site: SiteCard;
+  /**
+   * Animation presets (src/combat/behaviours/kit/motion.ts): living-idle and move-animation pieces bound to one material each
+   * (swirl, pulse, shimmer, stretch, iris), tuned with sliders in the titan builder. A titan with a hand-written idle ignores
+   * them.
+   */
+  motion?: MotionPreset[];
   /** Homage notes (what it nods to, and how it stays its own), for the director. Not shown in the game. */
   homage?: string;
   /**

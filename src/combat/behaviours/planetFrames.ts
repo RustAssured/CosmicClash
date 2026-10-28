@@ -45,13 +45,18 @@ export class PlanetFrames {
     this.col = new Uint32Array(F * this.nc);
     this.cls = new Uint8Array(F * this.nc);
     this.have = new Uint8Array(F);
-    if (typeof Worker === 'undefined' || typeof window === 'undefined') return;    try {
-      this.worker = new Worker(new URL('../../titans/art/planetBake.worker.ts', import.meta.url), { type: 'module' });
+    if (typeof Worker === 'undefined' || typeof window === 'undefined') return;
+    try {
+      this.worker = new Worker(new URL('../../titans/art/planetBake.worker.ts', import.meta.url), {
+        type: 'module',
+      });
     } catch {
       this.worker = null;
       return;
     }
-    this.worker.onmessage = (e: MessageEvent<{ t: 'frame'; fi: number; col: Uint32Array; cl: Uint8Array }>): void => {
+    this.worker.onmessage = (
+      e: MessageEvent<{ t: 'frame'; fi: number; col: Uint32Array; cl: Uint8Array }>,
+    ): void => {
       const m = e.data;
       if (m.t !== 'frame') return;
       this.col.set(m.col, m.fi * this.nc);
@@ -63,7 +68,16 @@ export class PlanetFrames {
         PlanetFrames.lastBakeMs = this.bakeMs;
       }
     };
-    this.worker.postMessage({ t: 'start', titan, seed: seed >>> 0, lighting, cells, frames: F, aim: 0, dir: -1 });
+    this.worker.postMessage({
+      t: 'start',
+      titan,
+      seed: seed >>> 0,
+      lighting,
+      cells,
+      frames: F,
+      aim: 0,
+      dir: -1,
+    });
   }
 
   /** The frame on screen and the way the world turns: the worker bakes the nearest missing frames that way first. */

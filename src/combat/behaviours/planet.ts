@@ -582,7 +582,14 @@ export class PlanetBehaviour extends Behaviour {
     this.sc = (f.def.art.params as { scale?: number }).scale ?? 1;
     // the prototype's halo at 80 % (WJ 2026-10-18): out to 1.7 R, full at the limb, its colour [90,170,255] × 0.16 × 0.8
     // over the alpha the halo rests at (≈ 0.78)
-    this.halo = new GlowSprite('planet-halo', -0.5, Math.round(1.7 * r.radius * this.sc), [15, 28, 42], 0.59, 6);
+    this.halo = new GlowSprite(
+      'planet-halo',
+      -0.5,
+      Math.round(1.7 * r.radius * this.sc),
+      [15, 28, 42],
+      0.59,
+      6,
+    );
     this.haloCore = new GlowSprite(
       'planet-halo-core',
       -0.4,
@@ -626,8 +633,22 @@ export class PlanetBehaviour extends Behaviour {
     // the living idle: the rubble ring's two halves on either side of the globe (normal blend), the idle on the skin
     const rw = Math.ceil(r.radius * 7.4) + 16;
     const rh = Math.ceil(r.radius * 5.6) + 16;
-    this.rubBack = new Overlay('planet-rubble-back', -0.6, Math.max(rw, 480), Math.max(rh, 360), 'normal', false);
-    this.rubFront = new Overlay('planet-rubble-front', 0.6, Math.max(rw, 480), Math.max(rh, 360), 'normal', true);
+    this.rubBack = new Overlay(
+      'planet-rubble-back',
+      -0.6,
+      Math.max(rw, 480),
+      Math.max(rh, 360),
+      'normal',
+      false,
+    );
+    this.rubFront = new Overlay(
+      'planet-rubble-front',
+      0.6,
+      Math.max(rw, 480),
+      Math.max(rh, 360),
+      'normal',
+      true,
+    );
     // loose rocks, as the prototype draws them: no titan outline round each pebble
     this.rubBack.layer.outline = false;
     this.rubFront.layer.outline = false;

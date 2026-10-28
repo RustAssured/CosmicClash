@@ -1,6 +1,7 @@
-import type { EffectiveStats, FighterTickCtx } from '@/contracts';
+import type { EffectiveStats, FighterTickCtx, RenderLayer, ViewRect } from '@/contracts';
 import { Behaviour } from '../../behaviour';
 import type { ActiveMove } from '../../move';
+import { KitMotion } from './motion';
 
 /**
  * The titan kit's behaviour base: a titan with no body-external parts (no tendrils, moons or swarms) and ONE signature
@@ -13,6 +14,8 @@ import type { ActiveMove } from '../../move';
 export abstract class KitBehaviour extends Behaviour {
   /** Ticks left on the signature effect (0 = off). */
   protected signatureLeft = 0;
+  /** Its animation presets (`kit.motion`), built on the first drawn frame; presentation only. */
+  private motion: KitMotion | null | undefined;
 
   /** The signature move's active phase began: start the titan's mechanic here. */
   protected onSignature(_m: ActiveMove): void {}
@@ -42,6 +45,35 @@ export abstract class KitBehaviour extends Behaviour {
 
   override reset(_heal: number): void {
     this.signatureLeft = 0;
+  }
+
+  /**
+   * Draw its animation presets (`kit.motion`, src/combat/behaviours/kit/motion.ts), if it has any. A behaviour with a
+   * hand-written idle overrides this and draws its own instead.
+   */
+  override renderLayers(_view: ViewRect, _alpha: number, out: RenderLayer[]): void {
+    const f = this.f;
+    if (this.motion === undefined)
+      this.motion = f.def.kit?.motion?.length ? new KitMotion(f.body.map, f.def) : null;
+    const k = this.motion;
+    if (!k?.active || (f.ko && f.stateTicks > 50)) return;
+    const m = f.mv;
+    k.render(
+      out[out.length - 1]!,
+      f.body.map,
+      {
+        tick: f.tickNo,
+        slot: m.def ? m.def.slot : null,
+        phase: m.phase,
+        phaseTick: m.phaseTick,
+        startup: m.startup,
+        active: m.active,
+        recovery: m.recovery,
+        aim: m.aim,
+        guarding: f.state === 'guard',
+      },
+      out,
+    );
   }
 
   override hash(h: number): number {

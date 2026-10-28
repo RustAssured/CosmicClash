@@ -216,11 +216,36 @@ export class PlanetIdle {
   private pullFell = false;
   private nextPull = 9;
   private nextQuake = 5;
-  private readonly quakes = new Pool<Quake>(6, () => ({ t0: 0, plate: 0, ex: 0, ey: 0, ez: 0, dx: 1, dy: 0 }));
+  private readonly quakes = new Pool<Quake>(6, () => ({
+    t0: 0,
+    plate: 0,
+    ex: 0,
+    ey: 0,
+    ez: 0,
+    dx: 1,
+    dy: 0,
+  }));
   private readonly craters: Crater[] = [];
   private readonly rocks: Rock[] = [];
-  private readonly inc = new Pool<Inc>(32, () => ({ x: 0, y: 0, vx: 0, vy: 0, t0: 0, size: 1, px: 0, py: 0 }));
-  private readonly puffs = new Pool<Puff>(160, () => ({ x: 0, y: 0, vx: 0, vy: 0, age: 0, life: 1, kind: 0 }));
+  private readonly inc = new Pool<Inc>(32, () => ({
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    t0: 0,
+    size: 1,
+    px: 0,
+    py: 0,
+  }));
+  private readonly puffs = new Pool<Puff>(160, () => ({
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    age: 0,
+    life: 1,
+    kind: 0,
+  }));
   private jolt = 0;
   private joltDir = 1;
   private steps = 0;
@@ -312,7 +337,9 @@ export class PlanetIdle {
 
     // the atmosphere as the prototype draws it (WJ 2026-10-18: "thinner, not so jittery"): the inner ATMO_KEEP px of the ring
     // in solid bands lit toward the key light (the painter's Rayleigh edge without its dither and noise), the rest hidden
-    const atmoL = (lit[I.atmosphere] ?? []).map((c) => (c | 0xff000000) >>> 0).sort((a, b) => lum(a) - lum(b));
+    const atmoL = (lit[I.atmosphere] ?? [])
+      .map((c) => (c | 0xff000000) >>> 0)
+      .sort((a, b) => lum(a) - lum(b));
     const kx = lighting.dir[0] * 0.8;
     const ky = lighting.dir[1];
     const kh = DMath.hypot(kx, ky) || 1;
@@ -332,7 +359,11 @@ export class PlanetIdle {
       const ang = DMath.atan2(dy, dx);
       const f = clampN(((DMath.cos(ang) * kx + DMath.sin(ang) * ky) / kh) * 0.5 + 0.5, 0, 1);
       const v = (0.25 + 0.75 * f * f) * (1 - 0.55 * clampN(out, 0, 1));
-      const k = clampN(Math.round(v * (atmoL.length - 1)) + (map.material[i] === I.cloud ? 1 : 0), 0, atmoL.length - 1);
+      const k = clampN(
+        Math.round(v * (atmoL.length - 1)) + (map.material[i] === I.cloud ? 1 : 0),
+        0,
+        atmoL.length - 1,
+      );
       ringC.push(atmoL[k] ?? 0);
     }
     this.ringI = Int32Array.from(ringI);
@@ -1125,7 +1156,11 @@ export class PlanetIdle {
         for (let yy = 0; yy < r.size; yy++)
           for (let xx = 0; xx < r.size; xx++) {
             if (r.size === 3 && (xx + yy === 0 || xx + yy === 4)) continue;
-            ov.set(x + xx, y + yy, xx + yy === 0 || (r.size === 3 && xx + yy === 1) ? hi : xx + yy >= r.size ? lo : md);
+            ov.set(
+              x + xx,
+              y + yy,
+              xx + yy === 0 || (r.size === 3 && xx + yy === 1) ? hi : xx + yy >= r.size ? lo : md,
+            );
           }
     }
     // rocks dragged in from deep space: a cooling streak behind each (never over the face)
@@ -1156,7 +1191,8 @@ export class PlanetIdle {
         const k = 1 - p.age / p.life;
         for (let yy = -1; yy <= 1; yy++)
           for (let xx = -1; xx <= 1; xx++)
-            if (xx * xx + yy * yy <= 2 * k + 0.2) front.set(x + xx, y + yy, M[M.length - 1]!, Math.round(200 * k));
+            if (xx * xx + yy * yy <= 2 * k + 0.2)
+              front.set(x + xx, y + yy, M[M.length - 1]!, Math.round(200 * k));
         continue;
       }
       if (BAY8[((y & 7) << 3) | (x & 7)]! < p.age / p.life) continue;

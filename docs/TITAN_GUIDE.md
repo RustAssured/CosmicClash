@@ -38,6 +38,28 @@ Every titan has the same seven parts. A new titan keeps all of its parts in two 
 **Not every titan fits the kit.** 우리 (a baked rig), the Mouth (an analytic fighter) and the Last One (many body regions)
 are hand-built and stay that way. The kit is for the common case: one body, six moves, one signature idea.
 
+### Kinds: what a titan *is*
+
+Every titan has a **kind** (`kit.kind` in its JSON; the titans before the kit carry theirs in `src/titans/roster.ts`):
+
+| Kind | 종류 | What belongs here | Roster |
+|---|---|---|---|
+| **Celestial body** | 천체 | Stars, planets, holes in space: round, layered, glowing from within | Planet, Supernova, Black Hole |
+| **Rock & metal** (`mineral`) | 암석 | Asteroids, ores, crystal masses: hard, faceted, breaking into shards | Asteroid |
+| **Organic** | 생물 | Flesh, membrane, tendrils: soft, lobed, wet, tearing rather than shattering | The Cradle, Cradle Child |
+| **Construct** | 구조체 | Idols, engines, made things: glazed, banded, clean seams | The Last One, 우리 |
+| **Cosmic being** (`cosmic`) | 우주적 존재 | Watchers, possessors, things with too many eyes: luminous, unsettling | The Witness, the Nexus |
+
+A kind is an **authoring preset, not a gameplay type**. Nothing in a fight reads it: matchups still come only from damage
+types against each material's `resist`, which keeps balancing in one place. What a kind does is give a new blob titan a
+fitting start (src/titans/kit/kinds.ts):
+
+- the physics archetype and colour ramp of its five materials (skin, flesh, marking, eye, core);
+- the outline (lobes, wobble, markings, eyes);
+- its voice and its movement wake.
+
+Every one of those numbers stays editable afterwards. From a template (`--from=planet`, …) the kind is only a label.
+
 ---
 
 ## 2. How to describe a new creature to Claude
@@ -63,6 +85,7 @@ Weakness:                     what happens when it's losing (its failure mode)
 Sound:                        e.g. "wet, heavy, a whale's groan", "glass bells under a landslide"
 Lore line:                    one or two sentences for its card
 Homage notes:                 what it nods to, and how it stays its own (see "Homage" below)
+Kind:                         celestial / mineral (rock & metal) / organic / construct / cosmic (a cosmic being)
 Template:                     blob (a fresh creature), or start from: planet / asteroid / nexus / blackhole / supernova / lastone
 ```
 
@@ -93,6 +116,90 @@ A good test: if someone who has seen the film looks at the card and says "oh, th
 
 ## 3. The numbers worth tweaking
 
+### The titan builder (v2)
+
+The easiest way to tweak them is the **titan builder**, a page in the dev server:
+
+```text
+npm run dev, then open http://localhost:5173/dev/builder/
+```
+
+- **Pick a titan** (any kit titan) or **+ New titan**: the same scaffold as `npm run new:titan`, with the kind picked from
+  cards.
+- **Every number has a slider**, and the body repaints as you drag: at ×2–4, at game size and as the 64 px read. Its
+  panels are KIND, BODY (the blob's shape; other painters get their raw `art.params`), PALETTE & MATERIALS (a hue shift for
+  everything, accents, each material's ramp, archetype, glow, toughness and density), ATTRIBUTES & AI, VOICE, CARD and RAW
+  JSON.
+- **The checks run live** on every change: size class, palette clash with the roster, every material showing, and the
+  definition validator (frame data, slots). **Run titan:check** runs the quick checks (AI coverage, replay) on the saved file.
+- **Save** (or Ctrl+S) writes the JSON, prettier-formatted, and the open game tabs reload with it. The **Training**, **VS AI**
+  and **Damage states** links open the saved titan.
+- Unsaved edits are kept as a draft in the tab, so a reload never loses them. **Revert** goes back to the saved file.
+
+### Import key art (Phase 1)
+
+A blob titan's body can come from **key art** instead of the blob: BODY › **Import key art…** opens the import workspace.
+
+1. **Load the art** (png, jpg or webp; or drop it in). The auto mask is a first guess: anything unlike the frame's border.
+   On art whose background shares the creature's colours (nebulae!) it will be wrong, and that is expected.
+2. **Mark the creature.** Lasso − across everything, then Lasso + around the creature's outline; Brush + / − for details.
+   **Background** samples colours that are not the creature, and **Cut background** removes them from inside the mask.
+   **Core** puts the KO anchor (the eye, the heart); Undo goes back.
+3. **Convert.** The preview on the right is the game's own painter. The knobs:
+   - **size**: its longest side in game px (its size class's default);
+   - **materials**: how many body regions; **structure** 1 = regions that follow the anatomy (shell, membrane, vortex),
+     0 = plain colour groups. Keep it high: the matter world weakens every bond between two different materials, so
+     colour-band materials would make the body crumble along random lines;
+   - **veins** (0–3): strongly coloured streaks a region's ramp cannot show become their own glowing materials (and weak
+     seams: the body cracks along them);
+   - **simplify** flattens painterly texture into clean regions; **vibrance** keeps the colours alive at sprite size;
+   - **form light** adds the stage's light on a gentle dome; **dither** blends the ramp steps.
+4. **Apply to titan**, then rename the materials in PALETTE (they come named by colour) and pick their physics, then
+   **Save**: body.json, its JSON, its index.ts (the image painter, src/titans/kit/image.ts) and the key art
+   (docs/titans/<id>/keyart.webp) are written together.
+
+An imported body keeps the art's shading in its material ramps, so PALETTE still recolours it and the stage still lights
+it. Its moves, signature and voice are the blob's until they are built. The **BRIEF** panel keeps the creature's description
+in docs/titans/<id>/BRIEF.md, and **Copy packet for Claude** puts the brief and the titan's state on the clipboard for a
+Claude Code session to take further. The Remainder (docs/titans/remainder/) was the first titan made this way.
+
+It only works with `npm run dev` on your own machine: the dev server saves the files (tools/builder/plugin.ts), and only
+for requests from the machine itself. The JSON stays the one source of truth, so everything below still works by hand.
+
+### Motion studio and animation presets (Phase 2)
+
+**▶ Studio** (top bar) plays the titan you are editing in the **real sim**: the game's own fighters, matter world and
+behaviours, drawn frame by frame by the software compositor. Unsaved edits play too.
+
+- Pick a **move** and an **aim**, a **foe**, the **gap**, how long a charge or guard is **held**, and when the foe
+  **strikes** (to test a guard). The clip re-runs on every change.
+- The **timeline** under the frame is coloured by the move's phase (gold startup, purple charge, red active, blue
+  recovery, green guard); white marks are hits it lands, red ones hits it takes. Drag on it to scrub, **←/→** steps a
+  tick, **space** plays. **Hitboxes** draws the live hit shapes, as Training does.
+- **MOVE** shows the move's frame data (with its feel target) and the selected aim's hitboxes as numbers: from/to, damage
+  type and energy, the shape, the knockback. Change one and the clip re-runs.
+- **MOTION** edits the **animation presets** (below), while the clip plays.
+- **NOTES**: pause on a frame, write what should change, **Pin note to this frame**. The note and the frame (with the
+  hitboxes) are saved in docs/titans/<id>/NOTES.md and notes/. It is a task list: ask Claude to "work through
+  docs/titans/<id>/NOTES.md" (**Copy for Claude** copies that), and tick notes off when they are done.
+
+**Animation presets** (`kit.motion`, the MOTION panel; src/combat/behaviours/kit/motion.ts) give a titan a living idle and
+move animation without code. Each preset moves the cells of one material; each separate patch of it moves round its own
+centre (two eyes on two wings swirl apart). They stack in order.
+
+| Preset | What it does | Knobs |
+|---|---|---|
+| **swirl** | turns like a vortex and drains toward its centre | speed, inflow, turbulence, direction |
+| **pulse** | brightens and glows on a beat, optionally as a ring running outward | rate, depth (ramp steps), glow, wave |
+| **shimmer** | scattered cells flare to the top of the ramp and fade | density, rate, glow |
+| **stretch** | during a move (Strike by default) the front patch is pulled toward the aim like rubber and snaps back | reach, ripple |
+| **iris** | petals of another material close over it while guarding | petal colour, petals, speed |
+
+**Runs** sets when a preset plays: always, or during one move slot. A titan whose behaviour draws its own hand-written idle
+(the Remainder, the Cradle) ignores its presets, and the panel says so.
+
+### By hand
+
 All of these are in `src/titans/kit/<id>/<id>.json`. Change one, save, and reload the game.
 
 | What | Where | What it does |
@@ -107,6 +214,9 @@ All of these are in `src/titans/kit/<id>/<id>.json`. Change one, save, and reloa
 | **Knockback** | `…hitboxes[].knockback` | How far it throws the foe. |
 | **Overall power** | `balance.power`, `balance.durability` (0.3–3) | The quickest balance knobs: deal more / take less. |
 | **AI personality** | `ai.weights` (0–1) | `aggression`, `patience`, `zoning` (keeps distance), `retreat`, `punish`. |
+| **Animation presets** | `kit.motion` | A list of `{ "type", "material", "on"?, knobs… }`: see "Motion studio and animation presets" above. |
+| **What the AI sees** | `moves[].extra.aiReach` | The AI judges a move by its hitboxes. When the real threat is something else (a launched slug, a body that moves), describe it: a box, a tick window and an energy, per aim. Add `"replace": true` to use it even though the move has hitboxes. |
+| **Meter earned** | `moves[].extra.meterGain` | A hit earns ultimate meter by its energy. Scale it down for moves with very large energies (TIDAL grabs), or to `0` so an ultimate cannot refill itself. |
 | **Voice** | `kit.voice` | `pitch` (Hz: 30 = a mountain, 120 = a boulder), `grit` (smooth to gritty), `ring` (how it rings when hit), `wet` (reverb). |
 | **Signature** | `src/combat/behaviours/kit/<id>.ts` | The placeholder swells for 120 ticks with blows ×1.2. Change the numbers, or describe a new idea to Claude. |
 
@@ -130,6 +240,7 @@ And from a terminal:
 ```text
 npm run titan:check -- <id>                the full report: size, palette, AI coverage, replay, balance sweep
 npx tsx tools/titans/still.ts <id>         stills of it in a real fight + the select screen (docs/gallery/kit/)
+npx tsx tools/titans/clip.ts out.gif --a=<id> --b=planet --script0="20:crush"   a clip of a fight (.gif / .mp4 / .webm; no GPU)
 npx vitest run src/titans                  the fast checks for every titan
 ```
 
@@ -145,6 +256,7 @@ flags any slip (docs/netplay/STEP0.md).
 npm run new:titan -- <id> "<English Name>" "<Korean name>"                 a blob creature (default)
 npm run new:titan -- <id> "<English Name>" "<Korean name>" --from=planet   start from an existing titan
     options: --size=small|medium|large  --hue=0..359  --stage=rim  --essence=<word>
+             --kind=celestial|mineral|organic|construct|cosmic   (§1 "Kinds"; default organic, the plain blob)
 npm run new:titan -- --remove <id>                                          take it out again, cleanly
 ```
 
@@ -257,7 +369,12 @@ A titan ships when all of these are true.
 | The blob painter | `src/titans/kit/blob.ts` |
 | Behaviours | `src/combat/behaviours/kit/<id>.ts` (base: `kit/base.ts`) |
 | The kit voice | `src/audio/voices/kitVoice.ts` |
+| Animation presets | `src/combat/behaviours/kit/motion.ts` |
+| The motion studio | `dev/builder/studio.ts` (notes: `tools/builder/notes.ts`) |
 | The checks | `src/titans/roster.test.ts`, `tools/titans/checks.ts`, `tools/titans/check.ts` |
 | The scaffold | `tools/titans/new.ts` |
+| Kinds (presets) | `src/titans/kit/kinds.ts` (the list: `TITAN_KINDS` in `src/contracts/roster.ts`) |
+| The titan builder | `dev/builder/` (page), `tools/builder/plugin.ts` (the dev server's file bridge) |
+| Key art import | `dev/builder/artImport.ts` (art → cells and materials), `src/titans/kit/image.ts` (the image painter) |
 | The ship step | `tools/titans/ship.ts` (`npm run titan:ship -- <id>`) |
 | The site cards | `tools/site/roster.ts` (run on every `npm run build:site`) |

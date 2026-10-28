@@ -2588,8 +2588,10 @@ export class FighterImpl implements Fighter {
     this.lastDealtTick = this.tickNo;
     // a graze (only the foe's parts were touched) earns no meter and none of the big-hit presentation
     const graze = (foe as unknown as { lastBodyTouched?: boolean }).lastBodyTouched === false;
+    // extra.meterGain scales it for moves whose energies are large for their type (the Remainder's TIDAL grabs)
+    const gain = (this.mv.def?.extra?.['meterGain'] as number | undefined) ?? 1;
     if (this.live && !graze)
-      this.meter = Math.min(1, this.meter + e.energy * T.meterDealt * (1 - res.blocked * 0.7));
+      this.meter = Math.min(1, this.meter + e.energy * T.meterDealt * gain * (1 - res.blocked * 0.7));
 
     const rate = !info.continuous || this.tickNo - this.lastEventTick >= T.continuousEventEvery;
     // the weight as it landed (the defender lightened a guarded blow); the blow that KOs is catastrophic

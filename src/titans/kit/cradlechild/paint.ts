@@ -266,13 +266,17 @@ function makeLayout(def: TitanDef, seed: number): Layout {
       const hook: Pt[] = [];
       for (let s = 0; s <= 6; s++) {
         const a = g1 + Math.PI / 2 + (s / 6) * Math.PI * 1.3;
-        hook.push({ x: e.x + DMath.cos(g1 - Math.PI / 2) * 3.2 + DMath.cos(a) * 3.2, y: e.y + DMath.sin(g1 - Math.PI / 2) * 3.2 + DMath.sin(a) * 3.2 });
+        hook.push({
+          x: e.x + DMath.cos(g1 - Math.PI / 2) * 3.2 + DMath.cos(a) * 3.2,
+          y: e.y + DMath.sin(g1 - Math.PI / 2) * 3.2 + DMath.sin(a) * 3.2,
+        });
       }
       bone(hook, R.w * 0.8, R.w * 0.6, 0, true);
       const f = pts[pts.length - 1]!;
       knobs.push({ x: f.x, y: f.y, r: R.w + 1.1 });
     }
-    for (const a of R.knobs) knobs.push({ x: cx + DMath.cos(a) * R.r, y: ry + DMath.sin(a) * R.r, r: R.w + 1 });
+    for (const a of R.knobs)
+      knobs.push({ x: cx + DMath.cos(a) * R.r, y: ry + DMath.sin(a) * R.r, r: R.w + 1 });
   }
   // the spire and its cross bar, knobbed at every end
   bone(line({ x: cx, y: p.hood.top + 3 }, { x: cx, y: C.spire }, 10), 2.1, 1.5);
@@ -299,7 +303,10 @@ function makeLayout(def: TitanDef, seed: number): Layout {
     const pts: Pt[] = [];
     for (let s = 0; s <= 8; s++) {
       const q = s / 8;
-      pts.push({ x: cx + t * 2 * bw * (1 - q) + t * 4 * DMath.sin(Math.PI * q), y: H.base - 4 + (H.top + 2 - (H.base - 4)) * q });
+      pts.push({
+        x: cx + t * 2 * bw * (1 - q) + t * 4 * DMath.sin(Math.PI * q),
+        y: H.base - 4 + (H.top + 2 - (H.base - 4)) * q,
+      });
     }
     bone(pts, Math.abs(t) < 0.3 ? 1.5 : 1.2, 0.8);
   }
@@ -313,7 +320,10 @@ function makeLayout(def: TitanDef, seed: number): Layout {
       const tip = at(Lp.tip[0], Lp.tip[1], side);
       const outer = at(Lp.outer[0], Lp.outer[1], side);
       const bottom = at(Lp.bottom[0], Lp.bottom[1], side);
-      const mid = { x: (root.x + tip.x + outer.x + bottom.x) / 4, y: (root.y + tip.y + outer.y + bottom.y) / 4 };
+      const mid = {
+        x: (root.x + tip.x + outer.x + bottom.x) / 4,
+        y: (root.y + tip.y + outer.y + bottom.y) / 4,
+      };
       const eOut = sagEdge(tip, outer, Lp.sag[0], mid, 10);
       const eBot = sagEdge(outer, bottom, Lp.sag[1], mid, 10);
       const eIn = sagEdge(bottom, root, Lp.sag[2], mid, 8);
@@ -341,7 +351,19 @@ function makeLayout(def: TitanDef, seed: number): Layout {
       bone([...eBot, bottom], 1.1, 1);
       // the mid rib from the root to the outer corner, bowing under the galaxy
       const ribMid = { x: lobe.gx + side * 2, y: lobe.gy + lobe.gr * 0.85 + 3 };
-      bone(catmull([[root.x, root.y], [ribMid.x, ribMid.y], [outer.x, outer.y]], 6), 1.6, 1.1, 1);
+      bone(
+        catmull(
+          [
+            [root.x, root.y],
+            [ribMid.x, ribMid.y],
+            [outer.x, outer.y],
+          ],
+          6,
+        ),
+        1.6,
+        1.1,
+        1,
+      );
       const tp = past(root, tip, 3);
       knobs.push({ x: tp.x, y: tp.y, r: 2.6 });
       const op = past(mid, outer, 2.5);
@@ -357,7 +379,16 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   // vessels: raw red, fanning from each lobe root across the membrane; running down the torso from the cavity; a few
   // loops hanging free off the torso's flank
   const veins: Seg[] = [];
-  const walk = (x: number, y: number, dir: number, steps: number, len: number, pull: (x: number, y: number) => number, depth: number, w: number): void => {
+  const walk = (
+    x: number,
+    y: number,
+    dir: number,
+    steps: number,
+    len: number,
+    pull: (x: number, y: number) => number,
+    depth: number,
+    w: number,
+  ): void => {
     let d = dir;
     for (let s = 0; s < steps; s++) {
       const nx = x + DMath.cos(d) * len;
@@ -370,7 +401,16 @@ function makeLayout(def: TitanDef, seed: number): Layout {
       delta = DMath.atan2(DMath.sin(delta), DMath.cos(delta));
       d += delta * 0.3 + rng.range(-0.4, 0.4);
       if (depth < 2 && s % 3 === 1 && rng.next() < 0.7)
-        walk(x, y, d + (rng.next() < 0.5 ? -1 : 1) * rng.range(0.45, 0.85), steps - s - 1, len * 0.85, pull, depth + 1, w * 0.8);
+        walk(
+          x,
+          y,
+          d + (rng.next() < 0.5 ? -1 : 1) * rng.range(0.45, 0.85),
+          steps - s - 1,
+          len * 0.85,
+          pull,
+          depth + 1,
+          w * 0.8,
+        );
     }
   };
   for (const L of lobes) {
@@ -385,7 +425,16 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   const down = (): number => Math.PI / 2;
   for (let j = 0; j < 2; j++) {
     const n0 = veins.length;
-    walk(cx - rng.range(0.2, 0.8) * Cv.rx, Cv.y + Cv.ry * 0.85, Math.PI / 2 + rng.range(-0.25, 0.35), 14, 3.6, down, 2, 0.95);
+    walk(
+      cx - rng.range(0.2, 0.8) * Cv.rx,
+      Cv.y + Cv.ry * 0.85,
+      Math.PI / 2 + rng.range(-0.25, 0.35),
+      14,
+      3.6,
+      down,
+      2,
+      0.95,
+    );
     // bilateral: mirror the run onto the other side (with a little drift, so it is not a stamp)
     for (const v of veins.slice(n0)) {
       const jx = (hash01(Math.round(v.ax), Math.round(v.ay), seed) - 0.5) * 1.2;
@@ -415,7 +464,10 @@ function makeLayout(def: TitanDef, seed: number): Layout {
   // the lower structures
   const limbs: Layout['limbs'] = [];
   for (const Lm of p.limbs) {
-    const c = catmull(Lm.pts.map(([dx, y]) => [cx + dx, y] as [number, number]), 8);
+    const c = catmull(
+      Lm.pts.map(([dx, y]) => [cx + dx, y] as [number, number]),
+      8,
+    );
     // heavy: holds its weight most of the way, then tapers fast
     const segs = capsules(c, (q) => Lm.r1 + (Lm.r0 - Lm.r1) * (1 - DMath.pow(q, 1.6)));
     limbs.push({ segs, x0: c[0]!.x, y0: c[0]!.y, x1: c[c.length - 1]!.x, y1: c[c.length - 1]!.y });
@@ -427,10 +479,19 @@ function makeLayout(def: TitanDef, seed: number): Layout {
       knobs.push({ x: pt.x + rng.range(-0.8, 0.8), y: pt.y, r: r * 0.75 });
     }
   }
-  const pods: Pod[] = p.chambers.map(([dx, y, rx, ry], k) => ({ x: cx + dx, y, rx, ry, seed: seed + 400 + k }));
+  const pods: Pod[] = p.chambers.map(([dx, y, rx, ry], k) => ({
+    x: cx + dx,
+    y,
+    rx,
+    ry,
+    seed: seed + 400 + k,
+  }));
   const chains: Layout['chains'] = [];
   p.chains.forEach((Ch, k) => {
-    const c = catmull(Ch.pts.map(([dx, y]) => [cx + dx, y] as [number, number]), 8);
+    const c = catmull(
+      Ch.pts.map(([dx, y]) => [cx + dx, y] as [number, number]),
+      8,
+    );
     const segs = capsules(c, () => 0.85);
     const beads: Pt[] = [];
     let acc = Ch.bead * 0.6;
@@ -441,13 +502,14 @@ function makeLayout(def: TitanDef, seed: number): Layout {
         beads.push(c[s]!);
       }
     }
-    Ch.pods.forEach(([dx, y, rx, ry], j) => pods.push({ x: cx + dx, y, rx, ry, seed: seed + 500 + k * 10 + j }));
+    Ch.pods.forEach(([dx, y, rx, ry], j) =>
+      pods.push({ x: cx + dx, y, rx, ry, seed: seed + 500 + k * 10 + j }),
+    );
     chains.push({ segs, beads, x0: c[0]!.x, y0: c[0]!.y, x1: c[c.length - 1]!.x, y1: c[c.length - 1]!.y });
   });
   const webs: number[][] = [];
   for (const Wb of p.webs)
-    for (const side of Wb.mirror ? [-1, 1] : [1])
-      webs.push(Wb.pts.flatMap(([dx, y]) => [cx + side * dx, y]));
+    for (const side of Wb.mirror ? [-1, 1] : [1]) webs.push(Wb.pts.flatMap(([dx, y]) => [cx + side * dx, y]));
 
   return {
     p,
@@ -468,7 +530,12 @@ const segSd = (x: number, y: number, s: Seg): number =>
   sdTaperedCapsule(x, y, s.ax, s.ay, s.ra, s.bx, s.by, s.rb);
 
 /** Stamp a set of capsules: calls `f(i, d, k)` for every cell within capsule k (d = signed distance, < 0 inside). */
-function stamp(W: number, H: number, segs: readonly Seg[], f: (i: number, d: number, k: number) => void): void {
+function stamp(
+  W: number,
+  H: number,
+  segs: readonly Seg[],
+  f: (i: number, d: number, k: number) => void,
+): void {
   segs.forEach((sg, k) => {
     const r = Math.max(sg.ra, sg.rb) + 1;
     const x0 = Math.max(1, Math.floor(Math.min(sg.ax, sg.bx) - r));
@@ -484,7 +551,12 @@ function stamp(W: number, H: number, segs: readonly Seg[], f: (i: number, d: num
 }
 
 /** Cells inside a polygon (flat points), with the signed distance to its edge. */
-function fillPoly(W: number, H: number, poly: readonly number[], f: (i: number, x: number, y: number, d: number) => void): void {
+function fillPoly(
+  W: number,
+  H: number,
+  poly: readonly number[],
+  f: (i: number, x: number, y: number, d: number) => void,
+): void {
   let x0 = W;
   let x1 = 0;
   let y0 = H;
@@ -679,7 +751,8 @@ export function paintChild(
       const rootD = DMath.hypot(fx - Lb.root.x, fy - Lb.root.y);
       const window = 1 - smoothstep(0.7, 1.6, gd);
       let m = ids.membrane;
-      let tone = 0.6 + window * 0.9 + fbm(fx * 0.14, fy * 0.14, Lb.seed + 3, 2) * 0.5 - (1 - clamp01(depth / 6)) * 0.3;
+      let tone =
+        0.6 + window * 0.9 + fbm(fx * 0.14, fy * 0.14, Lb.seed + 3, 2) * 0.5 - (1 - clamp01(depth / 6)) * 0.3;
       if (rootD < 14 + fbm(fx * 0.1, fy * 0.1, Lb.seed + 5, 2) * 5) {
         m = ids.flesh;
         tone = 0.2 + clamp01(rootD / 14) * 0.6;
@@ -746,7 +819,12 @@ export function paintChild(
       const th = DMath.atan2(dy, dx);
       if (rc < kc.r + 0.5) {
         // the core: white-hot at its heart, gold toward its edge
-        set(i, ids.core, 16 + (1 - rc / kc.r) * 4, 3.2 - DMath.pow(rc / kc.r, 1.5) * 3 + fbm(fx * 0.3, fy * 0.3, sB + 61, 2) * 0.3);
+        set(
+          i,
+          ids.core,
+          16 + (1 - rc / kc.r) * 4,
+          3.2 - DMath.pow(rc / kc.r, 1.5) * 3 + fbm(fx * 0.3, fy * 0.3, sB + 61, 2) * 0.3,
+        );
         continue;
       }
       const spill = 1 - (rc - kc.r) / 3;
@@ -777,8 +855,11 @@ export function paintChild(
       const dx = (k - 1.5) * Cv.rx * 0.42 + rng.range(-1.5, 1.5);
       const top = Cv.y - Cv.ry * DMath.pow(Math.max(0, 1 - sq(dx / Cv.rx)), 0.5) + 1;
       const len = rng.range(3, 6.5);
-      stamp(W, H, [{ ax: cx + dx, ay: top, ra: 1.5, bx: cx + dx + rng.range(-0.5, 0.5), by: top + len, rb: 1 }], (i, d) =>
-        set(i, ids.tissue, 13, 1.1 + d * 0.4),
+      stamp(
+        W,
+        H,
+        [{ ax: cx + dx, ay: top, ra: 1.5, bx: cx + dx + rng.range(-0.5, 0.5), by: top + len, rb: 1 }],
+        (i, d) => set(i, ids.tissue, 13, 1.1 + d * 0.4),
       );
     }
   }
@@ -790,7 +871,8 @@ export function paintChild(
     for (let y = Math.floor(Lb.gy - R * 1.6); y <= Math.ceil(Lb.gy + R * 1.6); y++)
       for (let x = Math.floor(Lb.gx - R * 1.6); x <= Math.ceil(Lb.gx + R * 1.6); x++) {
         const i = y * W + x;
-        if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1 || !soft(cv.mat[i]!) && cv.mat[i] !== ids.vein) continue;
+        if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1 || (!soft(cv.mat[i]!) && cv.mat[i] !== ids.vein))
+          continue;
         // tilted along the lobe, seen at a slant
         const a = DMath.atan2(Lb.outer.y - Lb.root.y, Lb.outer.x - Lb.root.x);
         const dx = x + 0.5 - Lb.gx;
@@ -862,7 +944,8 @@ export function paintChild(
   {
     const rng = new Rng(seed ^ 0xd819);
     const anchors: Pt[] = [];
-    for (const Lb of L.lobes) for (let k = 2; k < Lb.lower.length; k += 3) if (rng.next() < 0.55) anchors.push(Lb.lower[k]!);
+    for (const Lb of L.lobes)
+      for (let k = 2; k < Lb.lower.length; k += 3) if (rng.next() < 0.55) anchors.push(Lb.lower[k]!);
     for (const n of L.knobs) if (rng.next() < 0.3) anchors.push({ x: n.x, y: n.y + n.r });
     for (const Lm of [...L.limbs, ...L.chains]) anchors.push({ x: Lm.x1, y: Lm.y1 });
     for (const a of anchors) {
@@ -887,11 +970,27 @@ export function paintChild(
 
   const ramps = buildLitRamps(def.materials, lighting, 0.75);
   const shade: (Partial<ShadeParams> | undefined)[] = [];
-  shade[ids.tissue] = { contrast: 0.9, dither: 0.55, ao: 0.55, rim: 0.7, outline: 0.7, bayer8: true, bias: 0.06 };
+  shade[ids.tissue] = {
+    contrast: 0.9,
+    dither: 0.55,
+    ao: 0.55,
+    rim: 0.7,
+    outline: 0.7,
+    bayer8: true,
+    bias: 0.06,
+  };
   shade[ids.flesh] = { contrast: 0.95, dither: 0.55, ao: 0.6, rim: 0.4, outline: 0.6, bayer8: true };
   shade[ids.vein] = { contrast: 0.8, dither: 0.2, ao: 0.2, rim: 0.2, outline: 0.2 };
   shade[ids.bone] = { contrast: 1.15, dither: 0.25, ao: 0.4, rim: 0.9, outline: 0.8, bias: 0.08 };
-  shade[ids.membrane] = { contrast: 0.7, dither: 0.6, ao: 0.4, rim: 0.9, outline: 0.35, bayer8: true, bump: 0.6 };
+  shade[ids.membrane] = {
+    contrast: 0.7,
+    dither: 0.6,
+    ao: 0.4,
+    rim: 0.9,
+    outline: 0.35,
+    bayer8: true,
+    bump: 0.6,
+  };
   shade[ids.galaxy] = { contrast: 0.5, dither: 0.6, ao: 0, rim: 0, outline: 0, bayer8: true, bump: 0.3 };
   shade[ids.star] = { contrast: 0.5, dither: 0.3, ao: 0, rim: 0, outline: 0 };
   shade[ids.core] = { contrast: 0.6, dither: 0.3, ao: 0, rim: 0, outline: 0 };

@@ -80,7 +80,10 @@ export interface IdleVeil {
 }
 
 /** The prototype's joint lag: segment s eases toward its heading at 5.5 / (1 + 0.42 s) per second, once per tick. */
-const IDLE_RATE = Array.from({ length: NODES - 1 }, (_, s) => 1 - DMath.exp(-(1 / 60) * (5.5 / (1 + 0.42 * s))));
+const IDLE_RATE = Array.from(
+  { length: NODES - 1 },
+  (_, s) => 1 - DMath.exp(-(1 / 60) * (5.5 / (1 + 0.42 * s))),
+);
 const ss01 = (a: number, b: number, x: number): number => {
   const t = clamp01((x - a) / (b - a));
   return t * t * (3 - 2 * t);

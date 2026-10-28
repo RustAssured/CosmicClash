@@ -279,7 +279,8 @@ export class WitnessBehaviour extends Behaviour {
     // heading drives are made in region order, one per arm region (buildWitnessRig)
     const headOf = new Map<number, number>();
     let k = 0;
-    for (let i = 0; i < W.regions.length; i++) if (W.regions[i]!.kind === 'arm') headOf.set(i, wr.headingDrives[k++]!);
+    for (let i = 0; i < W.regions.length; i++)
+      if (W.regions[i]!.kind === 'arm') headOf.set(i, wr.headingDrives[k++]!);
     this.segHead = W.arms.map((a) => a.regions.map((ri) => headOf.get(ri) ?? -1));
     this.segRest = W.arms.map((a) => a.regions.map((ri) => wr.driveOf[wr.bodyOf[ri]!]!));
     this.idleDrives = [...wr.headingDrives, ...this.segRest.flat(), ...wr.haloDrives];
@@ -1096,7 +1097,8 @@ export class WitnessBehaviour extends Behaviour {
     }
     this.drawFragments(f.tickNo, light);
     // the living idle's reticle on the foe and its line of sight (a pure function of the witnessing clock)
-    if (this.dying < 0 && this.pose.w > 0.5) this.idle.drawReticle(fx, this.pose.wit, h.eyeX, h.eyeY, fv.x, fv.y);
+    if (this.dying < 0 && this.pose.w > 0.5)
+      this.idle.drawReticle(fx, this.pose.wit, h.eyeX, h.eyeY, fv.x, fv.y);
     if (this.dying < 0) kit.strike(h);
     this.veil.apply(fx, fv.x, fv.y, f.tickNo, f.view.freezeTicks > 0);
     fx.end();
@@ -1167,7 +1169,8 @@ export class WitnessBehaviour extends Behaviour {
     for (const r of this.regions) {
       if (r.lost) continue;
       const m = r.body.map;
-      const shade = shading && (r.kind === 'carapace' || r.kind === 'arm' || r.kind === 'shrine' || r.kind === 'halo');
+      const shade =
+        shading && (r.kind === 'carapace' || r.kind === 'arm' || r.kind === 'shrine' || r.kind === 'halo');
       // re-copied when the map changed, on every idle step while shaded, and once more when the idle lets go
       if (m.version === r.version && !(shade && advanced) && !(r.idleDrawn && !shade)) continue;
       r.version = m.version;

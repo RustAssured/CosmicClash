@@ -2,6 +2,7 @@ import type { TitanDef, TitanId } from '@/contracts';
 import type { KitTitan } from './types';
 import cradleKit from './cradle';
 import cradlechildKit from './cradlechild';
+import remainderKit from './remainder';
 // new:titan imports (the scaffold adds `import <name> from './<id>';` above this line)
 
 /**
@@ -11,6 +12,7 @@ import cradlechildKit from './cradlechild';
 export const KIT_TITANS: readonly KitTitan[] = [
   cradleKit,
   cradlechildKit,
+  remainderKit,
   // new:titan (the scaffold adds entries above this line)
 ];
 

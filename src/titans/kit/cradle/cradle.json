@@ -1123,6 +1123,7 @@
   },
   "kit": {
     "template": "blob",
+    "kind": "organic",
     "size": "large",
     "stage": "nursery",
     "light": {

@@ -236,6 +236,68 @@ the blob placeholder's; not in the ladder's opponents.
   generalised). The titan guide's creature
   brief gained two lines: *where its scale lives* and *unfair at / open to*.
 
+## S23: the titan builder (v2) and titan kinds
+- **Kinds** (`TITAN_KINDS` in src/contracts/roster.ts; presets in src/titans/kit/kinds.ts): celestial, mineral (rock & metal),
+  organic, construct, cosmic (a cosmic being). Authoring only: no gameplay reads it. A kind sets a new blob titan's five
+  materials (archetype + ramp around its hue), outline, voice and wake; `npm run new:titan -- … --kind=<kind>` (default
+  organic = the old blob, unchanged). Every roster titan is tagged (first guess, for WJ to confirm): Planet, Supernova,
+  Black Hole celestial; Asteroid mineral; Cradle, Cradle Child organic; Last One, 우리 construct; Witness, Nexus cosmic.
+  Proof: one titan scaffolded per kind passed every roster check (validator, size, AI coverage, replay, painting), then
+  removed.
+- **Titan builder** (dev/builder/, `npm run dev` → /dev/builder/): live repaint on every slider (×2–4, 1×, 64 px, material
+  layers), live size / palette / materials / validator checks, Save (Ctrl+S) through a dev-server bridge
+  (tools/builder/plugin.ts: loopback only, header-gated writes, no shell), + New titan, Run titan:check, drafts survive
+  reloads. tools/titans/checks.ts gained `checkSizeOf` / `checkPaletteOf` (the same checks on values).
+- **Next for the builder:** moves (a frame-data timeline, hitboxes on the sprite), the destruction type (rewrite every
+  hitbox's damage type), voice audition, damage states in the page itself.
+
+## S24: key art import (builder Phase 1) and The Remainder / 잔여체
+- **Import key art** (BODY › Import key art…; dev/builder/importArt.ts + artImport.ts): mask the creature (auto guess,
+  lasso, brush, background samples + cut, core point), then convert: crop and scale to the size class, Kuwahara simplify,
+  **region materials** (k-means on colour blended with the surroundings' colour: materials follow the anatomy, because the
+  matter world weakens every bond between different materials), up to 3 **vein** materials for colours a region's ramp
+  cannot show (glowing, weak seams), hue-shifted ramps from each region's lightness quantiles (dominant hue per step), each
+  cell's level within its ramp. Stored as body.json (one byte a cell); painted by src/titans/kit/image.ts through the
+  ArtCanvas (stage light on a gentle dome, rim, outline, dither): palette-clean and recolourable. `kit.painter: 'image'`.
+- **Brief panel**: docs/titans/<id>/BRIEF.md in the builder, and "Copy packet for Claude".
+- **Bridge**: GET/PUT body (body.json + JSON + index.ts + key art), GET/PUT brief. The bridge no longer imports the
+  roster contract: vite.config.ts dependencies restart the dev server, and the scaffold edits that file mid-request.
+- **The Remainder / 잔여체** (`remainder`, shipped 2026-10-25): the first titan from key art, made entirely in the builder UI (driven by
+  Playwright): celestial, large, 163×230 px, materials crust, rubble, membrane, bone, vortex, ichor (vein), spark (vein),
+  core. Brief from the user's text with a creature-brief proposal (Compaction signature, Loosening ultimate, Cannibal failure
+  mode) in docs/titans/remainder/BRIEF.md; key art beside it; a software-composited fight strip in stills/. All quick
+  checks pass. **Open for WJ:** the Korean name (잔여체 proposed), the brief's mechanics. Moves, signature, voice: the blob's.
+- Not verified here: the GPU renderer (this sandbox's Chromium never reaches `ready`, for any titan, the Planet included);
+  the strip uses the software compositor (tools/titans/strip.ts).
+- **The Remainder's living idle** (src/combat/behaviours/kit/remainderIdle.ts, presentation only), reworked on the user's
+  note ("a wound in reality that wants to close; it keeps itself open: violent, under stress, sucking in its surroundings"):
+  the vortex swirls violently and drains (a flow map: two copies of the motion half a 0.6 s cycle apart, cross-faded per
+  cell, so it spins up to 5× faster at the eye and streams inward forever without winding the arms; surges and
+  turbulence), closing spasms every ~5.5 s (the eye squeezes, the swirl chokes, then it tears itself open: the eye blown
+  wide, a flash through the veins, a burst of speed, the body shaking), the shell round it creeps inward, stress fractures
+  crackle along the rim, wreckage orbits decay into the vortex and are consumed, dust streams over the shell into the eye,
+  the body twitches (and shakes when hit). Clockwise: the arms wind counter-clockwise outward in the key art (measured), so
+  they trail. The body animates on twos (30 Hz; at once on a hit): ≈ 1.2 ms on its frames, 0.05 ms between. Clips
+  (tools/titans/clip.ts: the software compositor + ffmpeg, no GPU) in docs/titans/remainder/clips/: idle (gif + mp4), an
+  exchange with the Witness, its (placeholder) ultimate on the Planet, and 20 s of AI vs the Nexus.
+- **The Remainder's six moves** (the user approved the proposal): Snap, Inhale, Fold, Compaction, Loosening, Hold Shut,
+  plus Mass (Hoard) and Cannibal; details, balance and clips in docs/titans/remainder/BRIEF.md. A rigid shell with violence
+  inside: no move moves the shell. 8 mechanics tests (src/combat/remainder.test.ts). Balance 65 % at AI level 4 (40 fights).
+  Snap reworked twice on the user's notes: a rubber band round the vortex, then the vortex's own pixels warped out of the
+  rim (no overlay).
+- **The Remainder shipped** (2026-10-25, ADK-010): its AI uses every move (Compaction's slug modelled with
+  `extra.aiReach.replace`; `extra.meterGain` stops its TIDAL grabs filling the meter), its own voice
+  (src/audio/voices/remainder.ts), `titan:check` counts guard raises. Left: the real-game pass and the hand steps in
+  docs/titans/remainder/CHECKLIST.md (hover clip, key art, CLASSIC slot: WJ decides).
+- **Builder Phase 2** (2026-10-25): the **motion studio** (▶ Studio, dev/builder/studio.ts) plays any move of the titan
+  being edited in the real sim, with a phase-coloured scrub timeline, live hitboxes, a MOVE tab (frame data and hitboxes
+  as numbers, re-run on every change), a MOTION tab and NOTES (pinned to a frame, saved with it to
+  docs/titans/<id>/NOTES.md as a task list for Claude; tools/builder/notes.ts, bridge `/__builder/notes`). **Animation
+  presets** (`kit.motion`, src/combat/behaviours/kit/motion.ts): swirl, pulse, shimmer, stretch, iris, each on one
+  material's patches, run by `KitBehaviour.renderLayers` for any kit titan without a hand-written idle; the MOTION panel
+  edits them with sliders. Tests: motion.test.ts (6), notes.test.ts (3), the roster checks every kit titan's presets.
+- **Next (Phase 3):** a pixel touch-up editor (paint cells and materials), part regions and pivots for motion.
+
 ## Next
 - **Cradle Child:** WJ answers the brief's open questions, then Gate 1 (body and palette).
 - **Netplay:** after WJ pushes and the site redeploys, run a two-machine test (ONLINE › host › send the link to a friend).
