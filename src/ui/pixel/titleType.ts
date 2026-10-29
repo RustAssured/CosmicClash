@@ -51,7 +51,19 @@ function rampAt(ramp: number[], t: number, x: number, y: number): number {
 
 /** `text` in `style`, letters ×k (k=2 by default) with `gap` px between them before scaling, on transparency. */
 export function titleType(text: string, style: TypeStyle, k = 2, gap = 4): Sprite {
-  const m = logotypeMask(text, gap);
+  return shadeType(logotypeMask(text, gap), style, k, text.length);
+}
+
+/**
+ * Any letter shapes (`m`: 1/0 row-major, e.g. the pixel font's) shaded in `style` the way `titleType` shades the logotype's,
+ * ×k. `seedKey` varies the cracks and stars.
+ */
+export function shadeType(
+  m: { d: Uint8Array; w: number; h: number },
+  style: TypeStyle,
+  k = 2,
+  seedKey = 1,
+): Sprite {
   const D = style.extrude.length;
   const pad = 2;
   const SW = m.w * k + pad * 2;
@@ -108,7 +120,7 @@ export function titleType(text: string, style: TypeStyle, k = 2, gap = 4): Sprit
   // the interior (face pixels at least 2px from any edge) is where cracks and stars may go
   const inner = (x: number, y: number): boolean =>
     at(x, y) === 1 && at(x - 2, y) === 1 && at(x + 2, y) === 1 && at(x, y - 2) === 1 && at(x, y + 2) === 1;
-  let seed = text.length * 7919 + SW;
+  let seed = seedKey * 7919 + SW;
   const rnd = (): number => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const interior: number[] = [];
   for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) if (inner(x, y)) interior.push(y * SW + x);
