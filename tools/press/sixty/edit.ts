@@ -55,7 +55,7 @@ function* clipFrames(c: Clip): Generator<Frame> {
   if (existsSync(`${TAKES_DIR}/${id}.mkv`) && existsSync(`${TAKES_DIR}/${id}.json`)) {
     const meta = JSON.parse(readFileSync(`${TAKES_DIR}/${id}.json`, 'utf8')) as { frames: { cells: number[] }[] };
     const raw = spawnSync('ffmpeg', ['-v', 'error', '-i', `${TAKES_DIR}/${id}.mkv`, '-f', 'rawvideo', '-pix_fmt', 'rgba', '-'], {
-      maxBuffer: 1 << 31,
+      maxBuffer: 1024 * 1024 * 1024,
     }).stdout;
     const per = W * H * 4;
     for (let f = 0; f < n; f++) {
@@ -124,7 +124,7 @@ function drawCard(cv: PixelCanvas, k: Card, t: number, frame: number): void {
       }
       logo(cv, u);
       drawText(cv, '아득', W / 2, 196, { color: INK, outline: EDGE, align: 'center', scale: 2 });
-      if (u > 0.9) drawText(cv, 'FREE IN YOUR BROWSER', W / 2, 238, { color: DIM, align: 'center', tracking: 3 });
+      if (u > 0.9) drawText(cv, 'FREE IN YOUR BROWSER', W / 2, 238, { color: INK, outline: EDGE, align: 'center', tracking: 3 });
       break;
     }
     case 'sting': {
@@ -160,6 +160,8 @@ const write = async (b: Uint8Array): Promise<void> => {
 };
 
 const total = Math.round((TO - FROM) * FPS);
+const shownCells: Record<'left' | 'right', number | null> = { left: null, right: null };
+const counterClip: Record<'left' | 'right', Clip | null> = { left: null, right: null };
 let ci = 0;
 let gen: Generator<Frame> | null = null;
 let genClip: Clip | null = null;
@@ -201,7 +203,12 @@ for (let i = 0; i < total; i++) {
         if (t < intro.at) continue;
         shown = Math.round(shown * Math.min(1, (t - intro.at) / intro.dur) ** 0.6);
       } else if (c.at < MARK.ah && t < 2.4) continue;
-      counter(cv, { name: n.name, ko: n.ko, cells: shown, start: fullBody(c.take.key, slot) }, side);
+      // the number chases the truth (a refill or a big loss reads as motion, never a jump); a new clip starts on it
+      const prev = shownCells[side];
+      if (prev === null || counterClip[side] !== c || (intro && intro.k === 'countIn')) shownCells[side] = shown;
+      else shownCells[side] = prev + (shown - prev) * 0.12;
+      counterClip[side] = c;
+      counter(cv, { name: n.name, ko: n.ko, cells: shownCells[side]!, start: fullBody(c.take.key, slot) }, side);
     }
   }
   for (const k of cards) if (t >= k.at - 1e-6 && t < k.at + k.dur) drawCard(cv, k, t, i);

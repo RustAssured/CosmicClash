@@ -87,7 +87,7 @@ function build(): { clips: Clip[]; cards: Card[] } {
     b += ROSTER_BEATS[i]!;
     const end = beat(b);
     clip(at, end, r.take, r.slot === 0 ? { left: 0, right: 1 } : { left: 1, right: 0 });
-    cards.push({ k: 'slam', at, dur: Math.min(end - at, 1.6), word: r.word, style: 'bone', sub: r.sub });
+    cards.push({ k: 'slam', at, dur: Math.min(end - at, 1.6), word: r.word, style: 'bone', sub: r.sub, y: 228 });
   }
 
   // III. THE RULE
@@ -108,7 +108,7 @@ function build(): { clips: Clip[]; cards: Card[] } {
   cards.push({ k: 'slam', at: beat(42), dur: MARK.snap - beat(42), word: 'IS THE BAR.', style: 'ember', size: 4 });
 
   // IV. THE HUNT
-  clip(MARK.hunt, MARK.through, T('h-rise', 'uri-colossus-mausoleum-22', 3215, { rate: [[0, 0.75]] }), { left: 0 });
+  clip(MARK.hunt, MARK.through, T('h-rise', 'uri-colossus-mausoleum-22', 3330, { rate: [[0, 0.75]] }), { left: 0 });
   cards.push({ k: 'whisper', at: MARK.hunt + 0.3, dur: 1.6, lines: ['IT IS LOOKING FOR AN EYE'], y: 60, scale: 2 });
   cards.push({ k: 'whisper', at: MARK.hunt + 2.0, dur: 1.9, lines: ['IT IS LOOKING FOR AN EYE', 'AND A MOUTH.'], y: 60, scale: 2 });
   for (const [i, [id, key, hit]] of HUNT.entries())
