@@ -67,6 +67,8 @@ const LOOSENING = 'remainder.loosening';
 const TIP: Record<AimDir, [number, number]> = { up: [156, -88], forward: [164, -4], down: [156, 80] };
 const JAW_Y: Record<AimDir, number> = { up: -44, forward: 0, down: 44 };
 const RIM = 58;
+/** How many turns Snap tries round the eye when the pixel it would stretch has been torn away. */
+const SNAP_TURNS = 24;
 
 const packHex = (hex: string): number => {
   const v = parseInt(hex.slice(1), 16);
@@ -89,6 +91,9 @@ export class RemainderFx {
   private readonly pal: Record<'ichor' | 'vortex' | 'spark' | 'bone' | 'crust' | 'core', Uint32Array>;
   /** Loosening's cracks: polylines from the eye to the rim (map cells), fixed per fighter. */
   private readonly cracks: Float32Array[] = [];
+  /** Snap's search round the eye for a surviving pixel (cos, sin of ±15°, ±30° … ±180°, nearest first). */
+  private readonly turnCos = new Float32Array(SNAP_TURNS);
+  private readonly turnSin = new Float32Array(SNAP_TURNS);
   private readonly seed: number;
 
   constructor(map: MatterMap, materials: readonly MaterialSpec[], seed: number) {
@@ -116,6 +121,11 @@ export class RemainderFx {
       crust: ramp('crust', '#403531'),
       core: ramp('core', '#150824'),
     };
+    for (let k = 0; k < SNAP_TURNS; k++) {
+      const a = ((k >> 1) + 1) * (Math.PI / 12) * (k & 1 ? -1 : 1);
+      this.turnCos[k] = fcos(a);
+      this.turnSin[k] = fsin(a);
+    }
     // the cracks: jagged polylines from near the eye out to the rim, evenly round with jitter
     const N = 9;
     for (let k = 0; k < N; k++) {
@@ -431,11 +441,20 @@ export class RemainderFx {
           const ripple = 0.03 * (1 - Math.abs(u)) * fsin(g * 14 - wave) * pose.ext;
           const sa0 = Math.min(Rs - 0.6, a0 + (Rs - a0) * (k + ripple));
           const sl = u * Math.sqrt(Math.max(0, Rs * Rs - sa0 * sa0));
-          const sx = Math.floor(cx + dX * sa0 + nX * sl);
-          const sy = Math.floor(cy + dY * sa0 + nY * sl);
-          const j = sy * map.w + sx;
-          if (sx < 0 || sy < 0 || sx >= map.w || sy >= map.h || !map.material[j]) {
-            if (along > R) this.front.putPal(x, y, vortex, 0, 0);
+          const ox = dX * sa0 + nX * sl;
+          const oy = dY * sa0 + nY * sl;
+          let j = this.live(map, cx + ox, cy + oy);
+          // past the rim, where that pixel was torn away: the vortex is round, so the nearest survivor at the same distance
+          // from the eye looks the same; without it the tongue would be the darkest step, a black contour of a whip. Inside
+          // the disc a hole stays a hole: the snap stretches the wound, it does not heal it
+          for (let k = 0; j < 0 && along > R && k < SNAP_TURNS; k++) {
+            const c = this.turnCos[k]!;
+            const s = this.turnSin[k]!;
+            j = this.live(map, cx + ox * c - oy * s, cy + ox * s + oy * c);
+          }
+          if (j < 0) {
+            // the whole ring is gone: the vortex's own mid tone, so the band still reads as the wound
+            if (along > R) this.front.putPal(x, y, vortex, vortex.length >> 1, 0);
             continue;
           }
           this.front.put(x, y, SP[j]! | 0xff000000, SE[j]!);
@@ -471,6 +490,15 @@ export class RemainderFx {
         }
       }
     }
+  }
+
+  /** The map cell at (x, y) if it still holds matter, else −1. */
+  private live(map: MatterMap, x: number, y: number): number {
+    const sx = Math.floor(x);
+    const sy = Math.floor(y);
+    if (sx < 0 || sy < 0 || sx >= map.w || sy >= map.h) return -1;
+    const j = sy * map.w + sx;
+    return map.material[j] ? j : -1;
   }
 
   /** INHALE: the dust streaming in (the tell, then the intake) and the bone mandibles biting shut. */
